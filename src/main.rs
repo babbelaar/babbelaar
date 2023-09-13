@@ -8,6 +8,7 @@ mod interpreter;
 mod keyword;
 mod lexer;
 mod parser;
+mod scope;
 mod statement;
 mod token;
 mod value;
@@ -18,7 +19,8 @@ pub use self::{
     keyword::Keyword,
     lexer::Lexer,
     parser::{Parser, ParseError},
-    statement::{FunctionStatement, Statement},
+    scope::Scope,
+    statement::{ForStatement, FunctionStatement, Statement},
     token::{Token, TokenKind},
     value::Value,
 };
@@ -26,14 +28,14 @@ pub use self::{
 fn main() {
     let source_code = std::fs::read_to_string("test.bab").unwrap();
 
-    println!("Lexing...");
+    println!("Lexeren...");
     let lexer = Lexer::new(&source_code);
     let tokens: Vec<_> = lexer.collect();
 
-    println!("Parsing...");
+    println!("Ontleden...");
     let mut parser = Parser::new(&tokens);
 
-    println!("Interpreting...");
+    println!("Aan het interpreteren...");
     let mut interpreter = Interpreter::new();
 
     loop {
@@ -45,7 +47,7 @@ fn main() {
             }
             Err(ParseError::EndOfFile) => break,
             Err(e) => {
-                println!("Error: {e}");
+                println!("Fout: {e}");
                 break;
             }
         }

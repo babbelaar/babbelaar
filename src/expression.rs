@@ -5,6 +5,7 @@
 pub enum PrimaryExpression<'source_code> {
     StringLiteral(&'source_code str),
     IntegerLiteral(i64),
+    Reference(&'source_code str),
 }
 
 #[derive(Clone, Debug)]
@@ -32,4 +33,13 @@ pub enum BiOperator {
     Add,
     Subtract,
     Multiply,
+}
+
+#[derive(Clone, Debug)]
+pub struct RangeExpression<'source_code> {
+    /// Start, inclusive
+    pub start: PrimaryExpression<'source_code>,
+
+    /// End, exclusive
+    pub end: PrimaryExpression<'source_code>,
 }

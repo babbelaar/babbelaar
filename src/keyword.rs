@@ -7,7 +7,10 @@
 pub enum Keyword {
     Als,
     Functie,
+    In,
+    Reeks,
     Structuur,
+    Volg,
 }
 
 impl Keyword {

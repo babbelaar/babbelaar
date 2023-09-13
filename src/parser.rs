@@ -11,7 +11,7 @@ use crate::{
     PrimaryExpression,
     Statement,
     Token,
-    TokenKind,
+    TokenKind, ForStatement, RangeExpression,
 };
 
 #[derive(Copy, Clone)]
@@ -32,6 +32,11 @@ impl<'source_code> Parser<'source_code> {
         if self.peek_token()?.kind == TokenKind::Keyword(Keyword::Functie) {
             _ = self.consume_token().ok();
             return Ok(Statement::Function(self.parse_function()?));
+        }
+
+        if self.peek_token()?.kind == TokenKind::Keyword(Keyword::Volg) {
+            _ = self.consume_token().ok();
+            return Ok(Statement::For(self.parse_for_statement()?));
         }
 
         let expr = self.parse_function_call_expression()?;
@@ -62,12 +67,61 @@ impl<'source_code> Parser<'source_code> {
         Ok(FunctionStatement { name, body })
     }
 
+    fn parse_for_statement(&mut self) -> Result<ForStatement<'source_code>, ParseError<'source_code>> {
+        let iterator = self.consume_token()?;
+        let TokenKind::Identifier(iterator_name) = iterator.kind else {
+            return Err(ParseError::ForStatementExpectedIteratorName { token: iterator });
+        };
+
+        let in_keyword = self.consume_token()?;
+        if in_keyword.kind != TokenKind::Keyword(Keyword::In) {
+            return Err(ParseError::ForStatementExpectedInKeyword { token: in_keyword });
+        }
+
+        let range = self.parse_range()?;
+
+        self.expect_left_curly_bracket("for-loop range")?;
+
+        let mut body = Vec::new();
+        loop {
+            if self.peek_token()?.kind == TokenKind::RightCurlyBracket {
+                _ = self.consume_token()?;
+                break;
+            }
+
+            body.push(self.parse_statement()?);
+        }
+
+
+        Ok(ForStatement { iterator_name, range, body })
+    }
+
+    fn parse_range(&mut self) -> Result<RangeExpression<'source_code>, ParseError<'source_code>> {
+        let range_keyword = self.consume_token()?;
+        if range_keyword.kind != TokenKind::Keyword(Keyword::Reeks) {
+            return Err(ParseError::RangeExpectedKeyword { token: range_keyword });
+        }
+
+        self.expect_left_paren("range")?;
+
+        let start = self.parse_primary_expression()?;
+
+        self.expect_comma("range")?;
+
+        let end = self.parse_primary_expression()?;
+
+        self.expect_right_paren("range")?;
+
+        Ok(RangeExpression { start, end })
+    }
+
     fn parse_primary_expression(&mut self) -> Result<PrimaryExpression<'source_code>, ParseError<'source_code>> {
         let token = self.consume_token()?;
 
         match token.kind {
             TokenKind::StringLiteral(literal) => Ok(PrimaryExpression::StringLiteral(literal)),
             TokenKind::Integer(integer) => Ok(PrimaryExpression::IntegerLiteral(integer)),
+            TokenKind::Identifier(identifier) => Ok(PrimaryExpression::Reference(identifier)),
 
             _ => Err(ParseError::UnknownStartOfExpression { token }),
         }
@@ -207,6 +261,15 @@ pub enum ParseError<'source_code> {
 
     #[error("Expected function name after 'functie', but got: {token:?}")]
     FunctionStatementExpectedName { token: Token<'source_code> },
+
+    #[error("Expected iterator name after 'volg', but got: {token:?}")]
+    ForStatementExpectedIteratorName { token: Token<'source_code> },
+
+    #[error("Expected 'in' keyword 'volg' iterator name, but got: {token:?}")]
+    ForStatementExpectedInKeyword { token: Token<'source_code> },
+
+    #[error("Expected 'reeks' keyword, but got: {token:?}")]
+    RangeExpectedKeyword { token: Token<'source_code> },
 
     #[error("Unknown start of expression: {token:?}")]
     UnknownStartOfExpression { token: Token<'source_code> },

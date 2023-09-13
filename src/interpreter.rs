@@ -10,23 +10,29 @@ use crate::*;
 
 pub struct Interpreter<'source_code> {
     functions: HashMap<&'source_code str, Rc<FunctionStatement<'source_code>>>,
+    scope: Scope<'source_code>,
 }
 
 impl<'source_code> Interpreter<'source_code> {
     pub fn new() -> Self {
         Self {
             functions: HashMap::new(),
+            scope: Scope::new(),
         }
     }
 
     pub fn execute(&mut self, statement: &Statement<'source_code>) {
         match statement {
-            Statement::Function(func) => {
-                self.functions.insert(func.name, Rc::new(func.clone()));
-            }
-
             Statement::Expression(expression) => {
                 self.execute_expression(expression);
+            }
+
+            Statement::For(statement) => {
+                self.execute_for_statement(statement);
+            }
+
+            Statement::Function(func) => {
+                self.functions.insert(func.name, Rc::new(func.clone()));
             }
         }
     }
@@ -36,6 +42,10 @@ impl<'source_code> Interpreter<'source_code> {
             Expression::Function(func) => self.execute_function_call(func),
             Expression::BiExpression(expr) => self.execute_bi_expression(expr),
 
+            Expression::Primary(PrimaryExpression::Reference(reference)) => {
+                self.scope.find(reference)
+            }
+
             Expression::Primary(PrimaryExpression::IntegerLiteral(integer)) => {
                 Value::Integer(*integer)
             }
@@ -44,6 +54,30 @@ impl<'source_code> Interpreter<'source_code> {
                 Value::String(str.to_string())
             }
         }
+    }
+
+    fn execute_for_statement(&mut self, statement: &ForStatement<'source_code>) -> Value {
+        let PrimaryExpression::IntegerLiteral(start) = statement.range.start else {
+            panic!("Invalid start");
+        };
+
+        let PrimaryExpression::IntegerLiteral(end) = statement.range.end else {
+            panic!("Invalid end");
+        };
+
+        self.scope = std::mem::take(&mut self.scope).push();
+
+        for x in start..end {
+            self.scope.variables.insert(statement.iterator_name, Value::Integer(x));
+
+            for statement in &statement.body {
+                self.execute(statement);
+            }
+        }
+
+        self.scope = std::mem::take(&mut self.scope).pop();
+
+        Value::Null
     }
 
     fn execute_bi_expression(&mut self, expression: &BiExpression<'source_code>) -> Value {
