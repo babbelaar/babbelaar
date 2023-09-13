@@ -1,7 +1,18 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{Statement, Token, TokenKind, Expression, expression::FunctionCallExpression, PrimaryExpression, BiOperator, BiExpression};
+use crate::{
+    BiOperator,
+    BiExpression,
+    Expression,
+    FunctionCallExpression,
+    FunctionStatement,
+    Keyword,
+    PrimaryExpression,
+    Statement,
+    Token,
+    TokenKind,
+};
 
 #[derive(Copy, Clone)]
 pub struct Parser<'source_code> {
@@ -17,9 +28,38 @@ impl<'source_code> Parser<'source_code> {
         }
     }
 
-    pub fn parse_statement(&mut self) -> Result<Statement<'source_code>, ParseError> {
+    pub fn parse_statement(&mut self) -> Result<Statement<'source_code>, ParseError<'source_code>> {
+        if self.peek_token()?.kind == TokenKind::Keyword(Keyword::Functie) {
+            _ = self.consume_token().ok();
+            return Ok(Statement::Function(self.parse_function()?));
+        }
+
         let expr = self.parse_function_call_expression()?;
         Ok(Statement::Expression(expr))
+    }
+
+    pub fn parse_function(&mut self) -> Result<FunctionStatement<'source_code>, ParseError<'source_code>> {
+        let name = self.consume_token()?;
+        let TokenKind::Identifier(name) = name.kind else {
+            return Err(ParseError::FunctionStatementExpectedName { token: name });
+        };
+
+        self.expect_left_paren("function name")?;
+        self.expect_right_paren("function name")?;
+        self.expect_left_curly_bracket("function argument list")?;
+
+        let mut body = Vec::new();
+        loop {
+            if self.peek_token()?.kind == TokenKind::RightCurlyBracket {
+                _ = self.consume_token()?;
+                break;
+            }
+
+            body.push(self.parse_statement()?);
+        }
+
+
+        Ok(FunctionStatement { name, body })
     }
 
     fn parse_primary_expression(&mut self) -> Result<PrimaryExpression<'source_code>, ParseError<'source_code>> {
@@ -111,6 +151,26 @@ impl<'source_code> Parser<'source_code> {
         Ok(())
     }
 
+    fn expect_right_paren(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
+        let token = self.consume_token()?;
+
+        if token.kind != TokenKind::RightParenthesis {
+            return Err(ParseError::ExpectedRightParen { token, context });
+        }
+
+        Ok(())
+    }
+
+    fn expect_left_curly_bracket(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
+        let token = self.consume_token()?;
+
+        if token.kind != TokenKind::LeftCurlyBracket {
+            return Err(ParseError::ExpectedLeftCurlyBracket { token, context });
+        }
+
+        Ok(())
+    }
+
     fn expect_comma(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
         let token = self.consume_token()?;
 
@@ -133,6 +193,9 @@ pub enum ParseError<'source_code> {
     #[error("Invalid start of function-call statement: {token:?}")]
     ExpressionFunctionCallNotStartingWithIdentifier { token: Token<'source_code> },
 
+    #[error("Expected left curly bracket '{{' after {context}, but got: {token:?}")]
+    ExpectedLeftCurlyBracket { token: Token<'source_code>, context: &'static str },
+
     #[error("Expected left parenthesis '(' after {context}, but got: {token:?}")]
     ExpectedLeftParen { token: Token<'source_code>, context: &'static str },
 
@@ -141,6 +204,9 @@ pub enum ParseError<'source_code> {
 
     #[error("Expected comma ',' after {context}, but got: {token:?}")]
     ExpectedComma { token: Token<'source_code>, context: &'static str },
+
+    #[error("Expected function name after 'functie', but got: {token:?}")]
+    FunctionStatementExpectedName { token: Token<'source_code> },
 
     #[error("Unknown start of expression: {token:?}")]
     UnknownStartOfExpression { token: Token<'source_code> },

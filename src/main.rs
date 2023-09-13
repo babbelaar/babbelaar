@@ -1,3 +1,8 @@
+// Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
+// All Rights Reserved.
+
+#![deny(elided_lifetimes_in_paths)]
+
 mod expression;
 mod interpreter;
 mod keyword;
@@ -13,13 +18,13 @@ pub use self::{
     keyword::Keyword,
     lexer::Lexer,
     parser::{Parser, ParseError},
-    statement::Statement,
+    statement::{FunctionStatement, Statement},
     token::{Token, TokenKind},
     value::Value,
 };
 
 fn main() {
-    let source_code = std::fs::read_to_string("test.vr").unwrap();
+    let source_code = std::fs::read_to_string("test.bab").unwrap();
 
     println!("Lexing...");
     let lexer = Lexer::new(&source_code);

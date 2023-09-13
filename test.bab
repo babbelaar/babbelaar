@@ -1,1 +1,5 @@
+functie hallo() {
+    schrijf("Hallo!")
+}
+
 schrijf("De uitkomst van twaalf keer tien is", 12 * 10)

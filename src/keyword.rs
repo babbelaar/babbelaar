@@ -3,6 +3,7 @@
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[derive(strum::AsRefStr, strum::EnumIter)]
+#[strum(serialize_all = "snake_case")]
 pub enum Keyword {
     Als,
     Functie,

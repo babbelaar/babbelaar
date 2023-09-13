@@ -1,23 +1,30 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::marker::PhantomData;
+use std::{
+    collections::HashMap,
+    rc::Rc,
+};
 
-use crate::{Statement, Expression, BiExpression, FunctionCallExpression, Value, BiOperator, PrimaryExpression};
+use crate::*;
 
 pub struct Interpreter<'source_code> {
-    _marker: PhantomData<&'source_code str>,
+    functions: HashMap<&'source_code str, Rc<FunctionStatement<'source_code>>>,
 }
 
 impl<'source_code> Interpreter<'source_code> {
     pub fn new() -> Self {
         Self {
-            _marker: PhantomData,
+            functions: HashMap::new(),
         }
     }
 
     pub fn execute(&mut self, statement: &Statement<'source_code>) {
         match statement {
+            Statement::Function(func) => {
+                self.functions.insert(func.name, Rc::new(func.clone()));
+            }
+
             Statement::Expression(expression) => {
                 self.execute_expression(expression);
             }
@@ -81,8 +88,15 @@ impl<'source_code> Interpreter<'source_code> {
         match func.function_identifier.as_ref() {
             "schrijf" => self.execute_function_schrijf(arguments),
 
-            _ => {
-                println!("Error: Unknown function {}", func.function_identifier);
+            name => {
+                if let Some(func) = self.functions.get(name).cloned() {
+                    for statement in &func.body {
+                        self.execute(statement);
+                    }
+                } else {
+                    println!("Error: Unknown function {name}");
+                }
+
                 Value::Null
             }
         }

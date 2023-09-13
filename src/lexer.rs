@@ -31,6 +31,10 @@ impl<'source_code> Lexer<'source_code> {
 
             '(' => self.consume_single_char_token(TokenKind::LeftParenthesis),
             ')' => self.consume_single_char_token(TokenKind::RightParenthesis),
+            '{' => self.consume_single_char_token(TokenKind::LeftCurlyBracket),
+            '}' => self.consume_single_char_token(TokenKind::RightCurlyBracket),
+            '[' => self.consume_single_char_token(TokenKind::LeftSquareBracket),
+            ']' => self.consume_single_char_token(TokenKind::RightSquareBracket),
             ';' => self.consume_single_char_token(TokenKind::Semicolon),
             ',' => self.consume_single_char_token(TokenKind::Comma),
             '=' => self.consume_single_char_token(TokenKind::EqualsSign),
