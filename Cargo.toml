@@ -1,0 +1,8 @@
+[package]
+name = "babbelaar"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "*"
+strum = { version = "*", features = ["derive"] }
