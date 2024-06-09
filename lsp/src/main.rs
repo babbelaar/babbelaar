@@ -14,6 +14,30 @@ struct Backend {
 }
 
 impl Backend {
+    async fn find_tokens_at<F>(&self, params: &TextDocumentPositionParams, mut f: F) -> Result<()>
+            where F: FnMut(Token) -> Result<()> {
+        self.lexed_document(&params.text_document, |tokens| {
+            for token in tokens {
+                if token.begin.line() != params.position.line as usize {
+                    continue;
+                }
+
+                if token.begin.column() > params.position.character as usize {
+                    continue;
+                }
+
+                if params.position.character as usize > token.end.column(){
+                    continue;
+                }
+
+                f(token)?;
+            }
+
+            Ok(())
+        })
+        .await
+    }
+
     async fn lexed_document<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
         F: FnOnce(Vec<Token>) -> Result<R>,
@@ -117,43 +141,40 @@ impl LanguageServer for Backend {
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        self.client
-            .log_message(MessageType::INFO, format!("Hover: {params:#?}"))
-            .await;
-        Ok(Some(Hover {
-            contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value: "Babbelaar".into(),
-            }),
-            range: None,
-        }))
+        let mut hover = None;
+
+        self.find_tokens_at(&params.text_document_position_params, |token| {
+            if let TokenKind::Identifier(ident) = &token.kind {
+                if let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| x.name == *ident) {
+                    hover = Some(Hover {
+                        contents: HoverContents::Markup(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: builtin_function.documentation.to_string(),
+                        }),
+                        range: Some(convert_token_range(&token)),
+                    });
+                }
+            }
+
+            Ok(())
+        }).await?;
+
+        Ok(hover)
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         info!("Completion: {params:#?}");
-        self.lexed_document(&params.text_document_position.text_document, |tokens| {
-            let mut completions = Vec::new();
+        let mut completions = Vec::new();
 
-            for token in tokens {
-                if token.begin.line() != params.text_document_position.position.line as usize {
-                    continue;
-                }
-
-                if token.begin.column() > params.text_document_position.position.character as usize {
-                    continue;
-                }
-
-                if token.end.column() > params.text_document_position.position.character as usize {
-                    continue;
-                }
-
-                if let TokenKind::Identifier(ident) = &token.kind {
-                    suggest_identifiers(ident, &mut completions);
-                }
+        self.find_tokens_at(&params.text_document_position, |token| {
+            if let TokenKind::Identifier(ident) = &token.kind {
+                suggest_identifiers(ident, &mut completions);
             }
-            Ok(Some(CompletionResponse::Array(completions)))
-        })
-        .await
+
+            Ok(())
+        }).await?;
+
+        Ok(Some(CompletionResponse::Array(completions)))
     }
 
     async fn completion_resolve(&self, params: CompletionItem) -> Result<CompletionItem> {
@@ -238,10 +259,14 @@ fn convert_token_kind(kind: &TokenKind) -> SymbolKind {
 fn convert_token_location(uri: Url, token: &Token) -> Location {
     Location {
         uri,
-        range: Range {
-            start: convert_position(token.begin),
-            end: convert_position(token.end),
-        }
+        range: convert_token_range(token),
+    }
+}
+
+fn convert_token_range(token: &Token) -> Range {
+    Range {
+        start: convert_position(token.begin),
+        end: convert_position(token.end),
     }
 }
 
