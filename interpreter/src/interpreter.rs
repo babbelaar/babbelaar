@@ -137,38 +137,22 @@ impl<'source_code> Interpreter<'source_code> {
             arguments.push(self.execute_expression(argument));
         }
 
-        match func.function_identifier.as_ref() {
-            "schrijf" => self.execute_function_schrijf(arguments),
+        let name: &str = func.function_identifier.as_ref();
 
-            name => {
-                if let Some(func) = self.functions.get(name).cloned() {
-                    for statement in &func.body {
-                        self.execute(statement);
-                    }
-                } else {
-                    println!("Error: Unknown function {name}");
-                }
-
-                Value::Null
+        if let Some(func) = self.functions.get(name).cloned() {
+            for statement in &func.body {
+                self.execute(statement);
             }
+            return Value::Null;
         }
-    }
 
-    fn execute_function_schrijf(&mut self, args: Vec<Value>) -> Value {
-        for (arg_idx, arg) in args.into_iter().enumerate() {
-            if arg_idx != 0 {
-                print!(" ");
-            }
-
-            match arg {
-                Value::Null => print!("null"),
-                Value::Integer(integer) => print!("{integer}"),
-                Value::String(str) => print!("{str}"),
+        for builtin_func in Builtin::FUNCTIONS {
+            if builtin_func.name == name {
+                return (builtin_func.function)(self, arguments);
             }
         }
 
-        println!();
-
+        println!("Error: Unknown function {name}");
         Value::Null
     }
 }

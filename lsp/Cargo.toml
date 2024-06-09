@@ -1,0 +1,16 @@
+[package]
+name = "babbelaar-lsp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4"
+thiserror = "1"
+tokio = { version = "1", features = ["full"] }
+tower-lsp = "0.20"
+
+babbelaar = { path = "../interpreter" }
+
+
+[dev-dependencies]
+rstest = "0.21"

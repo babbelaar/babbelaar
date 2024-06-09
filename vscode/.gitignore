@@ -1,8 +1,3 @@
-target
-.vscode
-.cargo
-.smeder
-
 out
 dist
 node_modules

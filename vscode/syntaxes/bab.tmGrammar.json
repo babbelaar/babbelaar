@@ -1,0 +1,34 @@
+{
+    "name": "Babbelaar",
+    "scopeName": "source.bab",
+    "patterns": [
+      {
+        "include": "#keywords"
+      },
+      {
+        "include": "#strings"
+      }
+    ],
+    "repository": {
+      "keywords": {
+        "patterns": [
+          {
+            "match": "\\b(volg|in|reeks|for)\\b",
+            "name": "keyword.control.my-language"
+          }
+        ]
+      },
+      "strings": {
+        "patterns": [
+          {
+            "match": "'[^']*'",
+            "name": "string.quoted.single.my-language"
+          },
+          {
+            "match": "\"[^\"]*\"",
+            "name": "string.quoted.double.my-language"
+          }
+        ]
+      }
+    }
+  }

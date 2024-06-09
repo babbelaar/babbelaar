@@ -3,6 +3,7 @@
 
 #![deny(elided_lifetimes_in_paths)]
 
+mod builtin;
 mod expression;
 mod interpreter;
 mod keyword;
@@ -15,6 +16,7 @@ mod util;
 mod value;
 
 pub use self::{
+    builtin::Builtin,
     expression::*,
     interpreter::Interpreter,
     keyword::Keyword,

@@ -1,7 +1,7 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::Keyword;
+use crate::{FileLocation, Keyword};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum TokenKind<'source_code> {
@@ -28,18 +28,46 @@ pub enum TokenKind<'source_code> {
     PercentageSign,
 }
 
+impl<'source_code> TokenKind<'source_code> {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Keyword(..) => "Keyword",
+
+            Self::Identifier(..) => "Identifier",
+            Self::StringLiteral(..) => "StringLiteral",
+            Self::TemplateString(..) => "TemplateString",
+            Self::Integer(..) => "Integer",
+
+            Self::Comma => "Comma",
+            Self::LeftParenthesis => "LeftParenthesis",
+            Self::RightParenthesis => "RightParenthesis",
+            Self::LeftCurlyBracket => "LeftCurlyBracket",
+            Self::RightCurlyBracket => "RightCurlyBracket",
+            Self::LeftSquareBracket => "LeftSquareBracket",
+            Self::RightSquareBracket => "RightSquareBracket",
+            Self::Semicolon => "Semicolon",
+            Self::PlusSign => "PlusSign",
+            Self::EqualsSign => "EqualsSign",
+            Self::HyphenMinus => "HyphenMinus",
+            Self::Solidus => "Solidus",
+            Self::Asterisk => "Asterisk",
+            Self::PercentageSign => "PercentageSign",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'source_code> {
     pub kind: TokenKind<'source_code>,
-    pub begin: usize,
-    pub end: usize,
+    pub begin: FileLocation,
+    pub end: FileLocation,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TemplateStringToken<'source_code> {
     Plain {
-        begin: usize,
-        end: usize,
+        begin: FileLocation,
+        end: FileLocation,
         str: &'source_code str,
     },
     Expression(Vec<Token<'source_code>>),

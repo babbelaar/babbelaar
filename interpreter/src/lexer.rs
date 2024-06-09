@@ -3,13 +3,15 @@
 
 use std::str::CharIndices;
 
-use crate::{Keyword, StringExt, TemplateStringToken, Token, TokenKind};
+use crate::{FileLocation, Keyword, TemplateStringToken, Token, TokenKind};
 
 pub struct Lexer<'source_code> {
     input: &'source_code str,
     chars: CharIndices<'source_code>,
 
-    current: Option<(usize, char)>,
+    current: Option<(FileLocation, char)>,
+    line: usize,
+    column: usize,
 }
 
 impl<'source_code> Lexer<'source_code> {
@@ -18,6 +20,8 @@ impl<'source_code> Lexer<'source_code> {
             input,
             chars: input.char_indices(),
             current: None,
+            line: 0,
+            column: 0,
         }
     }
 
@@ -46,7 +50,7 @@ impl<'source_code> Lexer<'source_code> {
             '*' => self.consume_single_char_token(TokenKind::Asterisk),
 
             unknown_char => {
-                let pos = self.input.find_file_location(self.current.unwrap_or_default().0).unwrap_or_default();
+                let pos = self.current.unwrap_or_default().0;
 
                 eprintln!("Error at test.bab:{pos}");
                 panic!("Invalid char: '{unknown_char}' (U+{:X}", unknown_char as u32)
@@ -74,7 +78,9 @@ impl<'source_code> Lexer<'source_code> {
         let begin = self.current?.0;
 
         loop {
-            let c = self.peek_char().unwrap();
+            let Some(c) = self.peek_char() else {
+                break;
+            };
 
             if c == '"' {
                 break;
@@ -84,7 +90,7 @@ impl<'source_code> Lexer<'source_code> {
         }
 
         let end = self.current?.0;
-        let str = &self.input[begin..end];
+        let str = &self.input[begin.offset()..end.offset()];
 
         self.consume_char();
 
@@ -104,7 +110,9 @@ impl<'source_code> Lexer<'source_code> {
         let mut parts = Vec::new();
 
         loop {
-            let c = self.peek_char().unwrap();
+            let Some(c) = self.peek_char() else {
+                break;
+            };
 
             if c == '{' {
                 self.consume_char();
@@ -134,9 +142,9 @@ impl<'source_code> Lexer<'source_code> {
 
             if let Some(TemplateStringToken::Plain{ begin, end, str }) = parts.last_mut() {
                 *end = end_pos;
-                *str = &self.input[*begin..end_pos];
+                *str = &self.input[begin.offset()..end_pos.offset()];
             } else {
-                let str = &self.input[begin..end];
+                let str = &self.input[begin.offset()..end.offset()];
                 parts.push(TemplateStringToken::Plain {
                     begin,
                     end,
@@ -159,7 +167,10 @@ impl<'source_code> Lexer<'source_code> {
         let begin = self.current?.0;
 
         loop {
-            let c = self.peek_char().unwrap();
+            let Some(c) = self.peek_char() else {
+                break;
+            };
+
             if !is_identifier_char(c) {
                 break;
             }
@@ -168,7 +179,7 @@ impl<'source_code> Lexer<'source_code> {
         }
 
         let end = self.current?.0;
-        let str = &self.input[begin..end];
+        let str = &self.input[begin.offset()..end.offset()];
 
         let kind = match Keyword::parse(str) {
             Some(keyword) => TokenKind::Keyword(keyword),
@@ -186,7 +197,10 @@ impl<'source_code> Lexer<'source_code> {
         let begin = self.current?.0;
 
         loop {
-            let c = self.peek_char().unwrap();
+            let Some(c) = self.peek_char() else {
+                break;
+            };
+
             if !('0'..='9').contains(&c) {
                 break;
             }
@@ -195,7 +209,7 @@ impl<'source_code> Lexer<'source_code> {
         }
 
         let end = self.current?.0;
-        let str = &self.input[begin..end];
+        let str = &self.input[begin.offset()..end.offset()];
         let integer = str.parse().unwrap();
 
         Some(Token {
@@ -220,7 +234,19 @@ impl<'source_code> Lexer<'source_code> {
             return Some(c);
         }
 
-        self.current = self.chars.next();
+        self.current = self.chars.next()
+            .map(|(offset, char)| {
+                let location = FileLocation::new(offset, self.line, self.column);
+
+                if char == '\n' {
+                    self.line += 1;
+                    self.column = 0;
+                } else {
+                    self.column += 1;
+                }
+
+                (location, char)
+            });
         Some(self.current?.1)
     }
 
