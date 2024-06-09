@@ -75,18 +75,18 @@ impl<'source_code> Interpreter<'source_code> {
     }
 
     fn execute_for_statement(&mut self, statement: &ForStatement<'source_code>) -> Value {
-        let PrimaryExpression::IntegerLiteral(start) = statement.range.start else {
+        let PrimaryExpression::IntegerLiteral(start) = *statement.range.start else {
             panic!("Invalid start");
         };
 
-        let PrimaryExpression::IntegerLiteral(end) = statement.range.end else {
+        let PrimaryExpression::IntegerLiteral(end) = *statement.range.end else {
             panic!("Invalid end");
         };
 
         self.scope = std::mem::take(&mut self.scope).push();
 
         for x in start..end {
-            self.scope.variables.insert(statement.iterator_name, Value::Integer(x));
+            self.scope.variables.insert(&statement.iterator_name, Value::Integer(x));
 
             for statement in &statement.body {
                 self.execute(statement);

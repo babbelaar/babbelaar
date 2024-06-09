@@ -1,7 +1,15 @@
+// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// All Rights Reserved.
+
+mod conversion;
+mod symbolization;
+
 use std::collections::HashMap;
 
-use babbelaar::{Builtin, FileLocation, Keyword, Token, TokenKind};
+use babbelaar::{Builtin, Keyword, Parser, Token, TokenKind};
+use conversion::convert_token_range;
 use log::{info, LevelFilter, Log};
+use symbolization::{LspTokenType, Symbolizer};
 use tokio::sync::Mutex;
 use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::*;
@@ -68,6 +76,69 @@ impl Backend {
         store.insert(uri.clone(), contents);
         result
     }
+
+    fn capabilities(&self) -> ServerCapabilities {
+        ServerCapabilities {
+            text_document_sync: Some(TextDocumentSyncCapability::Kind(
+                TextDocumentSyncKind::FULL,
+            )),
+            completion_provider: Some(CompletionOptions {
+                resolve_provider: Some(true),
+                trigger_characters: Some(vec![".".to_string()]),
+                work_done_progress_options: WorkDoneProgressOptions::default(),
+                ..Default::default()
+            }),
+            signature_help_provider: Some(SignatureHelpOptions {
+                trigger_characters: None,
+                retrigger_characters: None,
+                work_done_progress_options: WorkDoneProgressOptions::default(),
+            }),
+            hover_provider: Some(true.into()),
+            document_formatting_provider: Some(OneOf::Left(true)),
+            document_highlight_provider: Some(OneOf::Left(true)),
+            document_symbol_provider: Some(OneOf::Left(true)),
+            semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+                SemanticTokensOptions {
+                    work_done_progress_options: WorkDoneProgressOptions {
+                        work_done_progress: None,
+                    },
+                    legend: SemanticTokensLegend {
+                        token_types: LspTokenType::legend(),
+                        token_modifiers: Vec::new(),
+                    },
+                    range: Some(false),
+                    full: Some(SemanticTokensFullOptions::Bool(true)),
+                }
+            )),
+            // workspace_symbol_provider: Some(OneOf::Left(true)),
+            // definition_provider: Some(OneOf::Left(true)),
+            ..ServerCapabilities::default()
+        }
+    }
+
+    async fn on_semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>> {
+        let mut symbolizer = Symbolizer::new(params.text_document.uri.clone());
+
+        self.lexed_document(&params.text_document, |tokens| {
+            for token in &tokens {
+                symbolizer.add_token(token);
+            }
+
+            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            while let Ok(statement) = parser.parse_statement() {
+                symbolizer.add_statement(&statement);
+            }
+
+            Ok(())
+        }).await?;
+
+        let tokens = symbolizer.to_tokens();
+        // self.client.log_message(MessageType::INFO, format!("Symbols: {response:#?}")).await;
+        Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+            result_id: None,
+            data: tokens,
+        })))
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -78,29 +149,7 @@ impl LanguageServer for Backend {
                 name: "Babbelaar Taalserveerder".to_string(),
                 version: None,
             }),
-            capabilities: ServerCapabilities {
-                text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::FULL,
-                )),
-                completion_provider: Some(CompletionOptions {
-                    resolve_provider: Some(true),
-                    trigger_characters: Some(vec![".".to_string()]),
-                    work_done_progress_options: WorkDoneProgressOptions::default(),
-                    ..Default::default()
-                }),
-                signature_help_provider: Some(SignatureHelpOptions {
-                    trigger_characters: None,
-                    retrigger_characters: None,
-                    work_done_progress_options: WorkDoneProgressOptions::default(),
-                }),
-                hover_provider: Some(true.into()),
-                document_formatting_provider: Some(OneOf::Left(true)),
-                document_highlight_provider: Some(OneOf::Left(true)),
-                document_symbol_provider: Some(OneOf::Left(true)),
-                // workspace_symbol_provider: Some(OneOf::Left(true)),
-                // definition_provider: Some(OneOf::Left(true)),
-                ..ServerCapabilities::default()
-            },
+            capabilities: self.capabilities(),
         })
     }
 
@@ -123,16 +172,28 @@ impl LanguageServer for Backend {
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        self.lexed_document(&params.text_document, |tokens| {
-            let mut symbols = Vec::new();
+        let mut symbolizer = Symbolizer::new(params.text_document.uri.clone());
 
-            for token in tokens {
-                convert_token_to_semantic_symbol(&params.text_document.uri, token, &mut symbols);
+        self.lexed_document(&params.text_document, |tokens| {
+            for token in &tokens {
+                symbolizer.add_token(token);
             }
 
-            Ok(Some(DocumentSymbolResponse::Flat(symbols)))
-        })
-        .await
+            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            while let Ok(statement) = parser.parse_statement() {
+                symbolizer.add_statement(&statement);
+            }
+
+            Ok(())
+        }).await?;
+
+        let response = symbolizer.to_response();
+        // self.client.log_message(MessageType::INFO, format!("Symbols: {response:#?}")).await;
+        Ok(Some(response))
+    }
+
+    async fn semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>> {
+        self.on_semantic_tokens_full(params).await
     }
 
     async fn document_highlight(&self, _params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
@@ -216,64 +277,6 @@ fn suggest_identifiers(ident: &str, completions: &mut Vec<CompletionItem>) {
                 ..Default::default()
             });
         }
-    }
-}
-
-fn convert_token_to_semantic_symbol(uri: &Url, token: Token, symbols: &mut Vec<SymbolInformation>) {
-    #[allow(deprecated)]
-    symbols.push(SymbolInformation {
-        name: token.kind.name().to_string(),
-        kind: convert_token_kind(&token.kind),
-        tags: None,
-        deprecated: None,
-        location: convert_token_location(uri.clone(), &token),
-        container_name: None,
-    })
-}
-
-fn convert_token_kind(kind: &TokenKind) -> SymbolKind {
-    match kind {
-        TokenKind::Keyword(..) => SymbolKind::KEY,
-        TokenKind::StringLiteral(..) => SymbolKind::STRING,
-        TokenKind::TemplateString(..) => SymbolKind::STRING,
-        TokenKind::Identifier(..) => SymbolKind::VARIABLE,
-        TokenKind::Integer(..) => SymbolKind::NUMBER,
-
-        TokenKind::Comma => SymbolKind::OPERATOR,
-        TokenKind::LeftParenthesis => SymbolKind::OPERATOR,
-        TokenKind::RightParenthesis => SymbolKind::OPERATOR,
-        TokenKind::LeftCurlyBracket => SymbolKind::OPERATOR,
-        TokenKind::RightCurlyBracket => SymbolKind::OPERATOR,
-        TokenKind::LeftSquareBracket => SymbolKind::OPERATOR,
-        TokenKind::RightSquareBracket => SymbolKind::OPERATOR,
-        TokenKind::Semicolon => SymbolKind::OPERATOR,
-        TokenKind::PlusSign => SymbolKind::OPERATOR,
-        TokenKind::EqualsSign => SymbolKind::OPERATOR,
-        TokenKind::HyphenMinus => SymbolKind::OPERATOR,
-        TokenKind::Solidus => SymbolKind::OPERATOR,
-        TokenKind::Asterisk => SymbolKind::OPERATOR,
-        TokenKind::PercentageSign => SymbolKind::OPERATOR,
-    }
-}
-
-fn convert_token_location(uri: Url, token: &Token) -> Location {
-    Location {
-        uri,
-        range: convert_token_range(token),
-    }
-}
-
-fn convert_token_range(token: &Token) -> Range {
-    Range {
-        start: convert_position(token.begin),
-        end: convert_position(token.end),
-    }
-}
-
-fn convert_position(location: FileLocation) -> Position {
-    Position {
-        line: location.line() as _,
-        character: location.column() as _,
     }
 }
 

@@ -2,20 +2,7 @@
 // All Rights Reserved.
 
 use crate::{
-    BiOperator,
-    BiExpression,
-    Expression,
-    ForStatement,
-    FunctionCallExpression,
-    FunctionStatement,
-    Keyword,
-    PrimaryExpression,
-    RangeExpression,
-    Statement,
-    TemplateStringExpressionPart,
-    TemplateStringToken,
-    Token,
-    TokenKind,
+    BiExpression, BiOperator, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, Keyword, PrimaryExpression, RangeExpression, Ranged, Statement, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseError<'source_code>>;
@@ -23,14 +10,28 @@ pub type ParseResult<'source_code, T> = Result<T, ParseError<'source_code>>;
 #[derive(Copy, Clone)]
 pub struct Parser<'tokens, 'source_code> {
     tokens: &'tokens [Token<'source_code>],
-    cursor: usize,
+    pub cursor: usize,
+    pub token_begin: FileLocation,
+    pub token_end: FileLocation,
+    error_behavior: ParserErrorBehavior,
 }
 
 impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     pub fn new(tokens: &'tokens [Token<'source_code>]) -> Self {
         Self {
+            error_behavior: ParserErrorBehavior::Propagate,
+            token_begin: Default::default(),
+            token_end: Default::default(),
             tokens,
             cursor: 0,
+        }
+    }
+
+    #[must_use]
+    pub fn attempt_to_ignore_errors(self) -> Self {
+        Self {
+            error_behavior: ParserErrorBehavior::AttemptToIgnore,
+            ..self
         }
     }
 
@@ -41,7 +42,6 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
 
         if self.peek_token()?.kind == TokenKind::Keyword(Keyword::Volg) {
-            _ = self.consume_token().ok();
             return Ok(Statement::For(self.parse_for_statement()?));
         }
 
@@ -66,7 +66,11 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 break;
             }
 
-            body.push(self.parse_statement()?);
+            match (self.parse_statement(), self.error_behavior) {
+                (Ok(statement), _) => body.push(statement),
+                (Err(e), ParserErrorBehavior::Propagate) => return Err(e),
+                (Err(_), ParserErrorBehavior::AttemptToIgnore) => continue,
+            }
         }
 
 
@@ -74,10 +78,13 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     fn parse_for_statement(&mut self) -> Result<ForStatement<'source_code>, ParseError<'source_code>> {
+        let keyword = self.consume_token()?.range();
         let iterator = self.consume_token()?;
         let TokenKind::Identifier(iterator_name) = iterator.kind else {
             return Err(ParseError::ForStatementExpectedIteratorName { token: iterator });
         };
+
+        let iterator_name = Ranged::new(iterator.range(), iterator_name);
 
         let in_keyword = self.consume_token()?;
         if in_keyword.kind != TokenKind::Keyword(Keyword::In) {
@@ -95,11 +102,15 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 break;
             }
 
-            body.push(self.parse_statement()?);
+            match (self.parse_statement(), self.error_behavior) {
+                (Ok(statement), _) => body.push(statement),
+                (Err(e), ParserErrorBehavior::Propagate) => return Err(e),
+                (Err(_), ParserErrorBehavior::AttemptToIgnore) => continue,
+            }
         }
 
 
-        Ok(ForStatement { iterator_name, range, body })
+        Ok(ForStatement { keyword, iterator_name, range, body })
     }
 
     fn parse_range(&mut self) -> Result<RangeExpression<'source_code>, ParseError<'source_code>> {
@@ -110,11 +121,11 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         self.expect_left_paren("range")?;
 
-        let start = self.parse_primary_expression()?;
+        let start = self.parse_ranged(Self::parse_primary_expression)?;
 
         self.expect_comma("range")?;
 
-        let end = self.parse_primary_expression()?;
+        let end = self.parse_ranged(Self::parse_primary_expression)?;
 
         self.expect_right_paren("range")?;
 
@@ -132,6 +143,14 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
             _ => Err(ParseError::UnknownStartOfExpression { token }),
         }
+    }
+
+    fn parse_ranged<F, T>(&mut self, f: F) -> Result<Ranged<T>, ParseError<'source_code>>
+            where F: FnOnce(&mut Self) -> Result<T, ParseError<'source_code>> {
+        let start = self.token_begin;
+        let value = f(self)?;
+        let end = self.token_end;
+        Ok(Ranged::new(FileRange::new(start, end), value))
     }
 
     fn parse_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
@@ -166,6 +185,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let TokenKind::Identifier(identifier) = token.kind else {
             return Err(ParseError::ExpressionFunctionCallNotStartingWithIdentifier { token });
         };
+        let function_identifier = Ranged::new(token.range(), identifier.to_string());
 
         self.expect_left_paren("function call identifier")?;
 
@@ -184,7 +204,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
 
         Ok(Expression::Function(FunctionCallExpression {
-            function_identifier: identifier.to_string(),
+            function_identifier,
             arguments,
         }))
     }
@@ -309,4 +329,10 @@ pub enum ParseError<'source_code> {
 
     #[error("Unknown start of expression: {token:?}")]
     UnknownStartOfExpression { token: Token<'source_code> },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParserErrorBehavior {
+    Propagate,
+    AttemptToIgnore,
 }

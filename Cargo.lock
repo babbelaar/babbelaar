@@ -70,6 +70,7 @@ dependencies = [
  "babbelaar",
  "log",
  "rstest",
+ "strum",
  "thiserror",
  "tokio",
  "tower-lsp",

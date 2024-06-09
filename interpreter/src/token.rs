@@ -1,7 +1,7 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{FileLocation, Keyword};
+use crate::{FileLocation, FileRange, Keyword};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum TokenKind<'source_code> {
@@ -61,6 +61,12 @@ pub struct Token<'source_code> {
     pub kind: TokenKind<'source_code>,
     pub begin: FileLocation,
     pub end: FileLocation,
+}
+
+impl<'source_code> Token<'source_code> {
+    pub fn range(&self) -> FileRange {
+        (self.begin, self.end).into()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

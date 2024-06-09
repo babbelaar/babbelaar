@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 log = "0.4"
 thiserror = "1"
+strum = { version = "*", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tower-lsp = "0.20"
 

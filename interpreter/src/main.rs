@@ -25,7 +25,7 @@ pub use self::{
     scope::Scope,
     statement::{ForStatement, FunctionStatement, Statement},
     token::{TemplateStringToken, Token, TokenKind},
-    util::{FileLocation, StringExt},
+    util::{FileLocation, FileRange, Ranged, StringExt},
     value::Value,
 };
 

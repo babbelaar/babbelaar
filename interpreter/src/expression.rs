@@ -1,6 +1,8 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use crate::Ranged;
+
 #[derive(Clone, Debug)]
 pub enum PrimaryExpression<'source_code> {
     StringLiteral(&'source_code str),
@@ -26,7 +28,7 @@ pub enum Expression<'source_code> {
 
 #[derive(Clone, Debug)]
 pub struct FunctionCallExpression<'source_code> {
-    pub function_identifier: String,
+    pub function_identifier: Ranged<String>,
     pub arguments: Vec<Expression<'source_code>>,
 }
 
@@ -47,8 +49,8 @@ pub enum BiOperator {
 #[derive(Clone, Debug)]
 pub struct RangeExpression<'source_code> {
     /// Start, inclusive
-    pub start: PrimaryExpression<'source_code>,
+    pub start: Ranged<PrimaryExpression<'source_code>>,
 
     /// End, exclusive
-    pub end: PrimaryExpression<'source_code>,
+    pub end: Ranged<PrimaryExpression<'source_code>>,
 }

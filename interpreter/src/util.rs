@@ -1,9 +1,9 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::Display;
+use std::{fmt::Display, ops::{Deref, DerefMut}};
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileLocation {
     offset: usize,
     line: usize,
@@ -51,6 +51,90 @@ impl From<FileLocation> for (usize, usize) {
 impl Display for FileLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{}:{}", self.line() + 1, self.column() + 1))
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FileRange {
+    start: FileLocation,
+    end: FileLocation,
+}
+
+impl FileRange {
+    #[must_use]
+    pub const fn new(start: FileLocation, end: FileLocation) -> Self {
+        Self {
+            start,
+            end,
+        }
+    }
+
+    #[must_use]
+    pub const fn start(&self) -> FileLocation {
+        self.start
+    }
+
+    #[must_use]
+    pub const fn end(&self) -> FileLocation {
+        self.end
+    }
+}
+
+impl From<(FileLocation, FileLocation)> for FileRange {
+    fn from(value: (FileLocation, FileLocation)) -> Self {
+        Self::new(value.0, value.1)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Ranged<T> {
+    range: FileRange,
+    value: T,
+}
+
+impl<T> Ranged<T> {
+    #[must_use]
+    pub const fn new(range: FileRange, value: T) -> Self {
+        Self {
+            range,
+            value,
+        }
+    }
+
+    #[must_use]
+    pub const fn range(&self) -> FileRange {
+        self.range
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T> AsRef<T> for Ranged<T> {
+    fn as_ref(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T> AsMut<T> for Ranged<T> {
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
+}
+
+impl<T> Deref for Ranged<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl<T> DerefMut for Ranged<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
     }
 }
 
