@@ -53,6 +53,24 @@ impl<'source_code> Interpreter<'source_code> {
             Expression::Primary(PrimaryExpression::StringLiteral(str)) => {
                 Value::String(str.to_string())
             }
+
+            Expression::Primary(PrimaryExpression::TemplateString{ parts }) => {
+                let mut string = String::new();
+
+                for part in parts {
+                    match part {
+                        TemplateStringExpressionPart::String(str) => {
+                            string += str;
+                        }
+
+                        TemplateStringExpressionPart::Expression(expression) => {
+                            string += &self.execute_expression(expression).to_string();
+                        }
+                    }
+                }
+
+                Value::String(string)
+            }
         }
     }
 

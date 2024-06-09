@@ -3,7 +3,7 @@
 
 use std::str::CharIndices;
 
-use crate::{Token, TokenKind, Keyword};
+use crate::{Keyword, StringExt, TemplateStringToken, Token, TokenKind};
 
 pub struct Lexer<'source_code> {
     input: &'source_code str,
@@ -26,6 +26,8 @@ impl<'source_code> Lexer<'source_code> {
 
         match self.peek_char()? {
             '"' => self.consume_string(),
+            '€' => self.consume_template_string(),
+
             'a'..='z' | 'A'..='Z' => self.consume_identifier_or_keyword(),
             '0'..='9' => self.consume_number(),
 
@@ -43,7 +45,12 @@ impl<'source_code> Lexer<'source_code> {
             '/' => self.consume_single_char_token(TokenKind::Solidus),
             '*' => self.consume_single_char_token(TokenKind::Asterisk),
 
-            unknown_char => panic!("Invalid char: '{unknown_char}' (U+{:X}", unknown_char as u32),
+            unknown_char => {
+                let pos = self.input.find_file_location(self.current.unwrap_or_default().0).unwrap_or_default();
+
+                eprintln!("Error at test.bab:{pos}");
+                panic!("Invalid char: '{unknown_char}' (U+{:X}", unknown_char as u32)
+            }
         }
     }
 
@@ -83,6 +90,66 @@ impl<'source_code> Lexer<'source_code> {
 
         Some(Token {
             kind: TokenKind::StringLiteral(str),
+            begin,
+            end,
+        })
+    }
+
+    fn consume_template_string(&mut self) -> Option<Token<'source_code>> {
+        assert_eq!(self.next_char().unwrap(), '€');
+        let begin = self.current?.0;
+
+        assert_eq!(self.next_char().unwrap(), '"');
+
+        let mut parts = Vec::new();
+
+        loop {
+            let c = self.peek_char().unwrap();
+
+            if c == '{' {
+                self.consume_char();
+                let mut tokens = Vec::new();
+                loop {
+                    if self.peek_char() == Some('}') {
+                        self.consume_char();
+                        break;
+                    }
+
+                    let token = self.next()?;
+                    tokens.push(token);
+                }
+
+                parts.push(TemplateStringToken::Expression(tokens));
+                continue;
+            }
+
+            if c == '"' {
+                break;
+            }
+
+            let begin = self.current?.0;
+            self.consume_char();
+            let end_pos = self.current?.0;
+            let end = end_pos;
+
+            if let Some(TemplateStringToken::Plain{ begin, end, str }) = parts.last_mut() {
+                *end = end_pos;
+                *str = &self.input[*begin..end_pos];
+            } else {
+                let str = &self.input[begin..end];
+                parts.push(TemplateStringToken::Plain {
+                    begin,
+                    end,
+                    str,
+                });
+            }
+        }
+
+        self.consume_char();
+        let end = self.current?.0;
+
+        Some(Token {
+            kind: TokenKind::TemplateString(parts),
             begin,
             end,
         })
@@ -182,4 +249,8 @@ fn is_identifier_char(c: char) -> bool {
         || ('A'..='Z').contains(&c)
         || ('0'..='9').contains(&c)
         || c == '_'
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum LexerError {
 }

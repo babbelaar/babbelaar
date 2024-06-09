@@ -1,4 +1,4 @@
-// Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 #![deny(elided_lifetimes_in_paths)]
@@ -11,6 +11,7 @@ mod parser;
 mod scope;
 mod statement;
 mod token;
+mod util;
 mod value;
 
 pub use self::{
@@ -21,7 +22,8 @@ pub use self::{
     parser::{Parser, ParseError},
     scope::Scope,
     statement::{ForStatement, FunctionStatement, Statement},
-    token::{Token, TokenKind},
+    token::{TemplateStringToken, Token, TokenKind},
+    util::{FileLocation, StringExt},
     value::Value,
 };
 

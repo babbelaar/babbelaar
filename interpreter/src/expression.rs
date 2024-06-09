@@ -6,6 +6,15 @@ pub enum PrimaryExpression<'source_code> {
     StringLiteral(&'source_code str),
     IntegerLiteral(i64),
     Reference(&'source_code str),
+    TemplateString {
+        parts: Vec<TemplateStringExpressionPart<'source_code>>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum TemplateStringExpressionPart<'source_code> {
+    String(&'source_code str),
+    Expression(Expression<'source_code>),
 }
 
 #[derive(Clone, Debug)]

@@ -1,5 +1,5 @@
 volg i in reeks(0, 11) {
     volg j in reeks(0, 11) {
-        schrijf("Getal:", i, "en", j, "is", i + j)
+        schrijf(€"Getal: {i} en {j} is samen {i + j}")
     }
 }

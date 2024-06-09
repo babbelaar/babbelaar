@@ -5,23 +5,29 @@ use crate::{
     BiOperator,
     BiExpression,
     Expression,
+    ForStatement,
     FunctionCallExpression,
     FunctionStatement,
     Keyword,
     PrimaryExpression,
+    RangeExpression,
     Statement,
+    TemplateStringExpressionPart,
+    TemplateStringToken,
     Token,
-    TokenKind, ForStatement, RangeExpression,
+    TokenKind,
 };
 
+pub type ParseResult<'source_code, T> = Result<T, ParseError<'source_code>>;
+
 #[derive(Copy, Clone)]
-pub struct Parser<'source_code> {
-    tokens: &'source_code [Token<'source_code>],
+pub struct Parser<'tokens, 'source_code> {
+    tokens: &'tokens [Token<'source_code>],
     cursor: usize,
 }
 
-impl<'source_code> Parser<'source_code> {
-    pub fn new(tokens: &'source_code [Token<'source_code>]) -> Self {
+impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
+    pub fn new(tokens: &'tokens [Token<'source_code>]) -> Self {
         Self {
             tokens,
             cursor: 0,
@@ -122,6 +128,7 @@ impl<'source_code> Parser<'source_code> {
             TokenKind::StringLiteral(literal) => Ok(PrimaryExpression::StringLiteral(literal)),
             TokenKind::Integer(integer) => Ok(PrimaryExpression::IntegerLiteral(integer)),
             TokenKind::Identifier(identifier) => Ok(PrimaryExpression::Reference(identifier)),
+            TokenKind::TemplateString(template_string) => self.parse_template_string(template_string),
 
             _ => Err(ParseError::UnknownStartOfExpression { token }),
         }
@@ -180,6 +187,32 @@ impl<'source_code> Parser<'source_code> {
             function_identifier: identifier.to_string(),
             arguments,
         }))
+    }
+
+    fn parse_template_string(&self, template_string: Vec<TemplateStringToken<'source_code>>) -> ParseResult<'source_code, PrimaryExpression<'source_code>> {
+        let mut parts = Vec::new();
+
+        for token in template_string {
+            let part = match token {
+                TemplateStringToken::Plain { str, .. } => TemplateStringExpressionPart::String(str),
+                TemplateStringToken::Expression(tokens) => {
+                    let mut parser = Parser::new(&tokens);
+                    let expr = parser.parse_expression()?;
+
+                    if parser.cursor < tokens.len() {
+                        return Err(ParseError::ResidualTokensInTemplateString {
+                            token: tokens[parser.cursor].clone(),
+                        });
+                    }
+
+                    TemplateStringExpressionPart::Expression(expr)
+                }
+            };
+
+            parts.push(part);
+        }
+
+        Ok(PrimaryExpression::TemplateString { parts })
     }
 
     fn peek_token(&self) -> Result<&Token<'source_code>, ParseError<'source_code>> {
@@ -270,6 +303,9 @@ pub enum ParseError<'source_code> {
 
     #[error("Expected 'reeks' keyword, but got: {token:?}")]
     RangeExpectedKeyword { token: Token<'source_code> },
+
+    #[error("Residual token after template string expression: {token:?}")]
+    ResidualTokensInTemplateString { token: Token<'source_code> },
 
     #[error("Unknown start of expression: {token:?}")]
     UnknownStartOfExpression { token: Token<'source_code> },
