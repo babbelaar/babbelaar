@@ -7,16 +7,17 @@
         "vscode": "^1.90.0"
     },
     "categories": [
-        "Other"
-    ],
-    "activationEvents": [
-        "onLanguage:bab"
+        "Programming Languages"
     ],
     "main": "./out/extension.js",
     "contributes": {
         "languages": [
             {
-                "id": "bab",
+                "id": "babbelaar",
+                "configuration": "./language-configuration.json",
+                "aliases": [
+                    "Babbelaar"
+                ],
                 "extensions": [
                     ".bab"
                 ]
@@ -24,8 +25,26 @@
         ],
         "commands": [
             {
+                "command": "babbelaar.uitvoeren",
+                "title": "Babbelaar: Bestand uitvoeren"
+            },
+            {
                 "command": "babbelaar.helloWorld",
                 "title": "Hello World"
+            }
+        ],
+        "taskDefinitions": [
+            {
+                "type": "babbelaar",
+                "required": [
+                    "script"
+                ],
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Het bestandspad om uit te voeren."
+                    }
+                }
             }
         ],
         "configuration": {
@@ -47,9 +66,15 @@
         },
         "grammars": [
             {
-                "language": "bab",
-                "scopeName": "source.bab",
-                "path": "./syntaxes/bab.tmGrammar.json"
+                "language": "babbelaar",
+                "scopeName": "source.babbelaar",
+                "path": "./syntaxes/babbelaar.tmGrammar.json"
+            }
+        ],
+        "snippets": [
+            {
+                "language": "babbelaar",
+                "path": "./snippets/babbelaar.json"
             }
         ]
     },

@@ -38,7 +38,7 @@ impl DocumentationProvider for Keyword {
             Self::Reeks => {
                 r#"Stel een reeks op van getallen.
 ## Voorbeeld
-```bab
+```babbelaar
 volg i in reeks(0, 10) {
     // Gebruik het getal tussen 0 en 10.
 }

@@ -46,6 +46,32 @@ impl Backend {
         .await
     }
 
+    async fn collect_lenses(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
+        let url = params.text_document.uri.to_string();
+        Ok(Some(vec![
+            CodeLens {
+                range: Range {
+                    start: Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 0,
+                        character: 1,
+                    },
+                },
+                command: Some(Command {
+                    title: "► Uitvoeren".into(),
+                    command: "babbelaar.uitvoeren".into(),
+                    arguments: Some(vec![
+                        url.into(),
+                    ]),
+                }),
+                data: None,
+            }
+        ]))
+    }
+
     async fn lexed_document<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
         F: FnOnce(Vec<Token>) -> Result<R>,
@@ -110,6 +136,9 @@ impl Backend {
                     full: Some(SemanticTokensFullOptions::Bool(true)),
                 }
             )),
+            code_lens_provider: Some(CodeLensOptions {
+                resolve_provider: Some(true),
+            }),
             // workspace_symbol_provider: Some(OneOf::Left(true)),
             // definition_provider: Some(OneOf::Left(true)),
             ..ServerCapabilities::default()
@@ -151,6 +180,14 @@ impl LanguageServer for Backend {
             }),
             capabilities: self.capabilities(),
         })
+    }
+
+    async fn code_lens(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
+        self.collect_lenses(params).await
+    }
+
+    async fn code_lens_resolve(&self, params: CodeLens) -> Result<CodeLens> {
+        Ok(params)
     }
 
     async fn initialized(&self, _: InitializedParams) {

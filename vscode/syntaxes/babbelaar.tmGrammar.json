@@ -1,0 +1,47 @@
+{
+    "$schema": "https://json.schemastore.org/tmlanguage.json",
+    "name": "Babbelaar",
+    "scopeName": "source.babbelaar",
+    "patterns": [
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#strings"
+        }
+    ],
+    "repository": {
+        "keywords": {
+            "patterns": [
+                {
+                    "match": "\\b(volg|in|reeks|functie|bekeer)\\b",
+                    "name": "keyword.control.babbelaar"
+                }
+            ]
+        },
+        "constant.numeric.decimal": {
+            "patterns": [
+                {
+                    "match": "(?![_$[:alpha:]])([[:digit:]]+)\\s*(?=(\\/\\*([^\\*]|(\\*[^\\/]))*\\*\\/\\s*)*:)",
+                    "name": "constant.numeric"
+                }
+            ]
+        },
+        "strings": {
+            "patterns": [
+                {
+                    "match": "'[^']*'",
+                    "name": "string.quoted.single.babbelaar"
+                },
+                {
+                    "match": "\"[^\"]*\"",
+                    "name": "string.quoted.double.babbelaar"
+                },
+                {
+                    "match": "€\"[^\"]*\"",
+                    "name": "string.quoted.double.template.babbelaar"
+                }
+            ]
+        }
+    }
+}

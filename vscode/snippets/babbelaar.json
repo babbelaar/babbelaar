@@ -1,0 +1,12 @@
+{
+    "Nieuwe functie aanmaken": {
+        "prefix": ["functie"],
+        "body": ["functie ${1:naam}() {", "\t$0", "}"],
+        "description": "Een nieuwe functie."
+    },
+    "Itereren met volg in reeks": {
+        "prefix": ["volg", "volg-reeks"],
+        "body": ["volg ${1:element} in reeks(${2:start}, ${3:eind}) {", "\t$0", "}"],
+        "description": "Volg in reek."
+    }
+}

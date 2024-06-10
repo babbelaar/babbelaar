@@ -21,6 +21,11 @@ import {
 	TextEdit,
 	Selection,
 	Uri,
+	tasks,
+	Task,
+	TaskProvider,
+	ShellExecution,
+	TaskScope,
 } from "vscode";
 
 import {
@@ -33,6 +38,52 @@ import {
 
 let client: LanguageClient;
 // type a = Parameters<>;
+
+
+class BabbelaarTaskProvider implements TaskProvider<Task> {
+	provideTasks(token: CancellationToken): ProviderResult<Task[]> {
+		console.log(`Tasks token ${token}`);
+		// throw new Error("Method not implemented.");
+		return [];
+	}
+
+	createRun(path: string): Task {
+		const task = new Task(
+			{
+				type: "babbelaar",
+				path,
+			},
+			TaskScope.Workspace,
+			path,
+			"babbelaar",
+		);
+		return this.resolveTaskImpl(task);
+	}
+
+	resolveTask(task: Task, _token: CancellationToken): ProviderResult<Task> {
+		return this.resolveTaskImpl(task);
+	}
+
+	resolveTaskImpl(task: Task): Task {
+		const command = process.env.BABBELAAR || "babbelaar";
+
+		const path = task.definition["path"] as string;
+		const execution = new ShellExecution(`clear; ${command} ${path}`);
+		console.log(JSON.stringify(task, null, ''));
+		const definition = task.definition;
+
+		return new Task(
+			definition,
+			task.scope ?? TaskScope.Workspace,
+			path,
+			'babbelaar',
+			execution
+		  );
+	}
+}
+
+const taskProvider = new BabbelaarTaskProvider();
+const taskProviderSubscription = tasks.registerTaskProvider("babbelaar", taskProvider);
 
 export async function activate(context: ExtensionContext) {
 	let disposable = commands.registerCommand("babbelaar.helloWorld", async uri => {
@@ -50,6 +101,14 @@ export async function activate(context: ExtensionContext) {
 	});
 
 	context.subscriptions.push(disposable);
+
+	disposable = commands.registerCommand("babbelaar.uitvoeren", async uri => {
+		const path = workspace.textDocuments[0].uri.fsPath;
+		tasks.executeTask(taskProvider.createRun(path));
+	});
+
+	context.subscriptions.push(disposable);
+
 
 	const traceOutputChannel = window.createOutputChannel("Babbelaar Taalserveerder trace");
 	const command = process.env.SERVER_PATH || "babbelaar-lsp";
@@ -72,7 +131,7 @@ export async function activate(context: ExtensionContext) {
 	// Options to control the language client
 	let clientOptions: LanguageClientOptions = {
 		// Register the server for plain text documents
-		documentSelector: [{ scheme: "file", language: "bab" }],
+		documentSelector: [{ scheme: "file", language: "babbelaar" }],
 		synchronize: {
 			// Notify the server about file changes to '.clientrc files contained in the workspace
 			fileEvents: workspace.createFileSystemWatcher("**/.clientrc"),
