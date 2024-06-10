@@ -3,7 +3,7 @@
 
 use std::str::CharIndices;
 
-use crate::{FileLocation, Keyword, TemplateStringToken, Token, TokenKind};
+use crate::{FileLocation, Keyword, Punctuator, TemplateStringToken, Token, TokenKind};
 
 pub struct Lexer<'source_code> {
     input: &'source_code str,
@@ -28,34 +28,47 @@ impl<'source_code> Lexer<'source_code> {
     pub fn next(&mut self) -> Option<Token<'source_code>> {
         self.skip_whitespace();
 
-        match self.peek_char()? {
+        let ch = self.peek_char()?;
+        let tok = match ch {
             '"' => self.consume_string(),
             '€' => self.consume_template_string(),
 
             'a'..='z' | 'A'..='Z' => self.consume_identifier_or_keyword(),
             '0'..='9' => self.consume_number(),
 
-            '(' => self.consume_single_char_token(TokenKind::LeftParenthesis),
-            ')' => self.consume_single_char_token(TokenKind::RightParenthesis),
-            '{' => self.consume_single_char_token(TokenKind::LeftCurlyBracket),
-            '}' => self.consume_single_char_token(TokenKind::RightCurlyBracket),
-            '[' => self.consume_single_char_token(TokenKind::LeftSquareBracket),
-            ']' => self.consume_single_char_token(TokenKind::RightSquareBracket),
-            ';' => self.consume_single_char_token(TokenKind::Semicolon),
-            ',' => self.consume_single_char_token(TokenKind::Comma),
-            '=' => self.consume_single_char_token(TokenKind::EqualsSign),
-            '+' => self.consume_single_char_token(TokenKind::PlusSign),
-            '-' => self.consume_single_char_token(TokenKind::HyphenMinus),
-            '/' => self.consume_single_char_token(TokenKind::Solidus),
-            '*' => self.consume_single_char_token(TokenKind::Asterisk),
+            '(' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::LeftParenthesis)),
+            ')' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::RightParenthesis)),
+            '{' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::LeftCurlyBracket)),
+            '}' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::RightCurlyBracket)),
+            '[' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::LeftSquareBracket)),
+            ']' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::RightSquareBracket)),
+            ';' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Semicolon)),
+            ',' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Comma)),
+            '=' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::EqualsSign)),
+            '+' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PlusSign)),
+            '-' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::HyphenMinus)),
+            '/' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus)),
+            '*' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Asterisk)),
+            ':' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Colon)),
 
-            unknown_char => {
-                let pos = self.current.unwrap_or_default().0;
-
-                eprintln!("Error at test.bab:{pos}");
-                panic!("Invalid char: '{unknown_char}' (U+{:X}", unknown_char as u32)
+            _ => {
+                let (begin, char) = self.current?;
+                self.consume_char();
+                let end = self.current
+                    .map(|(pos, _)| pos)
+                    .unwrap_or_else(|| {
+                        let length = char.len_utf8();
+                        FileLocation::new(begin.offset() + length, begin.line(), begin.column() + length)
+                    });
+                Some(Token {
+                    begin,
+                    end,
+                    kind: TokenKind::IllegalCharacter(char),
+                })
             }
-        }
+        };
+
+        tok
     }
 
     fn consume_single_char_token(&mut self, kind: TokenKind<'source_code>) -> Option<Token<'source_code>> {
@@ -118,12 +131,12 @@ impl<'source_code> Lexer<'source_code> {
                 self.consume_char();
                 let mut tokens = Vec::new();
                 loop {
-                    if self.peek_char() == Some('}') {
-                        self.consume_char();
+                    let token = self.next()?;
+
+                    if matches!(token.kind, TokenKind::Punctuator(Punctuator::RightCurlyBracket)) {
                         break;
                     }
 
-                    let token = self.next()?;
                     tokens.push(token);
                 }
 

@@ -2,7 +2,7 @@
 // All Rights Reserved.
 
 use crate::{
-    BiExpression, BiOperator, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, Keyword, PrimaryExpression, RangeExpression, Ranged, Statement, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind
+    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, Keyword, Parameter, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseError<'source_code>>;
@@ -36,6 +36,11 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     pub fn parse_statement(&mut self) -> Result<Statement<'source_code>, ParseError<'source_code>> {
+        if self.peek_token()?.kind == TokenKind::Keyword(Keyword::Bekeer) {
+            _ = self.consume_token().ok();
+            return Ok(Statement::Return(self.parse_return_statement()?));
+        }
+
         if self.peek_token()?.kind == TokenKind::Keyword(Keyword::Functie) {
             _ = self.consume_token().ok();
             return Ok(Statement::Function(self.parse_function()?));
@@ -56,12 +61,38 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         };
 
         self.expect_left_paren("function name")?;
+
+        let mut parameters = Vec::new();
+        while self.peek_punctuator() != Some(Punctuator::RightParenthesis) {
+            match (self.parse_parameter(), self.error_behavior) {
+                (Ok(parameter), _) => parameters.push(parameter),
+                (Err(e), ParserErrorBehavior::Propagate) => return Err(e),
+                (Err(_), ParserErrorBehavior::AttemptToIgnore) => continue,
+            }
+
+            match self.peek_punctuator() {
+                Some(Punctuator::Comma) => {
+                    _ = self.consume_token()?;
+                    continue;
+                }
+
+                Some(Punctuator::RightParenthesis) => break,
+
+                _ => match self.error_behavior {
+                    ParserErrorBehavior::Propagate => return Err(ParseError::ParameterExpectedComma{
+                        token: self.peek_token().ok().cloned(),
+                    }),
+                    ParserErrorBehavior::AttemptToIgnore => continue,
+                }
+            }
+        }
+
         self.expect_right_paren("function name")?;
         self.expect_left_curly_bracket("function argument list")?;
 
         let mut body = Vec::new();
         loop {
-            if self.peek_token()?.kind == TokenKind::RightCurlyBracket {
+            if self.peek_token()?.kind == TokenKind::Punctuator(Punctuator::RightCurlyBracket) {
                 _ = self.consume_token()?;
                 break;
             }
@@ -74,7 +105,77 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
 
 
-        Ok(FunctionStatement { name, body })
+        Ok(FunctionStatement { name, body, parameters })
+    }
+
+    fn parse_return_statement(&mut self) -> Result<ReturnStatement<'source_code>, ParseError<'source_code>> {
+        match self.peek_punctuator() {
+            Some(Punctuator::Semicolon) => {
+                _ = self.consume_token()?;
+                return Ok(ReturnStatement { expression: None });
+            }
+
+            Some(Punctuator::RightCurlyBracket) => return Ok(ReturnStatement { expression: None }),
+
+            _ => (),
+        }
+
+        match self.parse_expression() {
+            Ok(expression) => {
+                Ok(ReturnStatement {
+                    expression: Some(expression),
+                })
+            }
+
+            Err(e) => {
+                match self.error_behavior {
+                    ParserErrorBehavior::Propagate => Err(e),
+                    ParserErrorBehavior::AttemptToIgnore => Ok(ReturnStatement {
+                        expression: None,
+                    }),
+                }
+            }
+        }
+    }
+
+    fn parse_parameter(&mut self) -> Result<Parameter<'source_code>, ParseError<'source_code>> {
+        let name = self.parse_parameter_name()?;
+
+        self.expect_colon("parameter name")?;
+
+        let ty = self.parse_type()?;
+
+        Ok(Parameter {
+            name,
+            ty,
+        })
+    }
+
+    fn parse_parameter_name(&mut self) -> Result<Ranged<String>, ParseError<'source_code>> {
+        let name = self.consume_token()?;
+        let name_range = name.range();
+        let TokenKind::Identifier(name) = name.kind else {
+            return Err(ParseError::ParameterExpectedName { token: name });
+        };
+
+        Ok(Ranged::new(name_range, name.to_string()))
+    }
+
+    fn parse_type(&mut self) -> Result<Ranged<Type<'source_code>>, ParseError<'source_code>> {
+        let name_token = self.consume_token()?;
+        let TokenKind::Identifier(name) = name_token.kind else {
+            return Err(ParseError::TypeExpectedSpecifierName { token: name_token });
+        };
+
+        let specifier = match Builtin::TYPES.iter().find(|x| x.name == name) {
+            Some(builtin) => TypeSpecifier::BuiltIn(builtin),
+            None => TypeSpecifier::Custom { name },
+        };
+
+        let ty = Type {
+            specifier: Ranged::new(name_token.range(), specifier),
+        };
+        Ok(Ranged::new(name_token.range(), ty))
     }
 
     fn parse_for_statement(&mut self) -> Result<ForStatement<'source_code>, ParseError<'source_code>> {
@@ -97,7 +198,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         let mut body = Vec::new();
         loop {
-            if self.peek_token()?.kind == TokenKind::RightCurlyBracket {
+            if self.peek_token()?.kind == TokenKind::Punctuator(Punctuator::RightCurlyBracket) {
                 _ = self.consume_token()?;
                 break;
             }
@@ -154,16 +255,24 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     fn parse_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
-        let primary = Expression::Primary(self.parse_primary_expression()?);
+        let primary = {
+            let mut parser = *self;
+            if let Ok(func) = parser.parse_function_call_expression() {
+                *self = parser;
+                func
+            } else {
+                Expression::Primary(self.parse_primary_expression()?)
+            }
+        };
 
         let Ok(next) = self.peek_token() else {
             return Ok(primary);
         };
 
         let operator = match next.kind {
-            TokenKind::PlusSign => BiOperator::Add,
-            TokenKind::HyphenMinus => BiOperator::Subtract,
-            TokenKind::Asterisk => BiOperator::Multiply,
+            TokenKind::Punctuator(Punctuator::PlusSign) => BiOperator::Add,
+            TokenKind::Punctuator(Punctuator::HyphenMinus) => BiOperator::Subtract,
+            TokenKind::Punctuator(Punctuator::Asterisk) => BiOperator::Multiply,
             _ => return Ok(primary),
         };
 
@@ -190,8 +299,8 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         self.expect_left_paren("function call identifier")?;
 
         let mut arguments = Vec::new();
-        loop {
-            if self.peek_token()?.kind == TokenKind::RightParenthesis {
+        while let Ok(token) = self.peek_token() {
+            if token.kind == TokenKind::Punctuator(Punctuator::RightParenthesis) {
                 self.consume_token()?;
                 break;
             }
@@ -242,6 +351,14 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
     }
 
+    fn peek_punctuator(&self) -> Option<Punctuator> {
+        let Ok(token) = self.peek_token() else { return None };
+        match token.kind {
+            TokenKind::Punctuator(punctuator) => Some(punctuator),
+            _ => None,
+        }
+    }
+
     fn consume_token(&mut self) -> Result<Token<'source_code>, ParseError<'source_code>> {
         let token = self.peek_token()?.clone();
         self.cursor += 1;
@@ -251,7 +368,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     fn expect_left_paren(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
         let token = self.consume_token()?;
 
-        if token.kind != TokenKind::LeftParenthesis {
+        if token.kind != TokenKind::Punctuator(Punctuator::LeftParenthesis) {
             return Err(ParseError::ExpectedLeftParen { token, context });
         }
 
@@ -261,7 +378,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     fn expect_right_paren(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
         let token = self.consume_token()?;
 
-        if token.kind != TokenKind::RightParenthesis {
+        if token.kind != TokenKind::Punctuator(Punctuator::RightParenthesis) {
             return Err(ParseError::ExpectedRightParen { token, context });
         }
 
@@ -271,7 +388,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     fn expect_left_curly_bracket(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
         let token = self.consume_token()?;
 
-        if token.kind != TokenKind::LeftCurlyBracket {
+        if token.kind != TokenKind::Punctuator(Punctuator::LeftCurlyBracket) {
             return Err(ParseError::ExpectedLeftCurlyBracket { token, context });
         }
 
@@ -281,8 +398,18 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     fn expect_comma(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
         let token = self.consume_token()?;
 
-        if token.kind != TokenKind::Comma {
+        if token.kind != TokenKind::Punctuator(Punctuator::Comma) {
             return Err(ParseError::ExpectedComma { token, context });
+        }
+
+        Ok(())
+    }
+
+    fn expect_colon(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
+        let token = self.consume_token()?;
+
+        if token.kind != TokenKind::Punctuator(Punctuator::Colon) {
+            return Err(ParseError::ExpectedColon { token, context });
         }
 
         Ok(())
@@ -309,6 +436,9 @@ pub enum ParseError<'source_code> {
     #[error("Expected right parenthesis ')' after {context}, but got: {token:?}")]
     ExpectedRightParen { token: Token<'source_code>, context: &'static str },
 
+    #[error("Expected colon ':' after {context}, but got: {token:?}")]
+    ExpectedColon { token: Token<'source_code>, context: &'static str },
+
     #[error("Expected comma ',' after {context}, but got: {token:?}")]
     ExpectedComma { token: Token<'source_code>, context: &'static str },
 
@@ -321,11 +451,20 @@ pub enum ParseError<'source_code> {
     #[error("Expected 'in' keyword 'volg' iterator name, but got: {token:?}")]
     ForStatementExpectedInKeyword { token: Token<'source_code> },
 
+    #[error("Expected name of parameter, but got: {token:?}")]
+    ParameterExpectedName { token: Token<'source_code> },
+
+    #[error("Expected comma ',' or right parenthesis ')' inside parameter list, but got: {token:?}")]
+    ParameterExpectedComma { token: Option<Token<'source_code>> },
+
     #[error("Expected 'reeks' keyword, but got: {token:?}")]
     RangeExpectedKeyword { token: Token<'source_code> },
 
     #[error("Residual token after template string expression: {token:?}")]
     ResidualTokensInTemplateString { token: Token<'source_code> },
+
+    #[error("Expected the type of the parameter, but got: {token:?}")]
+    TypeExpectedSpecifierName { token: Token<'source_code> },
 
     #[error("Unknown start of expression: {token:?}")]
     UnknownStartOfExpression { token: Token<'source_code> },
@@ -335,4 +474,22 @@ pub enum ParseError<'source_code> {
 pub enum ParserErrorBehavior {
     Propagate,
     AttemptToIgnore,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Lexer;
+
+    use super::*;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(" schrijf(\"Hallo\") ")]
+    #[case("schrijf(\"Hallo\")")]
+    fn parse_function_call_expression(#[case] input: &str) {
+        let tokens: Vec<Token<'_>> = Lexer::new(input).collect();
+        let mut parser = Parser::new(&tokens);
+        let expression = parser.parse_expression().unwrap();
+        assert!(matches!(expression, Expression::Function(..)), "Invalid parse: {expression:?}");
+    }
 }

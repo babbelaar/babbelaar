@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{fmt::Display, ops::{Deref, DerefMut}};
+use std::{borrow::Cow, fmt::Display, ops::{Deref, DerefMut}};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileLocation {
@@ -173,6 +173,10 @@ impl StringExt for &str {
 
         None
     }
+}
+
+pub trait DocumentationProvider {
+    fn provide_documentation(&self) -> Cow<'_, str>;
 }
 
 #[cfg(test)]

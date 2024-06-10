@@ -3,7 +3,8 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{Expression, FileRange, ForStatement, Statement, Token, TokenKind};
+use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, Parameter, Statement, Token, TokenKind};
+use log::info;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
 
@@ -26,6 +27,7 @@ impl Symbolizer {
         match statement {
             Statement::Expression(expression) => self.add_expression(expression),
             Statement::For(statement) => self.add_statement_for(statement),
+            Statement::Function(statement) => self.add_statement_function(statement),
             _ => (),
         }
     }
@@ -62,6 +64,7 @@ impl Symbolizer {
             previous_range = range;
         }
 
+        info!("Tokens: {tokens:#?}");
         tokens
     }
 
@@ -69,6 +72,30 @@ impl Symbolizer {
         for statement in &statement.body {
             self.add_statement(statement);
         }
+    }
+
+    fn add_statement_function(&mut self, statement: &FunctionStatement) {
+        for parameter in &statement.parameters {
+            self.add_parameter(parameter);
+        }
+
+        for statement in &statement.body {
+            self.add_statement(statement);
+        }
+    }
+
+    fn add_parameter(&mut self, parameter: &Parameter) {
+        self.symbols.insert(parameter.name.range(), LspSymbol {
+            name: parameter.name.value().to_string(),
+            kind: LspTokenType::ParameterName,
+            range: parameter.name.range(),
+        });
+
+        self.symbols.insert(parameter.ty.range(), LspSymbol {
+            name: "Type".to_string(),
+            kind: LspTokenType::Class,
+            range: parameter.ty.range(),
+        });
     }
 
     fn add_expression(&mut self, expression: &Expression) {
@@ -135,6 +162,8 @@ pub enum LspTokenType {
     Operator,
     String,
     Variable,
+    ParameterName,
+    Class,
 }
 
 impl LspTokenType {
@@ -153,20 +182,8 @@ impl<'source_code> From<&TokenKind<'source_code>> for LspTokenType {
             TokenKind::Identifier(..) => LspTokenType::Variable,
             TokenKind::Integer(..) => LspTokenType::Number,
 
-            TokenKind::Comma => LspTokenType::Operator,
-            TokenKind::LeftParenthesis => LspTokenType::Operator,
-            TokenKind::RightParenthesis => LspTokenType::Operator,
-            TokenKind::LeftCurlyBracket => LspTokenType::Operator,
-            TokenKind::RightCurlyBracket => LspTokenType::Operator,
-            TokenKind::LeftSquareBracket => LspTokenType::Operator,
-            TokenKind::RightSquareBracket => LspTokenType::Operator,
-            TokenKind::Semicolon => LspTokenType::Operator,
-            TokenKind::PlusSign => LspTokenType::Operator,
-            TokenKind::EqualsSign => LspTokenType::Operator,
-            TokenKind::HyphenMinus => LspTokenType::Operator,
-            TokenKind::Solidus => LspTokenType::Operator,
-            TokenKind::Asterisk => LspTokenType::Operator,
-            TokenKind::PercentageSign => LspTokenType::Operator,
+            TokenKind::Punctuator(..) => LspTokenType::Operator,
+            TokenKind::IllegalCharacter(..) => LspTokenType::Operator,
         }
     }
 }
@@ -181,6 +198,8 @@ impl From<LspTokenType> for SemanticTokenType {
             LspTokenType::Operator => SemanticTokenType::OPERATOR,
             LspTokenType::String => SemanticTokenType::STRING,
             LspTokenType::Variable => SemanticTokenType::VARIABLE,
+            LspTokenType::ParameterName => SemanticTokenType::PARAMETER,
+            LspTokenType::Class => SemanticTokenType::CLASS,
         }
     }
 }
@@ -201,6 +220,8 @@ impl From<LspTokenType> for SymbolKind {
             LspTokenType::Operator => SymbolKind::OPERATOR,
             LspTokenType::String => SymbolKind::STRING,
             LspTokenType::Variable => SymbolKind::VARIABLE,
+            LspTokenType::ParameterName => SymbolKind::PROPERTY,
+            LspTokenType::Class => SymbolKind::CLASS,
         }
     }
 }

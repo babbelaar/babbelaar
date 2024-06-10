@@ -13,7 +13,7 @@
       "keywords": {
         "patterns": [
           {
-            "match": "\\b(volg|in|reeks|for)\\b",
+            "match": "\\b(volg|in|reeks|functie|bekeer)\\b",
             "name": "keyword.control.my-language"
           }
         ]
@@ -26,6 +26,10 @@
           },
           {
             "match": "\"[^\"]*\"",
+            "name": "string.quoted.double.my-language"
+          },
+          {
+            "match": "€\"[^\"]*\"",
             "name": "string.quoted.double.my-language"
           }
         ]

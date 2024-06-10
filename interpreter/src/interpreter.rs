@@ -10,7 +10,7 @@ use crate::*;
 
 pub struct Interpreter<'source_code> {
     functions: HashMap<&'source_code str, Rc<FunctionStatement<'source_code>>>,
-    scope: Scope<'source_code>,
+    scope: Scope,
 }
 
 impl<'source_code> Interpreter<'source_code> {
@@ -22,17 +22,30 @@ impl<'source_code> Interpreter<'source_code> {
     }
 
     pub fn execute(&mut self, statement: &Statement<'source_code>) {
+        _ = self.execute_statement(statement);
+    }
+
+    fn execute_statement(&mut self, statement: &Statement<'source_code>) -> StatementResult {
         match statement {
             Statement::Expression(expression) => {
                 self.execute_expression(expression);
+                StatementResult::Continue
             }
 
             Statement::For(statement) => {
-                self.execute_for_statement(statement);
+                self.execute_for_statement(statement)
             }
 
             Statement::Function(func) => {
                 self.functions.insert(func.name, Rc::new(func.clone()));
+                StatementResult::Continue
+            }
+
+            Statement::Return(statement) => {
+                let value = statement.expression.as_ref()
+                    .map(|expr| self.execute_expression(expr));
+
+                StatementResult::Return(value)
             }
         }
     }
@@ -74,7 +87,7 @@ impl<'source_code> Interpreter<'source_code> {
         }
     }
 
-    fn execute_for_statement(&mut self, statement: &ForStatement<'source_code>) -> Value {
+    fn execute_for_statement(&mut self, statement: &ForStatement<'source_code>) -> StatementResult {
         let PrimaryExpression::IntegerLiteral(start) = *statement.range.start else {
             panic!("Invalid start");
         };
@@ -86,16 +99,18 @@ impl<'source_code> Interpreter<'source_code> {
         self.scope = std::mem::take(&mut self.scope).push();
 
         for x in start..end {
-            self.scope.variables.insert(&statement.iterator_name, Value::Integer(x));
+            self.scope.variables.insert(statement.iterator_name.to_string(), Value::Integer(x));
 
             for statement in &statement.body {
-                self.execute(statement);
+                if let StatementResult::Return(value) = self.execute_statement(statement) {
+                    return StatementResult::Return(value);
+                }
             }
         }
 
         self.scope = std::mem::take(&mut self.scope).pop();
 
-        Value::Null
+        StatementResult::Continue
     }
 
     fn execute_bi_expression(&mut self, expression: &BiExpression<'source_code>) -> Value {
@@ -140,9 +155,24 @@ impl<'source_code> Interpreter<'source_code> {
         let name: &str = func.function_identifier.as_ref();
 
         if let Some(func) = self.functions.get(name).cloned() {
-            for statement in &func.body {
-                self.execute(statement);
+            self.scope = std::mem::take(&mut self.scope).push();
+
+            for idx in 0..func.parameters.len() {
+                let name = func.parameters[idx].name.to_string();
+                self.scope.variables.insert(name, arguments[idx].clone());
             }
+
+            for statement in &func.body {
+                match self.execute_statement(statement) {
+                    StatementResult::Continue => (),
+                    StatementResult::Return(value) => {
+                        self.scope = std::mem::take(&mut self.scope).pop();
+                        return value.unwrap_or(Value::Null)
+                    }
+                }
+            }
+
+            self.scope = std::mem::take(&mut self.scope).pop();
             return Value::Null;
         }
 
@@ -155,4 +185,10 @@ impl<'source_code> Interpreter<'source_code> {
         println!("Error: Unknown function {name}");
         Value::Null
     }
+}
+
+#[must_use]
+enum StatementResult {
+    Continue,
+    Return(Option<Value>),
 }

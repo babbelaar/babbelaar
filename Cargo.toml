@@ -4,3 +4,4 @@ members = [
     "interpreter",
     "lsp",
 ]
+default-members = ["interpreter"]

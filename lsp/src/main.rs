@@ -6,7 +6,7 @@ mod symbolization;
 
 use std::collections::HashMap;
 
-use babbelaar::{Builtin, Keyword, Parser, Token, TokenKind};
+use babbelaar::{Builtin, DocumentationProvider, Keyword, Parser, Token, TokenKind};
 use conversion::convert_token_range;
 use log::{info, LevelFilter, Log};
 use symbolization::{LspTokenType, Symbolizer};
@@ -205,16 +205,30 @@ impl LanguageServer for Backend {
         let mut hover = None;
 
         self.find_tokens_at(&params.text_document_position_params, |token| {
-            if let TokenKind::Identifier(ident) = &token.kind {
-                if let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| x.name == *ident) {
+            match &token.kind {
+                TokenKind::Identifier(ident) => {
+                    if let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| x.name == *ident) {
+                        hover = Some(Hover {
+                            contents: HoverContents::Markup(MarkupContent {
+                                kind: MarkupKind::Markdown,
+                                value: builtin_function.documentation.to_string(),
+                            }),
+                            range: Some(convert_token_range(&token)),
+                        });
+                    }
+                }
+
+                TokenKind::Keyword(keyword) => {
                     hover = Some(Hover {
                         contents: HoverContents::Markup(MarkupContent {
                             kind: MarkupKind::Markdown,
-                            value: builtin_function.documentation.to_string(),
+                            value: keyword.provide_documentation().into_owned(),
                         }),
                         range: Some(convert_token_range(&token)),
                     });
                 }
+
+                _ => (),
             }
 
             Ok(())

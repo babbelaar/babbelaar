@@ -12,11 +12,12 @@ mod parser;
 mod scope;
 mod statement;
 mod token;
+mod type_;
 mod util;
 mod value;
 
 pub use self::{
-    builtin::Builtin,
+    builtin::{Builtin, BuiltinFunction, BuiltinType},
     expression::*,
     interpreter::Interpreter,
     keyword::Keyword,
@@ -24,7 +25,8 @@ pub use self::{
     parser::{Parser, ParseError},
     scope::Scope,
     statement::{ForStatement, FunctionStatement, Statement},
-    token::{TemplateStringToken, Token, TokenKind},
-    util::{FileLocation, FileRange, Ranged, StringExt},
+    token::{Punctuator, TemplateStringToken, Token, TokenKind},
+    type_::{Parameter, Type, TypeSpecifier},
+    util::{DocumentationProvider, FileLocation, FileRange, Ranged, StringExt},
     value::Value,
 };

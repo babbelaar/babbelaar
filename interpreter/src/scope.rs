@@ -6,12 +6,12 @@ use std::collections::HashMap;
 use crate::Value;
 
 #[derive(Default)]
-pub struct Scope<'source_code> {
-    pub parent: Option<Box<Scope<'source_code>>>,
-    pub variables: HashMap<&'source_code str, Value>,
+pub struct Scope {
+    pub parent: Option<Box<Scope>>,
+    pub variables: HashMap<String, Value>,
 }
 
-impl<'source_code> Scope<'source_code> {
+impl Scope {
     pub fn new() -> Self {
         Self {
             parent: None,

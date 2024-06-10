@@ -1,17 +1,13 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use strum::IntoStaticStr;
+
 use crate::{FileLocation, FileRange, Keyword};
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum TokenKind<'source_code> {
-    Keyword(Keyword),
-
-    Identifier(&'source_code str),
-    StringLiteral(&'source_code str),
-    TemplateString(Vec<TemplateStringToken<'source_code>>),
-    Integer(i64),
-
+#[derive(Debug, Clone, Copy, PartialEq, Eq, IntoStaticStr)]
+pub enum Punctuator {
+    Colon,
     Comma,
     LeftParenthesis,
     RightParenthesis,
@@ -28,6 +24,19 @@ pub enum TokenKind<'source_code> {
     PercentageSign,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum TokenKind<'source_code> {
+    Keyword(Keyword),
+
+    Identifier(&'source_code str),
+    StringLiteral(&'source_code str),
+    TemplateString(Vec<TemplateStringToken<'source_code>>),
+    Integer(i64),
+
+    Punctuator(Punctuator),
+    IllegalCharacter(char),
+}
+
 impl<'source_code> TokenKind<'source_code> {
     pub fn name(&self) -> &'static str {
         match self {
@@ -38,20 +47,8 @@ impl<'source_code> TokenKind<'source_code> {
             Self::TemplateString(..) => "TemplateString",
             Self::Integer(..) => "Integer",
 
-            Self::Comma => "Comma",
-            Self::LeftParenthesis => "LeftParenthesis",
-            Self::RightParenthesis => "RightParenthesis",
-            Self::LeftCurlyBracket => "LeftCurlyBracket",
-            Self::RightCurlyBracket => "RightCurlyBracket",
-            Self::LeftSquareBracket => "LeftSquareBracket",
-            Self::RightSquareBracket => "RightSquareBracket",
-            Self::Semicolon => "Semicolon",
-            Self::PlusSign => "PlusSign",
-            Self::EqualsSign => "EqualsSign",
-            Self::HyphenMinus => "HyphenMinus",
-            Self::Solidus => "Solidus",
-            Self::Asterisk => "Asterisk",
-            Self::PercentageSign => "PercentageSign",
+            Self::Punctuator(punctuator) => punctuator.into(),
+            Self::IllegalCharacter(..) => "InvalidCharacter",
         }
     }
 }
