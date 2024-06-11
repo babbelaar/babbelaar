@@ -5,20 +5,22 @@ mod conversion;
 mod symbolization;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use babbelaar::{Builtin, DocumentationProvider, Keyword, Parser, Token, TokenKind};
-use conversion::convert_token_range;
+use babbelaar::{Builtin, DocumentationProvider, Keyword, Parser, Statement, Token, TokenKind};
+use conversion::{convert_position, convert_token_range};
 use log::{info, LevelFilter, Log};
 use symbolization::{LspTokenType, Symbolizer};
+use tokio::spawn;
 use tokio::sync::Mutex;
 use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Backend {
     client: Client,
-    file_store: Mutex<HashMap<Url, String>>,
+    file_store: Arc<Mutex<HashMap<Url, String>>>,
 }
 
 impl Backend {
@@ -103,6 +105,49 @@ impl Backend {
         result
     }
 
+    async fn collect_diagnostics(&self, document: VersionedTextDocumentIdentifier) {
+        let text_document = TextDocumentIdentifier {
+            uri: document.uri,
+        };
+
+        let diags = self.lexed_document(&text_document, |tokens| {
+            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+
+            loop {
+                match parser.parse_statement() {
+                    Ok(_) => (),
+                    Err(e) => {
+                        parser.errors.push(e);
+                        break;
+                    }
+                }
+            }
+
+            let diags = parser.errors
+                .into_iter()
+                .flat_map(|err| {
+                    let token = err.token()?;
+
+                    Some(Diagnostic {
+                        range: convert_token_range(token),
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        code: Some(NumberOrString::String(err.name().to_string())),
+                        code_description: None,
+                        source: None,
+                        message: err.to_string(),
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    })
+                })
+                .collect();
+
+            Ok(diags)
+        }).await.unwrap();
+
+        self.client.publish_diagnostics(text_document.uri, diags, Some(document.version)).await;
+    }
+
     fn capabilities(&self) -> ServerCapabilities {
         ServerCapabilities {
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
@@ -139,6 +184,7 @@ impl Backend {
             code_lens_provider: Some(CodeLensOptions {
                 resolve_provider: Some(true),
             }),
+            inlay_hint_provider: Some(OneOf::Left(true)),
             // workspace_symbol_provider: Some(OneOf::Left(true)),
             // definition_provider: Some(OneOf::Left(true)),
             ..ServerCapabilities::default()
@@ -201,7 +247,12 @@ impl LanguageServer for Backend {
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
         info!("Change: {params:#?}");
         let mut file_store = self.file_store.lock().await;
-        file_store.insert(params.text_document.uri, std::mem::take(&mut params.content_changes[0].text));
+        file_store.insert(params.text_document.uri.clone(), std::mem::take(&mut params.content_changes[0].text));
+        let this = (*self).clone();
+        spawn(async move {
+            let this = this;
+            this.collect_diagnostics(params.text_document).await;
+        });
         info!("DoneChange");
     }
 
@@ -293,6 +344,37 @@ impl LanguageServer for Backend {
         Ok(params)
     }
 
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+        let mut hints = Vec::new();
+
+        self.lexed_document(&params.text_document, |tokens| {
+            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            while let Ok(statement) = parser.parse_statement() {
+                match statement {
+                    Statement::For(statement) => {
+                        hints.push(InlayHint {
+                            position: convert_position(statement.iterator_name.range().end()),
+                            label: InlayHintLabel::String(": G32".into()),
+                            kind: Some(InlayHintKind::TYPE),
+                            text_edits: None,
+                            tooltip: None,
+                            padding_left: None,
+                            padding_right: None,
+                            data: None,
+                        });
+                    }
+
+                    _ => (),
+                }
+            }
+
+            Ok(())
+        }).await?;
+
+        self.client.show_message(MessageType::INFO, format!("Hints: {hints:#?}")).await;
+        Ok(Some(hints))
+    }
+
     async fn shutdown(&self) -> Result<()> {
         Ok(())
     }
@@ -343,7 +425,7 @@ async fn main() {
             client: client.clone(),
         })))
         .unwrap();
-        Backend { client, file_store: Mutex::new(HashMap::new()) }
+        Backend { client, file_store: Arc::new(Mutex::new(HashMap::new())) }
     });
 
     Server::new(stdin, stdout, socket).serve(service).await;

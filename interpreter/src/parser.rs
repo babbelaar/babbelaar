@@ -1,18 +1,21 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use strum::AsRefStr;
+
 use crate::{
     statement::ReturnStatement, BiExpression, BiOperator, Builtin, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, Keyword, Parameter, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseError<'source_code>>;
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Parser<'tokens, 'source_code> {
     tokens: &'tokens [Token<'source_code>],
     pub cursor: usize,
     pub token_begin: FileLocation,
     pub token_end: FileLocation,
+    pub errors: Vec<ParseError<'source_code>>,
     error_behavior: ParserErrorBehavior,
 }
 
@@ -22,6 +25,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             error_behavior: ParserErrorBehavior::Propagate,
             token_begin: Default::default(),
             token_end: Default::default(),
+            errors: Vec::new(),
             tokens,
             cursor: 0,
         }
@@ -64,10 +68,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         let mut parameters = Vec::new();
         while self.peek_punctuator() != Some(Punctuator::RightParenthesis) {
-            match (self.parse_parameter(), self.error_behavior) {
-                (Ok(parameter), _) => parameters.push(parameter),
-                (Err(e), ParserErrorBehavior::Propagate) => return Err(e),
-                (Err(_), ParserErrorBehavior::AttemptToIgnore) => continue,
+            match self.parse_parameter() {
+                Ok(parameter) => parameters.push(parameter),
+                Err(error) => self.handle_error(error)?,
             }
 
             match self.peek_punctuator() {
@@ -97,15 +100,24 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 break;
             }
 
-            match (self.parse_statement(), self.error_behavior) {
-                (Ok(statement), _) => body.push(statement),
-                (Err(e), ParserErrorBehavior::Propagate) => return Err(e),
-                (Err(_), ParserErrorBehavior::AttemptToIgnore) => continue,
+            match self.parse_statement() {
+                Ok(statement) => body.push(statement),
+                Err(error) => self.handle_error(error)?,
             }
         }
 
 
         Ok(FunctionStatement { name, body, parameters })
+    }
+
+    fn handle_error(&mut self, error: ParseError<'source_code>) -> Result<(), ParseError<'source_code>> {
+        match self.error_behavior {
+            ParserErrorBehavior::AttemptToIgnore => {
+                self.errors.push(error);
+                Ok(())
+            }
+            ParserErrorBehavior::Propagate => return Err(error),
+        }
     }
 
     fn parse_return_statement(&mut self) -> Result<ReturnStatement<'source_code>, ParseError<'source_code>> {
@@ -127,14 +139,12 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 })
             }
 
-            Err(e) => {
-                match self.error_behavior {
-                    ParserErrorBehavior::Propagate => Err(e),
-                    ParserErrorBehavior::AttemptToIgnore => Ok(ReturnStatement {
+            Err(error) => self.handle_error(error)
+                .map(|()| {
+                    ReturnStatement {
                         expression: None,
-                    }),
-                }
-            }
+                    }
+                }),
         }
     }
 
@@ -203,10 +213,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 break;
             }
 
-            match (self.parse_statement(), self.error_behavior) {
-                (Ok(statement), _) => body.push(statement),
-                (Err(e), ParserErrorBehavior::Propagate) => return Err(e),
-                (Err(_), ParserErrorBehavior::AttemptToIgnore) => continue,
+            match self.parse_statement() {
+                Ok(statement) => body.push(statement),
+                Err(error) => self.handle_error(error)?,
             }
         }
 
@@ -256,7 +265,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
     fn parse_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
         let primary = {
-            let mut parser = *self;
+            let mut parser = self.clone();
             if let Ok(func) = parser.parse_function_call_expression() {
                 *self = parser;
                 func
@@ -416,7 +425,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error, AsRefStr)]
 pub enum ParseError<'source_code> {
     #[error("End of file (EOF) reached")]
     EndOfFile,
@@ -468,6 +477,35 @@ pub enum ParseError<'source_code> {
 
     #[error("Unknown start of expression: {token:?}")]
     UnknownStartOfExpression { token: Token<'source_code> },
+}
+
+impl<'source_code> ParseError<'source_code> {
+    pub fn token(&self) -> Option<&Token<'source_code>> {
+        match self {
+            Self::EndOfFile => None,
+            Self::StatementInvalidStart { token } => Some(token),
+            Self::ExpressionFunctionCallNotStartingWithIdentifier { token } => Some(token),
+            Self::ExpectedLeftCurlyBracket { token, .. } => Some(token),
+            Self::ExpectedLeftParen { token, .. } => Some(token),
+            Self::ExpectedRightParen { token, .. } => Some(token),
+            Self::ExpectedColon { token, .. } => Some(token),
+            Self::ExpectedComma { token, .. } => Some(token),
+            Self::FunctionStatementExpectedName { token } => Some(token),
+            Self::ForStatementExpectedIteratorName { token } => Some(token),
+            Self::ForStatementExpectedInKeyword { token } => Some(token),
+            Self::ParameterExpectedName { token } => Some(token),
+            Self::ParameterExpectedComma { token } => token.as_ref(),
+            Self::RangeExpectedKeyword { token } => Some(token),
+            Self::ResidualTokensInTemplateString { token } => Some(token),
+            Self::TypeExpectedSpecifierName { token } => Some(token),
+            Self::UnknownStartOfExpression { token } => Some(token),
+        }
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
