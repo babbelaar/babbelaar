@@ -24,7 +24,7 @@ pub use self::{
     lexer::Lexer,
     parser::{Parser, ParseError},
     scope::Scope,
-    statement::{ForStatement, FunctionStatement, Statement},
+    statement::{ForStatement, FunctionStatement, Statement, StatementKind},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     type_::{Parameter, Type, TypeSpecifier},
     util::{DocumentationProvider, FileLocation, FileRange, Ranged, StringExt},

@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, Parameter, Statement, Token, TokenKind};
+use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, Parameter, Statement, StatementKind, Token, TokenKind};
 use log::info;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
@@ -24,10 +24,10 @@ impl Symbolizer {
     }
 
     pub fn add_statement(&mut self, statement: &Statement) {
-        match statement {
-            Statement::Expression(expression) => self.add_expression(expression),
-            Statement::For(statement) => self.add_statement_for(statement),
-            Statement::Function(statement) => self.add_statement_function(statement),
+        match &statement.kind {
+            StatementKind::Expression(expression) => self.add_expression(expression),
+            StatementKind::For(statement) => self.add_statement_for(statement),
+            StatementKind::Function(statement) => self.add_statement_function(statement),
             _ => (),
         }
     }
@@ -64,7 +64,6 @@ impl Symbolizer {
             previous_range = range;
         }
 
-        info!("Tokens: {tokens:#?}");
         tokens
     }
 

@@ -1,10 +1,12 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::fmt::Display;
+
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, Keyword, Parameter, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
+    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, Keyword, Parameter, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseError<'source_code>>;
@@ -40,22 +42,32 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     pub fn parse_statement(&mut self) -> Result<Statement<'source_code>, ParseError<'source_code>> {
-        if self.peek_token()?.kind == TokenKind::Keyword(Keyword::Bekeer) {
-            _ = self.consume_token().ok();
-            return Ok(Statement::Return(self.parse_return_statement()?));
-        }
+        let first_token = self.peek_token()?;
+        let start = first_token.begin;
 
-        if self.peek_token()?.kind == TokenKind::Keyword(Keyword::Functie) {
-            _ = self.consume_token().ok();
-            return Ok(Statement::Function(self.parse_function()?));
-        }
+        let kind = match first_token.kind {
+            TokenKind::Keyword(Keyword::Bekeer) => {
+                _ = self.consume_token().ok();
+                StatementKind::Return(self.parse_return_statement()?)
+            }
 
-        if self.peek_token()?.kind == TokenKind::Keyword(Keyword::Volg) {
-            return Ok(Statement::For(self.parse_for_statement()?));
-        }
+            TokenKind::Keyword(Keyword::Functie) => {
+                _ = self.consume_token().ok();
+                StatementKind::Function(self.parse_function()?)
+            }
 
-        let expr = self.parse_function_call_expression()?;
-        Ok(Statement::Expression(expr))
+            TokenKind::Keyword(Keyword::Volg) => {
+                StatementKind::For(self.parse_for_statement()?)
+            }
+
+            _ => StatementKind::Expression(self.parse_function_call_expression()?)
+        };
+
+        let range = FileRange::new(start, self.token_end);
+        Ok(Statement {
+            range,
+            kind,
+        })
     }
 
     pub fn parse_function(&mut self) -> Result<FunctionStatement<'source_code>, ParseError<'source_code>> {
@@ -105,7 +117,6 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 Err(error) => self.handle_error(error)?,
             }
         }
-
 
         Ok(FunctionStatement { name, body, parameters })
     }
@@ -199,7 +210,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         let in_keyword = self.consume_token()?;
         if in_keyword.kind != TokenKind::Keyword(Keyword::In) {
-            return Err(ParseError::ForStatementExpectedInKeyword { token: in_keyword });
+            return Err(ParseError::ForStatementExpectedInKeyword { token: in_keyword, iterator_name });
         }
 
         let range = self.parse_range()?;
@@ -315,10 +326,18 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
 
             if !arguments.is_empty() {
-                self.expect_comma("argument in function call")?;
+                if let Err(error) = self.expect_comma("argument in function call") {
+                    self.handle_error(error)?;
+                    break;
+                }
             }
 
-            arguments.push(self.parse_expression()?);
+            match self.parse_expression() {
+                Ok(expr) => arguments.push(expr),
+                Err(error) => {
+                    self.handle_error(error)?;
+                }
+            }
         }
 
         Ok(Expression::Function(FunctionCallExpression {
@@ -370,6 +389,8 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
     fn consume_token(&mut self) -> Result<Token<'source_code>, ParseError<'source_code>> {
         let token = self.peek_token()?.clone();
+        self.token_begin = token.begin;
+        self.token_end = token.end;
         self.cursor += 1;
         Ok(token)
     }
@@ -427,55 +448,55 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
 #[derive(Clone, Debug, thiserror::Error, AsRefStr)]
 pub enum ParseError<'source_code> {
-    #[error("End of file (EOF) reached")]
+    #[error("Onverwacht einde van het bestand")]
     EndOfFile,
 
-    #[error("Invalid start of statement: {token:?}")]
+    #[error("Ongeldig start van een statement: {token}")]
     StatementInvalidStart{ token: Token<'source_code> },
 
-    #[error("Invalid start of function-call statement: {token:?}")]
+    #[error("Ongeldig start van een functieaanroepstatement: {token}")]
     ExpressionFunctionCallNotStartingWithIdentifier { token: Token<'source_code> },
 
-    #[error("Expected left curly bracket '{{' after {context}, but got: {token:?}")]
+    #[error("Open accolade verwacht `{{` na {context}, maar kreeg: {token}")]
     ExpectedLeftCurlyBracket { token: Token<'source_code>, context: &'static str },
 
-    #[error("Expected left parenthesis '(' after {context}, but got: {token:?}")]
+    #[error("Open rond haakje verwacht '(' na {context}, maar kreeg: {token}")]
     ExpectedLeftParen { token: Token<'source_code>, context: &'static str },
 
-    #[error("Expected right parenthesis ')' after {context}, but got: {token:?}")]
+    #[error("Gesloten rond haakje verwacht ')' na {context}, maar kreeg: {token}")]
     ExpectedRightParen { token: Token<'source_code>, context: &'static str },
 
-    #[error("Expected colon ':' after {context}, but got: {token:?}")]
+    #[error("Dubbele punt verwacht ':' na {context}, maar kreeg: {token}")]
     ExpectedColon { token: Token<'source_code>, context: &'static str },
 
-    #[error("Expected comma ',' after {context}, but got: {token:?}")]
+    #[error("Komma verwacht ',' after {context}, maar kreeg: {token}")]
     ExpectedComma { token: Token<'source_code>, context: &'static str },
 
-    #[error("Expected function name after 'functie', but got: {token:?}")]
+    #[error("Functienaam verwacht na `functie`, maar kreeg: {token}")]
     FunctionStatementExpectedName { token: Token<'source_code> },
 
-    #[error("Expected iterator name after 'volg', but got: {token:?}")]
+    #[error("Iteratornaam verwacht na `volg`, maar kreeg: {token}")]
     ForStatementExpectedIteratorName { token: Token<'source_code> },
 
-    #[error("Expected 'in' keyword 'volg' iterator name, but got: {token:?}")]
-    ForStatementExpectedInKeyword { token: Token<'source_code> },
+    #[error("Sleutelwoord 'in' verwacht na `volg {}`, maar kreeg: {token}", iterator_name.value())]
+    ForStatementExpectedInKeyword { token: Token<'source_code>, iterator_name: Ranged<&'source_code str> },
 
-    #[error("Expected name of parameter, but got: {token:?}")]
+    #[error("Parameternaam verwacht, maar kreeg: {token}")]
     ParameterExpectedName { token: Token<'source_code> },
 
-    #[error("Expected comma ',' or right parenthesis ')' inside parameter list, but got: {token:?}")]
+    #[error("Komma `,` of gesloten rond haakje `)` verwacht binnen parameterlijst, maar kreeg: {}", token.as_ref().map(|x| x as &dyn Display).unwrap_or_else(|| &"(niets)" as &'static dyn Display))]
     ParameterExpectedComma { token: Option<Token<'source_code>> },
 
-    #[error("Expected 'reeks' keyword, but got: {token:?}")]
+    #[error("Sleutelwoord `reeks` verwacht, maar kreeg: {token}")]
     RangeExpectedKeyword { token: Token<'source_code> },
 
-    #[error("Residual token after template string expression: {token:?}")]
+    #[error("Resterende token na expressie binnen sjabloonslinger: {token}")]
     ResidualTokensInTemplateString { token: Token<'source_code> },
 
-    #[error("Expected the type of the parameter, but got: {token:?}")]
+    #[error("Parametertype verwacht, maar kreeg: {token}")]
     TypeExpectedSpecifierName { token: Token<'source_code> },
 
-    #[error("Unknown start of expression: {token:?}")]
+    #[error("Onbekend start van een expressie: {token}")]
     UnknownStartOfExpression { token: Token<'source_code> },
 }
 
@@ -492,7 +513,7 @@ impl<'source_code> ParseError<'source_code> {
             Self::ExpectedComma { token, .. } => Some(token),
             Self::FunctionStatementExpectedName { token } => Some(token),
             Self::ForStatementExpectedIteratorName { token } => Some(token),
-            Self::ForStatementExpectedInKeyword { token } => Some(token),
+            Self::ForStatementExpectedInKeyword { token, .. } => Some(token),
             Self::ParameterExpectedName { token } => Some(token),
             Self::ParameterExpectedComma { token } => token.as_ref(),
             Self::RangeExpectedKeyword { token } => Some(token),

@@ -3,8 +3,14 @@
 
 use crate::{util::FileRange, Expression, Parameter, RangeExpression, Ranged};
 
-#[derive(Clone, Debug)]
-pub enum Statement<'source_code> {
+#[derive(Debug, Clone)]
+pub struct Statement<'source_code> {
+    pub range: FileRange,
+    pub kind: StatementKind<'source_code>,
+}
+
+#[derive(Debug, Clone)]
+pub enum StatementKind<'source_code> {
     Expression(Expression<'source_code>),
     Function(FunctionStatement<'source_code>),
     For(ForStatement<'source_code>),

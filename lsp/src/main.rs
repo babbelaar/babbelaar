@@ -7,7 +7,7 @@ mod symbolization;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use babbelaar::{Builtin, DocumentationProvider, Keyword, Parser, Statement, Token, TokenKind};
+use babbelaar::{Builtin, DocumentationProvider, Expression, Keyword, Parser, StatementKind, Token, TokenKind};
 use conversion::{convert_position, convert_token_range};
 use log::{info, LevelFilter, Log};
 use symbolization::{LspTokenType, Symbolizer};
@@ -148,6 +148,76 @@ impl Backend {
         self.client.publish_diagnostics(text_document.uri, diags, Some(document.version)).await;
     }
 
+    async fn collect_signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
+        let caret_line = params.text_document_position_params.position.line as usize;
+        let caret_column = params.text_document_position_params.position.character as usize;
+
+        self.lexed_document(&params.text_document_position_params.text_document, |tokens| {
+            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            info!("Caret is @ {caret_line}:{caret_column}");
+            loop {
+                let res = parser.parse_statement();
+
+                let Ok(statement) = res else {
+                    info!("Error: {res:#?}");
+                    break;
+                };
+                info!("Statement: {statement:#?}");
+                if statement.range.end().line() < caret_line {
+                    continue;
+                }
+
+                if statement.range.end().column() < caret_column {
+                    continue;
+                }
+
+                let StatementKind::Expression(expr) = statement.kind else {
+                    info!("No expression: {statement:?}");
+                    return Ok(None);
+                };
+
+                let Expression::Function(func) = expr else {
+                    info!("No func: {expr:?}");
+                    return Ok(None);
+                };
+
+                let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| x.name == *func.function_identifier) else {
+                    info!("No builtin: {func:?}");
+                    return Ok(None);
+                };
+
+                return Ok(Some(SignatureHelp {
+                    signatures: vec![
+                        SignatureInformation {
+                            label: "labelll".into(),
+                            documentation: Some(Documentation::MarkupContent(MarkupContent {
+                                kind: MarkupKind::Markdown,
+                                value: builtin_function.documentation.to_string(),
+                            })),
+                            parameters: Some(vec![
+                                ParameterInformation {
+                                    label: ParameterLabel::Simple("Paramet".to_string()),
+                                    documentation: Some(Documentation::String("Gekke docupara".into())),
+                                },
+                            ]),
+                            active_parameter: None,
+                        }
+                    ],
+                    active_signature: Some(0),
+                    active_parameter: None,
+                }));
+            }
+
+            let client = self.client.clone();
+            let total = tokens.len();
+            let cursor = parser.cursor;
+            spawn(async move {
+                client.log_message(MessageType::INFO, format!("Parser is @ {cursor} of {total}")).await
+            });
+            Ok(None)
+        }).await
+    }
+
     fn capabilities(&self) -> ServerCapabilities {
         ServerCapabilities {
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
@@ -160,8 +230,8 @@ impl Backend {
                 ..Default::default()
             }),
             signature_help_provider: Some(SignatureHelpOptions {
-                trigger_characters: None,
-                retrigger_characters: None,
+                trigger_characters: Some(vec!["(".into(), ",".into()]),
+                retrigger_characters: Some(vec![",".into()]),
                 work_done_progress_options: WorkDoneProgressOptions::default(),
             }),
             hover_provider: Some(true.into()),
@@ -185,8 +255,6 @@ impl Backend {
                 resolve_provider: Some(true),
             }),
             inlay_hint_provider: Some(OneOf::Left(true)),
-            // workspace_symbol_provider: Some(OneOf::Left(true)),
-            // definition_provider: Some(OneOf::Left(true)),
             ..ServerCapabilities::default()
         }
     }
@@ -228,6 +296,10 @@ impl LanguageServer for Backend {
         })
     }
 
+    async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
+        self.collect_signature_help(params).await
+    }
+
     async fn code_lens(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
         self.collect_lenses(params).await
     }
@@ -253,7 +325,6 @@ impl LanguageServer for Backend {
             let this = this;
             this.collect_diagnostics(params.text_document).await;
         });
-        info!("DoneChange");
     }
 
     async fn document_symbol(
@@ -326,7 +397,6 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        info!("Completion: {params:#?}");
         let mut completions = Vec::new();
 
         self.find_tokens_at(&params.text_document_position, |token| {
@@ -350,8 +420,8 @@ impl LanguageServer for Backend {
         self.lexed_document(&params.text_document, |tokens| {
             let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
             while let Ok(statement) = parser.parse_statement() {
-                match statement {
-                    Statement::For(statement) => {
+                match statement.kind {
+                    StatementKind::For(statement) => {
                         hints.push(InlayHint {
                             position: convert_position(statement.iterator_name.range().end()),
                             label: InlayHintLabel::String(": G32".into()),

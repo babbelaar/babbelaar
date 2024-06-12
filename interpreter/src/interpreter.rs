@@ -26,22 +26,22 @@ impl<'source_code> Interpreter<'source_code> {
     }
 
     fn execute_statement(&mut self, statement: &Statement<'source_code>) -> StatementResult {
-        match statement {
-            Statement::Expression(expression) => {
+        match &statement.kind {
+            StatementKind::Expression(expression) => {
                 self.execute_expression(expression);
                 StatementResult::Continue
             }
 
-            Statement::For(statement) => {
+            StatementKind::For(statement) => {
                 self.execute_for_statement(statement)
             }
 
-            Statement::Function(func) => {
+            StatementKind::Function(func) => {
                 self.functions.insert(func.name, Rc::new(func.clone()));
                 StatementResult::Continue
             }
 
-            Statement::Return(statement) => {
+            StatementKind::Return(statement) => {
                 let value = statement.expression.as_ref()
                     .map(|expr| self.execute_expression(expr));
 
