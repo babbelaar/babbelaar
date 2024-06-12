@@ -27,6 +27,6 @@ pub use self::{
     statement::{ForStatement, FunctionStatement, Statement, StatementKind},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     type_::{Parameter, Type, TypeSpecifier},
-    util::{DocumentationProvider, FileLocation, FileRange, Ranged, StringExt},
+    util::{DocumentationProvider, FileLocation, FileRange, LspCompletion, Ranged, StringExt},
     value::Value,
 };

@@ -179,6 +179,12 @@ pub trait DocumentationProvider {
     fn provide_documentation(&self) -> Cow<'_, str>;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LspCompletion<'a> {
+    pub completion: &'a str,
+    pub inline_detail: &'a str,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

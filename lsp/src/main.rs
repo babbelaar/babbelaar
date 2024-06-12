@@ -189,17 +189,12 @@ impl Backend {
                 return Ok(Some(SignatureHelp {
                     signatures: vec![
                         SignatureInformation {
-                            label: "labelll".into(),
+                            label: format!("{}()", builtin_function.name),
                             documentation: Some(Documentation::MarkupContent(MarkupContent {
                                 kind: MarkupKind::Markdown,
                                 value: builtin_function.documentation.to_string(),
                             })),
-                            parameters: Some(vec![
-                                ParameterInformation {
-                                    label: ParameterLabel::Simple("Paramet".to_string()),
-                                    documentation: Some(Documentation::String("Gekke docupara".into())),
-                                },
-                            ]),
+                            parameters: None,
                             active_parameter: None,
                         }
                     ],
@@ -276,7 +271,6 @@ impl Backend {
         }).await?;
 
         let tokens = symbolizer.to_tokens();
-        // self.client.log_message(MessageType::INFO, format!("Symbols: {response:#?}")).await;
         Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
             result_id: None,
             data: tokens,
@@ -456,6 +450,7 @@ fn suggest_identifiers(ident: &str, completions: &mut Vec<CompletionItem>) {
 
     for keyword in Keyword::iter_variants() {
         if keyword.as_ref().to_lowercase().starts_with(ident) {
+            let lsp = keyword.lsp_completion();
             completions.push(CompletionItem {
                 label: keyword.as_ref().to_string(),
                 label_details: Some(CompletionItemLabelDetails {
@@ -463,6 +458,9 @@ fn suggest_identifiers(ident: &str, completions: &mut Vec<CompletionItem>) {
                     description: Some("Description??".into()),
                 }),
                 kind: Some(CompletionItemKind::KEYWORD),
+                insert_text: lsp.map(|x| x.completion.to_string()),
+                detail: lsp.map(|x| x.inline_detail.to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
                 ..Default::default()
             });
         }
@@ -477,6 +475,11 @@ fn suggest_identifiers(ident: &str, completions: &mut Vec<CompletionItem>) {
                     kind: MarkupKind::Markdown,
                     value: builtin_function.documentation.to_string(),
                 })),
+                insert_text: match builtin_function.lsp_completion {
+                    Some(completion) => Some(completion.to_string()),
+                    None => Some(format!("{}($1)$0", builtin_function.name)),
+                },
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
                 ..Default::default()
             });
         }

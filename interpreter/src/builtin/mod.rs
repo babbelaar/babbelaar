@@ -16,7 +16,9 @@ impl Builtin {
         BuiltinFunction {
             name: "schrijf",
             documentation: "Schrijf tekst naar de uitvoer",
+            inline_detail: "Schrijf tekst naar de uitvoer",
             function: &functions::schrijf,
+            lsp_completion: Some("schrijf(\"$1\")$0")
         }
     ];
 

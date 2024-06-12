@@ -3,7 +3,7 @@
 
 use strum::IntoEnumIterator;
 
-use crate::DocumentationProvider;
+use crate::{DocumentationProvider, LspCompletion};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[derive(strum::AsRefStr, strum::EnumIter)]
@@ -25,6 +25,20 @@ impl Keyword {
 
     pub fn parse(input: &str) -> Option<Self> {
         Self::iter().find(|x| x.as_ref() == input)
+    }
+
+    pub fn lsp_completion(&self) -> Option<LspCompletion<'_>> {
+        match self {
+            Self::Functie => Some(LspCompletion {
+                completion: "functie ${1:naam}() {\n\t$0\n}",
+                inline_detail: "Een nieuwe functie.",
+            }),
+            Self::Volg => Some(LspCompletion {
+                completion: "volg ${1:element} in reeks(${2:start}, ${3:eind}) {\n\t$0\n}",
+                inline_detail: "Volg in reeks."
+            }),
+            _ => None,
+        }
     }
 }
 

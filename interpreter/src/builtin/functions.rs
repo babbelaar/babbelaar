@@ -8,7 +8,9 @@ pub type BuiltinFunctionSignature = &'static dyn Fn(&mut Interpreter<'_>, Vec<Va
 pub struct BuiltinFunction {
     pub name: &'static str,
     pub documentation: &'static str,
+    pub inline_detail: &'static str,
     pub function: BuiltinFunctionSignature,
+    pub lsp_completion: Option<&'static str>,
 }
 
 pub fn schrijf(_: &mut Interpreter<'_>, args: Vec<Value>) -> Value {

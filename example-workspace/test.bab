@@ -1,9 +1,7 @@
-functie reken_uit(a: G32, b: G32) {
-    bekeer a + b
+functie hallo() {
+    schrijf("Hallo")
 }
 
-volg i in reeks(0, 11) {
-    volg j in reeks(0, 11) {
-        schrijf(€"Getal: {i} en {j} is samen { reken_uit(i, j) }")
-    }
+volg i in reeks(0, 10) {
+    hallo()
 }
