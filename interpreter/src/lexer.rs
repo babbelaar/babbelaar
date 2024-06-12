@@ -72,11 +72,11 @@ impl<'source_code> Lexer<'source_code> {
     }
 
     fn consume_single_char_token(&mut self, kind: TokenKind<'source_code>) -> Option<Token<'source_code>> {
-        let begin = self.current?.0;
+        let begin = self.current_location();
 
         self.consume_char();
 
-        let end = self.current?.0;
+        let end = self.current_location();
 
         Some(Token {
             kind,
@@ -88,7 +88,7 @@ impl<'source_code> Lexer<'source_code> {
     fn consume_string(&mut self) -> Option<Token<'source_code>> {
         assert_eq!(self.next_char().unwrap(), '"');
 
-        let begin = self.current?.0;
+        let begin = self.current_location();
 
         loop {
             let Some(c) = self.peek_char() else {
@@ -102,7 +102,7 @@ impl<'source_code> Lexer<'source_code> {
             self.consume_char();
         }
 
-        let end = self.current?.0;
+        let end = self.current_location();
         let str = &self.input[begin.offset()..end.offset()];
 
         self.consume_char();
@@ -116,7 +116,7 @@ impl<'source_code> Lexer<'source_code> {
 
     fn consume_template_string(&mut self) -> Option<Token<'source_code>> {
         assert_eq!(self.next_char().unwrap(), '€');
-        let begin = self.current?.0;
+        let begin = self.current_location();
 
         assert_eq!(self.next_char().unwrap(), '"');
 
@@ -148,9 +148,9 @@ impl<'source_code> Lexer<'source_code> {
                 break;
             }
 
-            let begin = self.current?.0;
+            let begin = self.current_location();
             self.consume_char();
-            let end_pos = self.current?.0;
+            let end_pos = self.current_location();
             let end = end_pos;
 
             if let Some(TemplateStringToken::Plain{ begin, end, str }) = parts.last_mut() {
@@ -167,7 +167,7 @@ impl<'source_code> Lexer<'source_code> {
         }
 
         self.consume_char();
-        let end = self.current?.0;
+        let end = self.current_location();
 
         Some(Token {
             kind: TokenKind::TemplateString(parts),
@@ -177,7 +177,7 @@ impl<'source_code> Lexer<'source_code> {
     }
 
     fn consume_identifier_or_keyword(&mut self) -> Option<Token<'source_code>> {
-        let begin = self.current?.0;
+        let begin = self.current_location();
 
         loop {
             let Some(c) = self.peek_char() else {
@@ -191,7 +191,7 @@ impl<'source_code> Lexer<'source_code> {
             self.consume_char();
         }
 
-        let end = self.current?.0;
+        let end = self.current_location();
         let str = &self.input[begin.offset()..end.offset()];
 
         let kind = match Keyword::parse(str) {
@@ -207,7 +207,7 @@ impl<'source_code> Lexer<'source_code> {
     }
 
     fn consume_number(&mut self) -> Option<Token<'source_code>> {
-        let begin = self.current?.0;
+        let begin = self.current_location();
 
         loop {
             let Some(c) = self.peek_char() else {
@@ -221,7 +221,7 @@ impl<'source_code> Lexer<'source_code> {
             self.consume_char();
         }
 
-        let end = self.current?.0;
+        let end = self.current_location();
         let str = &self.input[begin.offset()..end.offset()];
         let integer = str.parse().unwrap();
 
@@ -273,6 +273,14 @@ impl<'source_code> Lexer<'source_code> {
         self.current = None;
         _ = self.peek_char();
     }
+
+    fn current_location(&mut self) -> FileLocation {
+        _ = self.peek_char();
+        match self.current {
+            Some((location, _)) => location,
+            None => FileLocation::new(self.input.len(), self.line, self.column),
+        }
+    }
 }
 
 impl<'source_code> Iterator for Lexer<'source_code> {
@@ -292,4 +300,27 @@ fn is_identifier_char(c: char) -> bool {
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum LexerError {
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case("h", Token {
+        kind: TokenKind::Identifier("h"),
+        begin: FileLocation::new(0, 0, 0),
+        end: FileLocation::new(1, 0, 1),
+    })]
+    #[case("s ", Token {
+        kind: TokenKind::Identifier("s"),
+        begin: FileLocation::new(0, 0, 0),
+        end: FileLocation::new(1, 0, 1),
+    })]
+    fn next_text(#[case] input: &'static str, #[case] expected: Token<'static>) {
+        let actual = Lexer::new(input).next();
+
+        assert_eq!(actual, Some(expected));
+    }
 }
