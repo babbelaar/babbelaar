@@ -27,7 +27,7 @@ pub struct ForStatement<'source_code> {
 
 #[derive(Clone, Debug)]
 pub struct FunctionStatement<'source_code> {
-    pub name: &'source_code str,
+    pub name: Ranged<&'source_code str>,
     pub parameters: Vec<Parameter<'source_code>>,
     pub body: Vec<Statement<'source_code>>,
 }

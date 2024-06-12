@@ -10,6 +10,7 @@ mod keyword;
 mod lexer;
 mod parser;
 mod scope;
+mod semantics;
 mod statement;
 mod token;
 mod type_;
@@ -24,7 +25,8 @@ pub use self::{
     lexer::Lexer,
     parser::{Parser, ParseError},
     scope::Scope,
-    statement::{ForStatement, FunctionStatement, Statement, StatementKind},
+    semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind},
+    statement::{ForStatement, FunctionStatement, ReturnStatement, Statement, StatementKind},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     type_::{Parameter, Type, TypeSpecifier},
     util::{DocumentationProvider, FileLocation, FileRange, LspCompletion, Ranged, StringExt},

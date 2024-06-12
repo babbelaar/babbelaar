@@ -1,13 +1,13 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::Ranged;
+use crate::{FileRange, Ranged};
 
 #[derive(Clone, Debug)]
 pub enum PrimaryExpression<'source_code> {
     StringLiteral(&'source_code str),
     IntegerLiteral(i64),
-    Reference(&'source_code str),
+    Reference(Ranged<&'source_code str>),
     TemplateString {
         parts: Vec<TemplateStringExpressionPart<'source_code>>,
     },
@@ -30,6 +30,9 @@ pub enum Expression<'source_code> {
 pub struct FunctionCallExpression<'source_code> {
     pub function_identifier: Ranged<String>,
     pub arguments: Vec<Expression<'source_code>>,
+
+    pub token_left_paren: FileRange,
+    pub token_right_paren: FileRange,
 }
 
 #[derive(Clone, Debug)]

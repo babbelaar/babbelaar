@@ -5,10 +5,11 @@ mod conversion;
 mod symbolization;
 
 use std::collections::HashMap;
+use std::mem::replace;
 use std::sync::Arc;
 
-use babbelaar::{Builtin, DocumentationProvider, Expression, Keyword, Parser, StatementKind, Token, TokenKind};
-use conversion::{convert_position, convert_token_range};
+use babbelaar::{Builtin, DocumentationProvider, Expression, Keyword, Parser, SemanticAnalyzer, StatementKind, Token, TokenKind};
+use conversion::{convert_file_range, convert_position, convert_token_range};
 use log::{info, LevelFilter, Log};
 use symbolization::{LspTokenType, Symbolizer};
 use tokio::spawn;
@@ -24,26 +25,31 @@ struct Backend {
 }
 
 impl Backend {
-    async fn find_tokens_at<F>(&self, params: &TextDocumentPositionParams, mut f: F) -> Result<()>
-            where F: FnMut(Token) -> Result<()> {
+    async fn find_tokens_at<F, R>(&self, params: &TextDocumentPositionParams, mut f: F) -> Result<Option<R>>
+            where F: FnMut(Token, Option<Token>) -> Result<Option<R>> {
         self.lexed_document(&params.text_document, |tokens| {
+            let mut previous = None;
             for token in tokens {
                 if token.begin.line() != params.position.line as usize {
+                    previous = Some(token);
                     continue;
                 }
 
                 if token.begin.column() > params.position.character as usize {
+                    previous = Some(token);
                     continue;
                 }
 
-                if params.position.character as usize > token.end.column(){
+                if params.position.character as usize > token.end.column() {
+                    previous = Some(token);
                     continue;
                 }
 
-                f(token)?;
+                let previous = replace(&mut previous, Some(token.clone()));
+                return f(token, previous);
             }
 
-            Ok(())
+            Ok(None)
         })
         .await
     }
@@ -105,6 +111,28 @@ impl Backend {
         result
     }
 
+    async fn with_semantics<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
+    where
+        F: FnOnce(SemanticAnalyzer) -> Result<R>,
+    {
+        self.lexed_document(text_document, |tokens| {
+
+            let mut parser = Parser::new(&tokens);
+            let mut statements = Vec::new();
+
+            while let Ok(statement) = parser.parse_statement() {
+                statements.push(statement);
+            }
+
+            let mut analyzer = SemanticAnalyzer::new();
+            for statement in &statements {
+                analyzer.analyze_statement(statement);
+            }
+
+            f(analyzer)
+        }).await
+    }
+
     async fn collect_diagnostics(&self, document: VersionedTextDocumentIdentifier) {
         let text_document = TextDocumentIdentifier {
             uri: document.uri,
@@ -112,10 +140,11 @@ impl Backend {
 
         let diags = self.lexed_document(&text_document, |tokens| {
             let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            let mut statements = Vec::new();
 
             loop {
                 match parser.parse_statement() {
-                    Ok(_) => (),
+                    Ok(statement) => statements.push(statement),
                     Err(e) => {
                         parser.errors.push(e);
                         break;
@@ -123,7 +152,9 @@ impl Backend {
                 }
             }
 
-            let diags = parser.errors
+            let mut diags = Vec::new();
+
+            let parse_errors = parser.errors
                 .into_iter()
                 .flat_map(|err| {
                     let token = err.token()?;
@@ -139,8 +170,32 @@ impl Backend {
                         tags: None,
                         data: None,
                     })
+                });
+
+            diags.extend(parse_errors);
+
+            let mut analyzer = SemanticAnalyzer::new();
+            for statement in &statements {
+                analyzer.analyze_statement(statement);
+            }
+
+            diags.extend(
+                analyzer.into_diagnostics()
+                .into_iter()
+                .map(|e| {
+                    Diagnostic {
+                        range: convert_file_range(e.range),
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        code: Some(NumberOrString::String(e.kind.name().to_string())),
+                        code_description: None,
+                        source: None,
+                        message: e.kind.to_string(),
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    }
                 })
-                .collect();
+            );
 
             Ok(diags)
         }).await.unwrap();
@@ -357,7 +412,7 @@ impl LanguageServer for Backend {
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let mut hover = None;
 
-        self.find_tokens_at(&params.text_document_position_params, |token| {
+        self.find_tokens_at(&params.text_document_position_params, |token, _| {
             match &token.kind {
                 TokenKind::Identifier(ident) => {
                     if let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| x.name == *ident) {
@@ -384,7 +439,7 @@ impl LanguageServer for Backend {
                 _ => (),
             }
 
-            Ok(())
+            Ok(Some(()))
         }).await?;
 
         Ok(hover)
@@ -393,13 +448,52 @@ impl LanguageServer for Backend {
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let mut completions = Vec::new();
 
-        self.find_tokens_at(&params.text_document_position, |token| {
-            if let TokenKind::Identifier(ident) = &token.kind {
-                suggest_identifiers(ident, &mut completions);
-            }
+        let mut was_new_func = false;
+        let ident = self.find_tokens_at(&params.text_document_position, |token, previous| {
+            was_new_func = previous.is_some_and(|tok| matches!(tok.kind, TokenKind::Keyword(Keyword::Functie)));
 
+            if let TokenKind::Identifier(ident) = &token.kind {
+                Ok(Some(ident.to_string()))
+            } else {
+                Ok(None)
+            }
+        }).await?;
+
+        let Some(ident) = ident else {
+            eprintln!("Was ident");
+            return Ok(None);
+        };
+
+        if was_new_func {
+            eprintln!("Was new func");
+            return Ok(None);
+        }
+
+        self.with_semantics(&params.text_document_position.text_document, |analyzer| {
+            if let Some(func) = analyzer.find_function_by_name(|f| f.starts_with(&ident)) {
+                completions.push(CompletionItem {
+                    label: func.name().to_string(),
+                    kind: Some(CompletionItemKind::FUNCTION),
+                    documentation: None,
+                    insert_text: Some({
+                        let mut insert = format!("{}(", func.name());
+
+                        for i in 0..func.parameter_count() {
+                            let comma = if i == 0 { "" } else { ", " };
+                            insert += &format!("{comma}${}", i + 1);
+                        }
+
+                        insert += ")$0";
+                        insert
+                    }),
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    ..Default::default()
+                });
+            }
             Ok(())
         }).await?;
+
+        suggest_identifiers(&ident, &mut completions);
 
         Ok(Some(CompletionResponse::Array(completions)))
     }

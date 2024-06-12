@@ -1,4 +1,4 @@
-// Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 use std::{
@@ -37,7 +37,7 @@ impl<'source_code> Interpreter<'source_code> {
             }
 
             StatementKind::Function(func) => {
-                self.functions.insert(func.name, Rc::new(func.clone()));
+                self.functions.insert(func.name.value(), Rc::new(func.clone()));
                 StatementResult::Continue
             }
 

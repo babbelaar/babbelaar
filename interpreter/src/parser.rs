@@ -72,9 +72,11 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
     pub fn parse_function(&mut self) -> Result<FunctionStatement<'source_code>, ParseError<'source_code>> {
         let name = self.consume_token()?;
+        let name_range = name.range();
         let TokenKind::Identifier(name) = name.kind else {
             return Err(ParseError::FunctionStatementExpectedName { token: name });
         };
+        let name = Ranged::new(name_range, name);
 
         self.expect_left_paren("function name")?;
 
@@ -259,7 +261,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         match token.kind {
             TokenKind::StringLiteral(literal) => Ok(PrimaryExpression::StringLiteral(literal)),
             TokenKind::Integer(integer) => Ok(PrimaryExpression::IntegerLiteral(integer)),
-            TokenKind::Identifier(identifier) => Ok(PrimaryExpression::Reference(identifier)),
+            TokenKind::Identifier(identifier) => Ok(PrimaryExpression::Reference(Ranged::new(token.range(), identifier))),
             TokenKind::TemplateString(template_string) => self.parse_template_string(template_string),
 
             _ => Err(ParseError::UnknownStartOfExpression { token }),
@@ -316,7 +318,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         };
         let function_identifier = Ranged::new(token.range(), identifier.to_string());
 
-        self.expect_left_paren("function call identifier")?;
+        let token_left_paren = self.expect_left_paren("function call identifier")?;
 
         let mut arguments = Vec::new();
         while let Ok(token) = self.peek_token() {
@@ -340,9 +342,13 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
         }
 
+        let token_right_paren = self.tokens[self.cursor - 1].range();
+
         Ok(Expression::Function(FunctionCallExpression {
             function_identifier,
             arguments,
+            token_left_paren,
+            token_right_paren,
         }))
     }
 
@@ -395,24 +401,24 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(token)
     }
 
-    fn expect_left_paren(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
+    fn expect_left_paren(&mut self, context: &'static str) -> Result<FileRange, ParseError<'source_code>> {
         let token = self.consume_token()?;
 
         if token.kind != TokenKind::Punctuator(Punctuator::LeftParenthesis) {
             return Err(ParseError::ExpectedLeftParen { token, context });
         }
 
-        Ok(())
+        Ok(token.range())
     }
 
-    fn expect_right_paren(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
+    fn expect_right_paren(&mut self, context: &'static str) -> Result<FileRange, ParseError<'source_code>> {
         let token = self.consume_token()?;
 
         if token.kind != TokenKind::Punctuator(Punctuator::RightParenthesis) {
             return Err(ParseError::ExpectedRightParen { token, context });
         }
 
-        Ok(())
+        Ok(token.range())
     }
 
     fn expect_left_curly_bracket(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {

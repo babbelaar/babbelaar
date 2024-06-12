@@ -11,6 +11,11 @@ pub struct BuiltinFunction {
     pub inline_detail: &'static str,
     pub function: BuiltinFunctionSignature,
     pub lsp_completion: Option<&'static str>,
+    pub parameters: &'static [BuiltinFunctionParameter],
+}
+
+pub struct BuiltinFunctionParameter {
+    pub name: &'static str,
 }
 
 pub fn schrijf(_: &mut Interpreter<'_>, args: Vec<Value>) -> Value {
