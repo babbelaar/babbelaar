@@ -1,6 +1,8 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::fmt::{Display, Formatter, Write};
+
 use strum::IntoStaticStr;
 
 use crate::{FileLocation, FileRange, Keyword};
@@ -22,6 +24,35 @@ pub enum Punctuator {
     Solidus,
     Asterisk,
     PercentageSign,
+}
+
+impl Punctuator {
+    #[must_use]
+    pub const fn as_str(&self) -> &str {
+        match self {
+            Self::Colon => ":",
+            Self::Comma => ",",
+            Self::LeftParenthesis => "(",
+            Self::RightParenthesis => ")",
+            Self::LeftCurlyBracket => "{",
+            Self::RightCurlyBracket => "}",
+            Self::LeftSquareBracket => "[",
+            Self::RightSquareBracket => "]",
+            Self::Semicolon => ";",
+            Self::PlusSign => "+",
+            Self::EqualsSign => "=",
+            Self::HyphenMinus => "-",
+            Self::Solidus => "/",
+            Self::Asterisk => "*",
+            Self::PercentageSign => "%",
+        }
+    }
+}
+
+impl Display for Punctuator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -53,6 +84,28 @@ impl<'source_code> TokenKind<'source_code> {
     }
 }
 
+impl<'source_code> Display for TokenKind<'source_code> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Identifier(ident) => ident.fmt(f),
+            Self::IllegalCharacter(ch) => ch.fmt(f),
+            Self::Integer(int) => int.fmt(f),
+            Self::Keyword(keyword) => f.write_str(keyword.as_ref()),
+            Self::Punctuator(punctuator) => punctuator.fmt(f),
+            Self::StringLiteral(str) => f.write_fmt(format_args!("\"{str}\"")),
+            Self::TemplateString(ts) => {
+                f.write_char('"')?;
+
+                for part in ts {
+                    part.fmt(f)?;
+                }
+
+                f.write_char('"')
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'source_code> {
     pub kind: TokenKind<'source_code>,
@@ -66,6 +119,12 @@ impl<'source_code> Token<'source_code> {
     }
 }
 
+impl<'source_code> Display for Token<'source_code> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.kind.fmt(f)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TemplateStringToken<'source_code> {
     Plain {
@@ -74,4 +133,20 @@ pub enum TemplateStringToken<'source_code> {
         str: &'source_code str,
     },
     Expression(Vec<Token<'source_code>>),
+}
+
+impl<'source_code> Display for TemplateStringToken<'source_code> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TemplateStringToken::Expression(expr) => {
+                f.write_char('{')?;
+                for token in expr {
+                    token.kind.fmt(f)?;
+                }
+                f.write_char('}')
+            }
+
+            TemplateStringToken::Plain { str, .. } => str.fmt(f),
+        }
+    }
 }
