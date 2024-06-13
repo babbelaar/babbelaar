@@ -14,7 +14,7 @@
         "keywords": {
             "patterns": [
                 {
-                    "match": "\\b(volg|in|reeks|functie|bekeer)\\b",
+                    "match": "\\b(volg|in|reeks|functie|bekeer|waar|onwaar|als)\\b",
                     "name": "keyword.control.babbelaar"
                 }
             ]

@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::HashMap};
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{BiExpression, Builtin, BuiltinFunction, Expression, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, Parameter, PrimaryExpression, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart};
+use crate::{BiExpression, Builtin, BuiltinFunction, Expression, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Parameter, PrimaryExpression, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart};
 
 pub struct SemanticAnalyzer<'source_code> {
     context: SemanticContext<'source_code>,
@@ -60,6 +60,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             StatementKind::Expression(expr) => self.analyze_expression(expr),
             StatementKind::For(statement) => self.analyze_for_statement(statement),
             StatementKind::Function(function) => self.analyze_function(function),
+            StatementKind::If(statement) => self.analyze_if_statement(statement),
             StatementKind::Return(function) => self.analyze_return_statement(function),
         }
     }
@@ -72,6 +73,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             kind: SemanticLocalKind::Iterator,
             declaration_range: statement.iterator_name.range(),
         });
+
+        for statement in &statement.body {
+            self.analyze_statement(statement);
+        }
+
+        self.context.scope.pop().expect("we pushed a scope, we should pop the scope");
+    }
+
+    fn analyze_if_statement(&mut self, statement: &'source_code IfStatement<'source_code>) {
+        self.context.scope.push(SemanticScope::default());
+
+        self.analyze_expression(&statement.condition);
 
         for statement in &statement.body {
             self.analyze_statement(statement);

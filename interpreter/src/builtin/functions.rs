@@ -26,11 +26,7 @@ pub fn schrijf(_: &mut Interpreter<'_>, args: Vec<Value>) -> Value {
             print!(" ");
         }
 
-        match arg {
-            Value::Null => print!("null"),
-            Value::Integer(integer) => print!("{integer}"),
-            Value::String(str) => print!("{str}"),
-        }
+        print!("{arg}");
     }
 
     println!();

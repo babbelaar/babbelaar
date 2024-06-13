@@ -41,6 +41,10 @@ impl<'source_code> Interpreter<'source_code> {
                 StatementResult::Continue
             }
 
+            StatementKind::If(statement) => {
+                self.execute_if_statement(statement)
+            }
+
             StatementKind::Return(statement) => {
                 let value = statement.expression.as_ref()
                     .map(|expr| self.execute_expression(expr));
@@ -54,6 +58,10 @@ impl<'source_code> Interpreter<'source_code> {
         match expression {
             Expression::Function(func) => self.execute_function_call(func),
             Expression::BiExpression(expr) => self.execute_bi_expression(expr),
+
+            Expression::Primary(PrimaryExpression::Boolean(boolean)) => {
+                Value::Bool(*boolean)
+            }
 
             Expression::Primary(PrimaryExpression::Reference(reference)) => {
                 self.scope.find(reference)
@@ -105,6 +113,24 @@ impl<'source_code> Interpreter<'source_code> {
                 if let StatementResult::Return(value) = self.execute_statement(statement) {
                     return StatementResult::Return(value);
                 }
+            }
+        }
+
+        self.scope = std::mem::take(&mut self.scope).pop();
+
+        StatementResult::Continue
+    }
+
+    fn execute_if_statement(&mut self, statement: &IfStatement<'source_code>) -> StatementResult {
+        self.scope = std::mem::take(&mut self.scope).push();
+
+        if !self.execute_expression(&statement.condition).is_true() {
+            return StatementResult::Continue;
+        }
+
+        for statement in &statement.body {
+            if let StatementResult::Return(value) = self.execute_statement(statement) {
+                return StatementResult::Return(value);
             }
         }
 

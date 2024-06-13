@@ -14,6 +14,7 @@ pub enum StatementKind<'source_code> {
     Expression(Expression<'source_code>),
     Function(FunctionStatement<'source_code>),
     For(ForStatement<'source_code>),
+    If(IfStatement<'source_code>),
     Return(ReturnStatement<'source_code>),
 }
 
@@ -29,6 +30,12 @@ pub struct ForStatement<'source_code> {
 pub struct FunctionStatement<'source_code> {
     pub name: Ranged<&'source_code str>,
     pub parameters: Vec<Parameter<'source_code>>,
+    pub body: Vec<Statement<'source_code>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct IfStatement<'source_code> {
+    pub condition: Ranged<Expression<'source_code>>,
     pub body: Vec<Statement<'source_code>>,
 }
 

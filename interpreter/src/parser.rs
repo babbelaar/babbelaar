@@ -6,7 +6,7 @@ use std::fmt::Display;
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, Keyword, Parameter, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
+    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Parameter, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseError<'source_code>>;
@@ -46,6 +46,11 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let start = first_token.begin;
 
         let kind = match first_token.kind {
+            TokenKind::Keyword(Keyword::Als) => {
+                _ = self.consume_token().ok();
+                StatementKind::If(self.parse_if_statement()?)
+            }
+
             TokenKind::Keyword(Keyword::Bekeer) => {
                 _ = self.consume_token().ok();
                 StatementKind::Return(self.parse_return_statement()?)
@@ -241,6 +246,29 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(ForStatement { keyword, iterator_name, range, body })
     }
 
+    fn parse_if_statement(&mut self) -> Result<IfStatement<'source_code>, ParseError<'source_code>> {
+        let start = self.token_end;
+        let condition = self.parse_expression()?;
+        let condition = Ranged::new(FileRange::new(start, self.token_end), condition);
+
+        self.expect_left_curly_bracket("als-conditie")?;
+
+        let mut body = Vec::new();
+        loop {
+            if self.peek_token()?.kind == TokenKind::Punctuator(Punctuator::RightCurlyBracket) {
+                _ = self.consume_token()?;
+                break;
+            }
+
+            match self.parse_statement() {
+                Ok(statement) => body.push(statement),
+                Err(error) => self.handle_error(error)?,
+            }
+        }
+
+        Ok(IfStatement { condition, body })
+    }
+
     fn parse_range(&mut self) -> Result<RangeExpression<'source_code>, ParseError<'source_code>> {
         let range_keyword = self.consume_token()?;
         if range_keyword.kind != TokenKind::Keyword(Keyword::Reeks) {
@@ -268,6 +296,8 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             TokenKind::Integer(integer) => Ok(PrimaryExpression::IntegerLiteral(integer)),
             TokenKind::Identifier(identifier) => Ok(PrimaryExpression::Reference(Ranged::new(token.range(), identifier))),
             TokenKind::TemplateString(template_string) => self.parse_template_string(template_string),
+            TokenKind::Keyword(Keyword::Waar) => Ok(PrimaryExpression::Boolean(true)),
+            TokenKind::Keyword(Keyword::Onwaar) => Ok(PrimaryExpression::Boolean(false)),
 
             _ => Err(ParseError::UnknownStartOfExpression { token }),
         }

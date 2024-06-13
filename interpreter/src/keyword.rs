@@ -13,9 +13,11 @@ pub enum Keyword {
     Bekeer,
     Functie,
     In,
+    Onwaar,
     Reeks,
     Structuur,
     Volg,
+    Waar,
 }
 
 impl Keyword {
@@ -29,6 +31,10 @@ impl Keyword {
 
     pub fn lsp_completion(&self) -> Option<LspCompletion<'_>> {
         match self {
+            Self::Als => Some(LspCompletion {
+                completion: "als ${1:conditie} {\n\t${0:dan}\n}",
+                inline_detail: "Voorwaardelijk een sectie uitvoeren."
+            }),
             Self::Functie => Some(LspCompletion {
                 completion: "functie ${1:naam}() {\n\t$0\n}",
                 inline_detail: "Een nieuwe functie.",
@@ -48,7 +54,8 @@ impl DocumentationProvider for Keyword {
             Self::Als => "Evalueer sectie als een voorwaarde geldt.",
             Self::Bekeer => "Geef een waarde terug aan de aanroeper van de functie.",
             Self::Functie => "Definieer een nieuwe functie.",
-            Self::In => "Herhaal over een stel waardes met [`for`].",
+            Self::In => "Herhaal over een stel waardes met `volg`.",
+            Self::Onwaar => "Een waarde van het type `booleaan`. Tegenovergestelde van `waar`",
             Self::Reeks => {
                 r#"Stel een reeks op van getallen.
 ## Voorbeeld
@@ -60,6 +67,7 @@ volg i in reeks(0, 10) {
             }
             Self::Structuur => "Definieer een datastructuur.",
             Self::Volg => "Herhaal de sectie per waarde van de reeks.",
+            Self::Waar => "Een waarde van het type `booleaan`. Tegenovergestelde van `onwaar`",
         }.into()
     }
 }

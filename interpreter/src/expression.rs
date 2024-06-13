@@ -5,6 +5,7 @@ use crate::{FileRange, Ranged};
 
 #[derive(Clone, Debug)]
 pub enum PrimaryExpression<'source_code> {
+    Boolean(bool),
     StringLiteral(&'source_code str),
     IntegerLiteral(i64),
     Reference(Ranged<&'source_code str>),

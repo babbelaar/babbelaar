@@ -8,5 +8,10 @@
         "prefix": ["volg", "volg-reeks"],
         "body": ["volg ${1:element} in reeks(${2:start}, ${3:eind}) {", "\t$0", "}"],
         "description": "Volg in reeks."
+    },
+    "Voorwaardelijk een sectie uitvoeren": {
+        "prefix": ["als"],
+        "body": ["als ${1:conditie} {", "\t${0:dan}", "}"],
+        "description": "Volg in reeks."
     }
 }
