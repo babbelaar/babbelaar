@@ -78,6 +78,16 @@ impl FileRange {
     pub const fn end(&self) -> FileLocation {
         self.end
     }
+
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        if self.end.line() == self.start.line() {
+            self.end.column() - self.start.column()
+        } else {
+            debug_assert!(self.end.line() - self.start.line() <= 1, "Cannot count characters across multiple lines");
+            self.end.column() + self.start.column()
+        }
+    }
 }
 
 impl From<(FileLocation, FileLocation)> for FileRange {

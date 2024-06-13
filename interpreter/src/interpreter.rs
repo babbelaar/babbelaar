@@ -182,8 +182,7 @@ impl<'source_code> Interpreter<'source_code> {
             }
         }
 
-        println!("Error: Unknown function {name}");
-        Value::Null
+        panic!("Error: Unknown function {name}");
     }
 }
 

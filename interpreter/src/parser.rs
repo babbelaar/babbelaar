@@ -78,7 +78,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         };
         let name = Ranged::new(name_range, name);
 
-        self.expect_left_paren("function name")?;
+        self.expect_left_paren("functienaam")?;
 
         let mut parameters = Vec::new();
         while self.peek_punctuator() != Some(Punctuator::RightParenthesis) {
@@ -104,8 +104,8 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
         }
 
-        self.expect_right_paren("function name")?;
-        self.expect_left_curly_bracket("function argument list")?;
+        self.expect_right_paren("functienaam")?;
+        self.expect_left_curly_bracket("functieargumentenlijst")?;
 
         let mut body = Vec::new();
         loop {
@@ -164,7 +164,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     fn parse_parameter(&mut self) -> Result<Parameter<'source_code>, ParseError<'source_code>> {
         let name = self.parse_parameter_name()?;
 
-        self.expect_colon("parameter name")?;
+        self.expect_colon("parameternaam")?;
 
         let ty = self.parse_type()?;
 
@@ -217,7 +217,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         let range = self.parse_range()?;
 
-        self.expect_left_curly_bracket("for-loop range")?;
+        self.expect_left_curly_bracket("reeks van volg-lus")?;
 
         let mut body = Vec::new();
         loop {
@@ -242,15 +242,15 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             return Err(ParseError::RangeExpectedKeyword { token: range_keyword });
         }
 
-        self.expect_left_paren("range")?;
+        self.expect_left_paren("reeks")?;
 
         let start = self.parse_ranged(Self::parse_primary_expression)?;
 
-        self.expect_comma("range")?;
+        self.expect_comma("reeks")?;
 
         let end = self.parse_ranged(Self::parse_primary_expression)?;
 
-        self.expect_right_paren("range")?;
+        self.expect_right_paren("reeks")?;
 
         Ok(RangeExpression { start, end })
     }
@@ -318,7 +318,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         };
         let function_identifier = Ranged::new(token.range(), identifier.to_string());
 
-        let token_left_paren = self.expect_left_paren("function call identifier")?;
+        let token_left_paren = self.expect_left_paren("aan te roepen functienaam")?;
 
         let mut arguments = Vec::new();
         while let Ok(token) = self.peek_token() {
@@ -328,7 +328,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
 
             if !arguments.is_empty() {
-                if let Err(error) = self.expect_comma("argument in function call") {
+                if let Err(error) = self.expect_comma("argument in functieaanroep") {
                     self.handle_error(error)?;
                     break;
                 }

@@ -4,7 +4,6 @@
 use std::collections::HashMap;
 
 use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, Parameter, Statement, StatementKind, Token, TokenKind};
-use log::info;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
 
@@ -127,7 +126,7 @@ impl LspSymbol {
             delta_start -= previous_range.end().column() as u32;
         }
 
-        let length = (self.range.end().column() - self.range.start().column()) as u32;
+        let length = self.range.len() as u32;
 
         SemanticToken {
             delta_line,

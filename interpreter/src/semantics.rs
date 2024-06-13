@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 use strum::AsRefStr;
 use thiserror::Error;
@@ -281,10 +281,44 @@ impl<'this, 'source_code> FunctionReference<'this, 'source_code> {
         }
     }
 
+    #[must_use]
     pub fn name(&self) -> &str {
         match self {
             Self::Builtin(func) => func.name,
             Self::Custom(func) => func.name,
+        }
+    }
+
+    #[must_use]
+    pub fn documentation(&self) -> Option<&str> {
+        match self {
+            Self::Builtin(func) => Some(func.documentation),
+            Self::Custom(..) => None,
+        }
+    }
+
+    #[must_use]
+    pub fn lsp_completion(&self) -> Cow<'_, str> {
+        if let Some(completion) = self.lsp_completion_raw() {
+            return Cow::Borrowed(completion);
+        }
+
+        let mut insert = format!("{}(", self.name());
+
+        for i in 0..self.parameter_count() {
+            let comma = if i == 0 { "" } else { ", " };
+            insert += &format!("{comma}${}", i + 1);
+        }
+
+        insert += ")$0";
+        Cow::Owned(insert)
+    }
+
+    #[must_use]
+    fn lsp_completion_raw(&self) -> Option<&str> {
+        match self {
+            Self::Builtin(func) => func.lsp_completion,
+            Self::Custom(..) => None,
         }
     }
 }

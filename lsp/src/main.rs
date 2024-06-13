@@ -474,18 +474,11 @@ impl LanguageServer for Backend {
                 completions.push(CompletionItem {
                     label: func.name().to_string(),
                     kind: Some(CompletionItemKind::FUNCTION),
-                    documentation: None,
-                    insert_text: Some({
-                        let mut insert = format!("{}(", func.name());
-
-                        for i in 0..func.parameter_count() {
-                            let comma = if i == 0 { "" } else { ", " };
-                            insert += &format!("{comma}${}", i + 1);
-                        }
-
-                        insert += ")$0";
-                        insert
-                    }),
+                    documentation: func.documentation().map(|x| Documentation::MarkupContent(MarkupContent {
+                        kind: MarkupKind::Markdown,
+                        value: x.to_string(),
+                    })),
+                    insert_text: Some(func.lsp_completion().into_owned()),
                     insert_text_format: Some(InsertTextFormat::SNIPPET),
                     ..Default::default()
                 });
@@ -554,25 +547,6 @@ fn suggest_identifiers(ident: &str, completions: &mut Vec<CompletionItem>) {
                 kind: Some(CompletionItemKind::KEYWORD),
                 insert_text: lsp.map(|x| x.completion.to_string()),
                 detail: lsp.map(|x| x.inline_detail.to_string()),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                ..Default::default()
-            });
-        }
-    }
-
-    for builtin_function in Builtin::FUNCTIONS {
-        if builtin_function.name.starts_with(ident) {
-            completions.push(CompletionItem {
-                label: builtin_function.name.to_string(),
-                kind: Some(CompletionItemKind::FUNCTION),
-                documentation: Some(Documentation::MarkupContent(MarkupContent {
-                    kind: MarkupKind::Markdown,
-                    value: builtin_function.documentation.to_string(),
-                })),
-                insert_text: match builtin_function.lsp_completion {
-                    Some(completion) => Some(completion.to_string()),
-                    None => Some(format!("{}($1)$0", builtin_function.name)),
-                },
                 insert_text_format: Some(InsertTextFormat::SNIPPET),
                 ..Default::default()
             });

@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::io::stdin;
+
 use crate::{Interpreter, Value};
 
 pub type BuiltinFunctionSignature = &'static dyn Fn(&mut Interpreter<'_>, Vec<Value>) -> Value;
@@ -34,4 +36,11 @@ pub fn schrijf(_: &mut Interpreter<'_>, args: Vec<Value>) -> Value {
     println!();
 
     Value::Null
+}
+
+pub fn lees(_: &mut Interpreter<'_>, _: Vec<Value>) -> Value {
+    let mut line = String::new();
+    stdin().read_line(&mut line).unwrap();
+    line.truncate(line.trim_end().len());
+    Value::String(line)
 }
