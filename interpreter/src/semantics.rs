@@ -19,6 +19,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         Self {
             context: SemanticContext {
                 scope: vec![SemanticScope::default()],
+                definition_tracker: Some(HashMap::new()),
             },
             diagnostics: Vec::new(),
         }
@@ -33,13 +34,12 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     pub fn analyze_function(&mut self, function: &'source_code FunctionStatement<'source_code>) {
-        self.context.scope.last_mut().unwrap().functions.push(SemanticFunction {
+        self.context.push_function(SemanticFunction {
             name: &function.name,
             parameters: &function.parameters,
         });
 
-        self.context.scope.push(SemanticScope::default());
-        let scope = self.context.scope.last_mut().expect("we just pushed a scope");
+        let scope = self.context.push_scope();
 
         for param in &function.parameters {
             scope.locals.insert(&param.name, SemanticLocal {
@@ -52,7 +52,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             self.analyze_statement(statement);
         }
 
-        self.context.scope.pop().expect("we pushed a scope, we should pop the scope");
+        self.context.pop_scope();
     }
 
     pub fn analyze_statement(&mut self, statement: &'source_code Statement<'source_code>) {
@@ -66,9 +66,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     fn analyze_for_statement(&mut self, statement: &'source_code ForStatement<'source_code>) {
-        self.context.scope.push(SemanticScope::default());
-
-        let scope = self.context.scope.last_mut().expect("we just pushed a scope");
+        let scope = self.context.push_scope();
         scope.locals.insert(&statement.iterator_name, SemanticLocal {
             kind: SemanticLocalKind::Iterator,
             declaration_range: statement.iterator_name.range(),
@@ -78,11 +76,11 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             self.analyze_statement(statement);
         }
 
-        self.context.scope.pop().expect("we pushed a scope, we should pop the scope");
+        self.context.pop_scope();
     }
 
     fn analyze_if_statement(&mut self, statement: &'source_code IfStatement<'source_code>) {
-        self.context.scope.push(SemanticScope::default());
+        self.context.push_scope();
 
         self.analyze_expression(&statement.condition);
 
@@ -90,7 +88,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             self.analyze_statement(statement);
         }
 
-        self.context.scope.pop().expect("we pushed a scope, we should pop the scope");
+        self.context.pop_scope();
     }
 
     fn analyze_return_statement(&mut self, statement: &'source_code ReturnStatement<'source_code>) {
@@ -166,8 +164,16 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     return;
                 };
 
-                // TODO
-                _ = local;
+                let local_reference = SemanticReference {
+                    local_kind: local.kind,
+                    declaration_range: local.declaration_range,
+                };
+
+                if let Some(tracker) = &mut self.context.definition_tracker {
+                    tracker.insert(reference.range(), local_reference);
+                }
+
+                // TODO type checking
             }
 
             _ => (), // TODO
@@ -208,6 +214,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
     pub fn find_function<'this>(&'this self, name: &str) -> Option<FunctionReference<'this, 'source_code>> {
         self.find_function_by_name(|func| func == name)
+    }
+
+    pub fn find_reference(&self, range: FileRange) -> Option<SemanticReference> {
+        self.context.definition_tracker.as_ref()?.get(&range).copied()
     }
 
     #[must_use]
@@ -253,6 +263,23 @@ impl<'source_code> SemanticDiagnosticKind<'source_code> {
 
 struct SemanticContext<'source_code> {
     scope: Vec<SemanticScope<'source_code>>,
+
+    definition_tracker: Option<HashMap<FileRange, SemanticReference>>,
+}
+
+impl<'source_code> SemanticContext<'source_code> {
+    pub fn push_scope(&mut self) -> &mut SemanticScope<'source_code> {
+        self.scope.push(SemanticScope::default());
+        self.scope.last_mut().expect("we just pushed a scope")
+    }
+
+    fn push_function(&mut self, function: SemanticFunction<'source_code>) {
+        self.scope.last_mut().unwrap().functions.push(function);
+    }
+
+    fn pop_scope(&mut self) {
+        self.scope.pop().unwrap();
+    }
 }
 
 #[derive(Default)]
@@ -275,7 +302,15 @@ struct SemanticLocal {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SemanticLocalKind {
+pub struct SemanticReference {
+    pub local_kind: SemanticLocalKind,
+    pub declaration_range: FileRange,
+    // type ...
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SemanticLocalKind {
     Parameter,
     Iterator,
 }

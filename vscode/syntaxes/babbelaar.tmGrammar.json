@@ -8,6 +8,12 @@
         },
         {
             "include": "#strings"
+        },
+        {
+            "include": "#constant.numeric.decimal"
+        },
+        {
+            "include": "#constant.numeric"
         }
     ],
     "repository": {

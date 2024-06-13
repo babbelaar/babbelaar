@@ -14,7 +14,7 @@
         "languages": [
             {
                 "id": "babbelaar",
-                "configuration": "./language-configuration.json",
+                "configuration": "./syntaxes/language-config.json",
                 "aliases": [
                     "Babbelaar"
                 ],
@@ -29,8 +29,8 @@
                 "title": "Babbelaar: Bestand uitvoeren"
             },
             {
-                "command": "babbelaar.helloWorld",
-                "title": "Hello World"
+                "command": "babbelaar.herstarten",
+                "title": "Babbelaar: Taalserveerder herstarten"
             }
         ],
         "taskDefinitions": [

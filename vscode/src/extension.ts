@@ -86,18 +86,8 @@ const taskProvider = new BabbelaarTaskProvider();
 const taskProviderSubscription = tasks.registerTaskProvider("babbelaar", taskProvider);
 
 export async function activate(context: ExtensionContext) {
-	let disposable = commands.registerCommand("babbelaar.helloWorld", async uri => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		const url = Uri.parse('file:///Users/tager/Developer/Public/Babbelaar/test.bab')
-		let document = await workspace.openTextDocument(url);
-		await window.showTextDocument(document);
-
-		console.log(url);
-		window.activeTextEditor!.document
-		let editor = window.activeTextEditor;
-		let range = new Range(1, 1, 1, 1)
-		editor!.selection = new Selection(range.start, range.end);
+	let disposable = commands.registerCommand("babbelaar.herstarten", async => {
+		startClient();
 	});
 
 	context.subscriptions.push(disposable);
@@ -109,6 +99,13 @@ export async function activate(context: ExtensionContext) {
 
 	context.subscriptions.push(disposable);
 
+	startClient();
+}
+
+function startClient() {
+	if (client) {
+		client.stop();
+	}
 
 	const traceOutputChannel = window.createOutputChannel("Babbelaar Taalserveerder trace");
 	const command = process.env.SERVER_PATH || "babbelaar-lsp";

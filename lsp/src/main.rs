@@ -310,26 +310,31 @@ impl Backend {
     }
 
     async fn on_semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>> {
-        let mut symbolizer = Symbolizer::new(params.text_document.uri.clone());
-
         self.lexed_document(&params.text_document, |tokens| {
+            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone());
+
             for token in &tokens {
                 symbolizer.add_token(token);
             }
 
             let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            let mut statements = Vec::new();
             while let Ok(statement) = parser.parse_statement() {
-                symbolizer.add_statement(&statement);
+                statements.push(statement);
             }
 
-            Ok(())
-        }).await?;
+            for statement in &statements {
+                symbolizer.add_statement(statement);
+            }
 
-        let tokens = symbolizer.to_tokens();
-        Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
-            result_id: None,
-            data: tokens,
-        })))
+            let tokens = symbolizer.to_tokens();
+
+            Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+                result_id: None,
+                data: tokens,
+            })))
+        }).await
+
     }
 }
 
@@ -380,24 +385,28 @@ impl LanguageServer for Backend {
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        let mut symbolizer = Symbolizer::new(params.text_document.uri.clone());
 
         self.lexed_document(&params.text_document, |tokens| {
+            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone());
+
             for token in &tokens {
                 symbolizer.add_token(token);
             }
 
+            let mut statements = Vec::new();
+
             let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
             while let Ok(statement) = parser.parse_statement() {
-                symbolizer.add_statement(&statement);
+                statements.push(statement);
             }
 
-            Ok(())
-        }).await?;
+            for statement in &statements {
+                symbolizer.add_statement(statement);
+            }
 
-        let response = symbolizer.to_response();
-        // self.client.log_message(MessageType::INFO, format!("Symbols: {response:#?}")).await;
-        Ok(Some(response))
+            let response = symbolizer.to_response();
+            Ok(Some(response))
+        }).await
     }
 
     async fn semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>> {

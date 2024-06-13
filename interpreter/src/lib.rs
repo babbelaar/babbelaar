@@ -25,7 +25,7 @@ pub use self::{
     lexer::Lexer,
     parser::{Parser, ParseError},
     scope::Scope,
-    semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind},
+    semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticLocalKind, SemanticReference},
     statement::{ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     type_::{Parameter, Type, TypeSpecifier},

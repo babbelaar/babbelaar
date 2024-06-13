@@ -3,26 +3,28 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, Parameter, ReturnStatement, Statement, StatementKind, Token, TokenKind};
+use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, Parameter, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Token, TokenKind};
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
 
 use crate::conversion::convert_file_range_to_location;
 
-pub struct Symbolizer {
+pub struct Symbolizer<'source_code> {
     uri: Url,
     symbols: HashMap<FileRange, LspSymbol>,
+    semantic_analyzer: SemanticAnalyzer<'source_code>,
 }
 
-impl Symbolizer {
+impl<'source_code> Symbolizer<'source_code> {
     pub fn new(uri: Url) -> Self {
         Self {
             uri,
             symbols: HashMap::new(),
+            semantic_analyzer: SemanticAnalyzer::new(),
         }
     }
 
-    pub fn add_statement(&mut self, statement: &Statement) {
+    pub fn add_statement(&mut self, statement: &'source_code Statement<'source_code>) {
         match &statement.kind {
             StatementKind::Expression(expression) => self.add_expression(expression),
             StatementKind::For(statement) => self.add_statement_for(statement),
@@ -30,6 +32,8 @@ impl Symbolizer {
             StatementKind::If(statement) => self.add_statement_if(statement),
             StatementKind::Return(statement) => self.add_statement_return(statement),
         }
+
+        self.semantic_analyzer.analyze_statement(statement);
     }
 
     pub fn add_token(&mut self, token: &Token) {
@@ -42,7 +46,7 @@ impl Symbolizer {
 
     pub fn to_response(self) -> DocumentSymbolResponse {
         let mut values: Vec<_> = self.symbols.into_iter().collect();
-        values.sort_by(|(range_a, _), (range_b, _)| range_a.cmp(range_b));
+        values.sort_by(|(range_a, _), (range_b, _)| range_a.start().offset().cmp(&range_b.start().offset()));
 
         let values = values.into_iter()
             .map(|(_, info)| info)
@@ -67,13 +71,13 @@ impl Symbolizer {
         tokens
     }
 
-    fn add_statement_for(&mut self, statement: &ForStatement) {
+    fn add_statement_for(&mut self, statement: &'source_code ForStatement<'source_code>) {
         for statement in &statement.body {
             self.add_statement(statement);
         }
     }
 
-    fn add_statement_function(&mut self, statement: &FunctionStatement) {
+    fn add_statement_function(&mut self, statement: &'source_code FunctionStatement<'source_code>) {
         for parameter in &statement.parameters {
             self.add_parameter(parameter);
         }
@@ -83,7 +87,7 @@ impl Symbolizer {
         }
     }
 
-    fn add_statement_if(&mut self, statement: &IfStatement) {
+    fn add_statement_if(&mut self, statement: &'source_code IfStatement<'source_code>) {
         self.add_expression(&statement.condition);
 
         for statement in &statement.body {
@@ -91,13 +95,13 @@ impl Symbolizer {
         }
     }
 
-    fn add_statement_return(&mut self, statement: &ReturnStatement) {
+    fn add_statement_return(&mut self, statement: &'source_code ReturnStatement<'source_code>) {
         if let Some(expr) = &statement.expression {
             self.add_expression(expr);
         }
     }
 
-    fn add_parameter(&mut self, parameter: &Parameter) {
+    fn add_parameter(&mut self, parameter: &'source_code Parameter<'source_code>) {
         self.symbols.insert(parameter.name.range(), LspSymbol {
             name: parameter.name.value().to_string(),
             kind: LspTokenType::ParameterName,
@@ -111,7 +115,7 @@ impl Symbolizer {
         });
     }
 
-    fn add_expression(&mut self, expression: &Expression) {
+    fn add_expression(&mut self, expression: &'source_code Expression<'source_code>) {
         match expression {
             Expression::Function(function) => {
                 self.symbols.insert(function.function_identifier.range(), LspSymbol {
@@ -121,11 +125,30 @@ impl Symbolizer {
                 });
             }
 
-            _ => (),
+            Expression::Primary(PrimaryExpression::Reference(identifier)) => {
+                if let Some(reference) = self.semantic_analyzer.find_reference(identifier.range()) {
+                    self.symbols.insert(identifier.range(), LspSymbol {
+                        name: identifier.value().to_string(),
+                        kind: match reference.local_kind {
+                            SemanticLocalKind::Iterator => LspTokenType::Variable,
+                            SemanticLocalKind::Parameter => LspTokenType::ParameterName,
+                        },
+                        range: identifier.range(),
+                    });
+                }
+            }
+
+            Expression::BiExpression(expr) => {
+                self.add_expression(&expr.lhs);
+                self.add_expression(&expr.rhs);
+            }
+
+            Expression::Primary(..) => (),
         }
     }
 }
 
+#[derive(Debug)]
 struct LspSymbol {
     name: String,
     kind: LspTokenType,
@@ -133,12 +156,13 @@ struct LspSymbol {
 }
 
 impl LspSymbol {
+    #[must_use]
     fn to_semantic(self, previous_range: FileRange) -> SemanticToken {
         let delta_line = (self.range.start().line() - previous_range.start().line()) as u32;
 
         let mut delta_start = self.range.start().column() as u32;
         if delta_line == 0 {
-            delta_start -= previous_range.end().column() as u32;
+            delta_start -= previous_range.start().column() as u32;
         }
 
         let length = self.range.len() as u32;
@@ -152,6 +176,7 @@ impl LspSymbol {
         }
     }
 
+    #[must_use]
     fn to_symbol(self, uri: Url) -> SymbolInformation {
         #[allow(deprecated)]
         SymbolInformation {
