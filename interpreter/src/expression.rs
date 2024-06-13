@@ -22,9 +22,9 @@ pub enum TemplateStringExpressionPart<'source_code> {
 
 #[derive(Clone, Debug)]
 pub enum Expression<'source_code> {
-    Primary(PrimaryExpression<'source_code>),
-    Function(FunctionCallExpression<'source_code>),
     BiExpression(BiExpression<'source_code>),
+    Function(FunctionCallExpression<'source_code>),
+    Primary(PrimaryExpression<'source_code>),
 }
 
 #[derive(Clone, Debug)]
@@ -48,6 +48,17 @@ pub enum BiOperator {
     Add,
     Subtract,
     Multiply,
+    Comparison(Comparison),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Comparison {
+    Equality,
+    Inequality,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }
 
 #[derive(Clone, Debug)]

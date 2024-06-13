@@ -1,3 +1,6 @@
-als waar {
-    onwaar
+volg e in reeks(0, 10) {
+    schrijf(€"{e}");
+    als e == 5 {
+        schrijf("Wow");
+    }
 }

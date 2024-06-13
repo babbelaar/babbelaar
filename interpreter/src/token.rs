@@ -9,20 +9,37 @@ use crate::{FileLocation, FileRange, Keyword};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, IntoStaticStr)]
 pub enum Punctuator {
+    #[strum(serialize = "dubbele punt")]
     Colon,
+    #[strum(serialize = "komma")]
     Comma,
+    #[strum(serialize = "open rond haakje")]
     LeftParenthesis,
+    #[strum(serialize = "gesloten rond haakje")]
     RightParenthesis,
+    #[strum(serialize = "open accolade")]
     LeftCurlyBracket,
+    #[strum(serialize = "gesloten accolade")]
     RightCurlyBracket,
+    #[strum(serialize = "open blokhaakje")]
     LeftSquareBracket,
+    #[strum(serialize = "gesloten blokhaakje")]
     RightSquareBracket,
+    #[strum(serialize = "puntkomma")]
     Semicolon,
+    #[strum(serialize = "plus")]
     PlusSign,
-    EqualsSign,
+    #[strum(serialize = "aanwijzing")]
+    Assignment,
+    #[strum(serialize = "vergelijking")]
+    Equals,
+    #[strum(serialize = "min")]
     HyphenMinus,
+    #[strum(serialize = "schuine streep")]
     Solidus,
+    #[strum(serialize = "sterretje")]
     Asterisk,
+    #[strum(serialize = "procent")]
     PercentageSign,
 }
 
@@ -40,7 +57,8 @@ impl Punctuator {
             Self::RightSquareBracket => "]",
             Self::Semicolon => ";",
             Self::PlusSign => "+",
-            Self::EqualsSign => "=",
+            Self::Assignment => "=",
+            Self::Equals => "==",
             Self::HyphenMinus => "-",
             Self::Solidus => "/",
             Self::Asterisk => "*",
@@ -71,15 +89,15 @@ pub enum TokenKind<'source_code> {
 impl<'source_code> TokenKind<'source_code> {
     pub fn name(&self) -> &'static str {
         match self {
-            Self::Keyword(..) => "Keyword",
+            Self::Keyword(..) => "sleutelwoord",
 
-            Self::Identifier(..) => "Identifier",
-            Self::StringLiteral(..) => "StringLiteral",
-            Self::TemplateString(..) => "TemplateString",
-            Self::Integer(..) => "Integer",
+            Self::Identifier(..) => "identifier",
+            Self::StringLiteral(..) => "slinger",
+            Self::TemplateString(..) => "sjabloonslinger",
+            Self::Integer(..) => "getal",
 
             Self::Punctuator(punctuator) => punctuator.into(),
-            Self::IllegalCharacter(..) => "InvalidCharacter",
+            Self::IllegalCharacter(..) => "ongeldig teken",
         }
     }
 }

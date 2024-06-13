@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, Parameter, Statement, StatementKind, Token, TokenKind};
+use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, Parameter, ReturnStatement, Statement, StatementKind, Token, TokenKind};
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
 
@@ -27,7 +27,8 @@ impl Symbolizer {
             StatementKind::Expression(expression) => self.add_expression(expression),
             StatementKind::For(statement) => self.add_statement_for(statement),
             StatementKind::Function(statement) => self.add_statement_function(statement),
-            _ => (),
+            StatementKind::If(statement) => self.add_statement_if(statement),
+            StatementKind::Return(statement) => self.add_statement_return(statement),
         }
     }
 
@@ -79,6 +80,20 @@ impl Symbolizer {
 
         for statement in &statement.body {
             self.add_statement(statement);
+        }
+    }
+
+    fn add_statement_if(&mut self, statement: &IfStatement) {
+        self.add_expression(&statement.condition);
+
+        for statement in &statement.body {
+            self.add_statement(statement);
+        }
+    }
+
+    fn add_statement_return(&mut self, statement: &ReturnStatement) {
+        if let Some(expr) = &statement.expression {
+            self.add_expression(expr);
         }
     }
 

@@ -56,8 +56,8 @@ impl<'source_code> Interpreter<'source_code> {
 
     fn execute_expression(&mut self, expression: &Expression<'source_code>) -> Value {
         match expression {
-            Expression::Function(func) => self.execute_function_call(func),
             Expression::BiExpression(expr) => self.execute_bi_expression(expr),
+            Expression::Function(func) => self.execute_function_call(func),
 
             Expression::Primary(PrimaryExpression::Boolean(boolean)) => {
                 Value::Bool(*boolean)
@@ -147,6 +147,10 @@ impl<'source_code> Interpreter<'source_code> {
             BiOperator::Add => self.execute_expression_add(lhs, rhs),
             BiOperator::Subtract => self.execute_expression_subtract(lhs, rhs),
             BiOperator::Multiply => self.execute_expression_multiply(lhs, rhs),
+
+            BiOperator::Comparison(comparison) => {
+                Value::Bool(lhs.compare(&rhs, comparison))
+            }
         }
     }
 

@@ -1,9 +1,11 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::Display;
+use std::{cmp::Ordering, fmt::Display};
 
-#[derive(Clone, Debug)]
+use crate::Comparison;
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     /// hehe 5 billion dollar problem
     Null,
@@ -16,6 +18,34 @@ impl Value {
     #[must_use]
     pub fn is_true(&self) -> bool {
         matches!(self, Self::Bool(true))
+    }
+
+    #[must_use]
+    pub fn compare(&self, other: &Self, comparison: Comparison) -> bool {
+        let Some(ordering) = self.partial_cmp(other) else {
+            return false;
+        };
+
+        match comparison {
+            Comparison::Equality => ordering == Ordering::Equal,
+            Comparison::Inequality => ordering != Ordering::Equal,
+            Comparison::GreaterThan => ordering == Ordering::Greater,
+            Comparison::GreaterThanOrEqual => ordering != Ordering::Less,
+            Comparison::LessThan => ordering == Ordering::Less,
+            Comparison::LessThanOrEqual => ordering != Ordering::Greater,
+        }
+    }
+}
+
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Self::Null, Self::Null) => Some(Ordering::Equal),
+            (Self::Bool(this), Self::Bool(that)) => Some(this.cmp(that)),
+            (Self::Integer(this), Self::Integer(that)) => Some(this.cmp(that)),
+            (Self::String(this), Self::String(that)) => Some(this.cmp(that)),
+            _ => None,
+        }
     }
 }
 

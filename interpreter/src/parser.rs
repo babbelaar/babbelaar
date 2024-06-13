@@ -6,7 +6,7 @@ use std::fmt::Display;
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Parameter, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
+    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Comparison, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Parameter, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseError<'source_code>>;
@@ -312,30 +312,44 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     fn parse_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
-        let primary = {
-            let mut parser = self.clone();
-            if let Ok(func) = parser.parse_function_call_expression() {
-                *self = parser;
-                func
-            } else {
-                Expression::Primary(self.parse_primary_expression()?)
-            }
-        };
+        self.parse_relational_expression()
+    }
+
+    fn parse_relational_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
+        self.parse_bi_expression(Self::parse_multiplicative_expression, &[
+            (Punctuator::Equals, BiOperator::Comparison(Comparison::Equality)),
+            // TODO the rest
+        ])
+    }
+
+    fn parse_multiplicative_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
+        self.parse_bi_expression(Self::parse_additive_expression, &[
+            (Punctuator::PlusSign, BiOperator::Add),
+            (Punctuator::HyphenMinus, BiOperator::Subtract),
+        ])
+    }
+
+    fn parse_additive_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
+        self.parse_bi_expression(Self::parse_postfix_expression, &[
+            (Punctuator::PlusSign, BiOperator::Add),
+            (Punctuator::HyphenMinus, BiOperator::Subtract),
+        ])
+    }
+
+    fn parse_bi_expression<F>(&mut self, mut operand: F, operators: &[(Punctuator, BiOperator)]) -> Result<Expression<'source_code>, ParseError<'source_code>>
+            where F: FnMut(&mut Self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
+        let lhs = operand(self)?;
 
         let Ok(next) = self.peek_token() else {
-            return Ok(primary);
+            return Ok(lhs);
         };
 
-        let operator = match next.kind {
-            TokenKind::Punctuator(Punctuator::PlusSign) => BiOperator::Add,
-            TokenKind::Punctuator(Punctuator::HyphenMinus) => BiOperator::Subtract,
-            TokenKind::Punctuator(Punctuator::Asterisk) => BiOperator::Multiply,
-            _ => return Ok(primary),
+        let Some((_, operator)) = operators.into_iter().find(|(p, _)| next.kind == TokenKind::Punctuator(*p)).cloned() else {
+            return Ok(lhs);
         };
 
         self.consume_token()?;
 
-        let lhs = primary;
         let rhs = Expression::Primary(self.parse_primary_expression()?);
 
         Ok(Expression::BiExpression(BiExpression {
@@ -343,6 +357,16 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
         }))
+    }
+
+    fn parse_postfix_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
+        let mut parser = self.clone();
+        if let Ok(func) = parser.parse_function_call_expression() {
+            *self = parser;
+            Ok(func)
+        } else {
+            Ok(Expression::Primary(self.parse_primary_expression()?))
+        }
     }
 
     fn parse_function_call_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {

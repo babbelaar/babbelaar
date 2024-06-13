@@ -44,7 +44,7 @@ impl<'source_code> Lexer<'source_code> {
             ']' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::RightSquareBracket)),
             ';' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Semicolon)),
             ',' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Comma)),
-            '=' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::EqualsSign)),
+            '=' => self.consume_single_or_double_char_token(Punctuator::Assignment, Punctuator::Equals),
             '+' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PlusSign)),
             '-' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::HyphenMinus)),
             '/' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus)),
@@ -75,6 +75,27 @@ impl<'source_code> Lexer<'source_code> {
         let begin = self.current_location();
 
         self.consume_char();
+
+        let end = self.current_location();
+
+        Some(Token {
+            kind,
+            begin,
+            end,
+        })
+    }
+
+    fn consume_single_or_double_char_token(&mut self, single: Punctuator, double: Punctuator) -> Option<Token<'source_code>> {
+        let begin = self.current_location();
+
+        let char = self.next_char()?;
+
+        let kind = if self.peek_char() == Some(char) {
+            self.consume_char();
+            TokenKind::Punctuator(double)
+        } else {
+            TokenKind::Punctuator(single)
+        };
 
         let end = self.current_location();
 
