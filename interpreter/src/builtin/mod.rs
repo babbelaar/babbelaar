@@ -18,7 +18,7 @@ impl Builtin {
             documentation: "Schrijf tekst naar de uitvoer",
             inline_detail: "Schrijf tekst naar de uitvoer",
             function: &functions::schrijf,
-            lsp_completion: Some("schrijf(\"$1\")$0"),
+            lsp_completion: Some("schrijf(\"$1\");$0"),
             parameters: &[
                 BuiltinFunctionParameter {
                     name: "uitvoer",
@@ -30,7 +30,7 @@ impl Builtin {
             documentation: "Lees tekst vanuit de invoer",
             inline_detail: "Lees tekst",
             function: &functions::lees,
-            lsp_completion: Some("lees()$0"),
+            lsp_completion: Some("lees();$0"),
             parameters: &[]
         }
     ];

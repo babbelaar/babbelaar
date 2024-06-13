@@ -60,7 +60,11 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 StatementKind::For(self.parse_for_statement()?)
             }
 
-            _ => StatementKind::Expression(self.parse_function_call_expression()?)
+            _ => {
+                let expression = self.parse_function_call_expression()?;
+                self.expect_semicolon_after_statement()?;
+                StatementKind::Expression(expression)
+            }
         };
 
         let range = FileRange::new(start, self.token_end);
@@ -147,6 +151,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         match self.parse_expression() {
             Ok(expression) => {
+                self.expect_semicolon_after_statement()?;
                 Ok(ReturnStatement {
                     expression: Some(expression),
                 })
@@ -450,6 +455,20 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         Ok(())
     }
+
+    fn expect_semicolon_after_statement(&mut self) -> Result<(), ParseError<'source_code>> {
+        let token = match self.consume_token() {
+            Ok(token) => token,
+            Err(ParseError::EndOfFile) => return self.handle_error(ParseError::ExpectedSemicolonAfterStatement { token: self.tokens[self.cursor - 1].clone() }),
+            Err(e) => return Err(e),
+        };
+
+        if token.kind != TokenKind::Punctuator(Punctuator::Semicolon) {
+            self.handle_error(ParseError::ExpectedSemicolonAfterStatement { token })?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error, AsRefStr)]
@@ -475,8 +494,11 @@ pub enum ParseError<'source_code> {
     #[error("Dubbele punt verwacht ':' na {context}, maar kreeg: {token}")]
     ExpectedColon { token: Token<'source_code>, context: &'static str },
 
-    #[error("Komma verwacht ',' after {context}, maar kreeg: {token}")]
+    #[error("Komma verwacht ',' na {context}, maar kreeg: {token}")]
     ExpectedComma { token: Token<'source_code>, context: &'static str },
+
+    #[error("Puntkomma verwacht ';' na statement: {token}")]
+    ExpectedSemicolonAfterStatement { token: Token<'source_code> },
 
     #[error("Functienaam verwacht na `functie`, maar kreeg: {token}")]
     FunctionStatementExpectedName { token: Token<'source_code> },
@@ -517,6 +539,7 @@ impl<'source_code> ParseError<'source_code> {
             Self::ExpectedRightParen { token, .. } => Some(token),
             Self::ExpectedColon { token, .. } => Some(token),
             Self::ExpectedComma { token, .. } => Some(token),
+            Self::ExpectedSemicolonAfterStatement { token, .. } => Some(token),
             Self::FunctionStatementExpectedName { token } => Some(token),
             Self::ForStatementExpectedIteratorName { token } => Some(token),
             Self::ForStatementExpectedInKeyword { token, .. } => Some(token),

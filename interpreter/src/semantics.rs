@@ -310,7 +310,7 @@ impl<'this, 'source_code> FunctionReference<'this, 'source_code> {
             insert += &format!("{comma}${}", i + 1);
         }
 
-        insert += ")$0";
+        insert += ");$0";
         Cow::Owned(insert)
     }
 
