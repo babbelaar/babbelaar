@@ -143,7 +143,7 @@ impl<'source_code> Interpreter<'source_code> {
         let lhs = self.execute_expression(&expression.lhs);
         let rhs = self.execute_expression(&expression.rhs);
 
-        match expression.operator {
+        match *expression.operator {
             BiOperator::Add => self.execute_expression_add(lhs, rhs),
             BiOperator::Subtract => self.execute_expression_subtract(lhs, rhs),
             BiOperator::Multiply => self.execute_expression_multiply(lhs, rhs),

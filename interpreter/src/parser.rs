@@ -247,9 +247,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     fn parse_if_statement(&mut self) -> Result<IfStatement<'source_code>, ParseError<'source_code>> {
-        let start = self.token_end;
         let condition = self.parse_expression()?;
-        let condition = Ranged::new(FileRange::new(start, self.token_end), condition);
 
         self.expect_left_curly_bracket("als-conditie")?;
 
@@ -311,8 +309,15 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(Ranged::new(FileRange::new(start, end), value))
     }
 
-    fn parse_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
-        self.parse_relational_expression()
+    fn parse_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseError<'source_code>> {
+        let start = self.next_start();
+
+        let expr = self.parse_relational_expression()?;
+
+        let end = self.token_end;
+        let range = FileRange::new(start, end);
+
+        Ok(Ranged::new(range, expr))
     }
 
     fn parse_relational_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
@@ -348,7 +353,8 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             return Ok(lhs);
         };
 
-        self.consume_token()?;
+        let operator_range = self.consume_token()?.range();
+        let operator = Ranged::new(operator_range, operator);
 
         let rhs = Expression::Primary(self.parse_primary_expression()?);
 
@@ -523,6 +529,13 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         Ok(())
     }
+
+    fn next_start(&self) -> FileLocation {
+        match self.tokens.get(self.cursor) {
+            Some(token) => token.end,
+            None => self.token_end,
+        }
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error, AsRefStr)]
@@ -632,6 +645,6 @@ mod tests {
         let tokens: Vec<Token<'_>> = Lexer::new(input).collect();
         let mut parser = Parser::new(&tokens);
         let expression = parser.parse_expression().unwrap();
-        assert!(matches!(expression, Expression::Function(..)), "Invalid parse: {expression:?}");
+        assert!(matches!(expression.value(), Expression::Function(..)), "Invalid parse: {expression:?}");
     }
 }

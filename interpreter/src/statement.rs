@@ -41,5 +41,5 @@ pub struct IfStatement<'source_code> {
 
 #[derive(Clone, Debug)]
 pub struct ReturnStatement<'source_code> {
-    pub expression: Option<Expression<'source_code>>,
+    pub expression: Option<Ranged<Expression<'source_code>>>,
 }

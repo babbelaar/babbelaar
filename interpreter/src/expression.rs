@@ -17,7 +17,7 @@ pub enum PrimaryExpression<'source_code> {
 #[derive(Debug, Clone)]
 pub enum TemplateStringExpressionPart<'source_code> {
     String(&'source_code str),
-    Expression(Expression<'source_code>),
+    Expression(Ranged<Expression<'source_code>>),
 }
 
 #[derive(Clone, Debug)]
@@ -30,7 +30,7 @@ pub enum Expression<'source_code> {
 #[derive(Clone, Debug)]
 pub struct FunctionCallExpression<'source_code> {
     pub function_identifier: Ranged<String>,
-    pub arguments: Vec<Expression<'source_code>>,
+    pub arguments: Vec<Ranged<Expression<'source_code>>>,
 
     pub token_left_paren: FileRange,
     pub token_right_paren: FileRange,
@@ -38,7 +38,7 @@ pub struct FunctionCallExpression<'source_code> {
 
 #[derive(Clone, Debug)]
 pub struct BiExpression<'source_code> {
-    pub operator: BiOperator,
+    pub operator: Ranged<BiOperator>,
     pub lhs: Box<Expression<'source_code>>,
     pub rhs: Box<Expression<'source_code>>,
 }

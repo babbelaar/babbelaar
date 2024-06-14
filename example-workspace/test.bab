@@ -1,3 +1,2 @@
-functie hallo(gaga: G32) {
-    schrijf("Halldo");
-}
+bekeer "hallo";
+schrijf("doei");

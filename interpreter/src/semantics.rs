@@ -1,12 +1,12 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, fmt::Display};
 
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{BiExpression, Builtin, BuiltinFunction, Expression, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Parameter, PrimaryExpression, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart};
+use crate::{BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Parameter, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 pub struct SemanticAnalyzer<'source_code> {
     context: SemanticContext<'source_code>,
@@ -25,7 +25,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
     }
 
-    pub fn analyze_expression(&mut self, expression: &'source_code Expression<'source_code>) {
+    pub fn analyze_expression(&mut self, expression: &'source_code Expression<'source_code>) -> SemanticType {
         match expression {
             Expression::BiExpression(bi) => self.analyze_bi_expression(bi),
             Expression::Function(function) => self.analyze_function_call_expression(function),
@@ -39,12 +39,14 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             parameters: &function.parameters,
         });
 
-        let scope = self.context.push_scope();
+        self.context.push_scope();
 
         for param in &function.parameters {
-            scope.locals.insert(&param.name, SemanticLocal {
+            let typ = self.resolve_type(&param.ty);
+            self.context.scope.last_mut().unwrap().locals.insert(&param.name, SemanticLocal {
                 kind: SemanticLocalKind::Parameter,
                 declaration_range: param.name.range(),
+                typ,
             });
         }
 
@@ -57,7 +59,9 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
     pub fn analyze_statement(&mut self, statement: &'source_code Statement<'source_code>) {
         match &statement.kind {
-            StatementKind::Expression(expr) => self.analyze_expression(expr),
+            StatementKind::Expression(expr) => {
+                self.analyze_expression(expr);
+            }
             StatementKind::For(statement) => self.analyze_for_statement(statement),
             StatementKind::Function(function) => self.analyze_function(function),
             StatementKind::If(statement) => self.analyze_if_statement(statement),
@@ -70,6 +74,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         scope.locals.insert(&statement.iterator_name, SemanticLocal {
             kind: SemanticLocalKind::Iterator,
             declaration_range: statement.iterator_name.range(),
+            typ: SemanticType::Builtin(&Builtin::TYPE_G32),
         });
 
         for statement in &statement.body {
@@ -99,21 +104,31 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         // TODO analyze return type
     }
 
-    fn analyze_bi_expression(&mut self, expression: &'source_code BiExpression<'source_code>) {
-        self.analyze_expression(&expression.lhs);
-        self.analyze_expression(&expression.rhs);
+    fn analyze_bi_expression(&mut self, expression: &'source_code BiExpression<'source_code>) -> SemanticType {
+        let lhs_type = self.analyze_expression(&expression.lhs);
+        let rhs_type = self.analyze_expression(&expression.rhs);
 
-        // TODO analyze types & combinations
+        if lhs_type != rhs_type {
+            self.diagnostics.push(SemanticDiagnostic {
+                range: expression.operator.range(),
+                kind: SemanticDiagnosticKind::IncompatibleTypes {
+                    lhs_type: lhs_type.clone(),
+                    rhs_type,
+                }
+            });
+        }
+
+        lhs_type
     }
 
-    fn analyze_function_call_expression(&mut self, expression: &'source_code FunctionCallExpression<'source_code>) {
+    fn analyze_function_call_expression(&mut self, expression: &'source_code FunctionCallExpression<'source_code>) -> SemanticType {
         let function_name = expression.function_identifier.value();
         let Some(function) = self.find_function(&function_name) else {
             self.diagnostics.push(SemanticDiagnostic {
                 range: expression.function_identifier.range(),
                 kind: SemanticDiagnosticKind::InvalidFunctionReference { name: &expression.function_identifier }
             });
-            return;
+            return SemanticType::Builtin(Builtin::TYPE_NULL);
         };
 
         let param_count = function.parameter_count();
@@ -133,15 +148,38 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             });
         }
 
-        for arg in &expression.arguments {
-            self.analyze_expression(arg);
+        for (arg_idx, arg) in expression.arguments.iter().enumerate() {
+            let argument_type = self.analyze_expression(arg);
+            let function = self.find_function(&function_name).unwrap();
+            let parameter_type = self.resolve_parameter_type(&function, arg_idx);
+            if argument_type != parameter_type {
+                self.diagnostics.push(SemanticDiagnostic {
+                    range: arg.range(),
+                    kind: SemanticDiagnosticKind::IncompatibleArgumentParameterType {
+                        argument_type,
+                        parameter_type,
+                    },
+                })
+            }
         }
 
-        // TODO type check arguments vs parameters
+        SemanticType::Builtin(Builtin::TYPE_NULL)
     }
 
-    fn analyze_primary_expression(&mut self, expression: &'source_code PrimaryExpression<'source_code>) {
+    fn analyze_primary_expression(&mut self, expression: &'source_code PrimaryExpression<'source_code>) -> SemanticType {
         match expression {
+            PrimaryExpression::Boolean(..) => {
+                SemanticType::Builtin(Builtin::TYPE_BOOL)
+            }
+
+            PrimaryExpression::IntegerLiteral(..) => {
+                SemanticType::Builtin(Builtin::TYPE_G32)
+            }
+
+            PrimaryExpression::StringLiteral(..) => {
+                SemanticType::Builtin(Builtin::TYPE_SLINGER)
+            }
+
             PrimaryExpression::TemplateString { parts } => {
                 for part in parts {
                     match part {
@@ -153,6 +191,8 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                         _ => (),
                     }
                 }
+
+                SemanticType::Builtin(Builtin::TYPE_SLINGER)
             }
 
             PrimaryExpression::Reference(reference) => {
@@ -161,22 +201,22 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                         range: reference.range(),
                         kind: SemanticDiagnosticKind::InvalidIdentifierReference { identifier: &reference }
                     });
-                    return;
+                    return SemanticType::Builtin(Builtin::TYPE_NULL);
                 };
 
                 let local_reference = SemanticReference {
                     local_kind: local.kind,
                     declaration_range: local.declaration_range,
+                    typ: local.typ.clone(),
                 };
 
+                let typ = local.typ.clone();
                 if let Some(tracker) = &mut self.context.definition_tracker {
                     tracker.insert(reference.range(), local_reference);
                 }
 
-                // TODO type checking
+                typ
             }
-
-            _ => (), // TODO
         }
     }
 
@@ -193,12 +233,12 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         None
     }
 
-    pub fn find_function_by_name<'this, P>(&'this self, predicate: P) -> Option<FunctionReference<'this, 'source_code>>
+    pub fn find_function_by_name<'this, P>(&'this self, predicate: P) -> Option<FunctionReference<'source_code>>
             where P: Fn(&str) -> bool {
         for scope in self.context.scope.iter().rev() {
             for func in &scope.functions {
                 if predicate(func.name) {
-                    return Some(FunctionReference::Custom(func));
+                    return Some(FunctionReference::Custom(func.clone()));
                 }
             }
         }
@@ -212,7 +252,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         None
     }
 
-    pub fn find_function<'this>(&'this self, name: &str) -> Option<FunctionReference<'this, 'source_code>> {
+    pub fn find_function<'this>(&'this self, name: &str) -> Option<FunctionReference<'source_code>> {
         self.find_function_by_name(|func| func == name)
     }
 
@@ -223,6 +263,31 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     #[must_use]
     pub fn into_diagnostics(self) -> Vec<SemanticDiagnostic<'source_code>> {
         self.diagnostics
+    }
+
+    pub fn resolve_type(&mut self, ty: &'source_code Ranged<Type<'source_code>>) -> SemanticType {
+        match ty.specifier.value() {
+            TypeSpecifier::BuiltIn(ty) => SemanticType::Builtin(ty),
+            TypeSpecifier::Custom { name } => {
+                self.diagnostics.push(SemanticDiagnostic {
+                    range: ty.range(),
+                    kind: SemanticDiagnosticKind::UnknownType { name },
+                });
+
+                SemanticType::Builtin(Builtin::TYPE_NULL)
+            }
+        }
+    }
+
+    fn resolve_parameter_type<'this>(&'this mut self, function: &FunctionReference<'source_code>, arg_idx: usize) -> SemanticType {
+        match function {
+            FunctionReference::Builtin(func) => {
+                SemanticType::Builtin(func.parameters[arg_idx].typ)
+            }
+            FunctionReference::Custom(func) => {
+                self.resolve_type(&func.parameters[arg_idx].ty)
+            }
+        }
     }
 }
 
@@ -252,6 +317,23 @@ pub enum SemanticDiagnosticKind<'source_code> {
         function_name: &'source_code str,
         param_count: usize,
         arg_count: usize,
+    },
+
+    #[error("Type `{name}` is onbekend")]
+    UnknownType {
+        name: &'source_code str,
+    },
+
+    #[error("Types `{lhs_type}` en `{rhs_type}` zijn niet gelijksoortig.")]
+    IncompatibleTypes {
+        lhs_type: SemanticType,
+        rhs_type: SemanticType,
+    },
+
+    #[error("Ongeldig argument gegeven voor functie: argument van type `{argument_type}` is niet gelijksoortig met parameter van type `{parameter_type}`.")]
+    IncompatibleArgumentParameterType {
+        argument_type: SemanticType,
+        parameter_type: SemanticType,
     },
 }
 
@@ -288,7 +370,7 @@ struct SemanticScope<'source_code> {
     locals: HashMap<&'source_code str, SemanticLocal>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct SemanticFunction<'source_code> {
     name: &'source_code str,
     parameters: &'source_code [Parameter<'source_code>],
@@ -298,6 +380,7 @@ pub struct SemanticFunction<'source_code> {
 struct SemanticLocal {
     kind: SemanticLocalKind,
     declaration_range: FileRange,
+    pub typ: SemanticType,
     // type ...
 }
 
@@ -305,9 +388,22 @@ struct SemanticLocal {
 pub struct SemanticReference {
     pub local_kind: SemanticLocalKind,
     pub declaration_range: FileRange,
+    pub typ: SemanticType,
     // type ...
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SemanticType {
+    Builtin(&'static BuiltinType),
+}
+
+impl Display for SemanticType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Builtin(typ) => typ.fmt(f),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SemanticLocalKind {
@@ -315,12 +411,12 @@ pub enum SemanticLocalKind {
     Iterator,
 }
 
-pub enum FunctionReference<'this, 'source_code> {
+pub enum FunctionReference<'source_code> {
     Builtin(&'static BuiltinFunction),
-    Custom(&'this SemanticFunction<'source_code>),
+    Custom(SemanticFunction<'source_code>),
 }
 
-impl<'this, 'source_code> FunctionReference<'this, 'source_code> {
+impl<'source_code> FunctionReference<'source_code> {
     #[must_use]
     pub fn parameter_count(&self) -> usize {
         match self {

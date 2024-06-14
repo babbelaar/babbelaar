@@ -3,7 +3,7 @@
 
 use std::{cmp::Ordering, fmt::Display};
 
-use crate::Comparison;
+use crate::{Builtin, BuiltinType, Comparison};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -33,6 +33,15 @@ impl Value {
             Comparison::GreaterThanOrEqual => ordering != Ordering::Less,
             Comparison::LessThan => ordering == Ordering::Less,
             Comparison::LessThanOrEqual => ordering != Ordering::Greater,
+        }
+    }
+
+    pub fn typ(&self) -> &'static BuiltinType {
+        match self {
+            Self::Bool(..) => &Builtin::TYPE_BOOL,
+            Self::Integer(..) => &Builtin::TYPE_G32,
+            Self::Null => &Builtin::TYPE_NULL,
+            Self::String(..) => &Builtin::TYPE_SLINGER,
         }
     }
 }

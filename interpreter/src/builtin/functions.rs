@@ -3,7 +3,7 @@
 
 use std::io::stdin;
 
-use crate::{Interpreter, Value};
+use crate::{BuiltinType, Interpreter, Value};
 
 pub type BuiltinFunctionSignature = &'static dyn Fn(&mut Interpreter<'_>, Vec<Value>) -> Value;
 
@@ -18,6 +18,7 @@ pub struct BuiltinFunction {
 
 pub struct BuiltinFunctionParameter {
     pub name: &'static str,
+    pub typ: &'static BuiltinType,
 }
 
 pub fn schrijf(_: &mut Interpreter<'_>, args: Vec<Value>) -> Value {
