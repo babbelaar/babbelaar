@@ -329,8 +329,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
     fn parse_multiplicative_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
         self.parse_bi_expression(Self::parse_additive_expression, &[
-            (Punctuator::PlusSign, BiOperator::Add),
-            (Punctuator::HyphenMinus, BiOperator::Subtract),
+            (Punctuator::Asterisk, BiOperator::Multiply),
+            (Punctuator::PercentageSign, BiOperator::Modulo),
+            (Punctuator::Solidus, BiOperator::Divide),
         ])
     }
 

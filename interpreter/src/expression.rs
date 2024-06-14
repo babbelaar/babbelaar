@@ -48,6 +48,8 @@ pub enum BiOperator {
     Add,
     Subtract,
     Multiply,
+    Divide,
+    Modulo,
     Comparison(Comparison),
 }
 

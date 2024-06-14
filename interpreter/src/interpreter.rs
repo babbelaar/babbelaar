@@ -145,8 +145,10 @@ impl<'source_code> Interpreter<'source_code> {
 
         match *expression.operator {
             BiOperator::Add => self.execute_expression_add(lhs, rhs),
-            BiOperator::Subtract => self.execute_expression_subtract(lhs, rhs),
-            BiOperator::Multiply => self.execute_expression_multiply(lhs, rhs),
+            BiOperator::Subtract => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a - b),
+            BiOperator::Multiply => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a * b),
+            BiOperator::Modulo => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a % b),
+            BiOperator::Divide => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a / b),
 
             BiOperator::Comparison(comparison) => {
                 Value::Bool(lhs.compare(&rhs, comparison))
@@ -162,17 +164,10 @@ impl<'source_code> Interpreter<'source_code> {
         }
     }
 
-    fn execute_expression_subtract(&mut self, lhs: Value, rhs: Value) -> Value {
+    fn execute_bi_expression_numeric(&self, lhs: Value, rhs: Value, f: impl FnOnce(i64, i64) -> i64) -> Value {
         match (&lhs, &rhs) {
-            (Value::Integer(lhs), Value::Integer(rhs)) => Value::Integer(lhs - rhs),
-            _ => panic!("Invalid operands for add: {lhs:?} and {rhs:?}"),
-        }
-    }
-
-    fn execute_expression_multiply(&mut self, lhs: Value, rhs: Value) -> Value {
-        match (&lhs, &rhs) {
-            (Value::Integer(lhs), Value::Integer(rhs)) => Value::Integer(lhs * rhs),
-            _ => panic!("Invalid operands for add: {lhs:?} and {rhs:?}"),
+            (Value::Integer(lhs), Value::Integer(rhs)) => Value::Integer(f(*lhs, *rhs)),
+            _ => panic!("ICE: Invalid operands for numeric: {lhs:?} and {rhs:?}"),
         }
     }
 

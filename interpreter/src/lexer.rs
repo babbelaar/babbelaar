@@ -49,6 +49,7 @@ impl<'source_code> Lexer<'source_code> {
             '-' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::HyphenMinus)),
             '/' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus)),
             '*' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Asterisk)),
+            '%' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PercentageSign)),
             ':' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Colon)),
 
             _ => {
