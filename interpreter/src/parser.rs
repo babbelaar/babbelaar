@@ -6,7 +6,7 @@ use std::fmt::Display;
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Comparison, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Parameter, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
+    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Comparison, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseError<'source_code>>;
@@ -66,7 +66,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
 
             _ => {
-                let expression = self.parse_function_call_expression()?;
+                let expression = self.parse_expression()?;
                 self.expect_semicolon_after_statement()?;
                 StatementKind::Expression(expression)
             }
@@ -367,25 +367,53 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     fn parse_postfix_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
-        let mut parser = self.clone();
-        if let Ok(func) = parser.parse_function_call_expression() {
-            *self = parser;
-            Ok(func)
-        } else {
-            Ok(Expression::Primary(self.parse_primary_expression()?))
+        let mut expression = Expression::Primary(self.parse_primary_expression()?);
+
+        loop {
+            match self.peek_punctuator() {
+                Some(Punctuator::LeftParenthesis) => {
+                    let token_left_paren = self.consume_token()?.range();
+                    expression = Expression::Postfix(PostfixExpression {
+                        lhs: Box::new(expression),
+                        kind: PostfixExpressionKind::Call(self.parse_function_call_expression(token_left_paren)?)
+                    });
+                }
+
+                Some(Punctuator::Period) => {
+                    let _period = self.consume_token()?;
+
+                    let ident_token = self.consume_token()?;
+                    let TokenKind::Identifier(name) = ident_token.kind else {
+                        return Err(ParseError::PostfixMemberOrReferenceExpectedIdentifier { token: ident_token });
+                    };
+
+                    let name = Ranged::new(ident_token.range(), name);
+
+                    if self.peek_punctuator() == Some(Punctuator::LeftParenthesis) {
+                        let token_left_paren = self.consume_token()?.range();
+                        expression = Expression::Postfix(PostfixExpression {
+                            lhs: Box::new(expression),
+                            kind: PostfixExpressionKind::MethodCall(MethodCallExpression {
+                                method_name: name,
+                                call: self.parse_function_call_expression(token_left_paren)?,
+                            })
+                        });
+                    } else {
+                        expression = Expression::Postfix(PostfixExpression {
+                            lhs: Box::new(expression),
+                            kind: PostfixExpressionKind::Member(name),
+                        });
+                    }
+                }
+
+                _ => break,
+            }
         }
+
+        Ok(expression)
     }
 
-    fn parse_function_call_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
-        let token = self.consume_token()?;
-
-        let TokenKind::Identifier(identifier) = token.kind else {
-            return Err(ParseError::ExpressionFunctionCallNotStartingWithIdentifier { token });
-        };
-        let function_identifier = Ranged::new(token.range(), identifier.to_string());
-
-        let token_left_paren = self.expect_left_paren("aan te roepen functienaam")?;
-
+    fn parse_function_call_expression(&mut self, token_left_paren: FileRange) -> Result<FunctionCallExpression<'source_code>, ParseError<'source_code>> {
         let mut arguments = Vec::new();
         while let Ok(token) = self.peek_token() {
             if token.kind == TokenKind::Punctuator(Punctuator::RightParenthesis) {
@@ -410,12 +438,11 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         let token_right_paren = self.tokens[self.cursor - 1].range();
 
-        Ok(Expression::Function(FunctionCallExpression {
-            function_identifier,
+        Ok(FunctionCallExpression {
             arguments,
             token_left_paren,
             token_right_paren,
-        }))
+        })
     }
 
     fn parse_template_string(&self, template_string: Vec<TemplateStringToken<'source_code>>) -> ParseResult<'source_code, PrimaryExpression<'source_code>> {
@@ -583,6 +610,9 @@ pub enum ParseError<'source_code> {
     #[error("Komma `,` of gesloten rond haakje `)` verwacht binnen parameterlijst, maar kreeg: {}", token.as_ref().map(|x| x as &dyn Display).unwrap_or_else(|| &"(niets)" as &'static dyn Display))]
     ParameterExpectedComma { token: Option<Token<'source_code>> },
 
+    #[error("Methode of structuurlid verwacht na punt `.`, maar kreeg: {token}")]
+    PostfixMemberOrReferenceExpectedIdentifier { token: Token<'source_code> },
+
     #[error("Sleutelwoord `reeks` verwacht, maar kreeg: {token}")]
     RangeExpectedKeyword { token: Token<'source_code> },
 
@@ -613,6 +643,7 @@ impl<'source_code> ParseError<'source_code> {
             Self::ForStatementExpectedInKeyword { token, .. } => Some(token),
             Self::ParameterExpectedName { token } => Some(token),
             Self::ParameterExpectedComma { token } => token.as_ref(),
+            Self::PostfixMemberOrReferenceExpectedIdentifier { token } => Some(token),
             Self::RangeExpectedKeyword { token } => Some(token),
             Self::ResidualTokensInTemplateString { token } => Some(token),
             Self::TypeExpectedSpecifierName { token } => Some(token),
@@ -646,6 +677,12 @@ mod tests {
         let tokens: Vec<Token<'_>> = Lexer::new(input).collect();
         let mut parser = Parser::new(&tokens);
         let expression = parser.parse_expression().unwrap();
-        assert!(matches!(expression.value(), Expression::Function(..)), "Invalid parse: {expression:?}");
+        assert!(
+            matches!(
+                expression.value(),
+                Expression::Postfix(..)
+            ),
+            "Invalid parse: {expression:?}"
+        );
     }
 }

@@ -23,17 +23,35 @@ pub enum TemplateStringExpressionPart<'source_code> {
 #[derive(Clone, Debug)]
 pub enum Expression<'source_code> {
     BiExpression(BiExpression<'source_code>),
-    Function(FunctionCallExpression<'source_code>),
+    Postfix(PostfixExpression<'source_code>),
     Primary(PrimaryExpression<'source_code>),
+}
+
+#[derive(Debug, Clone)]
+pub struct PostfixExpression<'source_code> {
+    pub lhs: Box<Expression<'source_code>>,
+    pub kind: PostfixExpressionKind<'source_code>,
+}
+
+#[derive(Debug, Clone)]
+pub enum PostfixExpressionKind<'source_code> {
+    Call(FunctionCallExpression<'source_code>),
+    Member(Ranged<&'source_code str>),
+    MethodCall(MethodCallExpression<'source_code>),
 }
 
 #[derive(Clone, Debug)]
 pub struct FunctionCallExpression<'source_code> {
-    pub function_identifier: Ranged<String>,
     pub arguments: Vec<Ranged<Expression<'source_code>>>,
 
     pub token_left_paren: FileRange,
     pub token_right_paren: FileRange,
+}
+
+#[derive(Debug, Clone)]
+pub struct MethodCallExpression<'source_code> {
+    pub method_name: Ranged<&'source_code str>,
+    pub call: FunctionCallExpression<'source_code>,
 }
 
 #[derive(Clone, Debug)]

@@ -24,7 +24,8 @@ impl Builtin {
                     name: "uitvoer",
                     typ: Self::TYPE_SLINGER,
                 }
-            ]
+            ],
+            return_type: Self::TYPE_NULL,
         },
         BuiltinFunction {
             name: "lees",
@@ -32,7 +33,8 @@ impl Builtin {
             inline_detail: "Lees tekst",
             function: &functions::lees,
             lsp_completion: Some("lees();$0"),
-            parameters: &[]
+            parameters: &[],
+            return_type: Self::TYPE_NULL,
         }
     ];
 
@@ -45,20 +47,34 @@ impl Builtin {
     pub const TYPE_BOOL: &'static BuiltinType = &BuiltinType {
         name: "bool",
         documentation: "Een schakeling tussen `waar` en `onwaar`.",
+        methods: &[],
     };
 
     pub const TYPE_G32: &'static BuiltinType = &BuiltinType {
         name: "g32",
         documentation: "Een geheel getal met 32-bits precisie.",
+        methods: &[],
     };
 
     pub const TYPE_NULL: &'static BuiltinType = &BuiltinType {
         name: "null",
         documentation: "Tijdelijk type, niet gebruiken",
+        methods: &[],
     };
 
     pub const TYPE_SLINGER: &'static BuiltinType = &BuiltinType {
         name: "Slinger",
         documentation: "Een stuk tekst, schrijfbaar met bijvoorbeeld: \"Hallo, slinger!\"",
+        methods: &[
+            BuiltinFunction {
+                name: "lengte",
+                documentation: "Krijg de lengte van de slinger.\n## Voorbeeld\n```bab\n\"Hallo\".lengte() // = 5\n```",
+                inline_detail: "",
+                function: &functions::slinger_lengte,
+                lsp_completion: None,
+                parameters: &[],
+                return_type: Self::TYPE_G32,
+            }
+        ],
     };
 }

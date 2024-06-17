@@ -9,7 +9,7 @@ use std::{
 use crate::*;
 
 pub struct Interpreter<'source_code> {
-    functions: HashMap<&'source_code str, Rc<FunctionStatement<'source_code>>>,
+    functions: HashMap<FunctionId, Rc<FunctionStatement<'source_code>>>,
     scope: Scope,
 }
 
@@ -17,7 +17,7 @@ impl<'source_code> Interpreter<'source_code> {
     pub fn new() -> Self {
         Self {
             functions: HashMap::new(),
-            scope: Scope::new(),
+            scope: Scope::new_top_level(),
         }
     }
 
@@ -37,7 +37,9 @@ impl<'source_code> Interpreter<'source_code> {
             }
 
             StatementKind::Function(func) => {
-                self.functions.insert(func.name.value(), Rc::new(func.clone()));
+                let id = FunctionId::from(func);
+                self.functions.insert(id, Rc::new(func.clone()));
+                self.scope.variables.insert(func.name.to_string(), Value::Function { name: func.name.to_string(), id });
                 StatementResult::Continue
             }
 
@@ -57,7 +59,7 @@ impl<'source_code> Interpreter<'source_code> {
     fn execute_expression(&mut self, expression: &Expression<'source_code>) -> Value {
         match expression {
             Expression::BiExpression(expr) => self.execute_bi_expression(expr),
-            Expression::Function(func) => self.execute_function_call(func),
+            Expression::Postfix(expr) => self.execute_postfix_expression(expr),
 
             Expression::Primary(PrimaryExpression::Boolean(boolean)) => {
                 Value::Bool(*boolean)
@@ -171,43 +173,81 @@ impl<'source_code> Interpreter<'source_code> {
         }
     }
 
-    fn execute_function_call(&mut self, func: &FunctionCallExpression<'source_code>) -> Value {
-        let mut arguments = Vec::with_capacity(func.arguments.len());
-        for argument in &func.arguments {
-            arguments.push(self.execute_expression(argument));
-        }
+    fn execute_function_call(&mut self, lhs: Value, func: &FunctionCallExpression<'source_code>) -> Value {
+        let mut arguments: Vec<Value> = Vec::with_capacity(func.arguments.len());
 
-        let name: &str = func.function_identifier.as_ref();
+        match lhs {
+            Value::MethodReference { lhs, method } => {
+                arguments.push(*lhs);
+                for argument in &func.arguments {
+                    arguments.push(self.execute_expression(argument));
+                }
 
-        if let Some(func) = self.functions.get(name).cloned() {
-            self.scope = std::mem::take(&mut self.scope).push();
-
-            for idx in 0..func.parameters.len() {
-                let name = func.parameters[idx].name.to_string();
-                self.scope.variables.insert(name, arguments[idx].clone());
+                (method.function)(self, arguments)
             }
 
-            for statement in &func.body {
-                match self.execute_statement(statement) {
-                    StatementResult::Continue => (),
-                    StatementResult::Return(value) => {
-                        self.scope = std::mem::take(&mut self.scope).pop();
-                        return value.unwrap_or(Value::Null)
-                    }
+            Value::Function { id, .. } => {
+                for argument in &func.arguments {
+                    arguments.push(self.execute_expression(argument));
+                }
+
+                self.execute_function_by_id(id, arguments).unwrap()
+            }
+
+            _ => panic!("Unexpected lhs: {lhs:#?}"),
+        }
+    }
+
+    fn execute_function_by_id(&mut self, id: FunctionId, arguments: Vec<Value>) -> Option<Value> {
+        if id.namespace == usize::MAX {
+            let function = Builtin::FUNCTIONS[id.id];
+            return Some((function.function)(self, arguments));
+        }
+
+        let func = self.functions.get(&id).cloned().expect("Invalid FunctionId");
+        Some(self.execute_function(func, arguments))
+    }
+
+    fn execute_function(&mut self, func: Rc<FunctionStatement<'source_code>>, arguments: Vec<Value>) -> Value {
+        self.scope = std::mem::take(&mut self.scope).push();
+
+        for idx in 0..func.parameters.len() {
+            let name = func.parameters[idx].name.to_string();
+            self.scope.variables.insert(name, arguments[idx].clone());
+        }
+
+        for statement in &func.body {
+            match self.execute_statement(statement) {
+                StatementResult::Continue => (),
+                StatementResult::Return(value) => {
+                    self.scope = std::mem::take(&mut self.scope).pop();
+                    return value.unwrap_or(Value::Null);
                 }
             }
-
-            self.scope = std::mem::take(&mut self.scope).pop();
-            return Value::Null;
         }
 
-        for builtin_func in Builtin::FUNCTIONS {
-            if builtin_func.name == name {
-                return (builtin_func.function)(self, arguments);
-            }
-        }
+        self.scope = std::mem::take(&mut self.scope).pop();
+        Value::Null
+    }
 
-        panic!("Error: Unknown function {name}");
+    fn execute_postfix_expression(&mut self, expression: &PostfixExpression<'source_code>) -> Value {
+        let lhs = self.execute_expression(&expression.lhs);
+        match &expression.kind {
+            PostfixExpressionKind::Call(call) => self.execute_function_call(lhs, call),
+            PostfixExpressionKind::Member(member) => self.execute_member_reference(lhs, member),
+            PostfixExpressionKind::MethodCall(method) => self.execute_method_invocation(lhs, method),
+        }
+    }
+
+    fn execute_member_reference(&mut self, lhs: Value, member: &Ranged<&'source_code str>) -> Value {
+        _ = lhs;
+        _ = member;
+        todo!()
+    }
+
+    fn execute_method_invocation(&mut self, lhs: Value, expression: &MethodCallExpression<'source_code>) -> Value {
+        let method = lhs.get_method(&expression.method_name).unwrap();
+        self.execute_function_call(method, &expression.call)
     }
 }
 

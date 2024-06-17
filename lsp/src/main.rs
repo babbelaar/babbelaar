@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::mem::replace;
 use std::sync::Arc;
 
-use babbelaar::{Builtin, DocumentationProvider, Expression, Keyword, Parser, SemanticAnalyzer, StatementKind, Token, TokenKind};
+use babbelaar::{Builtin, DocumentationProvider, Expression, Keyword, Parser, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, StatementKind, Token, TokenKind};
 use conversion::{convert_file_range, convert_position, convert_token_range};
 use log::{info, LevelFilter, Log};
 use symbolization::{LspTokenType, Symbolizer};
@@ -227,17 +227,22 @@ impl Backend {
                 }
 
                 let StatementKind::Expression(expr) = statement.kind else {
-                    info!("No expression: {statement:?}");
                     return Ok(None);
                 };
 
-                let Expression::Function(func) = expr else {
-                    info!("No func: {expr:?}");
+                let Expression::Postfix(postfix) = expr.as_ref() else {
                     return Ok(None);
                 };
 
-                let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| x.name == *func.function_identifier) else {
-                    info!("No builtin: {func:?}");
+                let PostfixExpressionKind::Call(..) = &postfix.kind else {
+                    return Ok(None);
+                };
+
+                let Expression::Primary(PrimaryExpression::Reference(calling_name)) = postfix.lhs.as_ref() else {
+                    return Ok(None);
+                };
+
+                let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| &x.name == calling_name.value()) else {
                     return Ok(None);
                 };
 
@@ -481,7 +486,7 @@ impl LanguageServer for Backend {
         self.with_semantics(&params.text_document_position.text_document, |analyzer| {
             if let Some(func) = analyzer.find_function_by_name(|f| f.starts_with(&ident)) {
                 completions.push(CompletionItem {
-                    label: func.name().to_string(),
+                    label: func.function_name().to_string(),
                     kind: Some(CompletionItemKind::FUNCTION),
                     documentation: func.documentation().map(|x| Documentation::MarkupContent(MarkupContent {
                         kind: MarkupKind::Markdown,

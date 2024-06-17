@@ -11,7 +11,7 @@ pub struct Statement<'source_code> {
 
 #[derive(Debug, Clone)]
 pub enum StatementKind<'source_code> {
-    Expression(Expression<'source_code>),
+    Expression(Ranged<Expression<'source_code>>),
     Function(FunctionStatement<'source_code>),
     For(ForStatement<'source_code>),
     If(IfStatement<'source_code>),

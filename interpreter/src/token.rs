@@ -41,6 +41,8 @@ pub enum Punctuator {
     Asterisk,
     #[strum(serialize = "procent")]
     PercentageSign,
+    #[strum(serialize = "punt")]
+    Period,
 }
 
 impl Punctuator {
@@ -63,6 +65,7 @@ impl Punctuator {
             Self::Solidus => "/",
             Self::Asterisk => "*",
             Self::PercentageSign => "%",
+            Self::Period => ".",
         }
     }
 }

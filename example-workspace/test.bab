@@ -1,1 +1,10 @@
-schrijf(€"{2 % 2}");
+functie hallo(a: Slinger) {
+    als a.lengte() == 0 {
+        schrijf("Geen string");
+        bekeer;
+    }
+
+    schrijf(€"De slinger '{a}' heeft lengte {a.lengte()}");
+}
+
+hallo("agsg");

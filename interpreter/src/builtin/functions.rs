@@ -1,12 +1,13 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::io::stdin;
+use std::{fmt::{Debug, Display}, io::stdin};
 
 use crate::{BuiltinType, Interpreter, Value};
 
 pub type BuiltinFunctionSignature = &'static dyn Fn(&mut Interpreter<'_>, Vec<Value>) -> Value;
 
+#[derive(Clone, Copy)]
 pub struct BuiltinFunction {
     pub name: &'static str,
     pub documentation: &'static str,
@@ -14,8 +15,35 @@ pub struct BuiltinFunction {
     pub function: BuiltinFunctionSignature,
     pub lsp_completion: Option<&'static str>,
     pub parameters: &'static [BuiltinFunctionParameter],
+    pub return_type: &'static BuiltinType,
 }
 
+impl Display for BuiltinFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}()", self.name))
+    }
+}
+
+impl Debug for BuiltinFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BuiltinFunction")
+            .field("name", &self.name)
+            .field("documentation", &self.documentation)
+            .field("inline_detail", &self.inline_detail)
+            .field("function", &"(native)")
+            .field("lsp_completion", &self.lsp_completion)
+            .field("parameters", &self.parameters)
+            .finish()
+    }
+}
+
+impl PartialEq for BuiltinFunction {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+#[derive(Debug)]
 pub struct BuiltinFunctionParameter {
     pub name: &'static str,
     pub typ: &'static BuiltinType,
@@ -40,4 +68,8 @@ pub fn lees(_: &mut Interpreter<'_>, _: Vec<Value>) -> Value {
     stdin().read_line(&mut line).unwrap();
     line.truncate(line.trim_end().len());
     Value::String(line)
+}
+
+pub fn slinger_lengte(_: &mut Interpreter<'_>, parameter: Vec<Value>) -> Value {
+    Value::Integer(parameter[0].to_string().len() as _)
 }

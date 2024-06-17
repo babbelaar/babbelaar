@@ -3,10 +3,13 @@
 
 use std::fmt::Display;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use crate::BuiltinFunction;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BuiltinType {
     pub name: &'static str,
     pub documentation: &'static str,
+    pub methods: &'static [BuiltinFunction],
 }
 
 impl Display for BuiltinType {

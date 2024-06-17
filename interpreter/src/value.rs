@@ -1,9 +1,9 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{cmp::Ordering, fmt::Display};
+use std::{cmp::Ordering, fmt::Display, hash::{DefaultHasher, Hash, Hasher}};
 
-use crate::{Builtin, BuiltinType, Comparison};
+use crate::{Builtin, BuiltinFunction, BuiltinType, Comparison, FunctionStatement};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -13,7 +13,16 @@ pub enum Value {
     Bool(bool),
     Integer(i64),
     String(String),
+    MethodReference {
+        lhs: Box<Value>,
+        method: &'static BuiltinFunction,
+    },
+    Function {
+        name: String,
+        id: FunctionId,
+    },
 }
+
 impl Value {
     #[must_use]
     pub fn is_true(&self) -> bool {
@@ -42,7 +51,22 @@ impl Value {
             Self::Integer(..) => &Builtin::TYPE_G32,
             Self::Null => &Builtin::TYPE_NULL,
             Self::String(..) => &Builtin::TYPE_SLINGER,
+            Self::MethodReference { .. } => todo!(),
+            Self::Function { .. } => todo!(),
         }
+    }
+
+    pub fn get_method(&self, method_name: &str) -> Option<Value> {
+        for method in self.typ().methods.iter() {
+            if method.name == method_name {
+                return Some(Value::MethodReference {
+                    lhs: Box::new(self.clone()),
+                    method,
+                });
+            }
+        }
+
+        None
     }
 }
 
@@ -65,6 +89,25 @@ impl Display for Value {
             Self::Bool(b) => b.fmt(f),
             Self::Integer(i) => i.fmt(f),
             Self::String(str) => f.write_str(str),
+            Self::MethodReference { lhs, method } => f.write_fmt(format_args!("{lhs}.{}()", method.name)),
+            Self::Function { name, .. } => f.write_fmt(format_args!("functie {name}() {{ .. }}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FunctionId {
+    pub namespace: usize,
+    pub id: usize,
+}
+
+impl<'source_code> From<&FunctionStatement<'source_code>> for FunctionId {
+    fn from(value: &FunctionStatement<'source_code>) -> Self {
+        let mut hasher = DefaultHasher::new();
+        value.name.value().hash(&mut hasher);
+        Self {
+            namespace: 0,
+            id: hasher.finish() as usize,
         }
     }
 }

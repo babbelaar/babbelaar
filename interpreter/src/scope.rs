@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crate::Value;
+use crate::{Builtin, FunctionId, Value};
 
 #[derive(Default)]
 pub struct Scope {
@@ -17,6 +17,20 @@ impl Scope {
             parent: None,
             variables: HashMap::new(),
         }
+    }
+
+    pub fn new_top_level() -> Scope {
+        let mut this = Self::new();
+
+        for (func_idx, func) in Builtin::FUNCTIONS.iter().enumerate() {
+            let id = FunctionId {
+                namespace: usize::MAX,
+                id: func_idx,
+            };
+            this.variables.insert(func.name.to_string(), Value::Function { name: func.name.to_string(), id });
+        }
+
+        this
     }
 
     pub fn push(self) -> Self {

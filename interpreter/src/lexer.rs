@@ -47,10 +47,11 @@ impl<'source_code> Lexer<'source_code> {
             '=' => self.consume_single_or_double_char_token(Punctuator::Assignment, Punctuator::Equals),
             '+' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PlusSign)),
             '-' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::HyphenMinus)),
-            '/' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus)),
+            '/' => self.handle_solidus(),
             '*' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Asterisk)),
             '%' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PercentageSign)),
             ':' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Colon)),
+            '.' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Period)),
 
             _ => {
                 let (begin, char) = self.current?;
@@ -256,6 +257,17 @@ impl<'source_code> Lexer<'source_code> {
 
     fn skip_whitespace(&mut self) {
         while let Some(c) = self.peek_char() {
+            if c == '/' {
+                self.consume_char();
+                if self.peek_char() != Some('/') {
+                    self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus));
+                    continue;
+                }
+
+                self.consume_until_end_of_line();
+                continue;
+            }
+
             if !c.is_whitespace() {
                 break;
             }
@@ -301,6 +313,26 @@ impl<'source_code> Lexer<'source_code> {
         match self.current {
             Some((location, _)) => location,
             None => FileLocation::new(self.input.len(), self.line, self.column),
+        }
+    }
+
+    fn handle_solidus(&mut self) -> Option<Token<'source_code>> {
+        self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus))
+    }
+
+    fn consume_until_end_of_line(&mut self) {
+        while let Some(c) = self.next_char() {
+            if c == '\n' {
+                break;
+            }
+
+            if c == '\r' {
+                if self.peek_char() == Some('\n') {
+                    self.consume_char();
+                }
+
+                break;
+            }
         }
     }
 }

@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, Parameter, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Token, TokenKind};
+use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Token, TokenKind};
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
 
@@ -117,13 +117,7 @@ impl<'source_code> Symbolizer<'source_code> {
 
     fn add_expression(&mut self, expression: &'source_code Expression<'source_code>) {
         match expression {
-            Expression::Function(function) => {
-                self.symbols.insert(function.function_identifier.range(), LspSymbol {
-                    name: function.function_identifier.value().to_string(),
-                    kind: LspTokenType::Method,
-                    range: function.function_identifier.range(),
-                });
-            }
+            Expression::Postfix(expression) => self.add_expression_postfix(expression),
 
             Expression::Primary(PrimaryExpression::Reference(identifier)) => {
                 if let Some(reference) = self.semantic_analyzer.find_reference(identifier.range()) {
@@ -132,6 +126,8 @@ impl<'source_code> Symbolizer<'source_code> {
                         kind: match reference.local_kind {
                             SemanticLocalKind::Iterator => LspTokenType::Variable,
                             SemanticLocalKind::Parameter => LspTokenType::ParameterName,
+                            SemanticLocalKind::Function => LspTokenType::Function,
+                            SemanticLocalKind::FunctionReference => LspTokenType::Function,
                         },
                         range: identifier.range(),
                     });
@@ -144,6 +140,22 @@ impl<'source_code> Symbolizer<'source_code> {
             }
 
             Expression::Primary(..) => (),
+        }
+    }
+
+    fn add_expression_postfix(&mut self, expression: &PostfixExpression) {
+        match &expression.kind {
+            PostfixExpressionKind::Call(..) => {
+                if let Expression::Primary(PrimaryExpression::Reference(ident)) = expression.lhs.as_ref() {
+                    self.symbols.insert(ident.range(), LspSymbol {
+                        name: ident.value().to_string(),
+                        kind: LspTokenType::Method,
+                        range: ident.range(),
+                    });
+                }
+            }
+
+            _ => (),
         }
     }
 }

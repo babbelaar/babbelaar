@@ -30,7 +30,7 @@ pub use self::{
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     type_::{Parameter, Type, TypeSpecifier},
     util::{DocumentationProvider, FileLocation, FileRange, LspCompletion, Ranged, StringExt},
-    value::Value,
+    value::{FunctionId, Value},
 };
 
 fn main() {
