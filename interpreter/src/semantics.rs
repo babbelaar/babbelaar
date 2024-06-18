@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::{BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 pub struct SemanticAnalyzer<'source_code> {
-    context: SemanticContext<'source_code>,
+    pub context: SemanticContext<'source_code>,
     diagnostics: Vec<SemanticDiagnostic<'source_code>>,
 }
 
@@ -235,6 +235,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         None
     }
 
+    pub fn find_type_of_local(&self, name: &str) -> Option<SemanticType<'source_code>> {
+        for scope in self.context.scope.iter().rev() {
+            for (local_name, local) in &scope.locals {
+                if *local_name == name {
+                    return Some(local.typ.clone());
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn find_function_by_name<'this, P>(&'this self, predicate: P) -> Option<SemanticReference<'source_code>>
             where P: Fn(&str) -> bool {
         for scope in self.context.scope.iter().rev() {
@@ -417,10 +429,10 @@ impl<'source_code> SemanticDiagnosticKind<'source_code> {
     }
 }
 
-struct SemanticContext<'source_code> {
+pub struct SemanticContext<'source_code> {
     scope: Vec<SemanticScope<'source_code>>,
 
-    definition_tracker: Option<HashMap<FileRange, SemanticReference<'source_code>>>,
+    pub definition_tracker: Option<HashMap<FileRange, SemanticReference<'source_code>>>,
 }
 
 impl<'source_code> SemanticContext<'source_code> {
@@ -455,7 +467,7 @@ impl<'source_code> SemanticContext<'source_code> {
 }
 
 #[derive(Default)]
-struct SemanticScope<'source_code> {
+pub struct SemanticScope<'source_code> {
     locals: HashMap<&'source_code str, SemanticLocal<'source_code>>,
 }
 

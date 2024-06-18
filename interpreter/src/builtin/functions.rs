@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{fmt::{Debug, Display}, io::stdin};
+use std::{borrow::Cow, fmt::{Debug, Display}, io::stdin};
 
 use crate::{BuiltinType, Interpreter, Value};
 
@@ -16,6 +16,24 @@ pub struct BuiltinFunction {
     pub lsp_completion: Option<&'static str>,
     pub parameters: &'static [BuiltinFunctionParameter],
     pub return_type: &'static BuiltinType,
+}
+
+impl BuiltinFunction {
+    pub fn lsp_completion(&self) -> Cow<'static, str> {
+        match self.lsp_completion {
+            Some(completion) => Cow::Borrowed(&completion),
+            None => {
+                let mut result = format!("{}(", self.name);
+
+                for (idx, parameter) in self.parameters.iter().enumerate() {
+                    result += &format!("${{{index}:{name}}}", index = idx + 1, name = parameter.name);
+                }
+
+                result += ")$0";
+                Cow::Owned(result)
+            }
+        }
+    }
 }
 
 impl Display for BuiltinFunction {

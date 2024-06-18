@@ -48,7 +48,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let kind = match first_token.kind {
             TokenKind::Keyword(Keyword::Als) => {
                 _ = self.consume_token().ok();
-                StatementKind::If(self.parse_if_statement()?)
+                let stmt = self.parse_if_statement();
+                eprintln!("Debug statement = {stmt:#?}");
+                StatementKind::If(stmt?)
             }
 
             TokenKind::Keyword(Keyword::Bekeer) => {
@@ -118,14 +120,18 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         let mut body = Vec::new();
         loop {
-            if self.peek_token()?.kind == TokenKind::Punctuator(Punctuator::RightCurlyBracket) {
+            if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
                 _ = self.consume_token()?;
                 break;
             }
 
             match self.parse_statement() {
                 Ok(statement) => body.push(statement),
-                Err(error) => self.handle_error(error)?,
+                Err(ParseError::EndOfFile) => break,
+                Err(error) => {
+                    self.handle_error(error)?;
+                    break;
+                }
             }
         }
 
@@ -247,20 +253,36 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     fn parse_if_statement(&mut self) -> Result<IfStatement<'source_code>, ParseError<'source_code>> {
-        let condition = self.parse_expression()?;
+        let condition = match self.parse_expression() {
+            Ok(expression) => expression,
+            Err(error) => {
+                eprintln!("condition = {error:?} next = {:?}", self.peek_token());
+                self.handle_error(error)?;
 
-        self.expect_left_curly_bracket("als-conditie")?;
+                Ranged::new(
+                    FileRange::new(self.token_end, self.token_end),
+                    Expression::Primary(PrimaryExpression::Boolean(true))
+                )
+            }
+        };
+
+        if self.tokens[self.cursor - 1].kind != TokenKind::Punctuator(Punctuator::LeftCurlyBracket) {
+            self.expect_left_curly_bracket("als-conditie")?;
+        }
 
         let mut body = Vec::new();
         loop {
-            if self.peek_token()?.kind == TokenKind::Punctuator(Punctuator::RightCurlyBracket) {
+            if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
                 _ = self.consume_token()?;
                 break;
             }
 
             match self.parse_statement() {
                 Ok(statement) => body.push(statement),
-                Err(error) => self.handle_error(error)?,
+                Err(error) => {
+                    self.handle_error(error)?;
+                    break;
+                }
             }
         }
 
@@ -287,6 +309,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     fn parse_primary_expression(&mut self) -> Result<PrimaryExpression<'source_code>, ParseError<'source_code>> {
+        let reset = (self.cursor, self.token_begin, self.token_end);
         let token = self.consume_token()?;
 
         match token.kind {
@@ -297,7 +320,10 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             TokenKind::Keyword(Keyword::Waar) => Ok(PrimaryExpression::Boolean(true)),
             TokenKind::Keyword(Keyword::Onwaar) => Ok(PrimaryExpression::Boolean(false)),
 
-            _ => Err(ParseError::UnknownStartOfExpression { token }),
+            _ => {
+                (self.cursor, self.token_begin, self.token_end) = reset;
+                Err(ParseError::UnknownStartOfExpression { token })
+            }
         }
     }
 
@@ -380,11 +406,14 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 }
 
                 Some(Punctuator::Period) => {
-                    let _period = self.consume_token()?;
+                    let period = self.consume_token()?;
+                    let reset = (self.token_begin, self.token_end, self.cursor);
 
                     let ident_token = self.consume_token()?;
                     let TokenKind::Identifier(name) = ident_token.kind else {
-                        return Err(ParseError::PostfixMemberOrReferenceExpectedIdentifier { token: ident_token });
+                        self.handle_error(ParseError::PostfixMemberOrReferenceExpectedIdentifier { token: ident_token, period })?;
+                        (self.token_begin, self.token_end, self.cursor) = reset;
+                        break;
                     };
 
                     let name = Ranged::new(ident_token.range(), name);
@@ -506,19 +535,20 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
     fn expect_right_paren(&mut self, context: &'static str) -> Result<FileRange, ParseError<'source_code>> {
         let token = self.consume_token()?;
+        let range = token.range();
 
         if token.kind != TokenKind::Punctuator(Punctuator::RightParenthesis) {
-            return Err(ParseError::ExpectedRightParen { token, context });
+            self.handle_error(ParseError::ExpectedRightParen { token, context })?;
         }
 
-        Ok(token.range())
+        Ok(range)
     }
 
     fn expect_left_curly_bracket(&mut self, context: &'static str) -> Result<(), ParseError<'source_code>> {
         let token = self.consume_token()?;
 
         if token.kind != TokenKind::Punctuator(Punctuator::LeftCurlyBracket) {
-            return Err(ParseError::ExpectedLeftCurlyBracket { token, context });
+            self.handle_error(ParseError::ExpectedLeftCurlyBracket { token, context })?;
         }
 
         Ok(())
@@ -611,7 +641,7 @@ pub enum ParseError<'source_code> {
     ParameterExpectedComma { token: Option<Token<'source_code>> },
 
     #[error("Methode of structuurlid verwacht na punt `.`, maar kreeg: {token}")]
-    PostfixMemberOrReferenceExpectedIdentifier { token: Token<'source_code> },
+    PostfixMemberOrReferenceExpectedIdentifier { token: Token<'source_code>, period: Token<'source_code> },
 
     #[error("Sleutelwoord `reeks` verwacht, maar kreeg: {token}")]
     RangeExpectedKeyword { token: Token<'source_code> },
@@ -643,11 +673,18 @@ impl<'source_code> ParseError<'source_code> {
             Self::ForStatementExpectedInKeyword { token, .. } => Some(token),
             Self::ParameterExpectedName { token } => Some(token),
             Self::ParameterExpectedComma { token } => token.as_ref(),
-            Self::PostfixMemberOrReferenceExpectedIdentifier { token } => Some(token),
+            Self::PostfixMemberOrReferenceExpectedIdentifier { token, .. } => Some(token),
             Self::RangeExpectedKeyword { token } => Some(token),
             Self::ResidualTokensInTemplateString { token } => Some(token),
             Self::TypeExpectedSpecifierName { token } => Some(token),
             Self::UnknownStartOfExpression { token } => Some(token),
+        }
+    }
+
+    pub fn range(&self) -> Option<FileRange> {
+        match self {
+            Self::PostfixMemberOrReferenceExpectedIdentifier { period, .. } => Some(period.range()),
+            _ => Some(self.token()?.range()),
         }
     }
 

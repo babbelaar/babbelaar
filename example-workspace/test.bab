@@ -1,10 +1,2 @@
-functie hallo(a: Slinger) {
-    als a.lengte() == 0 {
-        schrijf("Geen string");
-        bekeer;
-    }
-
-    schrijf(€"De slinger '{a}' heeft lengte {a.lengte()}");
+functie hallo(afafg: Slinger) {
 }
-
-hallo("agsg");

@@ -5,15 +5,14 @@ mod conversion;
 mod symbolization;
 
 use std::collections::HashMap;
-use std::mem::replace;
 use std::sync::Arc;
 
-use babbelaar::{Builtin, DocumentationProvider, Expression, Keyword, Parser, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, StatementKind, Token, TokenKind};
+use babbelaar::{Builtin, DocumentationProvider, Expression, FileRange, Keyword, Parser, PostfixExpressionKind, PrimaryExpression, Punctuator, SemanticAnalyzer, SemanticType, StatementKind, Token, TokenKind};
 use conversion::{convert_file_range, convert_position, convert_token_range};
 use log::{info, LevelFilter, Log};
 use symbolization::{LspTokenType, Symbolizer};
 use tokio::spawn;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -21,31 +20,30 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 #[derive(Debug, Clone)]
 struct Backend {
     client: Client,
-    file_store: Arc<Mutex<HashMap<Url, String>>>,
+    file_store: Arc<RwLock<HashMap<Url, Arc<str>>>>,
 }
 
 impl Backend {
     async fn find_tokens_at<F, R>(&self, params: &TextDocumentPositionParams, mut f: F) -> Result<Option<R>>
-            where F: FnMut(Token, Option<Token>) -> Result<Option<R>> {
+            where F: FnMut(Token, Vec<Token>) -> Result<Option<R>> {
         self.lexed_document(&params.text_document, |tokens| {
-            let mut previous = None;
+            let mut previous = Vec::new();
             for token in tokens {
                 if token.begin.line() != params.position.line as usize {
-                    previous = Some(token);
+                    previous.push(token);
                     continue;
                 }
 
                 if token.begin.column() > params.position.character as usize {
-                    previous = Some(token);
+                    previous.push(token);
                     continue;
                 }
 
                 if params.position.character as usize > token.end.column() {
-                    previous = Some(token);
+                    previous.push(token);
                     continue;
                 }
 
-                let previous = replace(&mut previous, Some(token.clone()));
                 return f(token, previous);
             }
 
@@ -94,9 +92,9 @@ impl Backend {
     where
         F: FnOnce(&str) -> Result<R>,
     {
-        let mut store = self.file_store.lock().await;
-        if let Some(contents) = store.get(&uri) {
-            return f(contents);
+        let contents = self.file_store.read().await.get(&uri).cloned();
+        if let Some(contents) = contents {
+            return f(&contents);
         }
 
         let path = uri.path();
@@ -106,8 +104,14 @@ impl Backend {
                 .await;
             return Err(Error::internal_error());
         };
+
+        let contents = Arc::from(contents);
+        {
+            let mut store = self.file_store.write().await;
+            store.insert(uri.clone(), Arc::clone(&contents));
+        }
+
         let result = f(&contents);
-        store.insert(uri.clone(), contents);
         result
     }
 
@@ -116,8 +120,7 @@ impl Backend {
         F: FnOnce(SemanticAnalyzer) -> Result<R>,
     {
         self.lexed_document(text_document, |tokens| {
-
-            let mut parser = Parser::new(&tokens);
+            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
             let mut statements = Vec::new();
 
             while let Ok(statement) = parser.parse_statement() {
@@ -157,10 +160,8 @@ impl Backend {
             let parse_errors = parser.errors
                 .into_iter()
                 .flat_map(|err| {
-                    let token = err.token()?;
-
                     Some(Diagnostic {
-                        range: convert_token_range(token),
+                        range: convert_file_range(err.range()?),
                         severity: Some(DiagnosticSeverity::ERROR),
                         code: Some(NumberOrString::String(err.name().to_string())),
                         code_description: None,
@@ -376,9 +377,10 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
-        info!("Change: {params:#?}");
-        let mut file_store = self.file_store.lock().await;
-        file_store.insert(params.text_document.uri.clone(), std::mem::take(&mut params.content_changes[0].text));
+        {
+            let mut file_store = self.file_store.write().await;
+            file_store.insert(params.text_document.uri.clone(), Arc::from(std::mem::take(&mut params.content_changes[0].text)));
+        }
         let this = (*self).clone();
         spawn(async move {
             let this = this;
@@ -462,45 +464,98 @@ impl LanguageServer for Backend {
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let mut completions = Vec::new();
 
+        #[derive(Debug)]
+        enum CompletionMode {
+            Method((FileRange, String)),
+            Function(String),
+        }
+
         let mut was_new_func = false;
-        let ident = self.find_tokens_at(&params.text_document_position, |token, previous| {
-            was_new_func = previous.is_some_and(|tok| matches!(tok.kind, TokenKind::Keyword(Keyword::Functie)));
+        let mut prev_punc = None;
+        let completion_mode = self.find_tokens_at(&params.text_document_position, |token, previous| {
+            was_new_func = previous.last().is_some_and(|tok| matches!(tok.kind, TokenKind::Keyword(Keyword::Functie)));
+            prev_punc = previous.last().and_then(|x| if let TokenKind::Punctuator(punc) = x.kind { Some(punc) } else { None });
+
+            if prev_punc == Some(Punctuator::Period) {
+                if let Some(token) = previous.get(previous.len() - 2) {
+                    if let TokenKind::Identifier(ident) = &token.kind {
+                        return Ok(Some(CompletionMode::Method((token.range(), ident.to_string()))));
+                    }
+                }
+            }
+
+            if token.kind == TokenKind::Punctuator(Punctuator::Period) {
+                if let Some(token) = previous.last() {
+                    if let TokenKind::Identifier(ident) = &token.kind {
+                        return Ok(Some(CompletionMode::Method((token.range(), ident.to_string()))));
+                    }
+                }
+            }
 
             if let TokenKind::Identifier(ident) = &token.kind {
-                Ok(Some(ident.to_string()))
+                Ok(Some(CompletionMode::Function(ident.to_string())))
             } else {
                 Ok(None)
             }
         }).await?;
 
-        let Some(ident) = ident else {
-            eprintln!("Was ident");
-            return Ok(None);
-        };
-
         if was_new_func {
-            eprintln!("Was new func");
             return Ok(None);
         }
 
-        self.with_semantics(&params.text_document_position.text_document, |analyzer| {
-            if let Some(func) = analyzer.find_function_by_name(|f| f.starts_with(&ident)) {
-                completions.push(CompletionItem {
-                    label: func.function_name().to_string(),
-                    kind: Some(CompletionItemKind::FUNCTION),
-                    documentation: func.documentation().map(|x| Documentation::MarkupContent(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: x.to_string(),
-                    })),
-                    insert_text: Some(func.lsp_completion().into_owned()),
-                    insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    ..Default::default()
-                });
-            }
-            Ok(())
-        }).await?;
+        match completion_mode {
+            Some(CompletionMode::Function(ident)) => {
+                self.with_semantics(&params.text_document_position.text_document, |analyzer| {
+                    if let Some(func) = analyzer.find_function_by_name(|f| f.starts_with(&ident)) {
+                        completions.push(CompletionItem {
+                            label: func.function_name().to_string(),
+                            kind: Some(CompletionItemKind::FUNCTION),
+                            documentation: func.documentation().map(|x| Documentation::MarkupContent(MarkupContent {
+                                kind: MarkupKind::Markdown,
+                                value: x.to_string(),
+                            })),
+                            insert_text: Some(func.lsp_completion().into_owned()),
+                            insert_text_format: Some(InsertTextFormat::SNIPPET),
+                            ..Default::default()
+                        });
+                    }
 
-        suggest_identifiers(&ident, &mut completions);
+                    Ok(())
+                }).await?;
+
+                suggest_identifiers(&ident, &mut completions);
+            }
+
+            Some(CompletionMode::Method((last_identifier, _))) => {
+                self.with_semantics(&params.text_document_position.text_document, |analyzer| {
+                    if let Some(typ) = analyzer.context.definition_tracker.as_ref().and_then(|tracker| Some(tracker.get(&last_identifier)?.typ.clone())) {
+                        match typ {
+                            SemanticType::Builtin(builtin) => {
+                                for method in builtin.methods {
+                                    completions.push(CompletionItem {
+                                        label: format!("{}()", method.name),
+                                        kind: Some(CompletionItemKind::METHOD),
+                                        documentation: Some(Documentation::MarkupContent(MarkupContent {
+                                            kind: MarkupKind::Markdown,
+                                            value: method.documentation.to_string(),
+                                        })),
+                                        insert_text: Some(method.lsp_completion().into_owned()),
+                                        insert_text_format: Some(InsertTextFormat::SNIPPET),
+                                        ..Default::default()
+                                    });
+                                }
+                                return Ok(());
+                            }
+                            _ => (),
+                        }
+                    }
+
+                    Ok(())
+                }).await?;
+            }
+
+            None => (),
+        }
 
         Ok(Some(CompletionResponse::Array(completions)))
     }
@@ -580,7 +635,7 @@ async fn main() {
             client: client.clone(),
         })))
         .unwrap();
-        Backend { client, file_store: Arc::new(Mutex::new(HashMap::new())) }
+        Backend { client, file_store: Arc::new(RwLock::new(HashMap::new())) }
     });
 
     Server::new(stdin, stdout, socket).serve(service).await;
