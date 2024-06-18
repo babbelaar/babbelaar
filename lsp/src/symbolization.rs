@@ -78,6 +78,12 @@ impl<'source_code> Symbolizer<'source_code> {
     }
 
     fn add_statement_function(&mut self, statement: &'source_code FunctionStatement<'source_code>) {
+        self.symbols.insert(statement.name.range(), LspSymbol {
+            name: statement.name.value().to_string(),
+            kind: LspTokenType::Method,
+            range: statement.name.range(),
+        });
+
         for parameter in &statement.parameters {
             self.add_parameter(parameter);
         }
@@ -149,13 +155,27 @@ impl<'source_code> Symbolizer<'source_code> {
                 if let Expression::Primary(PrimaryExpression::Reference(ident)) = expression.lhs.as_ref() {
                     self.symbols.insert(ident.range(), LspSymbol {
                         name: ident.value().to_string(),
-                        kind: LspTokenType::Method,
+                        kind: LspTokenType::Function,
                         range: ident.range(),
                     });
                 }
             }
 
-            _ => (),
+            PostfixExpressionKind::MethodCall(method) => {
+                self.symbols.insert(method.method_name.range(), LspSymbol {
+                    name: method.method_name.value().to_string(),
+                    kind: LspTokenType::Method,
+                    range: method.method_name.range(),
+                });
+            }
+
+            PostfixExpressionKind::Member(member) => {
+                self.symbols.insert(member.range(), LspSymbol {
+                    name: member.value().to_string(),
+                    kind: LspTokenType::Property,
+                    range: member.range(),
+                });
+            }
         }
     }
 }
@@ -214,6 +234,7 @@ pub enum LspTokenType {
     Variable,
     ParameterName,
     Class,
+    Property,
 }
 
 impl LspTokenType {
@@ -250,6 +271,7 @@ impl From<LspTokenType> for SemanticTokenType {
             LspTokenType::Variable => SemanticTokenType::VARIABLE,
             LspTokenType::ParameterName => SemanticTokenType::PARAMETER,
             LspTokenType::Class => SemanticTokenType::CLASS,
+            LspTokenType::Property => SemanticTokenType::PROPERTY,
         }
     }
 }
@@ -272,6 +294,7 @@ impl From<LspTokenType> for SymbolKind {
             LspTokenType::Variable => SymbolKind::VARIABLE,
             LspTokenType::ParameterName => SymbolKind::PROPERTY,
             LspTokenType::Class => SymbolKind::CLASS,
+            LspTokenType::Property => SymbolKind::PROPERTY,
         }
     }
 }

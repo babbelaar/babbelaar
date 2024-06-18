@@ -1,3 +1,5 @@
 functie hallo(afafg: Slinger) {
+    als afafg.lengte() {
 
+    }
 }
