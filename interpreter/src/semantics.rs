@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::HashMap, fmt::Display};
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 pub struct SemanticAnalyzer<'source_code> {
     pub context: SemanticContext<'source_code>,
@@ -36,7 +36,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             parameters: &function.parameters,
         });
 
-        self.context.push_scope();
+        self.context.push_scope(function.range.start());
 
         for param in &function.parameters {
             let typ = self.resolve_type(&param.ty);
@@ -51,7 +51,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             self.analyze_statement(statement);
         }
 
-        self.context.pop_scope();
+        self.context.pop_scope(function.range.end());
     }
 
     pub fn analyze_statement(&mut self, statement: &'source_code Statement<'source_code>) {
@@ -67,7 +67,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     fn analyze_for_statement(&mut self, statement: &'source_code ForStatement<'source_code>) {
-        let scope = self.context.push_scope();
+        let scope = self.context.push_scope(statement.keyword.start());
         scope.locals.insert(&statement.iterator_name, SemanticLocal {
             kind: SemanticLocalKind::Iterator,
             declaration_range: statement.iterator_name.range(),
@@ -78,11 +78,11 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             self.analyze_statement(statement);
         }
 
-        self.context.pop_scope();
+        self.context.pop_scope(statement.file_range.end());
     }
 
     fn analyze_if_statement(&mut self, statement: &'source_code IfStatement<'source_code>) {
-        self.context.push_scope();
+        self.context.push_scope(statement.condition.range().start());
 
         self.analyze_expression(&statement.condition);
 
@@ -90,7 +90,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             self.analyze_statement(statement);
         }
 
-        self.context.pop_scope();
+        self.context.pop_scope(statement.range.end());
     }
 
     fn analyze_return_statement(&mut self, statement: &'source_code ReturnStatement<'source_code>) {
@@ -295,6 +295,15 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
     }
 
+    pub fn scopes_surrounding<F>(&self, location: FileLocation, mut f: F)
+            where F: FnMut(&SemanticScope<'_>) {
+        for scope in &self.context.previous_scopes {
+            if scope.range.contains(location) {
+                f(scope);
+            }
+        }
+    }
+
     fn resolve_parameter_type<'this>(&'this mut self, function: &SemanticReference<'source_code>, arg_idx: usize) -> SemanticType<'source_code> {
         match &function.typ {
             SemanticType::Builtin(..) => todo!(),
@@ -431,6 +440,7 @@ impl<'source_code> SemanticDiagnosticKind<'source_code> {
 
 pub struct SemanticContext<'source_code> {
     scope: Vec<SemanticScope<'source_code>>,
+    pub previous_scopes: Vec<SemanticScope<'source_code>>,
 
     pub definition_tracker: Option<HashMap<FileRange, SemanticReference<'source_code>>>,
 }
@@ -441,12 +451,16 @@ impl<'source_code> SemanticContext<'source_code> {
             scope: vec![
                 SemanticScope::new_top_level(),
             ],
+            previous_scopes: Vec::new(),
             definition_tracker: Some(HashMap::new()),
         }
     }
 
-    pub fn push_scope(&mut self) -> &mut SemanticScope<'source_code> {
-        self.scope.push(SemanticScope::default());
+    pub fn push_scope(&mut self, start: FileLocation) -> &mut SemanticScope<'source_code> {
+        self.scope.push(SemanticScope {
+            range: FileRange::new(start, start),
+            locals: HashMap::new(),
+        });
         self.scope.last_mut().expect("we just pushed a scope")
     }
 
@@ -461,19 +475,27 @@ impl<'source_code> SemanticContext<'source_code> {
         );
     }
 
-    fn pop_scope(&mut self) {
-        self.scope.pop().unwrap();
+    fn pop_scope(&mut self, location: FileLocation) {
+        let mut scope = self.scope.pop().unwrap();
+
+        scope.range = FileRange::new(scope.range.start(), location);
+
+        self.previous_scopes.push(scope);
     }
 }
 
-#[derive(Default)]
+#[derive(Debug)]
 pub struct SemanticScope<'source_code> {
-    locals: HashMap<&'source_code str, SemanticLocal<'source_code>>,
+    range: FileRange,
+    pub locals: HashMap<&'source_code str, SemanticLocal<'source_code>>,
 }
 
 impl<'source_code> SemanticScope<'source_code> {
     fn new_top_level() -> Self {
-        let mut this = Self::default();
+        let mut this = Self {
+            range: FileRange::new(FileLocation::default(), FileLocation::new(usize::MAX, usize::MAX, usize::MAX)),
+            locals: HashMap::default(),
+        };
 
         for func in Builtin::FUNCTIONS {
             this.locals.insert(&func.name, SemanticLocal {
@@ -507,9 +529,10 @@ impl<'source_code> PartialEq for SemanticFunction<'source_code> {
     }
 }
 
-struct SemanticLocal<'source_code> {
-    kind: SemanticLocalKind,
-    declaration_range: FileRange,
+#[derive(Debug)]
+pub struct SemanticLocal<'source_code> {
+    pub kind: SemanticLocalKind,
+    pub declaration_range: FileRange,
     pub typ: SemanticType<'source_code>,
     // type ...
 }

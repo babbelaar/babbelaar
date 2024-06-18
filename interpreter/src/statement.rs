@@ -20,6 +20,7 @@ pub enum StatementKind<'source_code> {
 
 #[derive(Clone, Debug)]
 pub struct ForStatement<'source_code> {
+    pub file_range: FileRange,
     pub keyword: FileRange,
     pub iterator_name: Ranged<&'source_code str>,
     pub range: RangeExpression<'source_code>,
@@ -28,6 +29,7 @@ pub struct ForStatement<'source_code> {
 
 #[derive(Clone, Debug)]
 pub struct FunctionStatement<'source_code> {
+    pub range: FileRange,
     pub name: Ranged<&'source_code str>,
     pub parameters: Vec<Parameter<'source_code>>,
     pub body: Vec<Statement<'source_code>>,
@@ -35,6 +37,7 @@ pub struct FunctionStatement<'source_code> {
 
 #[derive(Clone, Debug)]
 pub struct IfStatement<'source_code> {
+    pub range: FileRange,
     pub condition: Ranged<Expression<'source_code>>,
     pub body: Vec<Statement<'source_code>>,
 }

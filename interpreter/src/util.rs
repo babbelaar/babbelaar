@@ -83,6 +83,11 @@ impl FileRange {
     pub const fn len(&self) -> usize {
         self.end.offset - self.start.offset
     }
+
+    #[must_use]
+    pub const fn contains(&self, location: FileLocation) -> bool {
+        self.start.offset <= location.offset && self.end.offset >= location.offset
+    }
 }
 
 impl From<(FileLocation, FileLocation)> for FileRange {

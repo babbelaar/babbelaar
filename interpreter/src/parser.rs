@@ -135,7 +135,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
         }
 
-        Ok(FunctionStatement { name, body, parameters })
+        let range = FileRange::new(name_range.start(), self.previous_end());
+
+        Ok(FunctionStatement { name, body, parameters, range })
     }
 
     fn handle_error(&mut self, error: ParseError<'source_code>) -> Result<(), ParseError<'source_code>> {
@@ -248,11 +250,13 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
         }
 
+        let file_range = FileRange::new(keyword.start(), self.previous_end());
 
-        Ok(ForStatement { keyword, iterator_name, range, body })
+        Ok(ForStatement { keyword, iterator_name, range, body, file_range })
     }
 
     fn parse_if_statement(&mut self) -> Result<IfStatement<'source_code>, ParseError<'source_code>> {
+        let start = self.previous_end();
         let condition = match self.parse_expression() {
             Ok(expression) => expression,
             Err(error) => {
@@ -286,7 +290,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
         }
 
-        Ok(IfStatement { condition, body })
+        let range = FileRange::new(start, self.previous_end());
+
+        Ok(IfStatement { condition, body, range })
     }
 
     fn parse_range(&mut self) -> Result<RangeExpression<'source_code>, ParseError<'source_code>> {
@@ -586,6 +592,13 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
 
         Ok(())
+    }
+
+    fn previous_end(&self) -> FileLocation {
+        match self.tokens.get(self.cursor - 1) {
+            Some(token) => token.end,
+            None => self.token_begin,
+        }
     }
 
     fn next_start(&self) -> FileLocation {

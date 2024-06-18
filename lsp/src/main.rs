@@ -283,6 +283,9 @@ impl Backend {
                 resolve_provider: Some(true),
                 trigger_characters: Some(vec![".".to_string()]),
                 work_done_progress_options: WorkDoneProgressOptions::default(),
+                completion_item: Some(CompletionOptionsCompletionItem {
+                    label_details_support: Some(true),
+                }),
                 ..Default::default()
             }),
             signature_help_provider: Some(SignatureHelpOptions {
@@ -467,7 +470,7 @@ impl LanguageServer for Backend {
         #[derive(Debug)]
         enum CompletionMode {
             Method((FileRange, String)),
-            Function(String),
+            Function((FileRange, String)),
         }
 
         let mut was_new_func = false;
@@ -486,6 +489,7 @@ impl LanguageServer for Backend {
 
             if token.kind == TokenKind::Punctuator(Punctuator::Period) {
                 if let Some(token) = previous.last() {
+                    eprintln!("Previous = {token:?}");
                     if let TokenKind::Identifier(ident) = &token.kind {
                         return Ok(Some(CompletionMode::Method((token.range(), ident.to_string()))));
                     }
@@ -493,19 +497,22 @@ impl LanguageServer for Backend {
             }
 
             if let TokenKind::Identifier(ident) = &token.kind {
-                Ok(Some(CompletionMode::Function(ident.to_string())))
+                Ok(Some(CompletionMode::Function((token.range(), ident.to_string()))))
             } else {
                 Ok(None)
             }
         }).await?;
 
         if was_new_func {
+            eprintln!("Was new func");
             return Ok(None);
         }
 
-        match completion_mode {
-            Some(CompletionMode::Function(ident)) => {
-                self.with_semantics(&params.text_document_position.text_document, |analyzer| {
+        eprintln!("Mode = {completion_mode:?}");
+
+        self.with_semantics(&params.text_document_position.text_document, |analyzer| {
+            match completion_mode {
+                Some(CompletionMode::Function((range, ident))) => {
                     if let Some(func) = analyzer.find_function_by_name(|f| f.starts_with(&ident)) {
                         completions.push(CompletionItem {
                             label: func.function_name().to_string(),
@@ -520,14 +527,27 @@ impl LanguageServer for Backend {
                         });
                     }
 
-                    Ok(())
-                }).await?;
+                    info!("Prev={:#?}", analyzer.context.previous_scopes);
 
-                suggest_identifiers(&ident, &mut completions);
-            }
+                    analyzer.scopes_surrounding(range.start(), |scope| {
+                        for (name, local) in &scope.locals {
+                            completions.push(CompletionItem {
+                                label: name.to_string(),
+                                label_details: Some(CompletionItemLabelDetails {
+                                    detail: Some(local.typ.to_string()),
+                                    description: Some(local.typ.to_string()),
+                                }),
+                                kind: Some(CompletionItemKind::VARIABLE),
+                                documentation: None,
+                                ..Default::default()
+                            });
+                        }
+                    });
 
-            Some(CompletionMode::Method((last_identifier, _))) => {
-                self.with_semantics(&params.text_document_position.text_document, |analyzer| {
+                    suggest_identifiers(&ident, &mut completions);
+                }
+
+                Some(CompletionMode::Method((last_identifier, _))) => {
                     if let Some(typ) = analyzer.context.definition_tracker.as_ref().and_then(|tracker| Some(tracker.get(&last_identifier)?.typ.clone())) {
                         match typ {
                             SemanticType::Builtin(builtin) => {
@@ -550,12 +570,13 @@ impl LanguageServer for Backend {
                         }
                     }
 
-                    Ok(())
-                }).await?;
+                }
+
+                None => (),
             }
 
-            None => (),
-        }
+            Ok(())
+        }).await?;
 
         Ok(Some(CompletionResponse::Array(completions)))
     }
