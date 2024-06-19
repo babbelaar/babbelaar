@@ -184,13 +184,17 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
     fn parse_variable_statement(&mut self) -> Result<VariableStatement<'source_code>, ParseError<'source_code>> {
         let name_token = self.consume_token()?;
+        let name_range = name_token.range();
 
-        let TokenKind::Identifier(name) = name_token.kind else {
-            // TODO handle_error somehow
-            return Err(ParseError::ExpectedNameOfVariable { token: name_token });
+        let name = match name_token.kind {
+            TokenKind::Identifier(ident) => ident,
+            _ => {
+                self.handle_error(ParseError::ExpectedNameOfVariable { token: name_token })?;
+                ""
+            }
         };
 
-        let name = Ranged::new(name_token.range(), name);
+        let name = Ranged::new(name_range, name);
 
         let equals = self.consume_token()?;
         if equals.kind != TokenKind::Punctuator(Punctuator::Assignment) {
@@ -201,7 +205,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         self.expect_semicolon_after_statement()?;
 
         Ok(VariableStatement {
-            range: FileRange::new(name_token.begin, expression.range().end()),
+            range: FileRange::new(name.range().start(), expression.range().end()),
             name,
             expression,
         })
