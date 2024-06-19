@@ -312,6 +312,12 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 f(scope);
             }
         }
+
+        for scope in &self.context.scope {
+            if scope.range.contains(location) {
+                f(scope);
+            }
+        }
     }
 
     fn resolve_parameter_type<'this>(&'this mut self, function: &SemanticReference<'source_code>, arg_idx: usize) -> SemanticType<'source_code> {

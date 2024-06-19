@@ -194,7 +194,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         let equals = self.consume_token()?;
         if equals.kind != TokenKind::Punctuator(Punctuator::Assignment) {
-            self.handle_error(ParseError::ExpectedEqualsInsideVariable { token: equals });
+            self.handle_error(ParseError::ExpectedEqualsInsideVariable { token: equals })?;
         }
 
         let expression = self.parse_expression()?;
