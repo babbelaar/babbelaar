@@ -1,5 +1,11 @@
 functie hallo(afafg: Slinger) {
-    als afafg.lengte() {
-
+    schrijf(€"Je schreef: '{afafg}'");
+    als afafg.bevat("hi") {
+        schrijf("    WOW!!");
+        bekeer;
     }
+
+    schrijf("    :(");
 }
+
+hallo("Hallo, hi!");

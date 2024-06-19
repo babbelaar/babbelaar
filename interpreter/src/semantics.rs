@@ -71,7 +71,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         scope.locals.insert(&statement.iterator_name, SemanticLocal {
             kind: SemanticLocalKind::Iterator,
             declaration_range: statement.iterator_name.range(),
-            typ: SemanticType::Builtin(&Builtin::TYPE_G32),
+            typ: SemanticType::Builtin(BuiltinType::G32),
         });
 
         for statement in &statement.body {
@@ -120,7 +120,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
     fn analyze_function_call_expression(&mut self, lhs: SemanticType<'source_code>, expression: &'source_code FunctionCallExpression<'source_code>) -> SemanticType<'source_code> {
         let function_name = match lhs {
-            SemanticType::Builtin(builtin) => builtin.name,
+            SemanticType::Builtin(builtin) => builtin.name(),
             SemanticType::Function(func) => func.name.value(),
             SemanticType::FunctionReference(func) => func.name(),
         };
@@ -130,7 +130,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 range: expression.token_left_paren,
                 kind: SemanticDiagnosticKind::InvalidFunctionReference { name: &function_name }
             });
-            return SemanticType::Builtin(Builtin::TYPE_NULL);
+            return SemanticType::Builtin(BuiltinType::Null);
         };
 
         let param_count = function.typ.parameter_count().expect("This reference to be a function, verified by self.find_function()");
@@ -165,21 +165,21 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             }
         }
 
-        SemanticType::Builtin(Builtin::TYPE_NULL)
+        SemanticType::Builtin(BuiltinType::Null)
     }
 
     fn analyze_primary_expression(&mut self, expression: &'source_code PrimaryExpression<'source_code>) -> SemanticType<'source_code> {
         match expression {
             PrimaryExpression::Boolean(..) => {
-                SemanticType::Builtin(Builtin::TYPE_BOOL)
+                SemanticType::Builtin(BuiltinType::Bool)
             }
 
             PrimaryExpression::IntegerLiteral(..) => {
-                SemanticType::Builtin(Builtin::TYPE_G32)
+                SemanticType::Builtin(BuiltinType::G32)
             }
 
             PrimaryExpression::StringLiteral(..) => {
-                SemanticType::Builtin(Builtin::TYPE_SLINGER)
+                SemanticType::Builtin(BuiltinType::Slinger)
             }
 
             PrimaryExpression::TemplateString { parts } => {
@@ -194,7 +194,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     }
                 }
 
-                SemanticType::Builtin(Builtin::TYPE_SLINGER)
+                SemanticType::Builtin(BuiltinType::Slinger)
             }
 
             PrimaryExpression::Reference(reference) => {
@@ -203,7 +203,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                         range: reference.range(),
                         kind: SemanticDiagnosticKind::InvalidIdentifierReference { identifier: &reference }
                     });
-                    return SemanticType::Builtin(Builtin::TYPE_NULL);
+                    return SemanticType::Builtin(BuiltinType::Null);
                 };
 
                 let local_reference = SemanticReference {
@@ -283,14 +283,14 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
     pub fn resolve_type(&mut self, ty: &'source_code Ranged<Type<'source_code>>) -> SemanticType<'source_code> {
         match ty.specifier.value() {
-            TypeSpecifier::BuiltIn(ty) => SemanticType::Builtin(ty),
+            TypeSpecifier::BuiltIn(ty) => SemanticType::Builtin(*ty),
             TypeSpecifier::Custom { name } => {
                 self.diagnostics.push(SemanticDiagnostic {
                     range: ty.range(),
                     kind: SemanticDiagnosticKind::UnknownType { name },
                 });
 
-                SemanticType::Builtin(Builtin::TYPE_NULL)
+                SemanticType::Builtin(BuiltinType::Null)
             }
         }
     }
@@ -342,7 +342,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     fn analyze_method_expression(&mut self, typ: SemanticType<'source_code>, expression: &MethodCallExpression<'source_code>) -> SemanticType<'source_code> {
         match typ {
             SemanticType::Builtin(builtin) => {
-                for method in builtin.methods {
+                for method in builtin.methods() {
                     if method.name == *expression.method_name {
                         return SemanticType::Builtin(method.return_type);
                     }
@@ -555,7 +555,7 @@ impl<'source_code> SemanticReference<'source_code> {
 
     pub fn documentation(&self) -> Option<&'source_code str> {
         match &self.typ {
-            SemanticType::Builtin(builtin) => Some(builtin.documentation),
+            SemanticType::Builtin(builtin) => Some(builtin.documentation()),
             SemanticType::Function(..) => None,
             SemanticType::FunctionReference(func) => func.documentation(),
         }
@@ -563,7 +563,7 @@ impl<'source_code> SemanticReference<'source_code> {
 
     pub fn lsp_completion(&self) -> Cow<'source_code, str> {
         match &self.typ {
-            SemanticType::Builtin(builtin) => Cow::Borrowed(builtin.name),
+            SemanticType::Builtin(builtin) => Cow::Borrowed(builtin.name()),
             SemanticType::Function(func) => Cow::Owned(format!("{}($1);$0", func.name.value())),
             SemanticType::FunctionReference(func) => func.lsp_completion(),
         }
@@ -572,15 +572,15 @@ impl<'source_code> SemanticReference<'source_code> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SemanticType<'source_code> {
-    Builtin(&'static BuiltinType),
+    Builtin(BuiltinType),
     Function(SemanticFunction<'source_code>),
     FunctionReference(FunctionReference<'source_code>),
 }
 
 impl<'source_code> SemanticType<'source_code> {
     #[must_use]
-    pub const fn null() -> Self {
-        Self::Builtin(Builtin::TYPE_NULL)
+    pub fn null() -> Self {
+        Self::Builtin(BuiltinType::Null)
     }
 
     pub fn declaration_range(&self) -> FileRange {

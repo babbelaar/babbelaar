@@ -48,9 +48,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let kind = match first_token.kind {
             TokenKind::Keyword(Keyword::Als) => {
                 _ = self.consume_token().ok();
-                let stmt = self.parse_if_statement();
-                eprintln!("Debug statement = {stmt:#?}");
-                StatementKind::If(stmt?)
+                StatementKind::If(self.parse_if_statement()?)
             }
 
             TokenKind::Keyword(Keyword::Bekeer) => {
@@ -208,7 +206,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             return Err(ParseError::TypeExpectedSpecifierName { token: name_token });
         };
 
-        let specifier = match Builtin::TYPES.iter().find(|x| x.name == name) {
+        let specifier = match Builtin::type_by_name(name) {
             Some(builtin) => TypeSpecifier::BuiltIn(builtin),
             None => TypeSpecifier::Custom { name },
         };

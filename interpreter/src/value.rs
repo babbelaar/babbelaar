@@ -3,7 +3,7 @@
 
 use std::{cmp::Ordering, fmt::Display, hash::{DefaultHasher, Hash, Hasher}};
 
-use crate::{Builtin, BuiltinFunction, BuiltinType, Comparison, FunctionStatement};
+use crate::{BuiltinFunction, BuiltinType, Comparison, FunctionStatement};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -45,19 +45,19 @@ impl Value {
         }
     }
 
-    pub fn typ(&self) -> &'static BuiltinType {
+    pub fn typ(&self) -> BuiltinType {
         match self {
-            Self::Bool(..) => &Builtin::TYPE_BOOL,
-            Self::Integer(..) => &Builtin::TYPE_G32,
-            Self::Null => &Builtin::TYPE_NULL,
-            Self::String(..) => &Builtin::TYPE_SLINGER,
+            Self::Bool(..) => BuiltinType::Bool,
+            Self::Integer(..) => BuiltinType::G32,
+            Self::Null => BuiltinType::Null,
+            Self::String(..) => BuiltinType::Slinger,
             Self::MethodReference { .. } => todo!(),
             Self::Function { .. } => todo!(),
         }
     }
 
     pub fn get_method(&self, method_name: &str) -> Option<Value> {
-        for method in self.typ().methods.iter() {
+        for method in self.typ().methods().iter() {
             if method.name == method_name {
                 return Some(Value::MethodReference {
                     lhs: Box::new(self.clone()),

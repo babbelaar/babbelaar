@@ -5,7 +5,7 @@ use std::{borrow::Cow, fmt::{Debug, Display}, io::stdin};
 
 use crate::{BuiltinType, Interpreter, Value};
 
-pub type BuiltinFunctionSignature = &'static dyn Fn(&mut Interpreter<'_>, Vec<Value>) -> Value;
+pub type BuiltinFunctionSignature = &'static (dyn Fn(&mut Interpreter<'_>, Vec<Value>) -> Value + Send + Sync);
 
 #[derive(Clone, Copy)]
 pub struct BuiltinFunction {
@@ -15,7 +15,7 @@ pub struct BuiltinFunction {
     pub function: BuiltinFunctionSignature,
     pub lsp_completion: Option<&'static str>,
     pub parameters: &'static [BuiltinFunctionParameter],
-    pub return_type: &'static BuiltinType,
+    pub return_type: BuiltinType,
 }
 
 impl BuiltinFunction {
@@ -64,7 +64,7 @@ impl PartialEq for BuiltinFunction {
 #[derive(Debug)]
 pub struct BuiltinFunctionParameter {
     pub name: &'static str,
-    pub typ: &'static BuiltinType,
+    pub typ: BuiltinType,
 }
 
 pub fn schrijf(_: &mut Interpreter<'_>, args: Vec<Value>) -> Value {
@@ -86,8 +86,4 @@ pub fn lees(_: &mut Interpreter<'_>, _: Vec<Value>) -> Value {
     stdin().read_line(&mut line).unwrap();
     line.truncate(line.trim_end().len());
     Value::String(line)
-}
-
-pub fn slinger_lengte(_: &mut Interpreter<'_>, parameter: Vec<Value>) -> Value {
-    Value::Integer(parameter[0].to_string().len() as _)
 }

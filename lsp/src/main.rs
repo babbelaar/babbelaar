@@ -551,7 +551,7 @@ impl LanguageServer for Backend {
                     if let Some(typ) = analyzer.context.definition_tracker.as_ref().and_then(|tracker| Some(tracker.get(&last_identifier)?.typ.clone())) {
                         match typ {
                             SemanticType::Builtin(builtin) => {
-                                for method in builtin.methods {
+                                for method in builtin.methods() {
                                     completions.push(CompletionItem {
                                         label: format!("{}()", method.name),
                                         kind: Some(CompletionItemKind::METHOD),

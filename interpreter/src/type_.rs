@@ -16,7 +16,7 @@ pub struct Type<'source_code> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeSpecifier<'source_code> {
-    BuiltIn(&'static BuiltinType),
+    BuiltIn(BuiltinType),
     Custom {
         name: &'source_code str,
     },

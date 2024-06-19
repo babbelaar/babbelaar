@@ -2,6 +2,7 @@
 // All Rights Reserved.
 
 mod functions;
+mod methods;
 mod types;
 
 pub use self::{
@@ -12,6 +13,11 @@ pub use self::{
 pub struct Builtin;
 
 impl Builtin {
+    #[must_use]
+    pub fn type_by_name(name: &str) -> Option<BuiltinType> {
+        Self::TYPES.iter().find(|x| x.name() == name).copied()
+    }
+
     pub const FUNCTIONS: &'static [BuiltinFunction] = &[
         BuiltinFunction {
             name: "schrijf",
@@ -22,10 +28,10 @@ impl Builtin {
             parameters: &[
                 BuiltinFunctionParameter {
                     name: "uitvoer",
-                    typ: Self::TYPE_SLINGER,
+                    typ: BuiltinType::Slinger,
                 }
             ],
-            return_type: Self::TYPE_NULL,
+            return_type: BuiltinType::Null,
         },
         BuiltinFunction {
             name: "lees",
@@ -34,47 +40,13 @@ impl Builtin {
             function: &functions::lees,
             lsp_completion: Some("lees();$0"),
             parameters: &[],
-            return_type: Self::TYPE_NULL,
+            return_type: BuiltinType::Null,
         }
     ];
 
-    pub const TYPES: &'static [&'static BuiltinType] = &[
-        Self::TYPE_BOOL,
-        Self::TYPE_G32,
-        Self::TYPE_SLINGER,
+    pub const TYPES: &'static [BuiltinType] = &[
+        BuiltinType::Bool,
+        BuiltinType::G32,
+        BuiltinType::Slinger,
     ];
-
-    pub const TYPE_BOOL: &'static BuiltinType = &BuiltinType {
-        name: "bool",
-        documentation: "Een schakeling tussen `waar` en `onwaar`.",
-        methods: &[],
-    };
-
-    pub const TYPE_G32: &'static BuiltinType = &BuiltinType {
-        name: "g32",
-        documentation: "Een geheel getal met 32-bits precisie.",
-        methods: &[],
-    };
-
-    pub const TYPE_NULL: &'static BuiltinType = &BuiltinType {
-        name: "null",
-        documentation: "Tijdelijk type, niet gebruiken",
-        methods: &[],
-    };
-
-    pub const TYPE_SLINGER: &'static BuiltinType = &BuiltinType {
-        name: "Slinger",
-        documentation: "Een stuk tekst, schrijfbaar met bijvoorbeeld: \"Hallo, slinger!\"",
-        methods: &[
-            BuiltinFunction {
-                name: "lengte",
-                documentation: "Krijg de lengte van de slinger.\n## Voorbeeld\n```bab\n\"Hallo\".lengte() // = 5\n```",
-                inline_detail: "",
-                function: &functions::slinger_lengte,
-                lsp_completion: None,
-                parameters: &[],
-                return_type: Self::TYPE_G32,
-            }
-        ],
-    };
 }
