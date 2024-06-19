@@ -642,6 +642,22 @@ fn suggest_identifiers(ident: &str, completions: &mut Vec<CompletionItem>) {
             });
         }
     }
+
+    for ty in Builtin::TYPES {
+        if ty.name().to_lowercase().starts_with(ident) {
+            completions.push(CompletionItem {
+                label: ty.name().to_string(),
+                label_details: Some(CompletionItemLabelDetails {
+                    detail: Some("Details??".into()),
+                    description: Some("Description??".into()),
+                }),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some(ty.documentation().to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
+            });
+        }
+    }
 }
 
 #[tokio::main]
