@@ -35,10 +35,10 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
     }
 ];
 
-pub fn slinger_lengte(_: &mut Interpreter<'_>, parameter: Vec<Value>) -> Value {
+pub fn slinger_lengte(_: &mut dyn Interpreter, parameter: Vec<Value>) -> Value {
     Value::Integer(parameter[0].to_string().len() as _)
 }
 
-pub fn slinger_bevat(_: &mut Interpreter<'_>, parameter: Vec<Value>) -> Value {
+pub fn slinger_bevat(_: &mut dyn Interpreter, parameter: Vec<Value>) -> Value {
     Value::Bool(parameter[0].to_string().contains(&parameter[1].to_string()))
 }

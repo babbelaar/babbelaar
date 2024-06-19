@@ -64,10 +64,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "babbelaar-interpreter"
+version = "0.1.0"
+dependencies = [
+ "babbelaar",
+ "rstest",
+ "strum",
+ "thiserror",
+]
+
+[[package]]
 name = "babbelaar-lsp"
 version = "0.1.0"
 dependencies = [
  "babbelaar",
+ "babbelaar-interpreter",
  "log",
  "rstest",
  "strum",

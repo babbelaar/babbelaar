@@ -9,7 +9,6 @@ mod interpreter;
 mod keyword;
 mod lexer;
 mod parser;
-mod scope;
 mod semantics;
 mod statement;
 mod token;
@@ -24,7 +23,6 @@ pub use self::{
     keyword::Keyword,
     lexer::Lexer,
     parser::{Parser, ParseError},
-    scope::Scope,
     semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticLocalKind, SemanticReference, SemanticType},
     statement::{ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},

@@ -6,6 +6,8 @@ use std::{
     rc::Rc,
 };
 
+use babbelaar::*;
+
 use crate::*;
 
 pub struct Interpreter<'source_code> {
@@ -255,6 +257,10 @@ impl<'source_code> Interpreter<'source_code> {
         let method = lhs.get_method(&expression.method_name).unwrap();
         self.execute_function_call(method, &expression.call)
     }
+}
+
+impl<'source_code> babbelaar::Interpreter for Interpreter<'source_code> {
+
 }
 
 #[must_use]

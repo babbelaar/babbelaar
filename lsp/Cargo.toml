@@ -10,7 +10,8 @@ strum = { version = "*", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tower-lsp = "0.20"
 
-babbelaar = { path = "../interpreter" }
+babbelaar = { path = "../babbelaar" }
+babbelaar-interpreter = { path = "../interpreter" }
 
 
 [dev-dependencies]

@@ -1,13 +1,11 @@
 [package]
-name = "babbelaar-interpreter"
+name = "babbelaar"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 thiserror = "*"
 strum = { version = "*", features = ["derive"] }
-
-babbelaar = { path = "../babbelaar" }
 
 [dev-dependencies]
 rstest = "0.21"
