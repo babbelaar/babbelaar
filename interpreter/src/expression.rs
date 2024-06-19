@@ -71,6 +71,20 @@ pub enum BiOperator {
     Comparison(Comparison),
 }
 
+impl BiOperator {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Add => "+",
+            Self::Subtract => "-",
+            Self::Multiply => "*",
+            Self::Divide => "/",
+            Self::Modulo => "%",
+            Self::Comparison(comp) => comp.as_str(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Comparison {
     Equality,
@@ -79,6 +93,20 @@ pub enum Comparison {
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+}
+
+impl Comparison {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Equality => "==",
+            Self::Inequality => "!=",
+            Self::LessThan => "<",
+            Self::LessThanOrEqual => "<=",
+            Self::GreaterThan => ">",
+            Self::GreaterThanOrEqual => ">=",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

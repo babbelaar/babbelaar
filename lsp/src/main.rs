@@ -2,13 +2,15 @@
 // All Rights Reserved.
 
 mod conversion;
+mod format;
 mod symbolization;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use babbelaar::{Builtin, DocumentationProvider, Expression, FileRange, Keyword, Parser, PostfixExpressionKind, PrimaryExpression, Punctuator, SemanticAnalyzer, SemanticType, StatementKind, Token, TokenKind};
+use babbelaar::{Builtin, DocumentationProvider, Expression, FileRange, Keyword, ParseError, Parser, PostfixExpressionKind, PrimaryExpression, Punctuator, SemanticAnalyzer, SemanticType, StatementKind, Token, TokenKind};
 use conversion::{convert_file_range, convert_position, convert_token_range};
+use format::Format;
 use log::{info, LevelFilter, Log};
 use symbolization::{LspTokenType, Symbolizer};
 use tokio::spawn;
@@ -26,7 +28,7 @@ struct Backend {
 impl Backend {
     async fn find_tokens_at<F, R>(&self, params: &TextDocumentPositionParams, mut f: F) -> Result<Option<R>>
             where F: FnMut(Token, Vec<Token>) -> Result<Option<R>> {
-        self.lexed_document(&params.text_document, |tokens| {
+        self.lexed_document(&params.text_document, |tokens, _| {
             let mut previous = Vec::new();
             for token in tokens {
                 if token.begin.line() != params.position.line as usize {
@@ -80,11 +82,11 @@ impl Backend {
 
     async fn lexed_document<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
-        F: FnOnce(Vec<Token>) -> Result<R>,
+        F: FnOnce(Vec<Token>, &str) -> Result<R>,
     {
         self.with_contents(&text_document.uri, |contents| {
             let tokens = babbelaar::Lexer::new(&contents).collect();
-            f(tokens)
+            f(tokens, contents)
         }).await
     }
 
@@ -119,7 +121,7 @@ impl Backend {
     where
         F: FnOnce(SemanticAnalyzer) -> Result<R>,
     {
-        self.lexed_document(text_document, |tokens| {
+        self.lexed_document(text_document, |tokens, _| {
             let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
             let mut statements = Vec::new();
 
@@ -141,7 +143,7 @@ impl Backend {
             uri: document.uri,
         };
 
-        let diags = self.lexed_document(&text_document, |tokens| {
+        let diags = self.lexed_document(&text_document, |tokens, _| {
             let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
             let mut statements = Vec::new();
 
@@ -208,7 +210,7 @@ impl Backend {
         let caret_line = params.text_document_position_params.position.line as usize;
         let caret_column = params.text_document_position_params.position.character as usize;
 
-        self.lexed_document(&params.text_document_position_params.text_document, |tokens| {
+        self.lexed_document(&params.text_document_position_params.text_document, |tokens, _| {
             let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
             info!("Caret is @ {caret_line}:{caret_column}");
             loop {
@@ -319,7 +321,7 @@ impl Backend {
     }
 
     async fn on_semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>> {
-        self.lexed_document(&params.text_document, |tokens| {
+        self.lexed_document(&params.text_document, |tokens, _| {
             let mut symbolizer = Symbolizer::new(params.text_document.uri.clone());
 
             for token in &tokens {
@@ -344,6 +346,38 @@ impl Backend {
             })))
         }).await
 
+    }
+
+    async fn format(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        let mut end = Position::default();
+
+        let result = self.lexed_document(&params.text_document, |tokens, source| {
+            let mut result = String::new();
+            let mut parser = Parser::new(&tokens);
+
+            if let Some(last) = tokens.last() {
+                end.line = last.end.line() as _;
+                end.character = last.end.column() as _;
+            }
+
+            loop {
+                match parser.parse_statement() {
+                    Ok(statement) => {
+                        result += &statement.format_to_string(source);
+                        result += "\n";
+                    }
+
+                    Err(ParseError::EndOfFile) => break,
+                    Err(..) => return Ok(None),
+                }
+            }
+
+            result = result.trim().to_string();
+            Ok(Some(result))
+        }).await?;
+
+        let range = Range { start: Position::default(), end, };
+        Ok(result.map(|new_text| vec![TextEdit { range, new_text }]))
     }
 }
 
@@ -391,12 +425,16 @@ impl LanguageServer for Backend {
         });
     }
 
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        self.format(params).await
+    }
+
     async fn document_symbol(
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
 
-        self.lexed_document(&params.text_document, |tokens| {
+        self.lexed_document(&params.text_document, |tokens, _| {
             let mut symbolizer = Symbolizer::new(params.text_document.uri.clone());
 
             for token in &tokens {
@@ -590,7 +628,7 @@ impl LanguageServer for Backend {
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let mut hints = Vec::new();
 
-        self.lexed_document(&params.text_document, |tokens| {
+        self.lexed_document(&params.text_document, |tokens, _| {
             let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
             while let Ok(statement) = parser.parse_statement() {
                 match statement.kind {

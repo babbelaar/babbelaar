@@ -18,6 +18,13 @@ pub enum StatementKind<'source_code> {
     Return(ReturnStatement<'source_code>),
 }
 
+impl<'source_code> StatementKind<'source_code> {
+    #[must_use]
+    pub const fn is_expression(&self) -> bool {
+        matches!(self, Self::Expression(..))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ForStatement<'source_code> {
     pub file_range: FileRange,
