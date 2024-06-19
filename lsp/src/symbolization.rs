@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Token, TokenKind};
+use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Token, TokenKind, VariableStatement};
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
 
@@ -31,6 +31,7 @@ impl<'source_code> Symbolizer<'source_code> {
             StatementKind::Function(statement) => self.add_statement_function(statement),
             StatementKind::If(statement) => self.add_statement_if(statement),
             StatementKind::Return(statement) => self.add_statement_return(statement),
+            StatementKind::Variable(statement) => self.add_statement_variable(statement),
         }
 
         self.semantic_analyzer.analyze_statement(statement);
@@ -107,6 +108,10 @@ impl<'source_code> Symbolizer<'source_code> {
         }
     }
 
+    fn add_statement_variable(&mut self, statement: &'source_code VariableStatement<'source_code>) {
+        self.add_expression(&statement.expression);
+    }
+
     fn add_parameter(&mut self, parameter: &'source_code Parameter<'source_code>) {
         self.symbols.insert(parameter.name.range(), LspSymbol {
             name: parameter.name.value().to_string(),
@@ -134,6 +139,7 @@ impl<'source_code> Symbolizer<'source_code> {
                             SemanticLocalKind::Parameter => LspTokenType::ParameterName,
                             SemanticLocalKind::Function => LspTokenType::Function,
                             SemanticLocalKind::FunctionReference => LspTokenType::Function,
+                            SemanticLocalKind::Variable => LspTokenType::Variable,
                         },
                         range: identifier.range(),
                     });

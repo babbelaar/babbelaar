@@ -15,6 +15,7 @@ pub enum Keyword {
     In,
     Onwaar,
     Reeks,
+    Stel,
     Structuur,
     Volg,
     Waar,
@@ -65,6 +66,7 @@ volg i in reeks(0, 10) {
 }
 ```"#
             }
+            Self::Stel => "Bepaal een aanpaswaarde in deze scoop",
             Self::Structuur => "Definieer een datastructuur.",
             Self::Volg => "Herhaal de sectie per waarde van de reeks.",
             Self::Waar => "Een waarde van het type `booleaan`. Tegenovergestelde van `onwaar`",

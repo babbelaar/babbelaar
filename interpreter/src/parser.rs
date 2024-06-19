@@ -6,7 +6,7 @@ use std::fmt::Display;
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Comparison, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier
+    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Comparison, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseError<'source_code>>;
@@ -59,6 +59,11 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             TokenKind::Keyword(Keyword::Functie) => {
                 _ = self.consume_token().ok();
                 StatementKind::Function(self.parse_function()?)
+            }
+
+            TokenKind::Keyword(Keyword::Stel) => {
+                _ = self.consume_token().ok();
+                StatementKind::Variable(self.parse_variable_statement()?)
             }
 
             TokenKind::Keyword(Keyword::Volg) => {
@@ -175,6 +180,31 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                     }
                 }),
         }
+    }
+
+    fn parse_variable_statement(&mut self) -> Result<VariableStatement<'source_code>, ParseError<'source_code>> {
+        let name_token = self.consume_token()?;
+
+        let TokenKind::Identifier(name) = name_token.kind else {
+            // TODO handle_error somehow
+            return Err(ParseError::ExpectedNameOfVariable { token: name_token });
+        };
+
+        let name = Ranged::new(name_token.range(), name);
+
+        let equals = self.consume_token()?;
+        if equals.kind != TokenKind::Punctuator(Punctuator::Assignment) {
+            self.handle_error(ParseError::ExpectedEqualsInsideVariable { token: equals });
+        }
+
+        let expression = self.parse_expression()?;
+        self.expect_semicolon_after_statement()?;
+
+        Ok(VariableStatement {
+            range: FileRange::new(name_token.begin, expression.range().end()),
+            name,
+            expression,
+        })
     }
 
     fn parse_parameter(&mut self) -> Result<Parameter<'source_code>, ParseError<'source_code>> {
@@ -633,6 +663,12 @@ pub enum ParseError<'source_code> {
     #[error("Komma verwacht ',' na {context}, maar kreeg: {token}")]
     ExpectedComma { token: Token<'source_code>, context: &'static str },
 
+    #[error("Naam van stelling verwacht, maar kreeg: {token}")]
+    ExpectedNameOfVariable { token: Token<'source_code> },
+
+    #[error("Is-teken `=` verwacht tussen naam van stelling en de toewijzing, maar kreeg: {token}")]
+    ExpectedEqualsInsideVariable { token: Token<'source_code> },
+
     #[error("Puntkomma verwacht ';' na statement: {token}")]
     ExpectedSemicolonAfterStatement { token: Token<'source_code> },
 
@@ -679,6 +715,8 @@ impl<'source_code> ParseError<'source_code> {
             Self::ExpectedColon { token, .. } => Some(token),
             Self::ExpectedComma { token, .. } => Some(token),
             Self::ExpectedSemicolonAfterStatement { token, .. } => Some(token),
+            Self::ExpectedNameOfVariable { token } => Some(token),
+            Self::ExpectedEqualsInsideVariable { token } => Some(token),
             Self::FunctionStatementExpectedName { token } => Some(token),
             Self::ForStatementExpectedIteratorName { token } => Some(token),
             Self::ForStatementExpectedInKeyword { token, .. } => Some(token),

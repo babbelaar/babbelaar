@@ -16,6 +16,7 @@ pub enum StatementKind<'source_code> {
     For(ForStatement<'source_code>),
     If(IfStatement<'source_code>),
     Return(ReturnStatement<'source_code>),
+    Variable(VariableStatement<'source_code>),
 }
 
 impl<'source_code> StatementKind<'source_code> {
@@ -52,4 +53,11 @@ pub struct IfStatement<'source_code> {
 #[derive(Clone, Debug)]
 pub struct ReturnStatement<'source_code> {
     pub expression: Option<Ranged<Expression<'source_code>>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct VariableStatement<'source_code> {
+    pub range: FileRange,
+    pub name: Ranged<&'source_code str>,
+    pub expression: Ranged<Expression<'source_code>>,
 }

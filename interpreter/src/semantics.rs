@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::HashMap, fmt::Display};
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 pub struct SemanticAnalyzer<'source_code> {
     pub context: SemanticContext<'source_code>,
@@ -63,6 +63,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             StatementKind::Function(function) => self.analyze_function(function),
             StatementKind::If(statement) => self.analyze_if_statement(statement),
             StatementKind::Return(function) => self.analyze_return_statement(function),
+            StatementKind::Variable(variable) => self.analyze_variable_statement(variable),
         }
     }
 
@@ -99,6 +100,15 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
 
         // TODO analyze return type
+    }
+
+    fn analyze_variable_statement(&mut self, statement: &'source_code VariableStatement<'source_code>) {
+        let typ = self.analyze_expression(&statement.expression);
+        self.context.scope.last_mut().unwrap().locals.insert(&statement.name, SemanticLocal {
+            kind: SemanticLocalKind::Variable,
+            declaration_range: statement.name.range(),
+            typ,
+        });
     }
 
     fn analyze_bi_expression(&mut self, expression: &'source_code BiExpression<'source_code>) -> SemanticType<'source_code> {
@@ -624,6 +634,7 @@ pub enum SemanticLocalKind {
     Iterator,
     Function,
     FunctionReference,
+    Variable,
 }
 
 impl SemanticLocalKind {
@@ -634,6 +645,7 @@ impl SemanticLocalKind {
             Self::Iterator => false,
             Self::Function => true,
             Self::FunctionReference => true,
+            Self::Variable => false,
         }
     }
 }

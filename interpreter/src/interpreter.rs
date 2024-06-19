@@ -53,6 +53,12 @@ impl<'source_code> Interpreter<'source_code> {
 
                 StatementResult::Return(value)
             }
+
+            StatementKind::Variable(variable) => {
+                let value = self.execute_expression(&variable.expression);
+                self.scope.variables.insert(variable.name.to_string(), value);
+                StatementResult::Continue
+            }
         }
     }
 

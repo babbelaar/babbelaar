@@ -6,7 +6,7 @@
 
 use std::fmt::Write;
 
-use babbelaar::{BiExpression, BuiltinType, Expression, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
+use babbelaar::{BiExpression, BuiltinType, Expression, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
 
 pub struct Formatter<'source> {
     #[allow(unused)]
@@ -148,6 +148,7 @@ impl<'source_code> Format for StatementKind<'source_code> {
             Self::For(statement) => statement.format(f),
             Self::If(statement) => statement.format(f),
             Self::Return(statement) => statement.format(f),
+            Self::Variable(statement) => statement.format(f),
         }
 
         *f.indents.last_mut().unwrap() = LastSiblingKind::OtherStatement;
@@ -269,6 +270,16 @@ impl<'source_code> Format for ReturnStatement<'source_code> {
             expr.format(f);
         }
 
+        f.write_str(";\n");
+    }
+}
+
+impl<'source_code> Format for VariableStatement<'source_code> {
+    fn format(&self, f: &mut Formatter<'_>) {
+        f.write_str("stel ");
+        f.write_str(&self.name);
+        f.write_str(" = ");
+        self.expression.format(f);
         f.write_str(";\n");
     }
 }

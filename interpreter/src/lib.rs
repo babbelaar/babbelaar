@@ -26,7 +26,7 @@ pub use self::{
     parser::{Parser, ParseError},
     scope::Scope,
     semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticLocalKind, SemanticReference, SemanticType},
-    statement::{ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind},
+    statement::{ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     type_::{Parameter, Type, TypeSpecifier},
     util::{DocumentationProvider, FileLocation, FileRange, LspCompletion, Ranged, StringExt},

@@ -1,12 +1,2 @@
-functie naam(b: Slinger) {
-    volg a in reeks(10, 20) {
-        schrijf(€"Hallo, {a}");
-
-        als a == 10 {
-            schrijf("Doei!!");
-            schrijf("Bye!!");
-        }
-    }
-}
-
-naam("doei");
+stel naampje = "Joost";
+schrijf(€"Hoi {naampje}");
