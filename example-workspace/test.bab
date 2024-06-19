@@ -1,11 +1,3 @@
-functie hallo(afafg: Slinger) {
-    schrijf(€"Je schreef: '{afafg}'");
-    als afafg.bevat("hi") {
-        schrijf("    WOW!!");
-        bekeer;
-    }
+functie naam(a: Slinger) {
 
-    schrijf("    :(");
 }
-
-hallo("Hallo, hi!");

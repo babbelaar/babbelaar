@@ -517,6 +517,7 @@ impl LanguageServer for Backend {
                         completions.push(CompletionItem {
                             label: func.function_name().to_string(),
                             kind: Some(CompletionItemKind::FUNCTION),
+                            detail: func.inline_detail().map(|x| x.to_string()),
                             documentation: func.documentation().map(|x| Documentation::MarkupContent(MarkupContent {
                                 kind: MarkupKind::Markdown,
                                 value: x.to_string(),
@@ -553,7 +554,8 @@ impl LanguageServer for Backend {
                             SemanticType::Builtin(builtin) => {
                                 for method in builtin.methods() {
                                     completions.push(CompletionItem {
-                                        label: format!("{}()", method.name),
+                                        label: method.lsp_label(),
+                                        detail: Some(method.inline_detail.to_string()),
                                         kind: Some(CompletionItemKind::METHOD),
                                         documentation: Some(Documentation::MarkupContent(MarkupContent {
                                             kind: MarkupKind::Markdown,

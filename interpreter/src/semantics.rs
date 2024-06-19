@@ -561,6 +561,14 @@ impl<'source_code> SemanticReference<'source_code> {
         }
     }
 
+    pub fn inline_detail(&self) -> Option<&'source_code str> {
+        match &self.typ {
+            SemanticType::Builtin(builtin) => Some(builtin.inline_detail()),
+            SemanticType::Function(..) => None,
+            SemanticType::FunctionReference(func) => func.inline_detail(),
+        }
+    }
+
     pub fn lsp_completion(&self) -> Cow<'source_code, str> {
         match &self.typ {
             SemanticType::Builtin(builtin) => Cow::Borrowed(builtin.name()),
@@ -700,6 +708,14 @@ impl<'source_code> FunctionReference<'source_code> {
         match self {
             Self::Builtin(..) => FileRange::default(),
             Self::Custom(func) => func.name.range(),
+        }
+    }
+
+    #[must_use]
+    fn inline_detail(&self) -> Option<&'source_code str> {
+        match self {
+            Self::Builtin(func) => Some(func.inline_detail),
+            Self::Custom(..) => None,
         }
     }
 }

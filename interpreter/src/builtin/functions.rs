@@ -34,6 +34,12 @@ impl BuiltinFunction {
             }
         }
     }
+
+    #[must_use]
+    pub fn lsp_label(&self) -> String {
+        let params = if self.parameters.is_empty() { "" } else { "…" };
+        format!("{}({params})", self.name)
+    }
 }
 
 impl Display for BuiltinFunction {

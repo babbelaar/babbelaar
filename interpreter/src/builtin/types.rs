@@ -28,6 +28,11 @@ impl BuiltinType {
 
     #[must_use]
     pub const fn documentation(&self) -> &'static str {
+        self.inline_detail()
+    }
+
+    #[must_use]
+    pub const fn inline_detail(&self) -> &'static str {
         match self {
             Self::Bool => "Een schakeling tussen `waar` en `onwaar`.",
             Self::G32 => "Een geheel getal met 32-bits precisie.",
