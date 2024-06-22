@@ -86,7 +86,8 @@ impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Null => f.write_str("null"),
-            Self::Bool(b) => b.fmt(f),
+            Self::Bool(false) => f.write_str("onwaar"),
+            Self::Bool(true) => f.write_str("waar"),
             Self::Integer(i) => i.fmt(f),
             Self::String(str) => f.write_str(str),
             Self::MethodReference { lhs, method } => f.write_fmt(format_args!("{lhs}.{}()", method.name)),
