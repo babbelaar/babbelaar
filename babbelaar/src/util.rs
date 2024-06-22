@@ -63,6 +63,7 @@ pub struct FileRange {
 impl FileRange {
     #[must_use]
     pub const fn new(start: FileLocation, end: FileLocation) -> Self {
+        debug_assert!(end.offset >= start.offset);
         Self {
             start,
             end,

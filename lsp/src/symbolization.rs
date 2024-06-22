@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Token, TokenKind, VariableStatement};
+use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
 
@@ -11,7 +11,7 @@ use crate::conversion::convert_file_range_to_location;
 
 pub struct Symbolizer<'source_code> {
     uri: Url,
-    symbols: HashMap<FileRange, LspSymbol>,
+    symbols: SymbolMap,
     semantic_analyzer: SemanticAnalyzer<'source_code>,
 }
 
@@ -19,7 +19,7 @@ impl<'source_code> Symbolizer<'source_code> {
     pub fn new(uri: Url) -> Self {
         Self {
             uri,
-            symbols: HashMap::new(),
+            symbols: SymbolMap::default(),
             semantic_analyzer: SemanticAnalyzer::new(),
         }
     }
@@ -38,15 +38,29 @@ impl<'source_code> Symbolizer<'source_code> {
     }
 
     pub fn add_token(&mut self, token: &Token) {
-        self.symbols.insert(token.range(), LspSymbol {
+        self.symbols.insert(LspSymbol {
             name: token.kind.name().to_string(),
             kind: (&token.kind).into(),
             range: token.range(),
         });
+
+        match &token.kind {
+            TokenKind::TemplateString(ts) => {
+                for part in ts.iter() {
+                    if let TemplateStringToken::Expression(expr) = part {
+                        for token in expr.iter() {
+                            self.add_token(token);
+                        }
+                    }
+                }
+            }
+
+            _ => (),
+        }
     }
 
     pub fn to_response(self) -> DocumentSymbolResponse {
-        let mut values: Vec<_> = self.symbols.into_iter().collect();
+        let mut values: Vec<_> = self.symbols.to_vec();
         values.sort_by(|(range_a, _), (range_b, _)| range_a.start().offset().cmp(&range_b.start().offset()));
 
         let values = values.into_iter()
@@ -57,7 +71,7 @@ impl<'source_code> Symbolizer<'source_code> {
     }
 
     pub fn to_tokens(self) -> Vec<SemanticToken> {
-        let mut values: Vec<_> = self.symbols.into_iter().collect();
+        let mut values: Vec<_> = self.symbols.to_vec();
         values.sort_by(|(range_a, _), (range_b, _)| range_a.cmp(range_b));
 
 
@@ -79,7 +93,7 @@ impl<'source_code> Symbolizer<'source_code> {
     }
 
     fn add_statement_function(&mut self, statement: &'source_code FunctionStatement<'source_code>) {
-        self.symbols.insert(statement.name.range(), LspSymbol {
+        self.symbols.insert(LspSymbol {
             name: statement.name.value().to_string(),
             kind: LspTokenType::Method,
             range: statement.name.range(),
@@ -113,13 +127,13 @@ impl<'source_code> Symbolizer<'source_code> {
     }
 
     fn add_parameter(&mut self, parameter: &'source_code Parameter<'source_code>) {
-        self.symbols.insert(parameter.name.range(), LspSymbol {
+        self.symbols.insert(LspSymbol {
             name: parameter.name.value().to_string(),
             kind: LspTokenType::ParameterName,
             range: parameter.name.range(),
         });
 
-        self.symbols.insert(parameter.ty.range(), LspSymbol {
+        self.symbols.insert(LspSymbol {
             name: "Type".to_string(),
             kind: LspTokenType::Class,
             range: parameter.ty.range(),
@@ -132,7 +146,7 @@ impl<'source_code> Symbolizer<'source_code> {
 
             Expression::Primary(PrimaryExpression::Reference(identifier)) => {
                 if let Some(reference) = self.semantic_analyzer.find_reference(identifier.range()) {
-                    self.symbols.insert(identifier.range(), LspSymbol {
+                    self.symbols.insert(LspSymbol {
                         name: identifier.value().to_string(),
                         kind: match reference.local_kind {
                             SemanticLocalKind::Iterator => LspTokenType::Variable,
@@ -151,6 +165,14 @@ impl<'source_code> Symbolizer<'source_code> {
                 self.add_expression(&expr.rhs);
             }
 
+            Expression::Primary(PrimaryExpression::TemplateString { parts }) => {
+                for part in parts {
+                    if let TemplateStringExpressionPart::Expression(expression) = part {
+                        self.add_expression(expression);
+                    }
+                }
+            }
+
             Expression::Primary(..) => (),
         }
     }
@@ -159,7 +181,7 @@ impl<'source_code> Symbolizer<'source_code> {
         match &expression.kind {
             PostfixExpressionKind::Call(..) => {
                 if let Expression::Primary(PrimaryExpression::Reference(ident)) = expression.lhs.value() {
-                    self.symbols.insert(ident.range(), LspSymbol {
+                    self.symbols.insert(LspSymbol {
                         name: ident.value().to_string(),
                         kind: LspTokenType::Function,
                         range: ident.range(),
@@ -168,7 +190,7 @@ impl<'source_code> Symbolizer<'source_code> {
             }
 
             PostfixExpressionKind::MethodCall(method) => {
-                self.symbols.insert(method.method_name.range(), LspSymbol {
+                self.symbols.insert(LspSymbol {
                     name: method.method_name.value().to_string(),
                     kind: LspTokenType::Method,
                     range: method.method_name.range(),
@@ -176,7 +198,7 @@ impl<'source_code> Symbolizer<'source_code> {
             }
 
             PostfixExpressionKind::Member(member) => {
-                self.symbols.insert(member.range(), LspSymbol {
+                self.symbols.insert(LspSymbol {
                     name: member.value().to_string(),
                     kind: LspTokenType::Property,
                     range: member.range(),
@@ -186,7 +208,52 @@ impl<'source_code> Symbolizer<'source_code> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
+struct SymbolMap {
+    map: HashMap<FileRange, LspSymbol>
+}
+
+impl SymbolMap {
+    pub fn insert(&mut self, sym: LspSymbol) {
+        let range = sym.range;
+        self.map.insert(sym.range, sym);
+
+        let Some(key) = self.map.keys().find(|x| {
+                    let x = x.start().offset()..x.end().offset();
+                    x.contains(&range.start().offset()) || x.contains(&range.end().offset().saturating_sub(1))
+                }).copied() else {
+            return;
+        };
+
+        if key == range {
+            return;
+        }
+
+        let mut sym_begin = self.map.remove(&key).unwrap();
+        let mut sym_end = sym_begin.clone();
+
+        eprintln!("sym_begin={:?} range={range:?}", sym_begin.range);
+
+        sym_begin.range = FileRange::new(sym_begin.range.start(), range.start());
+        sym_end.range = FileRange::new(range.end(), sym_end.range.end());
+
+        let is_begin_empty = sym_begin.range.start() == sym_begin.range.end();
+        if !is_begin_empty {
+            self.map.insert(sym_begin.range, sym_begin);
+        }
+
+        let is_end_empty = sym_end.range.start() == sym_end.range.end();
+        if !is_end_empty {
+            self.map.insert(sym_end.range, sym_end);
+        }
+    }
+
+    pub fn to_vec(self) -> Vec<(FileRange, LspSymbol)> {
+        self.map.into_iter().collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 struct LspSymbol {
     name: String,
     kind: LspTokenType,
@@ -301,6 +368,30 @@ impl From<LspTokenType> for SymbolKind {
             LspTokenType::ParameterName => SymbolKind::PROPERTY,
             LspTokenType::Class => SymbolKind::CLASS,
             LspTokenType::Property => SymbolKind::PROPERTY,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use babbelaar::Lexer;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(
+        "€\"Hallo {naam}\""
+    )]
+    fn test_add_token(#[case] input: &'static str) {
+        let tokens: Vec<Token<'static>> = Lexer::new(input).collect();
+
+        let mut symbolizer = Symbolizer::new(Url::parse("file:///test.h").unwrap());
+        for token in &tokens {
+            symbolizer.add_token(token);
+        }
+
+        for (range, symbol) in symbolizer.symbols.map {
+            eprintln!("Range={range:?}    symbol={symbol:#?}");
         }
     }
 }
