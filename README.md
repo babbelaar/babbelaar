@@ -3,9 +3,21 @@ De eerste Nederlandse programmeertaal!
 
 ## Kenmerken
 
-### Stellingen
-#### Volg
+### Functies
+```bab
+functie hallo(voornaam: Slinger) {
+    schrijf(€"Hallo, {voornaam}!");
+}
+
+### Statements
+
+#### Stel
+```bab
+stel mijnCijfer = 10;
 ```
+
+#### Volg
+```bab
 volg i in reeks(1, 2) {
     schrijf(i)
 }
@@ -16,8 +28,8 @@ volg i in reeks(1, 2) {
 `"Hallo, wereld!"`
 
 #### Sjabloonslinger
-```
+```bab
 volg i in reeks (0, 11) {
-    schrijf(€"Het getal is nu {i}")
+    schrijf(€"Het getal is nu {i}");
 }
 ```
