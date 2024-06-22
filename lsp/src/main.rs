@@ -412,6 +412,15 @@ impl LanguageServer for Backend {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         _ = self.with_contents(&params.text_document.uri, |_| { Ok(()) }).await.ok();
+
+        let this = (*self).clone();
+        spawn(async move {
+            let this = this;
+            this.collect_diagnostics(VersionedTextDocumentIdentifier {
+                uri: params.text_document.uri,
+                version: params.text_document.version,
+            }).await;
+        });
     }
 
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
