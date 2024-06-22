@@ -40,6 +40,10 @@ impl Keyword {
                 completion: "functie ${1:naam}() {\n\t$0\n}",
                 inline_detail: "Een nieuwe functie.",
             }),
+            Self::Stel => Some(LspCompletion {
+                completion: "stel ${1:variabele} = ${2:waarde};\n${0}",
+                inline_detail: "Een nieuwe variabele",
+            }),
             Self::Volg => Some(LspCompletion {
                 completion: "volg ${1:element} in reeks(${2:start}, ${3:eind}) {\n\t$0\n}",
                 inline_detail: "Volg in reeks."
