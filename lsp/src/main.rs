@@ -8,7 +8,7 @@ mod symbolization;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use babbelaar::{Builtin, DocumentationProvider, Expression, FileRange, Keyword, ParseError, Parser, PostfixExpressionKind, PrimaryExpression, Punctuator, SemanticAnalyzer, SemanticType, StatementKind, Token, TokenKind};
+use babbelaar::{Builtin, DocumentationProvider, Expression, FileRange, Keyword, ParseDiagnostic, Parser, PostfixExpressionKind, PrimaryExpression, Punctuator, SemanticAnalyzer, SemanticType, StatementKind, Token, TokenKind};
 use conversion::{convert_file_range, convert_position, convert_token_range};
 use format::Format;
 use log::{info, LevelFilter, Log};
@@ -368,7 +368,7 @@ impl Backend {
                         result += "\n";
                     }
 
-                    Err(ParseError::EndOfFile) => break,
+                    Err(ParseDiagnostic::EndOfFile) => break,
                     Err(..) => return Ok(None),
                 }
             }

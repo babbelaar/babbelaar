@@ -22,7 +22,7 @@ pub use self::{
     interpreter::Interpreter,
     keyword::Keyword,
     lexer::Lexer,
-    parser::{Parser, ParseError},
+    parser::{Parser, ParseDiagnostic},
     semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticLocalKind, SemanticReference, SemanticType},
     statement::{ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},

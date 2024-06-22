@@ -1,5 +1,1 @@
-stel a = "Hoi";
-
-schrijf(€"Begin: {a.begintMet("H")}");
-schrijf(€"Eind: {a.eindigtMet("i")}");
-schrijf(€"Eind: {"a".isLeeg()}");
+stel a = waarde;

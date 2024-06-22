@@ -83,7 +83,7 @@ pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
             Ok(statement) => {
                 interpreter.execute(&statement);
             }
-            Err(ParseError::EndOfFile) => break,
+            Err(ParseDiagnostic::EndOfFile) => break,
             Err(e) => {
                 eprintln!("Fout: {e}");
                 break;
