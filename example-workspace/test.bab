@@ -1,3 +1,15 @@
-functie hallo() {
+functie a() {
 
 }
+
+functie hallo() {
+    a();
+}
+
+functie start() {
+    volg i in reeks(0, 10000000000000) {
+        hallo();
+    }
+}
+
+start();

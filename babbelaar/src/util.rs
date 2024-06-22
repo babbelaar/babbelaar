@@ -120,6 +120,19 @@ impl<T> Ranged<T> {
     pub const fn value(&self) -> &T {
         &self.value
     }
+
+    #[must_use]
+    pub fn map<N>(self, f: impl FnOnce(T) -> N) -> Ranged<N>  {
+        Ranged {
+            range: self.range,
+            value: f(self.value),
+        }
+    }
+
+    #[must_use]
+    pub fn into_value(self) -> T {
+        self.value
+    }
 }
 
 impl<T> AsRef<T> for Ranged<T> {

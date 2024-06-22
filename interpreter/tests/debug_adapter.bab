@@ -1,0 +1,11 @@
+functie a() {
+
+}
+
+functie hallo() {
+    a();
+}
+
+volg i in reeks(0, 10000000000000) {
+    hallo();
+}

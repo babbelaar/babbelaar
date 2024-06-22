@@ -7,10 +7,45 @@
         "vscode": "^1.90.0"
     },
     "categories": [
+        "Debuggers",
         "Programming Languages"
     ],
     "main": "./out/extension.js",
     "contributes": {
+        "breakpoints": [
+            {
+                "language": "babbelaar"
+            }
+        ],
+        "debuggers": [
+            {
+                "type": "babbelaar",
+                "languages": [
+                    "babbelaar"
+                ],
+                "label": "Babbelaar",
+                "program": "../target/debug/babbelaar-interpreter",
+                "configurationAttributes": {
+                    "launch": {
+                        "required": [
+                            "program"
+                        ],
+                        "properties": {
+                            "program": {
+                                "type": "string",
+                                "description": "Absolute path to a text file."
+                            },
+                            "stopOnEntry": {
+                                "type": "boolean",
+                                "description": "Automatically stop after launch.",
+                                "default": true
+                            }
+                        }
+                    }
+                }
+
+            }
+        ],
         "languages": [
             {
                 "id": "babbelaar",

@@ -72,6 +72,7 @@ impl Backend {
                     title: "► Uitvoeren".into(),
                     command: "babbelaar.uitvoeren".into(),
                     arguments: Some(vec![
+                        "uitvoeren".into(),
                         url.into(),
                     ]),
                 }),
@@ -241,7 +242,7 @@ impl Backend {
                     return Ok(None);
                 };
 
-                let Expression::Primary(PrimaryExpression::Reference(calling_name)) = postfix.lhs.as_ref() else {
+                let Expression::Primary(PrimaryExpression::Reference(calling_name)) = postfix.lhs.value() else {
                     return Ok(None);
                 };
 

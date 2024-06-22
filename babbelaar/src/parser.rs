@@ -335,22 +335,23 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         self.expect_left_paren("reeks")?;
 
-        let start = self.parse_ranged(Self::parse_primary_expression)?;
+        let start = self.parse_primary_expression()?;
 
         self.expect_comma("reeks")?;
 
-        let end = self.parse_ranged(Self::parse_primary_expression)?;
+        let end = self.parse_primary_expression()?;
 
         self.expect_right_paren("reeks")?;
 
         Ok(RangeExpression { start, end })
     }
 
-    fn parse_primary_expression(&mut self) -> Result<PrimaryExpression<'source_code>, ParseError<'source_code>> {
+    fn parse_primary_expression(&mut self) -> Result<Ranged<PrimaryExpression<'source_code>>, ParseError<'source_code>> {
         let reset = (self.cursor, self.token_begin, self.token_end);
         let token = self.consume_token()?;
+        let range = token.range();
 
-        match token.kind {
+        let expression = match token.kind {
             TokenKind::StringLiteral(literal) => Ok(PrimaryExpression::StringLiteral(literal)),
             TokenKind::Integer(integer) => Ok(PrimaryExpression::IntegerLiteral(integer)),
             TokenKind::Identifier(identifier) => Ok(PrimaryExpression::Reference(Ranged::new(token.range(), identifier))),
@@ -362,7 +363,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 (self.cursor, self.token_begin, self.token_end) = reset;
                 Err(ParseError::UnknownStartOfExpression { token })
             }
-        }
+        }?;
+
+        Ok(Ranged::new(range, expression))
     }
 
     fn parse_ranged<F, T>(&mut self, f: F) -> Result<Ranged<T>, ParseError<'source_code>>
@@ -374,24 +377,17 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     fn parse_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseError<'source_code>> {
-        let start = self.next_start();
-
-        let expr = self.parse_relational_expression()?;
-
-        let end = self.token_end;
-        let range = FileRange::new(start, end);
-
-        Ok(Ranged::new(range, expr))
+        self.parse_relational_expression()
     }
 
-    fn parse_relational_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
+    fn parse_relational_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseError<'source_code>> {
         self.parse_bi_expression(Self::parse_multiplicative_expression, &[
             (Punctuator::Equals, BiOperator::Comparison(Comparison::Equality)),
             // TODO the rest
         ])
     }
 
-    fn parse_multiplicative_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
+    fn parse_multiplicative_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseError<'source_code>> {
         self.parse_bi_expression(Self::parse_additive_expression, &[
             (Punctuator::Asterisk, BiOperator::Multiply),
             (Punctuator::PercentageSign, BiOperator::Modulo),
@@ -399,15 +395,15 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         ])
     }
 
-    fn parse_additive_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
+    fn parse_additive_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseError<'source_code>> {
         self.parse_bi_expression(Self::parse_postfix_expression, &[
             (Punctuator::PlusSign, BiOperator::Add),
             (Punctuator::HyphenMinus, BiOperator::Subtract),
         ])
     }
 
-    fn parse_bi_expression<F>(&mut self, mut operand: F, operators: &[(Punctuator, BiOperator)]) -> Result<Expression<'source_code>, ParseError<'source_code>>
-            where F: FnMut(&mut Self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
+    fn parse_bi_expression<F>(&mut self, mut operand: F, operators: &[(Punctuator, BiOperator)]) -> Result<Ranged<Expression<'source_code>>, ParseError<'source_code>>
+            where F: FnMut(&mut Self) -> Result<Ranged<Expression<'source_code>>, ParseError<'source_code>> {
         let lhs = operand(self)?;
 
         let Ok(next) = self.peek_token() else {
@@ -421,26 +417,30 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let operator_range = self.consume_token()?.range();
         let operator = Ranged::new(operator_range, operator);
 
-        let rhs = Expression::Primary(self.parse_primary_expression()?);
+        let rhs = self.parse_primary_expression()?.map(|x| Expression::Primary(x));
+        let range = FileRange::new(lhs.range().start(), rhs.range().end());
 
-        Ok(Expression::BiExpression(BiExpression {
+        let expression = Expression::BiExpression(BiExpression {
             operator,
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
-        }))
+        });
+
+        Ok(Ranged::new(range, expression))
     }
 
-    fn parse_postfix_expression(&mut self) -> Result<Expression<'source_code>, ParseError<'source_code>> {
-        let mut expression = Expression::Primary(self.parse_primary_expression()?);
+    fn parse_postfix_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseError<'source_code>> {
+        let start = self.next_start();
+        let mut expression = self.parse_primary_expression()?.map(|x| Expression::Primary(x));
 
         loop {
-            match self.peek_punctuator() {
+            let expr = match self.peek_punctuator() {
                 Some(Punctuator::LeftParenthesis) => {
                     let token_left_paren = self.consume_token()?.range();
-                    expression = Expression::Postfix(PostfixExpression {
+                    Expression::Postfix(PostfixExpression {
                         lhs: Box::new(expression),
                         kind: PostfixExpressionKind::Call(self.parse_function_call_expression(token_left_paren)?)
-                    });
+                    })
                 }
 
                 Some(Punctuator::Period) => {
@@ -458,23 +458,26 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
                     if self.peek_punctuator() == Some(Punctuator::LeftParenthesis) {
                         let token_left_paren = self.consume_token()?.range();
-                        expression = Expression::Postfix(PostfixExpression {
+                        Expression::Postfix(PostfixExpression {
                             lhs: Box::new(expression),
                             kind: PostfixExpressionKind::MethodCall(MethodCallExpression {
                                 method_name: name,
                                 call: self.parse_function_call_expression(token_left_paren)?,
                             })
-                        });
+                        })
                     } else {
-                        expression = Expression::Postfix(PostfixExpression {
+                        Expression::Postfix(PostfixExpression {
                             lhs: Box::new(expression),
                             kind: PostfixExpressionKind::Member(name),
-                        });
+                        })
                     }
                 }
 
                 _ => break,
-            }
+            };
+
+            let range = FileRange::new(start, self.previous_end());
+            expression = Ranged::new(range, expr);
         }
 
         Ok(expression)

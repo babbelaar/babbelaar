@@ -26,6 +26,15 @@ import {
 	TaskProvider,
 	ShellExecution,
 	TaskScope,
+	debug,
+	DebugConfigurationProviderTriggerKind,
+	DebugConfigurationProvider,
+	WorkspaceFolder,
+	DebugConfiguration,
+	DebugAdapterDescriptorFactory,
+	DebugSession,
+	DebugAdapterExecutable,
+	DebugAdapterDescriptor,
 } from "vscode";
 
 import {
@@ -68,7 +77,7 @@ class BabbelaarTaskProvider implements TaskProvider<Task> {
 		const command = process.env.BABBELAAR || "babbelaar";
 
 		const path = task.definition["path"] as string;
-		const execution = new ShellExecution(`clear; ${command} ${path}`);
+		const execution = new ShellExecution(`clear; ${command} uitvoeren ${path}`);
 		console.log(JSON.stringify(task, null, ''));
 		const definition = task.definition;
 
@@ -89,6 +98,20 @@ export async function activate(context: ExtensionContext) {
 	let disposable = commands.registerCommand("babbelaar.herstarten", async => {
 		startClient();
 	});
+
+	debug.registerDebugAdapterTrackerFactory('*', {
+		createDebugAdapterTracker(session: DebugSession) {
+		  return {
+			onWillReceiveMessage: m => console.log(`> ${JSON.stringify(m, undefined, 2)} session ${JSON.stringify(session, undefined, 2)}`),
+			onDidSendMessage: m => console.log(`< ${JSON.stringify(m, undefined, 2)}`)
+		  };
+		}
+	  });
+
+	const configProvider = new BabbelaarDebugConfigurationProvider();
+	const debugConfigProvider = debug.registerDebugConfigurationProvider("babbelaar", configProvider, DebugConfigurationProviderTriggerKind.Dynamic);
+	context.subscriptions.push(debugConfigProvider);
+	context.subscriptions.push(debug.registerDebugAdapterDescriptorFactory("babbelaar", new DebugAdapterExecutableFactory()));
 
 	context.subscriptions.push(disposable);
 
@@ -225,4 +248,58 @@ export function activateInlayHints(ctx: ExtensionContext) {
 	workspace.onDidChangeTextDocument(maybeUpdater.onDidChangeTextDocument, maybeUpdater, ctx.subscriptions);
 
 	maybeUpdater.onConfigChange().catch(console.error);
+}
+
+
+class DebugAdapterExecutableFactory implements DebugAdapterDescriptorFactory {
+
+	// The following use of a DebugAdapter factory shows how to control what debug adapter executable is used.
+	// Since the code implements the default behavior, it is absolutely not neccessary and we show it here only for educational purpose.
+
+	createDebugAdapterDescriptor(_session: DebugSession, executable: DebugAdapterExecutable | undefined): ProviderResult<DebugAdapterDescriptor> {
+		// param "executable" contains the executable optionally specified in the package.json (if any)
+
+		// use the executable specified in the package.json if it exists or determine it based on some other information (e.g. the session)
+		// if (!executable) {
+			const command = "bash";
+			const args = [
+				"-c",
+				`/Users/tager/Developer/Public/Babbelaar/target/debug/babbelaar-interpreter debug ${window.activeTextEditor!.document.fileName} 2> /Users/tager/babout`,
+			];
+			const options = {
+				// cwd: "working directory for executable",
+				env: { "envVariable": "some value" }
+			};
+			executable = new DebugAdapterExecutable(command, args, options);
+		// }
+
+		// make VS Code launch the DA executable
+		return executable;
+	}
+}
+
+
+class BabbelaarDebugConfigurationProvider implements DebugConfigurationProvider {
+	resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugConfiguration> {
+
+		// if launch.json is missing or empty
+		if (!config.type && !config.request && !config.name) {
+			const editor = window.activeTextEditor;
+			if (editor && editor.document.languageId === 'babbelaar') {
+				config.type = 'babbelaar';
+				config.name = 'Launch';
+				config.request = 'launch';
+				config.program = "${file}";
+				config.stopOnEntry = true;
+			}
+		}
+
+		if (!config.program) {
+			return window.showInformationMessage("Cannot find a program to debug: " + JSON.stringify(config)).then(_ => {
+				return undefined;	// abort launch
+			});
+		}
+
+		return config;
+	}
 }

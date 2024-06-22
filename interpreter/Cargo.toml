@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+dap = "0.4.1-alpha1"
 thiserror = "*"
 strum = { version = "*", features = ["derive"] }
 
 babbelaar = { path = "../babbelaar" }
+clap = { version = "4.5.7", features = ["derive"] }
 
 [dev-dependencies]
 rstest = "0.21"

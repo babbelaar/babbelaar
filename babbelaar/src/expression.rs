@@ -29,7 +29,7 @@ pub enum Expression<'source_code> {
 
 #[derive(Debug, Clone)]
 pub struct PostfixExpression<'source_code> {
-    pub lhs: Box<Expression<'source_code>>,
+    pub lhs: Box<Ranged<Expression<'source_code>>>,
     pub kind: PostfixExpressionKind<'source_code>,
 }
 
@@ -57,8 +57,8 @@ pub struct MethodCallExpression<'source_code> {
 #[derive(Clone, Debug)]
 pub struct BiExpression<'source_code> {
     pub operator: Ranged<BiOperator>,
-    pub lhs: Box<Expression<'source_code>>,
-    pub rhs: Box<Expression<'source_code>>,
+    pub lhs: Box<Ranged<Expression<'source_code>>>,
+    pub rhs: Box<Ranged<Expression<'source_code>>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

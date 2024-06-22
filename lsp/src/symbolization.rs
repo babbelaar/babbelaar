@@ -158,7 +158,7 @@ impl<'source_code> Symbolizer<'source_code> {
     fn add_expression_postfix(&mut self, expression: &PostfixExpression) {
         match &expression.kind {
             PostfixExpressionKind::Call(..) => {
-                if let Expression::Primary(PrimaryExpression::Reference(ident)) = expression.lhs.as_ref() {
+                if let Expression::Primary(PrimaryExpression::Reference(ident)) = expression.lhs.value() {
                     self.symbols.insert(ident.range(), LspSymbol {
                         name: ident.value().to_string(),
                         kind: LspTokenType::Function,

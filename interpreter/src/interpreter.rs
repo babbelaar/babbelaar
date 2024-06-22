@@ -10,24 +10,30 @@ use babbelaar::*;
 
 use crate::*;
 
-pub struct Interpreter<'source_code> {
+pub struct Interpreter<'source_code, D>
+        where D: Debugger {
     functions: HashMap<FunctionId, Rc<FunctionStatement<'source_code>>>,
+    debugger: D,
     scope: Scope,
 }
 
-impl<'source_code> Interpreter<'source_code> {
-    pub fn new() -> Self {
+impl<'source_code, D> Interpreter<'source_code, D>
+        where D: Debugger {
+    pub fn new(debugger: D) -> Self {
         Self {
             functions: HashMap::new(),
             scope: Scope::new_top_level(),
+            debugger,
         }
     }
 
     pub fn execute(&mut self, statement: &Statement<'source_code>) {
+        self.debugger.initialize(&InterpreterAdapter);
         _ = self.execute_statement(statement);
     }
 
     fn execute_statement(&mut self, statement: &Statement<'source_code>) -> StatementResult {
+        self.debugger.on_statement(statement);
         match &statement.kind {
             StatementKind::Expression(expression) => {
                 self.execute_expression(expression);
@@ -64,8 +70,10 @@ impl<'source_code> Interpreter<'source_code> {
         }
     }
 
-    fn execute_expression(&mut self, expression: &Expression<'source_code>) -> Value {
-        match expression {
+    fn execute_expression(&mut self, expression: &Ranged<Expression<'source_code>>) -> Value {
+        self.debugger.on_expression(expression);
+
+        match expression.value() {
             Expression::BiExpression(expr) => self.execute_bi_expression(expr),
             Expression::Postfix(expr) => self.execute_postfix_expression(expr),
 
@@ -199,21 +207,55 @@ impl<'source_code> Interpreter<'source_code> {
                     arguments.push(self.execute_expression(argument));
                 }
 
-                self.execute_function_by_id(id, arguments).unwrap()
+                self.execute_function_by_id(id, arguments, func.token_left_paren).unwrap()
             }
 
             _ => panic!("Unexpected lhs: {lhs:#?}"),
         }
     }
 
-    fn execute_function_by_id(&mut self, id: FunctionId, arguments: Vec<Value>) -> Option<Value> {
+    fn execute_function_by_id(&mut self, id: FunctionId, arguments: Vec<Value>, caller_location: FileRange) -> Option<Value> {
         if id.namespace == usize::MAX {
             let function = Builtin::FUNCTIONS[id.id];
-            return Some((function.function)(self, arguments));
-        }
 
-        let func = self.functions.get(&id).cloned().expect("Invalid FunctionId");
-        Some(self.execute_function(func, arguments))
+            self.debugger.enter_function(DebuggerFunction {
+                ty: DebuggerFunctionType::Normal,
+                name: function.name,
+                caller_location,
+                callee_location: None,
+            }, &arguments);
+
+            let value = (function.function)(self, arguments);
+
+            self.debugger.leave_function(DebuggerFunction {
+                ty: DebuggerFunctionType::Normal,
+                name: function.name,
+                caller_location,
+                callee_location: None,
+            });
+
+            Some(value)
+        } else {
+            let func = self.functions.get(&id).cloned().expect("Invalid FunctionId");
+
+            self.debugger.enter_function(DebuggerFunction {
+                ty: DebuggerFunctionType::Normal,
+                name: func.name.value(),
+                caller_location,
+                callee_location: Some(func.name.range()),
+            }, &arguments);
+
+            let value = self.execute_function(Rc::clone(&func), arguments);
+
+            self.debugger.leave_function(DebuggerFunction {
+                ty: DebuggerFunctionType::Normal,
+                name: func.name.value(),
+                caller_location,
+                callee_location: Some(func.name.range()),
+            });
+
+            Some(value)
+        }
     }
 
     fn execute_function(&mut self, func: Rc<FunctionStatement<'source_code>>, arguments: Vec<Value>) -> Value {
@@ -259,9 +301,14 @@ impl<'source_code> Interpreter<'source_code> {
     }
 }
 
-impl<'source_code> babbelaar::Interpreter for Interpreter<'source_code> {
+impl<'source_code, D> babbelaar::Interpreter for Interpreter<'source_code, D>
+        where D: Debugger {
 
 }
+
+struct InterpreterAdapter;
+
+impl babbelaar::Interpreter for InterpreterAdapter {}
 
 #[must_use]
 enum StatementResult {
