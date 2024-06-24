@@ -70,7 +70,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    fn execute_expression(&mut self, expression: &Ranged<Expression<'source_code>>) -> Value {
+    pub fn execute_expression(&mut self, expression: &Ranged<Expression<'source_code>>) -> Value {
         self.debugger.on_expression(expression);
 
         match expression.value() {

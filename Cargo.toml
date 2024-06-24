@@ -4,5 +4,6 @@ members = [
     "babbelaar",
     "interpreter",
     "lsp",
+    "tests",
 ]
 default-members = ["interpreter"]

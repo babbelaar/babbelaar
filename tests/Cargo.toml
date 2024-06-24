@@ -1,0 +1,10 @@
+[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+babbelaar = { path = "../babbelaar" }
+babbelaar-interpreter = { path = "../interpreter" }
+
+rstest = "0.21"
