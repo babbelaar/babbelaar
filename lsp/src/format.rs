@@ -329,6 +329,11 @@ impl<'source_code> Format for PrimaryExpression<'source_code> {
                 }
                 f.write_char('"');
             }
+            Self::Parenthesized(expr) => {
+                f.write_char('(');
+                expr.format(f);
+                f.write_char(')');
+            }
         }
     }
 }

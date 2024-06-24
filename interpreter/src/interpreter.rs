@@ -110,6 +110,8 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
                 Value::String(string)
             }
+
+            Expression::Primary(PrimaryExpression::Parenthesized(expression)) => self.execute_expression(expression),
         }
     }
 

@@ -363,6 +363,12 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             TokenKind::Keyword(Keyword::Waar) => Ok(PrimaryExpression::Boolean(true)),
             TokenKind::Keyword(Keyword::Onwaar) => Ok(PrimaryExpression::Boolean(false)),
 
+            TokenKind::Punctuator(Punctuator::LeftParenthesis) => {
+                let expression = self.parse_expression()?;
+                self.expect_right_paren("expressie binnen haakjes")?;
+                Ok(PrimaryExpression::Parenthesized(Box::new(expression)))
+            }
+
             _ => {
                 (self.cursor, self.token_begin, self.token_end) = reset;
                 Err(ParseDiagnostic::UnknownStartOfExpression { token })

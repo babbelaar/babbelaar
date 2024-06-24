@@ -229,6 +229,8 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
                 typ
             }
+
+            PrimaryExpression::Parenthesized(expr) => self.analyze_expression(expr),
         }
     }
 

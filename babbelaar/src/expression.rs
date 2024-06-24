@@ -12,6 +12,7 @@ pub enum PrimaryExpression<'source_code> {
     TemplateString {
         parts: Vec<TemplateStringExpressionPart<'source_code>>,
     },
+    Parenthesized(Box<Ranged<Expression<'source_code>>>),
 }
 
 #[derive(Debug, Clone)]

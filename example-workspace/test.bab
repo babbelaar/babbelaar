@@ -3,6 +3,5 @@ stel a = 10;
 stel b = 20;
 stel c = 30;
 
-
 stel resultaat = a + b * c;
 schrijf(€"{resultaat} moet 610 zijn?");
