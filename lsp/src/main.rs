@@ -520,6 +520,24 @@ impl LanguageServer for Backend {
             Ok(Some(()))
         }).await?;
 
+        if hover.is_none() {
+            hover = self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
+                let pos = params.text_document_position_params.position;
+                let location = FileLocation::new(0, pos.line as _, pos.character as _);
+                let reference = analyzer.find_reference_at(location)
+                    .map(|(range, reference)| {
+                        Hover {
+                            contents: HoverContents::Markup(MarkupContent {
+                                kind: MarkupKind::Markdown,
+                                value: reference.hover(),
+                            }),
+                            range: Some(convert_file_range(range)),
+                        }
+                    });
+                Ok(reference)
+            }).await?;
+        }
+
         Ok(hover)
     }
 
@@ -682,11 +700,11 @@ impl LanguageServer for Backend {
             let pos = params.text_document_position_params.position;
             let location = FileLocation::new(0, pos.line as _, pos.character as _);
             let reference = analyzer.find_reference_at(location)
-                .map(|reference| {
+                .map(|(range, reference)| {
                     let target_range = convert_file_range(reference.declaration_range);
                     GotoDefinitionResponse::Link(vec![
                         LocationLink {
-                            origin_selection_range: None,
+                            origin_selection_range: Some(convert_file_range(range)),
                             // TODO: Base on FileLocation's file ID
                             target_uri: params.text_document_position_params.text_document.uri.clone(),
                             target_range,

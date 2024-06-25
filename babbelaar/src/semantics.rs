@@ -217,6 +217,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 };
 
                 let local_reference = SemanticReference {
+                    local_name: reference.value(),
                     local_kind: local.kind,
                     declaration_range: local.declaration_range,
                     typ: local.typ.clone(),
@@ -269,6 +270,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
                 if predicate(name) {
                     return Some(SemanticReference {
+                        local_name: name,
                         local_kind: SemanticLocalKind::FunctionReference,
                         declaration_range: func.typ.declaration_range(),
                         typ: func.typ.clone(),
@@ -288,10 +290,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         self.context.definition_tracker.as_ref()?.get(&range).cloned()
     }
 
-    pub fn find_reference_at(&self, location: FileLocation) -> Option<SemanticReference<'source_code>> {
+    pub fn find_reference_at(&self, location: FileLocation) -> Option<(FileRange, SemanticReference<'source_code>)> {
         for (range, reference) in self.context.definition_tracker.as_ref()? {
             if range.contains(location) {
-                return Some(reference.clone());
+                return Some((range.clone(), reference.clone()));
             }
         }
 
@@ -567,6 +569,7 @@ pub struct SemanticLocal<'source_code> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SemanticReference<'source_code> {
+    pub local_name: &'source_code str,
     pub local_kind: SemanticLocalKind,
     pub declaration_range: FileRange,
     pub typ: SemanticType<'source_code>,
@@ -602,6 +605,18 @@ impl<'source_code> SemanticReference<'source_code> {
             SemanticType::Builtin(builtin) => Cow::Borrowed(builtin.name()),
             SemanticType::Function(func) => Cow::Owned(format!("{}($1);$0", func.name.value())),
             SemanticType::FunctionReference(func) => func.lsp_completion(),
+        }
+    }
+
+    pub fn hover(&self) -> String {
+        match self.local_kind {
+            SemanticLocalKind::Function | SemanticLocalKind::FunctionReference => {
+                format!("```bab\nfunctie {}(..)\n```", self.local_name)
+            }
+
+            _ => {
+                format!("```bab\n{}: {}\n```", self.local_name, self.typ)
+            }
         }
     }
 }

@@ -1,5 +1,11 @@
-volg i in reeks(0, 100) {
-    stel a = i;
+functie naam() {
 
-    schrijf(€"A: {a}");
+}
+
+volg i in reeks(0, 100) {
+    stel a = "hoi";
+
+    naam();
+
+    schrijf(€"A: {i}");
 }
