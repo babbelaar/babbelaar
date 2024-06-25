@@ -1,7 +1,5 @@
+volg i in reeks(0, 100) {
+    stel a = i;
 
-stel a = 10;
-stel b = 20;
-stel c = 30;
-
-stel resultaat = a + b * c;
-schrijf(€"{resultaat} moet 610 zijn?");
+    schrijf(€"A: {a}");
+}

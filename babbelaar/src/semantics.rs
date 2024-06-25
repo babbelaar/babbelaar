@@ -288,6 +288,16 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         self.context.definition_tracker.as_ref()?.get(&range).cloned()
     }
 
+    pub fn find_reference_at(&self, location: FileLocation) -> Option<SemanticReference<'source_code>> {
+        for (range, reference) in self.context.definition_tracker.as_ref()? {
+            if range.contains(location) {
+                return Some(reference.clone());
+            }
+        }
+
+        None
+    }
+
     #[must_use]
     pub fn into_diagnostics(self) -> Vec<SemanticDiagnostic<'source_code>> {
         self.diagnostics

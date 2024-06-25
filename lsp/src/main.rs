@@ -8,7 +8,7 @@ mod symbolization;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use babbelaar::{Builtin, DocumentationProvider, Expression, FileRange, Keyword, ParseDiagnostic, Parser, PostfixExpressionKind, PrimaryExpression, Punctuator, SemanticAnalyzer, SemanticType, StatementKind, Token, TokenKind};
+use babbelaar::{Builtin, DocumentationProvider, Expression, FileLocation, FileRange, Keyword, ParseDiagnostic, Parser, PostfixExpressionKind, PrimaryExpression, Punctuator, SemanticAnalyzer, SemanticType, StatementKind, Token, TokenKind};
 use conversion::{convert_file_range, convert_position, convert_token_range};
 use format::Format;
 use log::{info, LevelFilter, Log};
@@ -316,7 +316,18 @@ impl Backend {
             code_lens_provider: Some(CodeLensOptions {
                 resolve_provider: Some(true),
             }),
-            inlay_hint_provider: Some(OneOf::Left(true)),
+            inlay_hint_provider: Some(OneOf::Right(InlayHintServerCapabilities::Options(InlayHintOptions {
+                work_done_progress_options: WorkDoneProgressOptions {
+                    work_done_progress: None,
+                },
+                resolve_provider: Some(true),
+            }))),
+            declaration_provider: Some(DeclarationCapability::Options(DeclarationOptions {
+                work_done_progress_options: WorkDoneProgressOptions {
+                    work_done_progress: None,
+                },
+            })),
+            definition_provider: Some(OneOf::Left(true)),
             ..ServerCapabilities::default()
         }
     }
@@ -664,6 +675,27 @@ impl LanguageServer for Backend {
 
         self.client.show_message(MessageType::INFO, format!("Hints: {hints:#?}")).await;
         Ok(Some(hints))
+    }
+
+    async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
+        self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
+            let pos = params.text_document_position_params.position;
+            let location = FileLocation::new(0, pos.line as _, pos.character as _);
+            let reference = analyzer.find_reference_at(location)
+                .map(|reference| {
+                    let target_range = convert_file_range(reference.declaration_range);
+                    GotoDefinitionResponse::Link(vec![
+                        LocationLink {
+                            origin_selection_range: None,
+                            // TODO: Base on FileLocation's file ID
+                            target_uri: params.text_document_position_params.text_document.uri.clone(),
+                            target_range,
+                            target_selection_range: target_range,
+                        }
+                    ])
+                });
+            Ok(reference)
+        }).await
     }
 
     async fn shutdown(&self) -> Result<()> {
