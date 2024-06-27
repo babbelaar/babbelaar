@@ -33,7 +33,7 @@ impl<'source_code> Lexer<'source_code> {
             '"' => self.consume_string(),
             '€' => self.consume_template_string(),
 
-            'a'..='z' | 'A'..='Z' => self.consume_identifier_or_keyword(),
+            'a'..='z' | 'A'..='Z' | '_' => self.consume_identifier_or_keyword(),
             '0'..='9' => self.consume_number(),
 
             '(' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::LeftParenthesis)),

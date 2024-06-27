@@ -12,6 +12,7 @@ mod scope;
 use std::path::{Path, PathBuf};
 
 pub use babbelaar::*;
+use babbelaar_compiler::LlvmContext;
 use clap::Subcommand;
 
 pub use self::{
@@ -44,6 +45,9 @@ impl Args {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    Bouwen {
+        bestand: PathBuf,
+    },
     Debug {
         bestand: PathBuf,
     },
@@ -56,6 +60,10 @@ fn main() {
     let args = Args::parse_args();
 
     match args.command {
+        Commands::Bouwen { bestand } => {
+            compile(bestand)
+        }
+
         Commands::Debug { bestand } => {
             interpret(&bestand, DebugAdapter::new(bestand.to_string_lossy().to_string()));
         }
@@ -65,29 +73,32 @@ fn main() {
     }
 }
 
+fn compile(bestand: PathBuf) {
+    let source_code = std::fs::read_to_string(&bestand).unwrap();
+    let mut babbelaar = BabbelaarContext::new(bestand, source_code);
+    let mut llvm = LlvmContext::new();
+
+    babbelaar.with_tree(|tree| llvm.parse_tree(tree)).unwrap();
+
+    llvm.finish();
+}
+
 pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
-    eprintln!("INTEPRETTTT");
+    parse(path, |tree| {
+        let mut interpreter = Interpreter::new(debugger);
+
+        for statement in tree.statements() {
+            interpreter.execute(&statement);
+        }
+    });
+}
+
+fn parse(path: &Path, f: impl FnOnce(ParseTree<'_>)) {
     let source_code = std::fs::read_to_string(path).unwrap();
 
     let lexer = Lexer::new(&source_code);
     let tokens: Vec<_> = lexer.collect();
 
-    let mut parser = Parser::new(&tokens);
-
-    let mut interpreter = Interpreter::new(debugger);
-
-    loop {
-        let statement = parser.parse_statement();
-
-        match statement {
-            Ok(statement) => {
-                interpreter.execute(&statement);
-            }
-            Err(ParseDiagnostic::EndOfFile) => break,
-            Err(e) => {
-                eprintln!("Fout: {e}");
-                break;
-            }
-        }
-    }
+    let mut parser = Parser::new(path.to_path_buf(), &tokens);
+    f(parser.parse_tree().unwrap())
 }

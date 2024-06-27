@@ -4,6 +4,7 @@
 #![deny(elided_lifetimes_in_paths)]
 
 mod builtin;
+mod context;
 mod expression;
 mod interpreter;
 mod keyword;
@@ -12,12 +13,14 @@ mod parser;
 mod semantics;
 mod statement;
 mod token;
+mod tree;
 mod type_;
 mod util;
 mod value;
 
 pub use self::{
     builtin::{Builtin, BuiltinFunction, BuiltinType},
+    context::BabbelaarContext,
     expression::*,
     interpreter::Interpreter,
     keyword::Keyword,
@@ -26,6 +29,7 @@ pub use self::{
     semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticLocalKind, SemanticReference, SemanticType},
     statement::{ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
+    tree::ParseTree,
     type_::{Parameter, Type, TypeSpecifier},
     util::{DocumentationProvider, FileLocation, FileRange, LspCompletion, Ranged, StringExt},
     value::{FunctionId, Value},

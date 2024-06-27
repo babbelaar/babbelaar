@@ -6,8 +6,9 @@ use std::{borrow::Cow, collections::HashMap, fmt::Display};
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
 
+#[derive(Debug)]
 pub struct SemanticAnalyzer<'source_code> {
     pub context: SemanticContext<'source_code>,
     diagnostics: Vec<SemanticDiagnostic<'source_code>>,
@@ -19,6 +20,12 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         Self {
             context: SemanticContext::new(),
             diagnostics: Vec::new(),
+        }
+    }
+
+    pub fn analyze_tree(&mut self, tree: &'source_code ParseTree<'source_code>) {
+        for statement in tree.statements() {
+            self.analyze_statement(statement);
         }
     }
 
@@ -468,6 +475,7 @@ impl<'source_code> SemanticDiagnosticKind<'source_code> {
     }
 }
 
+#[derive(Debug)]
 pub struct SemanticContext<'source_code> {
     scope: Vec<SemanticScope<'source_code>>,
     pub previous_scopes: Vec<SemanticScope<'source_code>>,

@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "babbelaar",
+    "builtin",
+    "compiler",
     "interpreter",
     "lsp",
     "tests",

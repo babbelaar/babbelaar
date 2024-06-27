@@ -1,18 +1,19 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::Display;
+use std::{fmt::Display, path::PathBuf};
 
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Comparison, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
+    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Comparison, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseDiagnostic<'source_code>>;
 
 #[derive(Clone)]
 pub struct Parser<'tokens, 'source_code> {
+    pub path: PathBuf,
     tokens: &'tokens [Token<'source_code>],
     pub cursor: usize,
     pub token_begin: FileLocation,
@@ -22,8 +23,9 @@ pub struct Parser<'tokens, 'source_code> {
 }
 
 impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
-    pub fn new(tokens: &'tokens [Token<'source_code>]) -> Self {
+    pub fn new(path: PathBuf, tokens: &'tokens [Token<'source_code>]) -> Self {
         Self {
+            path,
             error_behavior: ParserErrorBehavior::Propagate,
             token_begin: Default::default(),
             token_end: Default::default(),
@@ -39,6 +41,20 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             error_behavior: ParserErrorBehavior::AttemptToIgnore,
             ..self
         }
+    }
+
+    pub fn parse_tree(&mut self) -> Result<ParseTree<'source_code>, ParseDiagnostic<'source_code>> {
+        let mut tree = ParseTree::new(self.path.clone());
+
+        while !self.is_at_end() {
+            match self.parse_statement() {
+                Ok(statement) => tree.statements.push(statement),
+                Err(ParseDiagnostic::EndOfFile) => break,
+                Err(e) => return Err(e),
+            }
+        }
+
+        Ok(tree)
     }
 
     pub fn parse_statement(&mut self) -> Result<Statement<'source_code>, ParseDiagnostic<'source_code>> {
@@ -378,6 +394,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(Ranged::new(range, expression))
     }
 
+    #[allow(unused)] // TODO evaluate further need of this function
     fn parse_ranged<F, T>(&mut self, f: F) -> Result<Ranged<T>, ParseDiagnostic<'source_code>>
             where F: FnOnce(&mut Self) -> Result<T, ParseDiagnostic<'source_code>> {
         let start = self.token_begin;
@@ -536,7 +553,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             let part = match token {
                 TemplateStringToken::Plain { str, .. } => TemplateStringExpressionPart::String(str),
                 TemplateStringToken::Expression(tokens) => {
-                    let mut parser = Parser::new(&tokens);
+                    let mut parser = Parser::new(self.path.clone(), &tokens);
                     let expr = parser.parse_expression()?;
 
                     if parser.cursor < tokens.len() {
@@ -782,7 +799,7 @@ mod tests {
     #[case("schrijf(\"Hallo\")")]
     fn parse_function_call_expression(#[case] input: &str) {
         let tokens: Vec<Token<'_>> = Lexer::new(input).collect();
-        let mut parser = Parser::new(&tokens);
+        let mut parser = Parser::new(PathBuf::new(), &tokens);
         let expression = parser.parse_expression().unwrap();
         assert!(
             matches!(

@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::path::PathBuf;
+
 use babbelaar::{Expression, Lexer, ParseDiagnostic, Parser, Ranged, Statement, Token, Value};
 use babbelaar_interpreter::Interpreter;
 
@@ -8,7 +10,7 @@ pub fn parse<'a>(input: &'a str) -> Vec<Statement<'a>> {
     let mut result = Vec::new();
 
     let tokens: Vec<Token> = Lexer::new(input).collect();
-    let mut parser = Parser::new(&tokens);
+    let mut parser = Parser::new(PathBuf::new(), &tokens);
     loop {
         match parser.parse_statement() {
             Ok(statement) => result.push(statement),
@@ -22,7 +24,7 @@ pub fn parse<'a>(input: &'a str) -> Vec<Statement<'a>> {
 
 pub fn parse_expression<'a>(input: &'a str) -> Ranged<Expression<'a>> {
     let tokens: Vec<Token> = Lexer::new(input).collect();
-    let mut parser = Parser::new(&tokens);
+    let mut parser = Parser::new(PathBuf::new(), &tokens);
 
     let expr = parser.parse_expression().unwrap();
     assert!(parser.is_at_end());

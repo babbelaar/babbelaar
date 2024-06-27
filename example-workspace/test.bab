@@ -1,11 +1,5 @@
-functie naam() {
-
-}
-
-volg i in reeks(0, 100) {
-    stel a = "hoi";
-
-    naam();
-
-    schrijf(€"A: {i}");
+functie main() {
+    schrijf("Hallo");
+    schrijf("Joost");
+    bekeer;
 }

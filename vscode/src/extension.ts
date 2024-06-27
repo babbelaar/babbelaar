@@ -181,55 +181,55 @@ export function activateInlayHints(ctx: ExtensionContext) {
 			this.dispose();
 
 			const event = this.updateHintsEventEmitter.event;
-			// this.hintsProvider = languages.registerInlayHintsProvider(
-			//   { scheme: "file", language: "nrs" },
-			//   // new (class implements InlayHintsProvider {
-			//   //   onDidChangeInlayHints = event;
-			//   //   resolveInlayHint(hint: InlayHint, token: CancellationToken): ProviderResult<InlayHint> {
-			//   //     const ret = {
-			//   //       label: hint.label,
-			//   //       ...hint,
-			//   //     };
-			//   //     return ret;
-			//   //   }
-			//   //   async provideInlayHints(
-			//   //     document: TextDocument,
-			//   //     range: Range,
-			//   //     token: CancellationToken
-			//   //   ): Promise<InlayHint[]> {
-			//   //     const hints = (await client
-			//   //       .sendRequest("custom/inlay_hint", { path: document.uri.toString() })
-			//   //       .catch(err => null)) as [number, number, string][];
-			//   //     if (hints == null) {
-			//   //       return [];
-			//   //     } else {
-			//   //       return hints.map(item => {
-			//   //         const [start, end, label] = item;
-			//   //         let startPosition = document.positionAt(start);
-			//   //         let endPosition = document.positionAt(end);
-			//   //         return {
-			//   //           position: endPosition,
-			//   //           paddingLeft: true,
-			//   //           label: [
-			//   //             {
-			//   //               value: `${label}`,
-			//   //               // location: {
-			//   //               //   uri: document.uri,
-			//   //               //   range: new Range(1, 0, 1, 0)
-			//   //               // }
-			//   //               command: {
-			//   //                 title: "hello world",
-			//   //                 command: "helloworld.helloWorld",
-			//   //                 arguments: [document.uri],
-			//   //               },
-			//   //             },
-			//   //           ],
-			//   //         };
-			//   //       });
-			//   //     }
-			//   //   }
-			//   // })()
-			// );
+			this.hintsProvider = languages.registerInlayHintsProvider(
+			  { scheme: "file", language: "babbelaar" },
+			  new (class implements InlayHintsProvider {
+			    onDidChangeInlayHints = event;
+			    resolveInlayHint(hint: InlayHint, token: CancellationToken): ProviderResult<InlayHint> {
+			      const ret = {
+			        ...hint,
+			        label: hint.label,
+			      };
+			      return ret;
+			    }
+			    async provideInlayHints(
+			      document: TextDocument,
+			      range: Range,
+			      token: CancellationToken
+			    ): Promise<InlayHint[]> {
+			      const hints = (await client
+			        .sendRequest("custom/inlay_hint", { path: document.uri.toString() })
+			        .catch(err => null)) as [number, number, string][];
+			      if (hints == null) {
+			        return [];
+			      } else {
+			        return hints.map(item => {
+			          const [start, end, label] = item;
+			          let startPosition = document.positionAt(start);
+			          let endPosition = document.positionAt(end);
+			          return {
+			            position: endPosition,
+			            paddingLeft: true,
+			            label: [
+			              {
+			                value: `${label}`,
+			                // location: {
+			                //   uri: document.uri,
+			                //   range: new Range(1, 0, 1, 0)
+			                // }
+			                command: {
+			                  title: "hello world",
+			                  command: "helloworld.helloWorld",
+			                  arguments: [document.uri],
+			                },
+			              },
+			            ],
+			          };
+			        });
+			      }
+			    }
+			  })()
+			);
 		},
 
 		onDidChangeTextDocument({ contentChanges, document }: TextDocumentChangeEvent) {

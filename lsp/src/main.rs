@@ -6,6 +6,7 @@ mod format;
 mod symbolization;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use babbelaar::{Builtin, DocumentationProvider, Expression, FileLocation, FileRange, Keyword, ParseDiagnostic, Parser, PostfixExpressionKind, PrimaryExpression, Punctuator, SemanticAnalyzer, SemanticType, StatementKind, Token, TokenKind};
@@ -123,7 +124,7 @@ impl Backend {
         F: FnOnce(SemanticAnalyzer) -> Result<R>,
     {
         self.lexed_document(text_document, |tokens, _| {
-            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(PathBuf::from(text_document.uri.path()), &tokens).attempt_to_ignore_errors();
             let mut statements = Vec::new();
 
             while let Ok(statement) = parser.parse_statement() {
@@ -140,12 +141,14 @@ impl Backend {
     }
 
     async fn collect_diagnostics(&self, document: VersionedTextDocumentIdentifier) {
+        let path = PathBuf::from(document.uri.path());
+
         let text_document = TextDocumentIdentifier {
             uri: document.uri,
         };
 
         let diags = self.lexed_document(&text_document, |tokens, _| {
-            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(path, &tokens).attempt_to_ignore_errors();
             let mut statements = Vec::new();
 
             loop {
@@ -212,7 +215,7 @@ impl Backend {
         let caret_column = params.text_document_position_params.position.character as usize;
 
         self.lexed_document(&params.text_document_position_params.text_document, |tokens, _| {
-            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(PathBuf::from(params.text_document_position_params.text_document.uri.path()), &tokens).attempt_to_ignore_errors();
             info!("Caret is @ {caret_line}:{caret_column}");
             loop {
                 let res = parser.parse_statement();
@@ -340,7 +343,7 @@ impl Backend {
                 symbolizer.add_token(token);
             }
 
-            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(PathBuf::from(params.text_document.uri.path()), &tokens).attempt_to_ignore_errors();
             let mut statements = Vec::new();
             while let Ok(statement) = parser.parse_statement() {
                 statements.push(statement);
@@ -365,7 +368,7 @@ impl Backend {
 
         let result = self.lexed_document(&params.text_document, |tokens, source| {
             let mut result = String::new();
-            let mut parser = Parser::new(&tokens);
+            let mut parser = Parser::new(PathBuf::from(params.text_document.uri.path()), &tokens);
 
             if let Some(last) = tokens.last() {
                 end.line = last.end.line() as _;
@@ -464,7 +467,7 @@ impl LanguageServer for Backend {
 
             let mut statements = Vec::new();
 
-            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(PathBuf::from(params.text_document.uri.path()), &tokens).attempt_to_ignore_errors();
             while let Ok(statement) = parser.parse_statement() {
                 statements.push(statement);
             }
@@ -668,7 +671,7 @@ impl LanguageServer for Backend {
         let mut hints = Vec::new();
 
         self.lexed_document(&params.text_document, |tokens, _| {
-            let mut parser = Parser::new(&tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(PathBuf::from(params.text_document.uri.path()),&tokens).attempt_to_ignore_errors();
             while let Ok(statement) = parser.parse_statement() {
                 match statement.kind {
                     StatementKind::For(statement) => {

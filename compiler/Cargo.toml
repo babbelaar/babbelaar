@@ -1,0 +1,14 @@
+[package]
+name = "babbelaar-compiler"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+babbelaar = { path = "../babbelaar" }
+babbelaar-builtin = { path = "../builtin" }
+
+inkwell = { version = "0.4.0", features = ["llvm17-0"] }
+log = "0.4"
+
+[dev-dependencies]
+rstest = "0.21"
