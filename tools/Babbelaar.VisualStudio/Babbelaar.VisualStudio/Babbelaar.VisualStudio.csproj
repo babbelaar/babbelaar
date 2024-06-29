@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RustDirectory>$(SolutionDir)\..\..</RustDirectory>
+    <Title>Babbelaar voor Visual Studio</Title>
+    <PackageProjectUrl>https://github.com/babbelaar/babbelaar</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/babbelaar/babbelaar</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\MyResources.*xaml" />
+  </ItemGroup>
+
+  <Target Name="CargoBuildLSPDebug" BeforeTargets="BeforeBuild">
+    <Exec Command="cargo build" WorkingDirectory="$(RustDirectory)\lsp" />
+  </Target>
+
+  <Target Name="CargoBuildLSPRelease" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release'">
+    <Exec Command="cargo build --release" WorkingDirectory="$(RustDirectory)\lsp" />
+  </Target>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <Content Include="$(RustDirectory)\target\debug\babbelaar-lsp.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Release'">
+    <Content Include="$(RustDirectory)\target\release\babbelaar-lsp.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.9.2092" />
+    <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.9.2092" />
+  </ItemGroup>
+</Project>

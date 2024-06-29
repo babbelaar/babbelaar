@@ -8,3 +8,15 @@ dist
 node_modules
 .vscode-test/
 *.vsix
+
+# Visual Studio
+.vs/
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*nuget.g.*
+*nuget.g.*
+*.cache
+*.DotSettings
