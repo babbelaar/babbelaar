@@ -61,6 +61,8 @@ impl LlvmContext {
 
         if let Err(e) = module.verify() {
             eprintln!("Module verification failed: {}", e.to_string());
+            eprintln!("\n===== Module =====\n");
+            module.print_to_stderr();
             panic!("Verification Failed");
         }
 
@@ -138,7 +140,7 @@ struct Compiler<'a, 'ctx> {
     builder: &'a Builder<'ctx>,
     module: &'a Module<'ctx>,
     fn_value: Option<FunctionValue<'ctx>>,
-    variables: Vec<HashMap<String, PointerValue<'ctx>>>,
+    variables: Vec<HashMap<String, AnyValueEnum<'ctx>>>,
 }
 
 impl<'a, 'ctx> Compiler<'a, 'ctx> {
@@ -195,6 +197,12 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
     fn compile_function(&mut self, func: &FunctionStatement) {
         let function = self.compile_prototype(&func.name, &func.parameters);
 
+        let mut locals = HashMap::new();
+        for (param, value) in func.parameters.iter().zip(function.get_params()) {
+            locals.insert(param.name.value().clone(), value.as_any_value_enum());
+        }
+        self.variables.push(locals);
+
         self.fn_value = Some(function);
 
         let block = self.context.append_basic_block(function, "entry");
@@ -203,60 +211,33 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         for statement in &func.body {
             self.compile_statement(&function, &block, statement)
         }
+
+        self.variables.pop().expect("We pushed, so we pop");
     }
 
     fn create_basic_metadata_type(&mut self, ty: &Type) -> BasicMetadataTypeEnum<'ctx> {
         match ty.specifier.value() {
            TypeSpecifier::BuiltIn(BuiltinType::Bool) => BasicMetadataTypeEnum::IntType(self.context.bool_type()),
-           TypeSpecifier::BuiltIn(BuiltinType::G32) => BasicMetadataTypeEnum::IntType(self.context.i32_type()),
+           TypeSpecifier::BuiltIn(BuiltinType::G32) => BasicMetadataTypeEnum::IntType(self.context.i64_type()),
            TypeSpecifier::BuiltIn(BuiltinType::Null) => BasicMetadataTypeEnum::PointerType(self.context.opaque_struct_type("null").ptr_type(AddressSpace::default())),
            TypeSpecifier::BuiltIn(BuiltinType::Slinger) => BasicMetadataTypeEnum::PointerType(self.context.i8_type().ptr_type(AddressSpace::default())),
            TypeSpecifier::Custom { .. } => todo!(),
         }
     }
 
-    fn compile_expression(&self, function: &FunctionValue, block: &BasicBlock, expr: &Expression) -> BasicValueEnum {
+    fn compile_expression(&self, function: &FunctionValue, block: &BasicBlock, expr: &Expression) -> AnyValueEnum<'ctx> {
         match expr {
-            Expression::Primary(PrimaryExpression::Boolean(b)) => {
-                BasicValueEnum::IntValue(self.context.bool_type().const_int(*b as u64, false))
-            }
-
-            Expression::Primary(PrimaryExpression::IntegerLiteral(i)) => {
-                BasicValueEnum::IntValue(self.context.i64_type().const_int(*i as u64, false))
-            }
-
-            Expression::Primary(PrimaryExpression::Parenthesized(expr)) => {
-                self.compile_expression(function, block, expr.value())
-            }
-
-            Expression::Primary(PrimaryExpression::Reference(reference)) => {
-                let name: &str = reference.value();
-                let var_ptr = self.variables.iter().rev().flat_map(|x: &HashMap<String, PointerValue<'ctx>>| x.get(name))
-                    .next()
-                    .copied()
-                    .expect("variable not stored yet, SemanticAnalysis what are you doing?");
-                let pointee_ty = self.context.i8_type();
-                self.builder.build_load(pointee_ty, var_ptr, "load variable").unwrap()
-            }
-
-            Expression::Primary(PrimaryExpression::StringLiteral(literal)) => {
-                self.builder.build_global_string_ptr(&literal, "value").unwrap().as_pointer_value().into()
-            }
-
-            Expression::Primary(PrimaryExpression::TemplateString { parts }) => {
-                _ = parts;
-                todo!()
-            }
+            Expression::Primary(expr) => self.compile_expression_primary(function, block, expr),
 
             Expression::BiExpression(bi) => {
                 let lhs = self.compile_expression(function, block, bi.lhs.value());
                 let rhs = self.compile_expression(function, block, bi.rhs.value());
 
-                let BasicValueEnum::IntValue(lhs) = lhs else {
+                let AnyValueEnum::IntValue(lhs) = lhs else {
                     panic!("Invalid LHS: {lhs:#?}");
                 };
 
-                let BasicValueEnum::IntValue(rhs) = rhs else {
+                let AnyValueEnum::IntValue(rhs) = rhs else {
                     panic!("Invalid RHS: {rhs:#?}");
                 };
 
@@ -281,7 +262,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
                     BiOperator::Modulo => self.builder.build_int_signed_rem(lhs, rhs, "add").unwrap(),
                 };
 
-                BasicValueEnum::IntValue(value)
+                AnyValueEnum::IntValue(value)
             }
 
             Expression::Postfix(postfix) => {
@@ -289,7 +270,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
                     PostfixExpressionKind::Call(call) => {
                         let args: Vec<BasicMetadataValueEnum> = call.arguments.iter()
                             .map(|x| self.compile_expression(function, block, x.value()))
-                            .map(|x| BasicMetadataValueEnum::from(x))
+                            .map(|x| self.create_basic_metadata_value_enum(x))
                             .collect();
 
                         let retval = match postfix.lhs.value() {
@@ -305,10 +286,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
                             }
                         };
 
-                        retval.try_as_basic_value().left_or_else(|a| {
-                            _ = a; // println!("Unknown: {a:#?}");
-                            BasicValueEnum::IntValue(self.context.i8_type().const_zero())
-                        })
+                        retval.as_any_value_enum()
                     }
 
                     _ => todo!()
@@ -317,11 +295,83 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         }
     }
 
+    fn compile_expression_primary(&self, function: &FunctionValue, block: &BasicBlock, expr: &PrimaryExpression) -> AnyValueEnum<'ctx> {
+        match expr {
+            PrimaryExpression::Boolean(b) => {
+                AnyValueEnum::IntValue(self.context.bool_type().const_int(*b as u64, false))
+            }
+
+            PrimaryExpression::IntegerLiteral(i) => {
+                AnyValueEnum::IntValue(self.context.i64_type().const_int(*i as u64, false))
+            }
+
+            PrimaryExpression::Parenthesized(expr) => {
+                self.compile_expression(function, block, expr.value())
+            }
+
+            PrimaryExpression::Reference(reference) => {
+                let name: &str = reference.value();
+                self.variables.iter().rev().flat_map(|x| x.get(name))
+                    .next()
+                    .copied()
+                    .expect("variable not stored yet, SemanticAnalysis what are you doing?")
+            }
+
+            PrimaryExpression::StringLiteral(literal) => {
+                self.builder.build_global_string_ptr(&literal, "value").unwrap().as_pointer_value().into()
+            }
+
+            PrimaryExpression::TemplateString { parts } => {
+                _ = parts;
+                todo!()
+            }
+        }
+    }
+
     fn compile_statement_for(&mut self, function: &FunctionValue, block: &BasicBlock, stmt: &ForStatement) {
-        _ = function;
-        _ = block;
-        _ = stmt;
-        todo!()
+        let body_block = self.context.append_basic_block(*function, "for");
+
+        let start = self.compile_expression_primary(function, block, &stmt.range.start);
+        let start = self.create_basic_value(start);
+
+        let BasicValueEnum::IntValue(start) = start else {
+            panic!("Invalid start: {start:#?}");
+        };
+
+        self.builder.build_unconditional_branch(body_block).unwrap();
+        self.builder.position_at_end(body_block);
+
+        let variable = self.builder.build_phi(self.context.i64_type(), &stmt.iterator_name).unwrap();
+        variable.add_incoming(&[(&start, *block)]);
+
+        self.variables.last_mut().unwrap().insert(stmt.iterator_name.to_string(), variable.as_any_value_enum());
+
+        for statement in &stmt.body {
+            self.compile_statement(function, &body_block, statement);
+        }
+
+        let end = self.compile_expression_primary(function, block, &stmt.range.end);
+        let end = self.create_basic_value(end);
+
+        let BasicValueEnum::IntValue(end) = end else {
+            panic!("Invalid end: {end:#?}");
+        };
+
+        let current = variable.as_basic_value();
+        let BasicValueEnum::IntValue(current) = current else {
+            panic!("Invalid current: {current:#?}");
+        };
+
+        let new_value = self.builder.build_int_add(current, self.context.i64_type().const_int(1, false), "increment").unwrap();
+        variable.add_incoming(&[(&new_value, body_block)]);
+
+        let after_loop = self.context.append_basic_block(*function, "after loop");
+
+        let comp = self.builder.build_int_compare(IntPredicate::SLT, new_value, end, "range comparison").unwrap();
+
+        self.builder.build_conditional_branch(comp, body_block, after_loop).unwrap();
+
+        self.builder.position_at_end(after_loop);
     }
 
     fn compile_statement_if(&mut self, function: &FunctionValue, block: &BasicBlock, stmt: &IfStatement) {
@@ -329,7 +379,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         let else_block = self.context.append_basic_block(*function, "else");
         let comparison = self.compile_expression(function, block, &stmt.condition);
 
-        let BasicValueEnum::IntValue(comparison) = comparison else {
+        let AnyValueEnum::IntValue(comparison) = comparison else {
             panic!("Invalid comparison: {comparison:#?}");
         };
 
@@ -346,6 +396,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
     fn compile_statement_return(&mut self, function: &FunctionValue, block: &BasicBlock, stmt: &ReturnStatement) {
         if let Some(expr) = stmt.expression.as_ref() {
             let value = self.compile_expression(function, block, expr.value());
+            let value = self.create_basic_value(value);
             self.builder.build_return(Some(&value)).unwrap();
         } else {
             self.builder.build_return(None).unwrap();
@@ -355,9 +406,10 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
     fn compile_statement_variable(&mut self, function: &FunctionValue, block: &BasicBlock, stmt: &VariableStatement) {
         let storage = self.create_entry_block_alloca("variableStorage");
         let value = self.compile_expression(function, block, stmt.expression.value());
+        let value = self.create_basic_value(value);
         self.builder.build_store(storage, value).unwrap();
 
-        self.variables.last_mut().unwrap().insert(stmt.name.to_string(), storage);
+        self.variables.last_mut().unwrap().insert(stmt.name.to_string(), storage.into());
     }
 
     fn create_entry_block_alloca(&self, name: &str) -> PointerValue<'ctx> {
@@ -371,5 +423,50 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         }
 
         builder.build_alloca(self.context.f64_type(), name).unwrap()
+    }
+
+    fn create_basic_metadata_value_enum(&self, value: AnyValueEnum<'ctx>) -> BasicMetadataValueEnum<'ctx> {
+        match value {
+            AnyValueEnum::ArrayValue(value) => BasicMetadataValueEnum::ArrayValue(value),
+            AnyValueEnum::IntValue(value) => BasicMetadataValueEnum::IntValue(value),
+            AnyValueEnum::FloatValue(value) => BasicMetadataValueEnum::FloatValue(value),
+            AnyValueEnum::PointerValue(value) => BasicMetadataValueEnum::PointerValue(value),
+            AnyValueEnum::StructValue(value) => BasicMetadataValueEnum::StructValue(value),
+            AnyValueEnum::VectorValue(value) => BasicMetadataValueEnum::VectorValue(value),
+            AnyValueEnum::MetadataValue(value) => BasicMetadataValueEnum::MetadataValue(value),
+            AnyValueEnum::PhiValue(value) => value.as_basic_value().into(),
+
+            AnyValueEnum::FunctionValue(..) => {
+                todo!("Cannot coerce FunctionValue to BasicMetadataValueEnum")
+            }
+
+            AnyValueEnum::InstructionValue(..) => {
+                todo!("Cannot coerce InstructionValue to BasicMetadataValueEnum");
+            }
+        }
+    }
+
+    fn create_basic_value(&self, value: AnyValueEnum<'ctx>) -> BasicValueEnum<'ctx> {
+        match value {
+            AnyValueEnum::ArrayValue(value) => BasicValueEnum::ArrayValue(value),
+            AnyValueEnum::IntValue(value) => BasicValueEnum::IntValue(value),
+            AnyValueEnum::FloatValue(value) => BasicValueEnum::FloatValue(value),
+            AnyValueEnum::PointerValue(value) => BasicValueEnum::PointerValue(value),
+            AnyValueEnum::StructValue(value) => BasicValueEnum::StructValue(value),
+            AnyValueEnum::VectorValue(value) => BasicValueEnum::VectorValue(value),
+            AnyValueEnum::PhiValue(value) => value.as_basic_value().into(),
+
+            AnyValueEnum::FunctionValue(..) => {
+                todo!("Cannot coerce FunctionValue to BasicValueEnum")
+            }
+
+            AnyValueEnum::MetadataValue(..) => {
+                todo!("Cannot coerce MetadataValue to BasicValueEnum")
+            }
+
+            AnyValueEnum::InstructionValue(..) => {
+                todo!("Cannot coerce InstructionValue to BasicValueEnum");
+            }
+        }
     }
 }

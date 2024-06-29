@@ -1,5 +1,17 @@
+functie hallo(j: g32) {
+    volg i in reeks(0, j) {
+        schrijf("Test");
+    }
+
+    bekeer;
+}
+
+
 functie main() {
-    schrijf("Hallo");
-    schrijf("Joost");
+    volg i in reeks(0, 10) {
+        schrijf("Nu:");
+        hallo(i);
+    }
+
     bekeer;
 }
