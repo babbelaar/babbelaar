@@ -2,6 +2,7 @@
 // All Rights Reserved.
 
 use babbelaar::*;
+use log::warn;
 use tower_lsp::{
     jsonrpc::Result,
     lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams, CompletionResponse, Documentation, InsertTextFormat, MarkupContent, MarkupKind},
@@ -13,6 +14,7 @@ pub struct CompletionEngine<'b> {
     server: &'b Backend,
     params: CompletionParams,
     completions: Vec<CompletionItem>,
+    support_snippets: bool,
 }
 
 impl<'b> CompletionEngine<'b> {
@@ -21,13 +23,18 @@ impl<'b> CompletionEngine<'b> {
             server,
             params,
             completions: Vec::new(),
+            support_snippets: check_if_snippets_are_supported_by_the_client(server).await,
         };
 
-        if this.do_completions().await? {
-            Ok(Some(CompletionResponse::Array(this.completions)))
-        } else {
-            Ok(None)
+        if !this.do_completions().await? {
+            return Ok(None);
         }
+
+        if !this.support_snippets {
+            this.ensure_format_of_snippets();
+        }
+
+        Ok(Some(CompletionResponse::Array(this.completions)))
     }
 
     async fn do_completions(&mut self) -> Result<bool> {
@@ -202,6 +209,55 @@ impl<'b> CompletionEngine<'b> {
             }
         }
     }
+
+    fn ensure_format_of_snippets(&mut self) {
+        assert!(!self.support_snippets);
+
+        for item in &mut self.completions {
+            let Some(insert_text) = &mut item.insert_text else { continue };
+
+            item.insert_text_format = Some(InsertTextFormat::PLAIN_TEXT);
+
+            while let Some(dollar) = insert_text.find('$') {
+                let text = &insert_text[dollar..];
+
+                let Some((next_offset, next)) = text.char_indices().nth(1) else { continue };
+                let end_index = if next.is_ascii_digit() {
+                    dollar + next_offset + next.len_utf8()
+                } else if next == '{' {
+                    dollar + text.find('}').unwrap() + 1
+                } else {
+                    warn!("Failed to fix-up snippet because a weird $ continuation: '{text}'");
+                    break;
+                };
+
+                let mut new_text = insert_text[..dollar].to_string();
+                if end_index < insert_text.len() {
+                    new_text += &insert_text[end_index..];
+                }
+
+                *insert_text = new_text;
+            }
+        }
+    }
+}
+
+#[must_use]
+async fn check_if_snippets_are_supported_by_the_client(server: &Backend) -> bool {
+    check_if_snippets_are_supported_by_the_client_inner(server).await.unwrap_or(false)
+}
+
+#[must_use]
+async fn check_if_snippets_are_supported_by_the_client_inner(server: &Backend) -> Option<bool> {
+    let caps = server.client_configuration.read().await;
+    let caps = caps.as_ref()?;
+
+
+    caps.capabilities
+        .text_document.as_ref()?
+        .completion.as_ref()?
+        .completion_item.as_ref()?
+        .snippet_support
 }
 
 #[derive(Debug)]

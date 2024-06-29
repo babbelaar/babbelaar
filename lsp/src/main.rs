@@ -24,6 +24,7 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 #[derive(Debug, Clone)]
 struct Backend {
     client: Client,
+    client_configuration: Arc<RwLock<Option<InitializeParams>>>,
     file_store: Arc<RwLock<HashMap<Url, Arc<str>>>>,
 }
 
@@ -290,7 +291,7 @@ impl Backend {
                 TextDocumentSyncKind::FULL,
             )),
             completion_provider: Some(CompletionOptions {
-                resolve_provider: Some(true),
+                resolve_provider: Some(false),
                 trigger_characters: Some(vec![".".to_string()]),
                 work_done_progress_options: WorkDoneProgressOptions::default(),
                 completion_item: Some(CompletionOptionsCompletionItem {
@@ -402,8 +403,9 @@ impl Backend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(&self, p: InitializeParams) -> Result<InitializeResult> {
-        info!("Parameters: {p:#?}");
+    async fn initialize(&self, config: InitializeParams) -> Result<InitializeResult> {
+        *self.client_configuration.write().await = Some(config);
+
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "Babbelaar Taalserveerder".to_string(),
@@ -553,10 +555,6 @@ impl LanguageServer for Backend {
         CompletionEngine::complete(self, params).await
     }
 
-    async fn completion_resolve(&self, params: CompletionItem) -> Result<CompletionItem> {
-        Ok(params)
-    }
-
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let mut hints = Vec::new();
 
@@ -626,7 +624,11 @@ async fn main() {
             client: client.clone(),
         })))
         .unwrap();
-        Backend { client, file_store: Arc::new(RwLock::new(HashMap::new())) }
+        Backend {
+            client,
+            client_configuration: Arc::new(RwLock::new(None)),
+            file_store: Arc::new(RwLock::new(HashMap::new())),
+        }
     });
 
     Server::new(stdin, stdout, socket).serve(service).await;
