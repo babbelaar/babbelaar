@@ -49,14 +49,27 @@ impl LlvmContext {
     pub fn parse_tree(&mut self, tree: &ParseTree<'_>) -> Result<(), CompileError> {
         let module = self.context.create_module(&tree.module_name());
         let builder = self.context.create_builder();
+        let mut compiler = Compiler::new(&self.context, &builder, &module);
 
+        // Globals/declarations
+        for statement in tree.statements() {
+            match &statement.kind {
+                StatementKind::Function(function) => {
+                    _ = compiler.compile_prototype(&function.name, &function.parameters);
+                }
+
+                _ => (),
+            }
+        }
+
+        // Definitions
         for statement in tree.statements() {
             let StatementKind::Function(func) = &statement.kind else {
                 error!("Illegal top-level statement: {statement:#?}");
                 return Err(CompileError::IllegalParseTreeState);
             };
 
-            Compiler::compile(&self.context, &builder, &module, func);
+            compiler.compile(func);
         }
 
         if let Err(e) = module.verify() {
@@ -144,22 +157,23 @@ struct Compiler<'a, 'ctx> {
 }
 
 impl<'a, 'ctx> Compiler<'a, 'ctx> {
-    pub fn compile(
+    pub fn new(
         context: &'ctx Context,
         builder: &'a Builder<'ctx>,
         module: &'a Module<'ctx>,
-        func: &FunctionStatement<'_>,
-    ) {
-        let mut this = Self {
+    ) -> Self {
+        Self {
             context,
             builder,
             module,
             fn_value: None,
             variables: vec![HashMap::new()],
-        };
+        }
+    }
 
+    pub fn compile(&mut self, func: &FunctionStatement<'_>) {
         let range = FileRange::default();
-        this.compile_prototype("schrijf", &[
+        self.compile_prototype("schrijf", &[
             Parameter {
                 name: Ranged::new(range, "s".into()),
                 ty: Ranged::new(range, Type {
@@ -168,7 +182,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
             }
         ]);
 
-        this.compile_function(func)
+        self.compile_function(func)
     }
 
     fn compile_statement(&mut self, function: &FunctionValue, block: &BasicBlock, statement: &Statement) {
@@ -195,7 +209,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
     }
 
     fn compile_function(&mut self, func: &FunctionStatement) {
-        let function = self.compile_prototype(&func.name, &func.parameters);
+        let function = self.module.get_function(&func.name).unwrap();
 
         let mut locals = HashMap::new();
         for (param, value) in func.parameters.iter().zip(function.get_params()) {
@@ -275,7 +289,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 
                         let retval = match postfix.lhs.value() {
                             Expression::Primary(PrimaryExpression::Reference(reference)) => {
-                                let func = self.module.get_function(reference.value()).expect(&format!("Function not found: {}", reference.value()));
+                                let func = self.module.get_function(reference.value()).expect(&format!("ICE: functie niet gevonden {}", reference.value()));
                                 self.builder.build_direct_call(func, &args, "callExpr").expect(&format!("Failed to call: {}", reference.value()))
                             }
 

@@ -1,16 +1,16 @@
-functie hallo(j: g32) {
-    volg i in reeks(0, j) {
-        schrijf("Test");
-    }
-
-    bekeer;
-}
-
 
 functie main() {
     volg i in reeks(0, 10) {
         schrijf("Nu:");
         hallo(i);
+    }
+
+    bekeer;
+}
+
+functie hallo(j: g32) {
+    volg i in reeks(0, j) {
+        schrijf("Test");
     }
 
     bekeer;
