@@ -1,6 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+mod completions;
 mod conversion;
 mod format;
 mod symbolization;
@@ -9,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use babbelaar::*;
+use completions::CompletionEngine;
 use conversion::{convert_file_range, convert_position, convert_token_range};
 use format::Format;
 use log::{info, LevelFilter, Log};
@@ -400,7 +402,8 @@ impl Backend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+    async fn initialize(&self, p: InitializeParams) -> Result<InitializeResult> {
+        info!("Parameters: {p:#?}");
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "Babbelaar Taalserveerder".to_string(),
@@ -547,122 +550,7 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        let mut completions = Vec::new();
-
-        #[derive(Debug)]
-        enum CompletionMode {
-            Method((FileRange, String)),
-            Function((FileRange, String)),
-        }
-
-        let mut was_new_func = false;
-        let mut prev_punc = None;
-        let completion_mode = self.find_tokens_at(&params.text_document_position, |token, previous| {
-            was_new_func = previous.last().is_some_and(|tok| matches!(tok.kind, TokenKind::Keyword(Keyword::Functie)));
-            prev_punc = previous.last().and_then(|x| if let TokenKind::Punctuator(punc) = x.kind { Some(punc) } else { None });
-
-            if prev_punc == Some(Punctuator::Period) {
-                if let Some(token) = previous.get(previous.len() - 2) {
-                    if let TokenKind::Identifier(ident) = &token.kind {
-                        return Ok(Some(CompletionMode::Method((token.range(), ident.to_string()))));
-                    }
-                }
-            }
-
-            if token.kind == TokenKind::Punctuator(Punctuator::Period) {
-                if let Some(token) = previous.last() {
-                    eprintln!("Previous = {token:?}");
-                    if let TokenKind::Identifier(ident) = &token.kind {
-                        return Ok(Some(CompletionMode::Method((token.range(), ident.to_string()))));
-                    }
-                }
-            }
-
-            if let TokenKind::Identifier(ident) = &token.kind {
-                Ok(Some(CompletionMode::Function((token.range(), ident.to_string()))))
-            } else {
-                Ok(None)
-            }
-        }).await?;
-
-        if was_new_func {
-            eprintln!("Was new func");
-            return Ok(None);
-        }
-
-        eprintln!("Mode = {completion_mode:?}");
-
-        self.with_semantics(&params.text_document_position.text_document, |analyzer| {
-            match completion_mode {
-                Some(CompletionMode::Function((range, ident))) => {
-                    if let Some(func) = analyzer.find_function_by_name(|f| f.starts_with(&ident)) {
-                        completions.push(CompletionItem {
-                            label: func.function_name().to_string(),
-                            kind: Some(CompletionItemKind::FUNCTION),
-                            detail: func.inline_detail().map(|x| x.to_string()),
-                            documentation: func.documentation().map(|x| Documentation::MarkupContent(MarkupContent {
-                                kind: MarkupKind::Markdown,
-                                value: x.to_string(),
-                            })),
-                            insert_text: Some(func.lsp_completion().into_owned()),
-                            insert_text_format: Some(InsertTextFormat::SNIPPET),
-                            ..Default::default()
-                        });
-                    }
-
-                    info!("Prev={:#?}", analyzer.context.previous_scopes);
-
-                    analyzer.scopes_surrounding(range.start(), |scope| {
-                        for (name, local) in &scope.locals {
-                            completions.push(CompletionItem {
-                                label: name.to_string(),
-                                label_details: Some(CompletionItemLabelDetails {
-                                    detail: Some(local.typ.to_string()),
-                                    description: Some(local.typ.to_string()),
-                                }),
-                                kind: Some(CompletionItemKind::VARIABLE),
-                                documentation: None,
-                                ..Default::default()
-                            });
-                        }
-                    });
-
-                    suggest_identifiers(&ident, &mut completions);
-                }
-
-                Some(CompletionMode::Method((last_identifier, _))) => {
-                    if let Some(typ) = analyzer.context.definition_tracker.as_ref().and_then(|tracker| Some(tracker.get(&last_identifier)?.typ.clone())) {
-                        match typ {
-                            SemanticType::Builtin(builtin) => {
-                                for method in builtin.methods() {
-                                    completions.push(CompletionItem {
-                                        label: method.lsp_label(),
-                                        detail: Some(method.inline_detail.to_string()),
-                                        kind: Some(CompletionItemKind::METHOD),
-                                        documentation: Some(Documentation::MarkupContent(MarkupContent {
-                                            kind: MarkupKind::Markdown,
-                                            value: method.documentation.to_string(),
-                                        })),
-                                        insert_text: Some(method.lsp_completion().into_owned()),
-                                        insert_text_format: Some(InsertTextFormat::SNIPPET),
-                                        ..Default::default()
-                                    });
-                                }
-                                return Ok(());
-                            }
-                            _ => (),
-                        }
-                    }
-
-                }
-
-                None => (),
-            }
-
-            Ok(())
-        }).await?;
-
-        Ok(Some(CompletionResponse::Array(completions)))
+        CompletionEngine::complete(self, params).await
     }
 
     async fn completion_resolve(&self, params: CompletionItem) -> Result<CompletionItem> {
@@ -723,45 +611,6 @@ impl LanguageServer for Backend {
 
     async fn shutdown(&self) -> Result<()> {
         Ok(())
-    }
-}
-
-fn suggest_identifiers(ident: &str, completions: &mut Vec<CompletionItem>) {
-    let ident = ident.to_lowercase();
-    let ident = &ident;
-
-    for keyword in Keyword::iter_variants() {
-        if keyword.as_ref().to_lowercase().starts_with(ident) {
-            let lsp = keyword.lsp_completion();
-            completions.push(CompletionItem {
-                label: keyword.as_ref().to_string(),
-                label_details: Some(CompletionItemLabelDetails {
-                    detail: Some("Details??".into()),
-                    description: Some("Description??".into()),
-                }),
-                kind: Some(CompletionItemKind::KEYWORD),
-                insert_text: lsp.map(|x| x.completion.to_string()),
-                detail: lsp.map(|x| x.inline_detail.to_string()),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                ..Default::default()
-            });
-        }
-    }
-
-    for ty in Builtin::TYPES {
-        if ty.name().to_lowercase().starts_with(ident) {
-            completions.push(CompletionItem {
-                label: ty.name().to_string(),
-                label_details: Some(CompletionItemLabelDetails {
-                    detail: Some("Details??".into()),
-                    description: Some("Description??".into()),
-                }),
-                kind: Some(CompletionItemKind::KEYWORD),
-                detail: Some(ty.documentation().to_string()),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                ..Default::default()
-            });
-        }
     }
 }
 
