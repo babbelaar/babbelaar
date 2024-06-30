@@ -40,7 +40,7 @@ pub struct FunctionStatement<'source_code> {
     pub range: FileRange,
     pub name: Ranged<&'source_code str>,
     pub parameters: Vec<Parameter<'source_code>>,
-    pub body: Vec<Statement<'source_code>>,
+    pub body: Option<Vec<Statement<'source_code>>>,
 }
 
 #[derive(Clone, Debug)]

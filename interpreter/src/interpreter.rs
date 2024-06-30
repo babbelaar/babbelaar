@@ -76,24 +76,29 @@ impl<'source_code, D> Interpreter<'source_code, D>
         match expression.value() {
             Expression::BiExpression(expr) => self.execute_bi_expression(expr),
             Expression::Postfix(expr) => self.execute_postfix_expression(expr),
+            Expression::Primary(expr) => self.execute_expression_primary(expr),
+        }
+    }
 
-            Expression::Primary(PrimaryExpression::Boolean(boolean)) => {
+    fn execute_expression_primary(&mut self, expression: &PrimaryExpression<'source_code>) -> Value {
+        match expression {
+            PrimaryExpression::Boolean(boolean) => {
                 Value::Bool(*boolean)
             }
 
-            Expression::Primary(PrimaryExpression::Reference(reference)) => {
+            PrimaryExpression::Reference(reference) => {
                 self.scope.find(reference)
             }
 
-            Expression::Primary(PrimaryExpression::IntegerLiteral(integer)) => {
+            PrimaryExpression::IntegerLiteral(integer) => {
                 Value::Integer(*integer)
             }
 
-            Expression::Primary(PrimaryExpression::StringLiteral(str)) => {
+            PrimaryExpression::StringLiteral(str) => {
                 Value::String(str.to_string())
             }
 
-            Expression::Primary(PrimaryExpression::TemplateString{ parts }) => {
+            PrimaryExpression::TemplateString{ parts } => {
                 let mut string = String::new();
 
                 for part in parts {
@@ -111,16 +116,16 @@ impl<'source_code, D> Interpreter<'source_code, D>
                 Value::String(string)
             }
 
-            Expression::Primary(PrimaryExpression::Parenthesized(expression)) => self.execute_expression(expression),
+            PrimaryExpression::Parenthesized(expression) => self.execute_expression(expression),
         }
     }
 
     fn execute_for_statement(&mut self, statement: &ForStatement<'source_code>) -> StatementResult {
-        let PrimaryExpression::IntegerLiteral(start) = *statement.range.start else {
+        let Value::Integer(start) = self.execute_expression_primary(&statement.range.start) else {
             panic!("Invalid start");
         };
 
-        let PrimaryExpression::IntegerLiteral(end) = *statement.range.end else {
+        let Value::Integer(end) = self.execute_expression_primary(&statement.range.end) else {
             panic!("Invalid end");
         };
 
@@ -268,7 +273,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
             self.scope.variables.insert(name, arguments[idx].clone());
         }
 
-        for statement in &func.body {
+        for statement in func.body.as_ref().unwrap() {
             match self.execute_statement(statement) {
                 StatementResult::Continue => (),
                 StatementResult::Return(value) => {

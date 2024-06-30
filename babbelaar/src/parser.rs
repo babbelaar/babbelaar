@@ -155,6 +155,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
 
         let range = FileRange::new(name_range.start(), self.previous_end());
+        let body = Some(body);
 
         Ok(FunctionStatement { name, body, parameters, range })
     }

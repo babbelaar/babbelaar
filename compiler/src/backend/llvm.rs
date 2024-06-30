@@ -209,6 +209,10 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
     }
 
     fn compile_function(&mut self, func: &FunctionStatement) {
+        let Some(body) = &func.body else {
+            return;
+        };
+
         let function = self.module.get_function(&func.name).unwrap();
 
         let mut locals = HashMap::new();
@@ -222,7 +226,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         let block = self.context.append_basic_block(function, "entry");
         self.builder.position_at_end(block);
 
-        for statement in &func.body {
+        for statement in body {
             self.compile_statement(&function, &block, statement)
         }
 

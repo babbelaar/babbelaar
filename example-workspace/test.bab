@@ -15,3 +15,5 @@ functie hallo(j: g32) {
 
     bekeer;
 }
+
+main();

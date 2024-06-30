@@ -205,6 +205,20 @@ impl StringExt for &str {
     }
 }
 
+pub trait OptionExt<T> {
+    #[must_use]
+    fn as_inner_slice(&self) -> &[T];
+}
+
+impl<T> OptionExt<T> for Option<Vec<T>> {
+    fn as_inner_slice(&self) -> &[T] {
+        match self {
+            Some(vec) => vec.as_slice(),
+            None => &[]
+        }
+    }
+}
+
 pub trait DocumentationProvider {
     fn provide_documentation(&self) -> Cow<'_, str>;
 }

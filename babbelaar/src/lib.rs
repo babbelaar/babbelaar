@@ -31,6 +31,6 @@ pub use self::{
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     tree::ParseTree,
     type_::{Parameter, Type, TypeSpecifier},
-    util::{DocumentationProvider, FileLocation, FileRange, LspCompletion, Ranged, StringExt},
+    util::{DocumentationProvider, FileLocation, FileRange, LspCompletion, OptionExt, Ranged, StringExt},
     value::{FunctionId, Value},
 };

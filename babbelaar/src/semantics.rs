@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::HashMap, fmt::Display};
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer<'source_code> {
@@ -54,7 +54,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             });
         }
 
-        for statement in &function.body {
+        for statement in function.body.as_inner_slice() {
             self.analyze_statement(statement);
         }
 
