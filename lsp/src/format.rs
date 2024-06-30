@@ -6,7 +6,7 @@
 
 use std::fmt::Write;
 
-use babbelaar::{BiExpression, BuiltinType, Expression, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{BiExpression, BuiltinType, Expression, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
 
 pub struct Formatter<'source> {
     #[allow(unused)]
@@ -230,7 +230,7 @@ impl<'source_code> Format for FunctionStatement<'source_code> {
         }
         f.write_char(')');
 
-        f.with_body_statements(&self.body);
+        f.with_body_statements(self.body.as_inner_slice());
     }
 }
 

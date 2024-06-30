@@ -24,12 +24,23 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     pub fn analyze_tree(&mut self, tree: &'source_code ParseTree<'source_code>) {
+        for statement in tree.functions() {
+            if let StatementKind::Function(function) = &statement.kind {
+                self.context.push_function(SemanticFunction {
+                    name: function.name,
+                    parameters: &function.parameters,
+                });
+            } else {
+                debug_assert!(false);
+            }
+        }
+
         for statement in tree.statements() {
             self.analyze_statement(statement);
         }
     }
 
-    pub fn analyze_expression(&mut self, expression: &'source_code Expression<'source_code>) -> SemanticType<'source_code> {
+    fn analyze_expression(&mut self, expression: &'source_code Expression<'source_code>) -> SemanticType<'source_code> {
         match expression {
             Expression::BiExpression(bi) => self.analyze_bi_expression(bi),
             Expression::Postfix(postfix) => self.analyze_postfix_expression(postfix),
@@ -37,12 +48,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
     }
 
-    pub fn analyze_function(&mut self, function: &'source_code FunctionStatement<'source_code>) {
-        self.context.push_function(SemanticFunction {
-            name: function.name,
-            parameters: &function.parameters,
-        });
-
+    fn analyze_function(&mut self, function: &'source_code FunctionStatement<'source_code>) {
         self.context.push_scope(function.range.start());
 
         for param in &function.parameters {

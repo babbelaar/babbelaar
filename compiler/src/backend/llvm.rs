@@ -52,7 +52,7 @@ impl LlvmContext {
         let mut compiler = Compiler::new(&self.context, &builder, &module);
 
         // Globals/declarations
-        for statement in tree.statements() {
+        for statement in tree.functions() {
             match &statement.kind {
                 StatementKind::Function(function) => {
                     _ = compiler.compile_prototype(&function.name, &function.parameters);

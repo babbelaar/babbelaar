@@ -27,6 +27,19 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
+    pub fn execute_tree(&mut self, tree: &ParseTree<'source_code>) {
+        for statement in tree.functions() {
+            _ = self.execute_statement(statement);
+        }
+
+        for statement in tree.statements() {
+            match self.execute_statement(statement) {
+                StatementResult::Continue => continue,
+                StatementResult::Return(..) => break,
+            }
+        }
+    }
+
     pub fn execute(&mut self, statement: &Statement<'source_code>) {
         self.debugger.initialize(&InterpreterAdapter);
         _ = self.execute_statement(statement);

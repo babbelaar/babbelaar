@@ -7,6 +7,7 @@ mod format;
 mod symbolization;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use babbelaar::*;
@@ -130,16 +131,10 @@ impl Backend {
     {
         self.lexed_document(text_document, |tokens, _| {
             let mut parser = Parser::new(text_document.uri.to_file_path().unwrap(), &tokens).attempt_to_ignore_errors();
-            let mut statements = Vec::new();
-
-            while let Ok(statement) = parser.parse_statement() {
-                statements.push(statement);
-            }
+            let tree = parser.parse_tree().expect("Failed to parse tree");
 
             let mut analyzer = SemanticAnalyzer::new();
-            for statement in &statements {
-                analyzer.analyze_statement(statement);
-            }
+            analyzer.analyze_tree(&tree);
 
             f(analyzer)
         }).await
@@ -154,17 +149,14 @@ impl Backend {
 
         let diags = self.lexed_document(&text_document, |tokens, _| {
             let mut parser = Parser::new(path, &tokens).attempt_to_ignore_errors();
-            let mut statements = Vec::new();
 
-            loop {
-                match parser.parse_statement() {
-                    Ok(statement) => statements.push(statement),
-                    Err(e) => {
-                        parser.errors.push(e);
-                        break;
-                    }
+            let tree = match parser.parse_tree() {
+                Ok(tree) => tree,
+                Err(e) => {
+                    parser.errors.push(e);
+                    ParseTree::new(PathBuf::default())
                 }
-            }
+            };
 
             let mut diags = Vec::new();
 
@@ -187,9 +179,7 @@ impl Backend {
             diags.extend(parse_errors);
 
             let mut analyzer = SemanticAnalyzer::new();
-            for statement in &statements {
-                analyzer.analyze_statement(statement);
-            }
+            analyzer.analyze_tree(&tree);
 
             diags.extend(
                 analyzer.into_diagnostics()
