@@ -9,7 +9,7 @@ mod debug_adapter;
 mod interpreter;
 mod scope;
 
-use std::path::{Path, PathBuf};
+use std::{path::{Path, PathBuf}, process::exit};
 
 pub use babbelaar::*;
 use babbelaar_compiler::LlvmContext;
@@ -85,12 +85,34 @@ fn compile(bestand: PathBuf) {
 
 pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
     parse(path, |tree| {
-        let mut interpreter = Interpreter::new(debugger);
+        analyze(&tree);
 
-        for statement in tree.statements() {
-            interpreter.execute(&statement);
-        }
+        let mut interpreter = Interpreter::new(debugger);
+        interpreter.execute_tree(&tree);
     });
+}
+
+fn analyze(tree: &ParseTree<'_>) {
+    let mut analyzer = SemanticAnalyzer::new();
+    analyzer.analyze_tree(&tree);
+
+    let diags = analyzer.into_diagnostics();
+    for diagnostic in &diags {
+        eprintln!("Fout: {}", &diagnostic.kind);
+    }
+
+    if !diags.is_empty() {
+        if diags.len() == 1 {
+            eprintln!("1 semantisch probleem gevonden");
+        } else {
+            eprintln!("{} semantische {} gevonden",
+                diags.len(),
+                if diags.len() == 1 {  "probleem" } else { "problemen" }
+            );
+        }
+
+        exit(2);
+    }
 }
 
 fn parse(path: &Path, f: impl FnOnce(ParseTree<'_>)) {
