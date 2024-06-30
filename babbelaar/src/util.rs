@@ -168,43 +168,6 @@ impl<T> DerefMut for Ranged<T> {
     }
 }
 
-pub trait StringExt {
-    fn find_file_location(&self, offset: usize) -> Option<FileLocation>;
-}
-
-impl StringExt for &str {
-    fn find_file_location(&self, offset: usize) -> Option<FileLocation> {
-        let mut location = FileLocation::default();
-
-        let mut iter = self.char_indices().peekable();
-        while let Some((current_offset, ch)) = iter.next() {
-            if current_offset == offset {
-                return Some(location);
-            }
-
-            if current_offset > offset {
-                return Some(location);
-            }
-
-            if ch == '\r' {
-                if iter.peek().is_some_and(|(_, ch)| *ch == '\n') {
-                    iter.next();
-                }
-
-                location.line += 1;
-                location.column = 0;
-            } else if ch == '\n' {
-                location.line += 1;
-                location.column = 0;
-            } else {
-                location.column += 1;
-            }
-        }
-
-        None
-    }
-}
-
 pub trait OptionExt<T> {
     #[must_use]
     fn as_inner_slice(&self) -> &[T];
@@ -227,25 +190,4 @@ pub trait DocumentationProvider {
 pub struct LspCompletion<'a> {
     pub completion: &'a str,
     pub inline_detail: &'a str,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rstest::rstest;
-
-    #[rstest]
-    #[case("hello", 0, (0, 0, 0))]
-    #[case("hello", 1, (1, 0, 1))]
-    #[case("\n", 0, (0, 0, 0))]
-    #[case("\n1", 1, (1, 1, 0))]
-    #[case("hello\nworld", 7, (7, 1, 1))]
-    #[case("\r\nhello\r\nworld", 9, (9, 2, 0))]
-    fn find_file_location_tests(#[case] input: &str, #[case] offset: usize, #[case] expected: impl Into<Option<(usize, usize, usize)>>) {
-        let expected = expected.into().map(|x| x.into());
-
-        let actual = input.find_file_location(offset);
-
-        assert_eq!(expected, actual);
-    }
 }
