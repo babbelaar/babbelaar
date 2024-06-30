@@ -62,6 +62,8 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     pub fn analyze_statement(&mut self, statement: &'source_code Statement<'source_code>) {
+        self.analyze_attributes_for_statement(statement);
+
         match &statement.kind {
             StatementKind::Expression(expr) => {
                 self.analyze_expression(expr);
@@ -403,6 +405,15 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             }
         }
     }
+
+    fn analyze_attributes_for_statement(&mut self, statement: &Statement<'source_code>) {
+        for attribute in &statement.attributes {
+            self.diagnostics.push(SemanticDiagnostic {
+                range: attribute.name.range(),
+                kind: SemanticDiagnosticKind::UnknownAttribute { name: &attribute.name },
+            });
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -467,6 +478,9 @@ pub enum SemanticDiagnosticKind<'source_code> {
         typ: SemanticType<'source_code>,
         name: &'source_code str,
     },
+
+    #[error("Attribuut `{name}` is onbekend")]
+    UnknownAttribute { name: &'source_code str, },
 }
 
 impl<'source_code> SemanticDiagnosticKind<'source_code> {

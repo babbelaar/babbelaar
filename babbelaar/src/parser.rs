@@ -6,7 +6,7 @@ use std::{fmt::Display, path::PathBuf};
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, BiExpression, BiOperator, Builtin, Comparison, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
+    statement::ReturnStatement, Attribute, AttributeArgument, BiExpression, BiOperator, Builtin, Comparison, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseDiagnostic<'source_code>>;
@@ -48,7 +48,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         while !self.is_at_end() {
             match self.parse_statement() {
-                Ok(statement) => tree.statements.push(statement),
+                Ok(statement) => tree.push(statement),
                 Err(ParseDiagnostic::EndOfFile) => break,
                 Err(e) => return Err(e),
             }
@@ -58,9 +58,19 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     pub fn parse_statement(&mut self) -> Result<Statement<'source_code>, ParseDiagnostic<'source_code>> {
-        let first_token = self.peek_token()?;
-        let start = first_token.begin;
+        let start = self.peek_token()?.begin;
+        let mut attributes = Vec::new();
 
+        while let Some(Punctuator::AtSign) = self.peek_punctuator() {
+            _ = self.consume_token()?;
+
+            match self.parse_attribute() {
+                Ok(attr) => attributes.push(attr),
+                Err(e) => self.handle_error(e)?,
+            }
+        }
+
+        let first_token = self.peek_token()?;
         let kind = match first_token.kind {
             TokenKind::Keyword(Keyword::Als) => {
                 _ = self.consume_token().ok();
@@ -96,6 +106,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let range = FileRange::new(start, self.token_end);
         Ok(Statement {
             range,
+            attributes,
             kind,
         })
     }
@@ -158,6 +169,16 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let body = Some(body);
 
         Ok(FunctionStatement { name, body, parameters, range })
+    }
+
+    fn consume_identifier(&mut self, ident_purpose: &'static str, previous: &'source_code str) -> Result<Ranged<&'source_code str>, ParseDiagnostic<'source_code>> {
+        let token = self.consume_token()?;
+        let range = token.range();
+        if let TokenKind::Identifier(name) = token.kind {
+            Ok(Ranged::new(range, name))
+        } else {
+            return Err(ParseDiagnostic::ExpectedIdentifier { token, previous, ident_purpose });
+        }
     }
 
     fn handle_error(&mut self, error: ParseDiagnostic<'source_code>) -> Result<(), ParseDiagnostic<'source_code>> {
@@ -674,12 +695,100 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             None => self.token_end,
         }
     }
+
+    fn parse_attribute(&mut self) -> Result<Attribute<'source_code>, ParseDiagnostic<'source_code>> {
+        let name = match self.consume_identifier("Attribuutnaam", "@") {
+            Ok(name) => name,
+            Err(e) => {
+                self.handle_error(e)?;
+                Ranged::new(FileRange::default(), "")
+            }
+        };
+
+        let arguments = if let Some(Punctuator::LeftParenthesis) = self.peek_punctuator() {
+            _ = self.consume_token();
+            match self.parse_attribute_argument_list() {
+                Ok(arguments) => arguments,
+                Err(e) => {
+                    self.handle_error(e)?;
+                    Vec::new()
+                }
+            }
+        } else {
+            Vec::new()
+        };
+
+        Ok(Attribute {
+            name,
+            arguments,
+        })
+    }
+
+    fn parse_attribute_argument_list(&mut self) -> Result<Vec<AttributeArgument<'source_code>>, ParseDiagnostic<'source_code>> {
+        let mut arguments = Vec::new();
+
+        loop {
+            if self.peek_punctuator() == Some(Punctuator::RightParenthesis) {
+                _ = self.consume_token();
+                break;
+            }
+
+            match self.parse_attribute_argument() {
+                Ok(argument) => arguments.push(argument),
+                Err(e) => {
+                    self.handle_error(e)?;
+                    break;
+                }
+            }
+
+            let token = self.consume_token()?;
+            match &token.kind {
+                TokenKind::Punctuator(Punctuator::RightParenthesis) => {
+                    _ = self.consume_token();
+                    break;
+                }
+
+                TokenKind::Punctuator(Punctuator::Comma) => {
+                    _ = self.consume_token();
+                    continue;
+                }
+
+                _ => {
+                    self.handle_error(ParseDiagnostic::AttributeArgumentExpectedComma { token })?;
+                    break;
+                }
+            }
+        }
+
+        Ok(arguments)
+    }
+
+    fn parse_attribute_argument(&mut self) -> Result<AttributeArgument<'source_code>, ParseDiagnostic<'source_code>> {
+        let name = match self.consume_identifier("Argumentnaam", "(") {
+            Ok(name) => name,
+            Err(e) => {
+                self.handle_error(e)?;
+                Ranged::new(FileRange::default(), "")
+            }
+        };
+
+        self.expect_colon("argumentnaam")?;
+        let value = self.parse_primary_expression()?;
+
+        Ok(AttributeArgument {
+            name,
+            value,
+        })
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error, AsRefStr)]
 pub enum ParseDiagnostic<'source_code> {
     #[error("Onverwacht einde van het bestand")]
     EndOfFile,
+
+    #[error("Komma `,` of gesloten rond haakje `)` verwacht binnen attribuutargumentlijst, maar kreeg: {token}")]
+    AttributeArgumentExpectedComma { token: Token<'source_code> },
 
     #[error("Ongeldig start van een statement: {token}")]
     StatementInvalidStart{ token: Token<'source_code> },
@@ -714,6 +823,9 @@ pub enum ParseDiagnostic<'source_code> {
     #[error("Functienaam verwacht na `functie`, maar kreeg: {token}")]
     FunctionStatementExpectedName { token: Token<'source_code> },
 
+    #[error("{ident_purpose} verwacht na `{previous}`, maar kreeg: {token}")]
+    ExpectedIdentifier { token: Token<'source_code>, previous: &'source_code str, ident_purpose: &'static str },
+
     #[error("Iteratornaam verwacht na `volg`, maar kreeg: {token}")]
     ForStatementExpectedIteratorName { token: Token<'source_code> },
 
@@ -746,6 +858,7 @@ impl<'source_code> ParseDiagnostic<'source_code> {
     pub fn token(&self) -> Option<&Token<'source_code>> {
         match self {
             Self::EndOfFile => None,
+            Self::AttributeArgumentExpectedComma { token } => Some(token),
             Self::StatementInvalidStart { token } => Some(token),
             Self::ExpressionFunctionCallNotStartingWithIdentifier { token } => Some(token),
             Self::ExpectedLeftCurlyBracket { token, .. } => Some(token),
@@ -755,6 +868,7 @@ impl<'source_code> ParseDiagnostic<'source_code> {
             Self::ExpectedComma { token, .. } => Some(token),
             Self::ExpectedSemicolonAfterStatement { token, .. } => Some(token),
             Self::ExpectedNameOfVariable { token } => Some(token),
+            Self::ExpectedIdentifier { token, .. } => Some(token),
             Self::ExpectedEqualsInsideVariable { token } => Some(token),
             Self::FunctionStatementExpectedName { token } => Some(token),
             Self::ForStatementExpectedIteratorName { token } => Some(token),

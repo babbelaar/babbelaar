@@ -1,11 +1,12 @@
 // Copyright (C) 2023 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{util::FileRange, Expression, Parameter, RangeExpression, Ranged};
+use crate::{util::FileRange, Attribute, Expression, Parameter, RangeExpression, Ranged};
 
 #[derive(Debug, Clone)]
 pub struct Statement<'source_code> {
     pub range: FileRange,
+    pub attributes: Vec<Attribute<'source_code>>,
     pub kind: StatementKind<'source_code>,
 }
 

@@ -3,6 +3,7 @@
 
 #![deny(elided_lifetimes_in_paths)]
 
+mod attribute;
 mod builtin;
 mod context;
 mod expression;
@@ -19,6 +20,7 @@ mod util;
 mod value;
 
 pub use self::{
+    attribute::{Attribute, AttributeArgument},
     builtin::{Builtin, BuiltinFunction, BuiltinType},
     context::BabbelaarContext,
     expression::*,
