@@ -8,6 +8,7 @@ De eerste Nederlandse programmeertaal!
 functie hallo(voornaam: Slinger) {
     schrijf(€"Hallo, {voornaam}!");
 }
+```
 
 ### Statements
 
