@@ -182,6 +182,15 @@ impl<T> OptionExt<T> for Option<Vec<T>> {
     }
 }
 
+impl<T> OptionExt<T> for Option<&[T]> {
+    fn as_inner_slice(&self) -> &[T] {
+        match self {
+            Some(slice) => slice,
+            None => &[]
+        }
+    }
+}
+
 pub trait DocumentationProvider {
     fn provide_documentation(&self) -> Cow<'_, str>;
 }

@@ -339,12 +339,9 @@ impl Backend {
             }
 
             let mut parser = Parser::new(params.text_document.uri.to_file_path().unwrap(), &tokens).attempt_to_ignore_errors();
-            let mut statements = Vec::new();
-            while let Ok(statement) = parser.parse_statement() {
-                statements.push(statement);
-            }
+            let tree = parser.parse_tree().unwrap();
 
-            for statement in &statements {
+            for statement in tree.all() {
                 symbolizer.add_statement(statement);
             }
 
@@ -355,7 +352,6 @@ impl Backend {
                 data: tokens,
             })))
         }).await
-
     }
 
     async fn format(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
@@ -370,16 +366,9 @@ impl Backend {
                 end.character = last.end.column() as _;
             }
 
-            loop {
-                match parser.parse_statement() {
-                    Ok(statement) => {
-                        result += &statement.format_to_string(source);
-                        result += "\n";
-                    }
-
-                    Err(ParseDiagnostic::EndOfFile) => break,
-                    Err(..) => return Ok(None),
-                }
+            for statement in parser.parse_tree().unwrap_or_default().all() {
+                result += &statement.format_to_string(source);
+                result += "\n";
             }
 
             result = result.trim().to_string();
@@ -462,14 +451,10 @@ impl LanguageServer for Backend {
                 symbolizer.add_token(token);
             }
 
-            let mut statements = Vec::new();
-
             let mut parser = Parser::new(params.text_document.uri.to_file_path().unwrap(), &tokens).attempt_to_ignore_errors();
-            while let Ok(statement) = parser.parse_statement() {
-                statements.push(statement);
-            }
+            let tree = parser.parse_tree().unwrap();
 
-            for statement in &statements {
+            for statement in tree.all() {
                 symbolizer.add_statement(statement);
             }
 
@@ -550,8 +535,10 @@ impl LanguageServer for Backend {
 
         self.lexed_document(&params.text_document, |tokens, _| {
             let mut parser = Parser::new(params.text_document.uri.to_file_path().unwrap(), &tokens).attempt_to_ignore_errors();
-            while let Ok(statement) = parser.parse_statement() {
-                match statement.kind {
+            let tree = parser.parse_tree().unwrap();
+
+            for statement in tree.all() {
+                match &statement.kind {
                     StatementKind::For(statement) => {
                         hints.push(InlayHint {
                             position: convert_position(statement.iterator_name.range().end()),

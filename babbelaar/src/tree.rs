@@ -5,7 +5,7 @@ use std::{borrow::Cow, path::{Path, PathBuf}};
 
 use crate::{Statement, StatementKind};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct ParseTree<'source_code> {
     pub(crate) path: PathBuf,
     functions: Vec<Statement<'source_code>>,
@@ -40,6 +40,10 @@ impl<'source_code> ParseTree<'source_code> {
     #[must_use]
     pub fn functions(&self) -> &[Statement<'source_code>] {
         &self.functions
+    }
+
+    pub fn all(&self) -> impl Iterator<Item = &Statement<'source_code>> {
+        self.functions.iter().chain(self.statements.iter())
     }
 
     pub fn push(&mut self, statement: Statement<'source_code>) {
