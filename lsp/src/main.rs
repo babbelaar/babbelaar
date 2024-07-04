@@ -4,6 +4,7 @@
 mod completions;
 mod conversion;
 mod format;
+mod logger;
 mod symbolization;
 
 use std::collections::HashMap;
@@ -14,7 +15,8 @@ use babbelaar::*;
 use completions::CompletionEngine;
 use conversion::{convert_file_range, convert_position, convert_token_range};
 use format::Format;
-use log::{info, LevelFilter, Log};
+use log::{info, LevelFilter};
+use logger::Logger;
 use symbolization::{LspTokenType, Symbolizer};
 use tokio::spawn;
 use tokio::sync::RwLock;
@@ -595,12 +597,8 @@ async fn main() {
     let stdout = tokio::io::stdout();
     log::set_max_level(LevelFilter::Trace);
 
-
     let (service, socket) = LspService::new(|client| {
-        log::set_logger(Box::leak(Box::new(Logger {
-            client: client.clone(),
-        })))
-        .unwrap();
+        Logger::initialize(client.clone());
         Backend {
             client,
             client_configuration: Arc::new(RwLock::new(None)),
@@ -609,33 +607,4 @@ async fn main() {
     });
 
     Server::new(stdin, stdout, socket).serve(service).await;
-}
-
-struct Logger {
-    client: Client,
-}
-
-impl Log for Logger {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        _ = metadata;
-        log::set_max_level(LevelFilter::Trace);
-        true
-    }
-
-    fn log(&self, record: &log::Record) {
-        let typ = match record.level() {
-            log::Level::Error => MessageType::ERROR,
-            log::Level::Warn => MessageType::WARNING,
-            log::Level::Info => MessageType::INFO,
-            log::Level::Debug => MessageType::INFO,
-            log::Level::Trace => MessageType::INFO,
-        };
-        let client = self.client.clone();
-        let message = format!("{}: {}", record.file().unwrap_or_default(), record.args());
-        tokio::task::spawn(async move {
-            client.log_message(typ, message).await;
-        });
-    }
-
-    fn flush(&self) {}
 }
