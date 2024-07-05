@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
+use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
 
@@ -229,7 +230,11 @@ impl SymbolMap {
             return;
         }
 
-        let mut sym_begin = self.map.remove(&key).unwrap();
+        let Some(mut sym_begin) = self.map.remove(&key) else {
+            error!("Kon zojuist gevonden symbool niet verwijderen op index?");
+            debug_assert!(false);
+            return;
+        };
         let mut sym_end = sym_begin.clone();
 
         eprintln!("sym_begin={:?} range={range:?}", sym_begin.range);

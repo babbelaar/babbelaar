@@ -141,7 +141,11 @@ impl<'source_code> Format for StatementKind<'source_code> {
                 f.write_char(';');
                 f.new_line();
 
-                *f.indents.last_mut().unwrap() = LastSiblingKind::Expression;
+                if let Some(last) = f.indents.last_mut() {
+                    *last = LastSiblingKind::Expression;
+                } else {
+                    debug_assert!(false, "invalid state");
+                }
                 return;
             }
             Self::Function(statement) => statement.format(f),
@@ -151,7 +155,11 @@ impl<'source_code> Format for StatementKind<'source_code> {
             Self::Variable(statement) => statement.format(f),
         }
 
-        *f.indents.last_mut().unwrap() = LastSiblingKind::OtherStatement;
+        if let Some(last) = f.indents.last_mut() {
+            *last = LastSiblingKind::OtherStatement;
+        } else {
+            debug_assert!(false, "invalid state");
+        }
     }
 }
 

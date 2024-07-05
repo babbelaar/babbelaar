@@ -12,7 +12,6 @@ mod symbolization;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use completions::CompletionEngine;
 use log::{info, warn, LevelFilter};
 use logger::Logger;
 use tokio::sync::RwLock;
@@ -22,7 +21,11 @@ use tower_lsp::{LanguageServer, LspService, Server};
 
 pub use self::{
     backend::Backend,
+    conversion::{UrlExtension, convert_file_range, convert_position, convert_token_range},
+    completions::CompletionEngine,
     error::{BabbelaarLspError, BabbelaarLspResult},
+    format::Format,
+    symbolization::{LspTokenType, Symbolizer},
 };
 
 #[tower_lsp::async_trait]

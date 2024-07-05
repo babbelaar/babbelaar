@@ -5,13 +5,15 @@ use std::sync::Arc;
 
 use babbelaar::*;
 use log::info;
+use log::warn;
 use tokio::spawn;
 use tokio::sync::RwLock;
-use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 
+use crate::UrlExtension;
 use crate::{
+    BabbelaarLspResult as Result,
     conversion::{convert_file_range, convert_position, convert_token_range},
     completions::CompletionEngine,
     format::Format,
@@ -101,14 +103,14 @@ impl Backend {
             return f(&contents);
         }
 
-        let path = uri.to_file_path().unwrap();
+        let path = uri.to_path()?;
         let contents = match tokio::fs::read_to_string(&path).await {
             Ok(contents) => contents,
             Err(e) => {
                 self.client
                     .log_message(MessageType::INFO, format!("Failed to read path \"{}\" {e}", path.display()))
                     .await;
-                return Err(Error::internal_error());
+                return Err(e.into());
             }
         };
 
@@ -127,8 +129,8 @@ impl Backend {
         F: FnOnce(SemanticAnalyzer) -> Result<R>,
     {
         self.lexed_document(text_document, |tokens, _| {
-            let mut parser = Parser::new(text_document.uri.to_file_path().unwrap(), &tokens).attempt_to_ignore_errors();
-            let tree = parser.parse_tree().expect("Failed to parse tree");
+            let mut parser = Parser::new(text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
+            let tree = parser.parse_tree()?;
 
             let mut analyzer = SemanticAnalyzer::new();
             analyzer.analyze_tree(&tree);
@@ -137,8 +139,8 @@ impl Backend {
         }).await
     }
 
-    pub async fn collect_diagnostics(&self, document: VersionedTextDocumentIdentifier) {
-        let path = document.uri.to_file_path().unwrap();
+    pub async fn collect_diagnostics(&self, document: VersionedTextDocumentIdentifier) -> Result<()> {
+        let path = document.uri.to_path()?;
 
         let text_document = TextDocumentIdentifier {
             uri: document.uri,
@@ -197,9 +199,10 @@ impl Backend {
             );
 
             Ok(diags)
-        }).await.unwrap();
+        }).await?;
 
         self.client.publish_diagnostics(text_document.uri, diags, Some(document.version)).await;
+        Ok(())
     }
 
     pub async fn collect_signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
@@ -207,7 +210,7 @@ impl Backend {
         let caret_column = params.text_document_position_params.position.character as usize;
 
         self.lexed_document(&params.text_document_position_params.text_document, |tokens, _| {
-            let mut parser = Parser::new(params.text_document_position_params.text_document.uri.to_file_path().unwrap(), &tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(params.text_document_position_params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
             info!("Caret is @ {caret_line}:{caret_column}");
             loop {
                 let res = parser.parse_statement();
@@ -335,8 +338,8 @@ impl Backend {
                 symbolizer.add_token(token);
             }
 
-            let mut parser = Parser::new(params.text_document.uri.to_file_path().unwrap(), &tokens).attempt_to_ignore_errors();
-            let tree = parser.parse_tree().unwrap();
+            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
+            let tree = parser.parse_tree()?;
 
             for statement in tree.all() {
                 symbolizer.add_statement(statement);
@@ -356,7 +359,7 @@ impl Backend {
 
         let result = self.lexed_document(&params.text_document, |tokens, source| {
             let mut result = String::new();
-            let mut parser = Parser::new(params.text_document.uri.to_file_path().unwrap(), &tokens);
+            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens);
 
             if let Some(last) = tokens.last() {
                 end.line = last.end.line() as _;
@@ -410,10 +413,14 @@ impl Backend {
         let this = (*self).clone();
         spawn(async move {
             let this = this;
-            this.collect_diagnostics(VersionedTextDocumentIdentifier {
+            let result = this.collect_diagnostics(VersionedTextDocumentIdentifier {
                 uri: params.text_document.uri,
                 version: params.text_document.version,
             }).await;
+
+            if let Err(e) = result {
+                warn!("Kon bestand niet openen: {e}");
+            }
         });
     }
 
@@ -425,7 +432,9 @@ impl Backend {
         let this = (*self).clone();
         spawn(async move {
             let this = this;
-            this.collect_diagnostics(params.text_document).await;
+            if let Err(e) = this.collect_diagnostics(params.text_document).await {
+                warn!("Kon geen diagnostieken verzamelen: {e}");
+            }
         });
     }
 
@@ -445,8 +454,8 @@ impl Backend {
                 symbolizer.add_token(token);
             }
 
-            let mut parser = Parser::new(params.text_document.uri.to_file_path().unwrap(), &tokens).attempt_to_ignore_errors();
-            let tree = parser.parse_tree().unwrap();
+            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
+            let tree = parser.parse_tree()?;
 
             for statement in tree.all() {
                 symbolizer.add_statement(statement);
@@ -528,8 +537,8 @@ impl Backend {
         let mut hints = Vec::new();
 
         self.lexed_document(&params.text_document, |tokens, _| {
-            let mut parser = Parser::new(params.text_document.uri.to_file_path().unwrap(), &tokens).attempt_to_ignore_errors();
-            let tree = parser.parse_tree().unwrap();
+            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
+            let tree = parser.parse_tree()?;
 
             for statement in tree.all() {
                 match &statement.kind {

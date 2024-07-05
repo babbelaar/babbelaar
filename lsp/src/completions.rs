@@ -3,12 +3,9 @@
 
 use babbelaar::*;
 use log::warn;
-use tower_lsp::{
-    jsonrpc::Result,
-    lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams, CompletionResponse, Documentation, InsertTextFormat, MarkupContent, MarkupKind},
-};
+use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams, CompletionResponse, Documentation, InsertTextFormat, MarkupContent, MarkupKind};
 
-use crate::Backend;
+use crate::{Backend, BabbelaarLspResult as Result};
 
 pub struct CompletionEngine<'b> {
     server: &'b Backend,
@@ -225,7 +222,13 @@ impl<'b> CompletionEngine<'b> {
                 let end_index = if next.is_ascii_digit() {
                     dollar + next_offset + next.len_utf8()
                 } else if next == '{' {
-                    dollar + text.find('}').unwrap() + 1
+                    match text.find('}') {
+                        Some(pos) => dollar + pos + 1,
+                        None => {
+                            warn!("Geopende accolade gevonden, maar geen gesloten: '{text}'");
+                            break;
+                        }
+                    }
                 } else {
                     warn!("Failed to fix-up snippet because a weird $ continuation: '{text}'");
                     break;
