@@ -89,7 +89,7 @@ impl LanguageServer for Backend {
     }
 
     async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
-        Ok(self.goto_declaration(params).await?)
+        Ok(self.goto_definition(params).await?)
     }
 
     async fn shutdown(&self) -> Result<()> {
