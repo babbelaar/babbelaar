@@ -14,6 +14,7 @@ use std::{path::{Path, PathBuf}, process::exit};
 pub use babbelaar::*;
 use babbelaar_compiler::LlvmContext;
 use clap::Subcommand;
+use colored::Colorize;
 
 pub use self::{
     debugger::{
@@ -122,5 +123,43 @@ fn parse(path: &Path, f: impl FnOnce(ParseTree<'_>)) {
     let tokens: Vec<_> = lexer.collect();
 
     let mut parser = Parser::new(path.to_path_buf(), &tokens);
-    f(parser.parse_tree().unwrap())
+    match parser.parse_tree() {
+        Ok(tree) => f(tree),
+        Err(e) => {
+            eprintln!("{}: {}", "fout".red().bold(), e.to_string().bold());
+
+            if let Some(range) = e.range() {
+                eprintln!();
+                let mut iter = source_code.lines().skip(range.start().line() - 1);
+
+                if let Some(line) = iter.next() {
+                    if !line.trim().is_empty() {
+                        eprintln!("{}", line);
+                    }
+                }
+
+                if let Some(line) = iter.next() {
+                    eprintln!("{line}");
+                    eprintln!(
+                        "{spaces}{caret}{tildes} {description}",
+                        spaces = " ".repeat(range.start().column()),
+                        caret = "^".bright_red().bold(),
+                        tildes = "~".repeat(range.len().saturating_sub(1)).bright_blue(),
+                        description = "fout trad hier op".bright_red()
+                    );
+                }
+
+                if let Some(line) = iter.next() {
+                    if !line.trim().is_empty() {
+                        eprintln!("{}", line);
+                    }
+                }
+
+                eprintln!();
+
+                eprintln!("In {}:{}:{}\n", path.display(), range.start().line() + 1, range.start().column() + 1);
+                exit(1);
+            }
+        }
+    }
 }
