@@ -5,13 +5,13 @@ edition = "2021"
 
 [dependencies]
 dap = "0.4.1-alpha1"
-thiserror = "*"
-strum = { version = "*", features = ["derive"] }
+thiserror = "1"
+strum = { version = "0.26", features = ["derive"] }
 
 babbelaar = { path = "../babbelaar" }
 babbelaar-compiler = { path = "../compiler" }
-clap = { version = "4.5.7", features = ["derive"] }
-colored = "2"
+clap = { version = "4.5.16", features = ["derive"] }
+colored = "2.1"
 
 [dev-dependencies]
-rstest = "0.21"
+rstest = "0.22"

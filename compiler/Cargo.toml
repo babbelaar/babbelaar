@@ -11,4 +11,4 @@ inkwell = { git = "https://github.com/TheDan64/inkwell", rev = "5c9f7fcbb0a667f7
 log = "0.4"
 
 [dev-dependencies]
-rstest = "0.21"
+rstest = "0.22"

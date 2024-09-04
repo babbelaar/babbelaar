@@ -7,4 +7,4 @@ edition = "2021"
 babbelaar = { path = "../babbelaar" }
 babbelaar-interpreter = { path = "../interpreter" }
 
-rstest = "0.21"
+rstest = "0.22"

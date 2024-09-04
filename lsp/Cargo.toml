@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 log = "0.4"
 thiserror = "1"
-strum = { version = "*", features = ["derive"] }
+strum = { version = "0.26", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tower-lsp = "0.20"
 
@@ -15,4 +15,4 @@ babbelaar-interpreter = { path = "../interpreter" }
 
 
 [dev-dependencies]
-rstest = "0.21"
+rstest = "0.22"
