@@ -238,8 +238,8 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
         match ty.specifier.value() {
            TypeSpecifier::BuiltIn(BuiltinType::Bool) => BasicMetadataTypeEnum::IntType(self.context.bool_type()),
            TypeSpecifier::BuiltIn(BuiltinType::G32) => BasicMetadataTypeEnum::IntType(self.context.i64_type()),
-           TypeSpecifier::BuiltIn(BuiltinType::Null) => BasicMetadataTypeEnum::PointerType(self.context.opaque_struct_type("null").ptr_type(AddressSpace::default())),
-           TypeSpecifier::BuiltIn(BuiltinType::Slinger) => BasicMetadataTypeEnum::PointerType(self.context.i8_type().ptr_type(AddressSpace::default())),
+           TypeSpecifier::BuiltIn(BuiltinType::Null) => BasicMetadataTypeEnum::PointerType(self.context.ptr_type(AddressSpace::default())),
+           TypeSpecifier::BuiltIn(BuiltinType::Slinger) => BasicMetadataTypeEnum::PointerType(self.context.ptr_type(AddressSpace::default())),
            TypeSpecifier::Custom { .. } => todo!(),
         }
     }
