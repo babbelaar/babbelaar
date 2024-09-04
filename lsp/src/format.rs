@@ -6,7 +6,7 @@
 
 use std::fmt::Write;
 
-use babbelaar::{BiExpression, BuiltinType, Expression, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{BiExpression, BuiltinType, Expression, Field, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
 
 pub struct Formatter<'source> {
     #[allow(unused)]
@@ -152,6 +152,7 @@ impl<'source_code> Format for StatementKind<'source_code> {
             Self::For(statement) => statement.format(f),
             Self::If(statement) => statement.format(f),
             Self::Return(statement) => statement.format(f),
+            Self::Structure(statement) => statement.format(f),
             Self::Variable(statement) => statement.format(f),
         }
 
@@ -282,6 +283,30 @@ impl<'source_code> Format for ReturnStatement<'source_code> {
     }
 }
 
+impl<'source_code> Format for Structure<'source_code> {
+    fn format(&self, f: &mut Formatter<'_>) {
+        f.write_str("structuur ");
+        f.write_str(self.name.value());
+        f.with_curly_block(|f| {
+            for field in &self.fields {
+                field.format(f);
+                f.write_char(',');
+                f.new_line();
+            }
+        });
+
+    }
+}
+
+impl<'source_code> Format for Field<'source_code> {
+    fn format(&self, f: &mut Formatter<'_>) {
+        f.write_str("veld ");
+        f.write_str(self.name.value());
+        f.write_str(": ");
+        self.ty.format(f);
+    }
+}
+
 impl<'source_code> Format for VariableStatement<'source_code> {
     fn format(&self, f: &mut Formatter<'_>) {
         f.write_str("stel ");
@@ -342,7 +367,25 @@ impl<'source_code> Format for PrimaryExpression<'source_code> {
                 expr.format(f);
                 f.write_char(')');
             }
+            Self::StructureInstantiation(structure) => structure.format(f),
         }
+    }
+}
+
+impl<'source_code> Format for StructureInstantiationExpression<'source_code> {
+    fn format(&self, f: &mut Formatter) {
+        f.write_str("nieuwe ");
+        f.write_str(&self.name);
+        f.write_str(" ");
+        f.with_curly_block(|f| {
+            for field in &self.fields {
+                f.write_str(&field.name);
+                f.write_str(": ");
+                field.value.format(f);
+                f.write_char(',');
+                f.new_line();
+            }
+        })
     }
 }
 

@@ -13,6 +13,7 @@ mod lexer;
 mod parser;
 mod semantics;
 mod statement;
+mod structure;
 mod token;
 mod tree;
 mod type_;
@@ -30,9 +31,10 @@ pub use self::{
     parser::{Parser, ParseDiagnostic},
     semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticLocalKind, SemanticReference, SemanticType},
     statement::{ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
+    structure::{Field, Structure},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     tree::ParseTree,
     type_::{Parameter, Type, TypeSpecifier},
     util::{DocumentationProvider, FileLocation, FileRange, LspCompletion, OptionExt, Ranged},
-    value::{FunctionId, Value},
+    value::{FunctionId, StructureId, Value},
 };

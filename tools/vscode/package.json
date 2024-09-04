@@ -43,7 +43,6 @@
                         }
                     }
                 }
-
             }
         ],
         "languages": [
@@ -83,21 +82,21 @@
             }
         ],
         "configuration": {
-			"type": "object",
-			"title": "Example configuration",
-			"properties": {
-				"babbelaar-lsp.trace.server": {
-					"scope": "window",
-					"type": "string",
-					"enum": [
-						"off",
-						"messages",
-						"verbose"
-					],
-					"default": "off",
-					"description": "Traces the communication between VS Code and the language server."
-				}
-			}
+            "type": "object",
+            "title": "Example configuration",
+            "properties": {
+                "babbelaar-lsp.trace.server": {
+                    "scope": "window",
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "messages",
+                        "verbose"
+                    ],
+                    "default": "off",
+                    "description": "Traces the communication between VS Code and the language server."
+                }
+            }
         },
         "grammars": [
             {
@@ -122,15 +121,15 @@
         "test": "vscode-test"
     },
     "devDependencies": {
-        "@types/vscode": "^1.90.0",
         "@types/mocha": "^10.0.6",
         "@types/node": "18.x",
-        "vscode-languageclient": "^7.0.0",
+        "@types/vscode": "^1.90.0",
         "@typescript-eslint/eslint-plugin": "^7.11.0",
         "@typescript-eslint/parser": "^7.11.0",
-        "eslint": "^8.57.0",
-        "typescript": "^5.4.5",
         "@vscode/test-cli": "^0.0.9",
-        "@vscode/test-electron": "^2.4.0"
+        "@vscode/test-electron": "^2.4.0",
+        "eslint": "^8.57.0",
+        "typescript": "^5.5.3",
+        "vscode-languageclient": "^7.0.0"
     }
 }

@@ -13,8 +13,9 @@ use crate::*;
 pub struct Interpreter<'source_code, D>
         where D: Debugger {
     functions: HashMap<FunctionId, Rc<FunctionStatement<'source_code>>>,
+    structures: HashMap<StructureId, Rc<Structure<'source_code>>>,
     debugger: D,
-    scope: Scope,
+    scope: Scope<'source_code>,
 }
 
 impl<'source_code, D> Interpreter<'source_code, D>
@@ -22,6 +23,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
     pub fn new(debugger: D) -> Self {
         Self {
             functions: HashMap::new(),
+            structures: HashMap::new(),
             scope: Scope::new_top_level(),
             debugger,
         }
@@ -75,6 +77,14 @@ impl<'source_code, D> Interpreter<'source_code, D>
                 StatementResult::Return(value)
             }
 
+            StatementKind::Structure(structure) => {
+                let id = StructureId::from(structure);
+                let structure = Rc::new(structure.clone());
+                self.structures.insert(id, Rc::clone(&structure));
+                self.scope.structures.insert(structure.name.to_string(), structure);
+                StatementResult::Continue
+            }
+
             StatementKind::Variable(variable) => {
                 let value = self.execute_expression(&variable.expression);
                 self.scope.variables.insert(variable.name.to_string(), value);
@@ -109,6 +119,16 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
             PrimaryExpression::StringLiteral(str) => {
                 Value::String(str.to_string())
+            }
+
+            PrimaryExpression::StructureInstantiation(structure) => {
+                Value::Object {
+                    fields: structure.fields.iter()
+                        .map(|field| {
+                            (field.name.to_string(), self.execute_expression(&field.value))
+                        })
+                        .collect()
+                }
             }
 
             PrimaryExpression::TemplateString{ parts } => {
@@ -310,9 +330,11 @@ impl<'source_code, D> Interpreter<'source_code, D>
     }
 
     fn execute_member_reference(&mut self, lhs: Value, member: &Ranged<&'source_code str>) -> Value {
-        _ = lhs;
-        _ = member;
-        todo!()
+        let Value::Object { fields } = lhs else {
+            todo!("Invalid member reference: {member:?} for value {lhs:#?}");
+        };
+
+        fields.get(*member.value()).unwrap().clone()
     }
 
     fn execute_method_invocation(&mut self, lhs: Value, expression: &MethodCallExpression<'source_code>) -> Value {

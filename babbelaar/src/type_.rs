@@ -14,10 +14,10 @@ pub struct Type<'source_code> {
     pub specifier: Ranged<TypeSpecifier<'source_code>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum TypeSpecifier<'source_code> {
     BuiltIn(BuiltinType),
     Custom {
-        name: &'source_code str,
+        name: Ranged<&'source_code str>,
     },
 }

@@ -6,7 +6,7 @@ use std::{fmt::Display, path::PathBuf};
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, Attribute, AttributeArgument, BiExpression, BiOperator, Builtin, Comparison, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
+    statement::ReturnStatement, Attribute, AttributeArgument, BiExpression, BiOperator, Builtin, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseDiagnostic<'source_code>>;
@@ -90,6 +90,11 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             TokenKind::Keyword(Keyword::Stel) => {
                 _ = self.consume_token().ok();
                 StatementKind::Variable(self.parse_variable_statement()?)
+            }
+
+            TokenKind::Keyword(Keyword::Structuur) => {
+                _ = self.consume_token().ok();
+                StatementKind::Structure(self.parse_structure_statement()?)
             }
 
             TokenKind::Keyword(Keyword::Volg) => {
@@ -225,6 +230,77 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
     }
 
+    fn parse_structure_statement(&mut self) -> Result<Structure<'source_code>, ParseDiagnostic<'source_code>> {
+        let name_token = self.consume_token()?;
+
+        let name = Ranged::new(name_token.range(), match name_token.kind {
+            TokenKind::Identifier(ident) => ident,
+            _ => {
+                self.handle_error(ParseDiagnostic::ExpectedNameOfStructuur { token: name_token })?;
+                ""
+            }
+        });
+
+        let mut structure = Structure {
+            name,
+            fields: Vec::new(),
+        };
+
+        self.expect_left_curly_bracket("structuurnaam")?;
+
+        loop {
+            if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
+                _ = self.consume_token()?;
+                break;
+            }
+
+            match self.peek_token()?.kind {
+                TokenKind::Keyword(Keyword::Veld) => {
+                    _ = self.consume_token();
+                    structure.fields.push(self.parse_structure_field()?);
+                }
+
+                _ => {
+                    let token = self.consume_token()?;
+                    self.handle_error(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token })?;
+                    break;
+                }
+            }
+
+            if self.peek_punctuator() == Some(Punctuator::Comma) {
+                _ = self.consume_token()?;
+                continue;
+            }
+
+            if self.peek_punctuator() != Some(Punctuator::RightCurlyBracket) {
+                self.handle_error(ParseDiagnostic::UnexpectedTokenInsideStructure { token: self.peek_token()?.clone() })?;
+                break;
+            }
+        }
+
+        Ok(structure)
+    }
+
+    fn parse_structure_field(&mut self) -> Result<Field<'source_code>, ParseDiagnostic<'source_code>> {
+        let name_token = self.consume_token()?;
+
+        let name = Ranged::new(name_token.range(), match name_token.kind {
+            TokenKind::Identifier(ident) => ident,
+            _ => {
+                self.handle_error(ParseDiagnostic::ExpectedNameOfField { token: name_token })?;
+                ""
+            }
+        });
+
+        self.expect_colon("veldnaam")?;
+        let ty = self.parse_type()?;
+        Ok(Field {
+            attributes: Vec::new(),
+            name,
+            ty,
+        })
+    }
+
     fn parse_variable_statement(&mut self) -> Result<VariableStatement<'source_code>, ParseDiagnostic<'source_code>> {
         let name_token = self.consume_token()?;
         let name_range = name_token.range();
@@ -282,8 +358,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let TokenKind::Identifier(name) = name_token.kind else {
             return Err(ParseDiagnostic::TypeExpectedSpecifierName { token: name_token });
         };
+        let name = Ranged::new(name_token.range(), name);
 
-        let specifier = match Builtin::type_by_name(name) {
+        let specifier = match Builtin::type_by_name(name.value()) {
             Some(builtin) => TypeSpecifier::BuiltIn(builtin),
             None => TypeSpecifier::Custom { name },
         };
@@ -400,6 +477,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             TokenKind::TemplateString(template_string) => self.parse_template_string(template_string),
             TokenKind::Keyword(Keyword::Waar) => Ok(PrimaryExpression::Boolean(true)),
             TokenKind::Keyword(Keyword::Onwaar) => Ok(PrimaryExpression::Boolean(false)),
+            TokenKind::Keyword(Keyword::Nieuwe) => self.parse_structure_instantiation(),
 
             TokenKind::Punctuator(Punctuator::LeftParenthesis) => {
                 let expression = self.parse_expression()?;
@@ -409,7 +487,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
             _ => {
                 (self.cursor, self.token_begin, self.token_end) = reset;
-                Err(ParseDiagnostic::UnknownStartOfExpression { token })
+                let replacement_token = PrimaryExpression::Reference(Ranged::new(token.range(), ""));
+                self.handle_error(ParseDiagnostic::UnknownStartOfExpression { token })?;
+                Ok(replacement_token)
             }
         }?;
 
@@ -780,6 +860,70 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             value,
         })
     }
+
+    fn parse_structure_instantiation(&mut self) -> Result<PrimaryExpression<'source_code>, ParseDiagnostic<'source_code>> {
+        let name_token = self.peek_token()?;
+        let TokenKind::Identifier(name) = name_token.kind else {
+            return Err(ParseDiagnostic::ExpectedNameAfterNieuwe { token: name_token.clone() });
+        };
+
+        let name = Ranged::new(name_token.range(), name);
+        _ = self.consume_token();
+
+        self.expect_left_curly_bracket("nieuwe")?;
+
+        let mut expr = StructureInstantiationExpression {
+            name,
+            fields: Vec::new(),
+        };
+
+        loop {
+            if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
+                _ = self.consume_token()?;
+                break;
+            }
+
+            let token = self.peek_token()?;
+            match token.kind {
+                TokenKind::Identifier(name) => {
+                    let name = Ranged::new(token.range(), name);
+                    _ = self.consume_token();
+
+                    self.expect_colon("structuurveldverwijzing")?;
+                    let expression = match self.parse_expression() {
+                        Ok(expr) => expr,
+                        Err(e) => {
+                            self.handle_error(e)?;
+                            break;
+                        }
+                    };
+
+                    expr.fields.push(FieldInstantiation {
+                        name,
+                        value: Box::new(expression),
+                    })
+                }
+
+                _ => {
+                    let token = self.consume_token()?;
+                    self.handle_error(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token })?;
+                    break;
+                }
+            }
+
+            if self.peek_punctuator() == Some(Punctuator::Comma) {
+                _ = self.consume_token()?;
+                continue;
+            }
+
+            if self.peek_punctuator() != Some(Punctuator::RightCurlyBracket) {
+                self.handle_error(ParseDiagnostic::UnexpectedTokenInsideStructureInstantiation { token: self.peek_token()?.clone() })?;
+                break;
+            }
+        }
+
+        Ok(PrimaryExpression::StructureInstantiation(expr))
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error, AsRefStr)]
@@ -811,13 +955,22 @@ pub enum ParseDiagnostic<'source_code> {
     #[error("Komma verwacht ',' na {context}, maar kreeg: {token}")]
     ExpectedComma { token: Token<'source_code>, context: &'static str },
 
+    #[error("Naam van structuur verwacht, maar kreeg: {token}")]
+    ExpectedNameAfterNieuwe { token: Token<'source_code> },
+
+    #[error("Naam van structuurveld verwacht, maar kreeg: {token}")]
+    ExpectedNameOfField { token: Token<'source_code> },
+
+    #[error("Naam van structuur verwacht, maar kreeg: {token}")]
+    ExpectedNameOfStructuur { token: Token<'source_code> },
+
     #[error("Naam van stelling verwacht, maar kreeg: {token}")]
     ExpectedNameOfVariable { token: Token<'source_code> },
 
     #[error("Is-teken `=` verwacht tussen naam van stelling en de toewijzing, maar kreeg: {token}")]
     ExpectedEqualsInsideVariable { token: Token<'source_code> },
 
-    #[error("Puntkomma verwacht ';' na statement: {token}")]
+    #[error("Puntkomma verwacht ';' na statement, maar kreeg: {token}")]
     ExpectedSemicolonAfterStatement { token: Token<'source_code> },
 
     #[error("Functienaam verwacht na `functie`, maar kreeg: {token}")]
@@ -852,6 +1005,18 @@ pub enum ParseDiagnostic<'source_code> {
 
     #[error("Onbekend start van een expressie: {token}")]
     UnknownStartOfExpression { token: Token<'source_code> },
+
+    #[error("Onbekend start van een structuurlid: {token}")]
+    UnexpectedTokenAtStartOfStructureMember { token: Token<'source_code> },
+
+    #[error("Onverwachte token binnen structuur: `{token}`")]
+    UnexpectedTokenInsideStructure { token: Token<'source_code> },
+
+    #[error("Verwijzing naar structuurveld verwacht, maar kreeg: {token}")]
+    UnexpectedTokenAtStartOfStructureInstantiation { token: Token<'source_code> },
+
+    #[error("Onverwachte token binnen structuur: `{token}`")]
+    UnexpectedTokenInsideStructureInstantiation { token: Token<'source_code> },
 }
 
 impl<'source_code> ParseDiagnostic<'source_code> {
@@ -867,6 +1032,9 @@ impl<'source_code> ParseDiagnostic<'source_code> {
             Self::ExpectedColon { token, .. } => Some(token),
             Self::ExpectedComma { token, .. } => Some(token),
             Self::ExpectedSemicolonAfterStatement { token, .. } => Some(token),
+            Self::ExpectedNameAfterNieuwe { token } => Some(token),
+            Self::ExpectedNameOfField { token } => Some(token),
+            Self::ExpectedNameOfStructuur { token } => Some(token),
             Self::ExpectedNameOfVariable { token } => Some(token),
             Self::ExpectedIdentifier { token, .. } => Some(token),
             Self::ExpectedEqualsInsideVariable { token } => Some(token),
@@ -880,6 +1048,10 @@ impl<'source_code> ParseDiagnostic<'source_code> {
             Self::ResidualTokensInTemplateString { token } => Some(token),
             Self::TypeExpectedSpecifierName { token } => Some(token),
             Self::UnknownStartOfExpression { token } => Some(token),
+            Self::UnexpectedTokenAtStartOfStructureMember { token } => Some(token),
+            Self::UnexpectedTokenInsideStructure { token } => Some(token),
+            Self::UnexpectedTokenAtStartOfStructureInstantiation { token } => Some(token),
+            Self::UnexpectedTokenInsideStructureInstantiation { token } => Some(token),
         }
     }
 

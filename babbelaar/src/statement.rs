@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{util::FileRange, Attribute, Expression, Parameter, RangeExpression, Ranged};
+use crate::{util::FileRange, Attribute, Expression, Parameter, RangeExpression, Ranged, Structure};
 
 #[derive(Debug, Clone)]
 pub struct Statement<'source_code> {
@@ -17,6 +17,7 @@ pub enum StatementKind<'source_code> {
     For(ForStatement<'source_code>),
     If(IfStatement<'source_code>),
     Return(ReturnStatement<'source_code>),
+    Structure(Structure<'source_code>),
     Variable(VariableStatement<'source_code>),
 }
 

@@ -160,6 +160,20 @@ impl<'b> CompletionEngine<'b> {
                         }
                         return Ok(());
                     }
+
+                    SemanticType::Custom(custom) => {
+                        for field in &custom.fields {
+                            self.completions.push(CompletionItem {
+                                label: field.name.to_string(),
+                                detail: Some(field.ty.to_string()),
+                                kind: Some(CompletionItemKind::FIELD),
+                                documentation: None,
+                                insert_text: Some(field.name.to_string()),
+                                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                                ..Default::default()
+                            });
+                        }
+                    }
                     _ => (),
                 }
             }

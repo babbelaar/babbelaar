@@ -1,12 +1,12 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{borrow::Cow, collections::HashMap, fmt::Display};
+use std::{borrow::Cow, collections::{HashMap, HashSet}, fmt::Display, rc::Rc};
 
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, Attribute, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer<'source_code> {
@@ -24,18 +24,31 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     pub fn analyze_tree(&mut self, tree: &'source_code ParseTree<'source_code>) {
-        for statement in tree.functions() {
+        // TODO: fix this.
+        self.analyze_statements(tree.structures());
+        self.analyze_statements(tree.functions());
+        self.analyze_statements(tree.statements());
+    }
+
+    fn analyze_statements(&mut self, statements: &'source_code [Statement<'source_code>]) {
+        for statement in statements {
+            let StatementKind::Structure(structure) = &statement.kind else {
+                continue;
+            };
+
+            self.analyze_structure(statement, structure);
+        }
+
+        for statement in statements {
             if let StatementKind::Function(function) = &statement.kind {
                 self.context.push_function(SemanticFunction {
                     name: function.name,
                     parameters: &function.parameters,
                 });
-            } else {
-                debug_assert!(false);
             }
         }
 
-        for statement in tree.statements() {
+        for statement in statements {
             self.analyze_statement(statement);
         }
     }
@@ -60,9 +73,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             });
         }
 
-        for statement in function.body.as_inner_slice() {
-            self.analyze_statement(statement);
-        }
+        self.analyze_statements(function.body.as_inner_slice());
 
         self.context.pop_scope(function.range.end());
     }
@@ -78,6 +89,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             StatementKind::Function(function) => self.analyze_function(function),
             StatementKind::If(statement) => self.analyze_if_statement(statement),
             StatementKind::Return(function) => self.analyze_return_statement(function),
+            StatementKind::Structure(..) => (),
             StatementKind::Variable(variable) => self.analyze_variable_statement(variable),
         }
     }
@@ -90,9 +102,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             typ: SemanticType::Builtin(BuiltinType::G32),
         });
 
-        for statement in &statement.body {
-            self.analyze_statement(statement);
-        }
+        self.analyze_statements(&statement.body);
 
         self.context.pop_scope(statement.file_range.end());
     }
@@ -102,9 +112,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
         self.analyze_expression(&statement.condition);
 
-        for statement in &statement.body {
-            self.analyze_statement(statement);
-        }
+        self.analyze_statements(&statement.body);
 
         self.context.pop_scope(statement.range.end());
     }
@@ -115,6 +123,36 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
 
         // TODO analyze return type
+    }
+
+    fn analyze_structure(&mut self, statement: &'source_code Statement<'source_code>, structure: &'source_code Structure<'source_code>) {
+        let fields = structure.fields.iter().map(|x| SemanticField {
+            attributes: &x.attributes,
+            name: x.name,
+            ty: self.resolve_type(&x.ty),
+        }).collect();
+
+        let structure = Rc::new(SemanticStructure {
+            attributes: &statement.attributes,
+            name: structure.name,
+            fields,
+        });
+
+        self.context.push_structure(Rc::clone(&structure));
+
+        let mut names = HashSet::new();
+        for field in &structure.fields {
+            if !names.insert(field.name.value()) {
+                self.diagnostics.push(SemanticDiagnostic {
+                    range: field.name.range(),
+                    kind: SemanticDiagnosticKind::DuplicateFieldName { name: field.name.value() },
+                });
+            }
+
+            self.analyze_attributes_for_field(field);
+        }
+
+        // TODO
     }
 
     fn analyze_variable_statement(&mut self, statement: &'source_code VariableStatement<'source_code>) {
@@ -146,6 +184,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     fn analyze_function_call_expression(&mut self, lhs: SemanticType<'source_code>, expression: &'source_code FunctionCallExpression<'source_code>) -> SemanticType<'source_code> {
         let function_name = match lhs {
             SemanticType::Builtin(builtin) => builtin.name(),
+            SemanticType::Custom(custom) => &custom.name,
             SemanticType::Function(func) => func.name.value(),
             SemanticType::FunctionReference(func) => func.name(),
         };
@@ -207,6 +246,8 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 SemanticType::Builtin(BuiltinType::Slinger)
             }
 
+            PrimaryExpression::StructureInstantiation(structure) => self.analyze_structure_instantiation(structure),
+
             PrimaryExpression::TemplateString { parts } => {
                 for part in parts {
                     match part {
@@ -248,6 +289,55 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
             PrimaryExpression::Parenthesized(expr) => self.analyze_expression(expr),
         }
+    }
+
+    fn analyze_structure_instantiation(&mut self, instantiation: &'source_code StructureInstantiationExpression<'source_code>) -> SemanticType<'source_code> {
+        let ty = self.resolve_type_by_name(&instantiation.name);
+        let SemanticType::Custom(structure) = &ty else {
+            return SemanticType::null();
+        };
+
+        let all_valid_fields: HashMap<&str, &SemanticField<'source_code>> = structure.fields.iter().map(|x| (*x.name.value(), x)).collect();
+        let mut fields_left = all_valid_fields.clone();
+
+        for field_instantiation in &instantiation.fields {
+            let name = &field_instantiation.name;
+            match fields_left.remove(name.value()) {
+                Some(field) => {
+                    let declaration_type = &field.ty;
+                    let definition_type = self.analyze_expression(&field_instantiation.value);
+                    if declaration_type != &definition_type {
+                        self.diagnostics.push(SemanticDiagnostic {
+                            range: name.range(),
+                            kind: SemanticDiagnosticKind::IncompatibleFieldTypes {
+                                struct_name: structure.name.value(),
+                                field_name: name.value(),
+                                declaration_type: declaration_type.to_string(),
+                                definition_type: definition_type.to_string(),
+                            },
+                        });
+                    }
+                }
+                None => {
+                    if all_valid_fields.contains_key(name.value()) {
+                        self.diagnostics.push(SemanticDiagnostic {
+                            range: name.range(),
+                            kind: SemanticDiagnosticKind::DuplicateFieldInstantiation { name: name.value() },
+                        });
+                    } else {
+                        self.diagnostics.push(SemanticDiagnostic {
+                            range: name.range(),
+                            kind: SemanticDiagnosticKind::InvalidFieldInstantiation {
+                                struct_name: structure.name.value(),
+                                field_name: name.value()
+                            },
+                        });
+                    }
+                }
+            }
+        }
+
+        ty
     }
 
     fn find_local_by_name<'this, P>(&'this self, predicate: P) -> Option<&SemanticLocal<'source_code>>
@@ -320,18 +410,28 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         self.diagnostics
     }
 
+    #[must_use]
     pub fn resolve_type(&mut self, ty: &'source_code Ranged<Type<'source_code>>) -> SemanticType<'source_code> {
         match ty.specifier.value() {
             TypeSpecifier::BuiltIn(ty) => SemanticType::Builtin(*ty),
-            TypeSpecifier::Custom { name } => {
-                self.diagnostics.push(SemanticDiagnostic {
-                    range: ty.range(),
-                    kind: SemanticDiagnosticKind::UnknownType { name },
-                });
+            TypeSpecifier::Custom { name } => self.resolve_type_by_name(name),
+        }
+    }
 
-                SemanticType::Builtin(BuiltinType::Null)
+    #[must_use]
+    fn resolve_type_by_name(&mut self, name: &Ranged<&'source_code str>) -> SemanticType<'source_code> {
+        for scope in self.context.scope.iter().rev() {
+            if let Some(structure) = scope.structures.get(name.value()) {
+                return SemanticType::Custom(Rc::clone(structure));
             }
         }
+
+        self.diagnostics.push(SemanticDiagnostic {
+            range: name.range(),
+            kind: SemanticDiagnosticKind::UnknownType { name: &name },
+        });
+
+        SemanticType::Builtin(BuiltinType::Null)
     }
 
     pub fn scopes_surrounding<F>(&self, location: FileLocation, mut f: F)
@@ -352,6 +452,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     fn resolve_parameter_type<'this>(&'this mut self, function: &SemanticReference<'source_code>, arg_idx: usize) -> SemanticType<'source_code> {
         match &function.typ {
             SemanticType::Builtin(..) => todo!(),
+            SemanticType::Custom(..) => todo!(),
             SemanticType::Function(func) => {
                 self.resolve_type(&func.parameters[arg_idx].ty)
             }
@@ -374,7 +475,13 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     fn analyze_member_expression(&mut self, typ: SemanticType<'source_code>, member: Ranged<&'source_code str>) -> SemanticType<'source_code> {
-        // TODO implement when members exist
+        if let SemanticType::Custom(structure) = &typ {
+            for field in &structure.fields {
+                if field.name.value() == member.value() {
+                    return field.ty.clone();
+                }
+            }
+        }
 
         self.diagnostics.push(SemanticDiagnostic {
             range: member.range(),
@@ -401,6 +508,15 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 SemanticType::null()
             }
 
+            SemanticType::Custom(..) => {
+                self.diagnostics.push(SemanticDiagnostic {
+                    range: expression.method_name.range(),
+                    kind: SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value() }
+                });
+
+                SemanticType::null()
+            }
+
             SemanticType::Function(..) | SemanticType::FunctionReference(..) => {
                 self.diagnostics.push(SemanticDiagnostic {
                     range: expression.method_name.range(),
@@ -414,6 +530,15 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
     fn analyze_attributes_for_statement(&mut self, statement: &Statement<'source_code>) {
         for attribute in &statement.attributes {
+            self.diagnostics.push(SemanticDiagnostic {
+                range: attribute.name.range(),
+                kind: SemanticDiagnosticKind::UnknownAttribute { name: &attribute.name },
+            });
+        }
+    }
+
+    fn analyze_attributes_for_field(&mut self, field: &SemanticField<'source_code>) {
+        for attribute in field.attributes {
             self.diagnostics.push(SemanticDiagnostic {
                 range: attribute.name.range(),
                 kind: SemanticDiagnosticKind::UnknownAttribute { name: &attribute.name },
@@ -487,6 +612,26 @@ pub enum SemanticDiagnosticKind<'source_code> {
 
     #[error("Attribuut `{name}` is onbekend")]
     UnknownAttribute { name: &'source_code str, },
+
+    #[error("Veldnaam `{name}` wordt meerdere keren gebruikt")]
+    DuplicateFieldName { name: &'source_code str },
+
+    #[error("Veld met naam `{name}` wordt meerdere keren een waarde toegekend")]
+    DuplicateFieldInstantiation { name: &'source_code str },
+
+    #[error("Structuur `{struct_name}` heeft geen veld genaamd `{field_name}`")]
+    InvalidFieldInstantiation {
+        struct_name: &'source_code str,
+        field_name: &'source_code str,
+    },
+
+    #[error("Ongeldige waarde gegeven voor veld `{field_name}` in structuur `{struct_name}`. Veldtype `{declaration_type}` is niet gelijksoortig met definitie van `{definition_type}`.")]
+    IncompatibleFieldTypes {
+        struct_name: &'source_code str,
+        field_name: &'source_code str,
+        declaration_type: String,
+        definition_type: String,
+    },
 }
 
 impl<'source_code> SemanticDiagnosticKind<'source_code> {
@@ -518,6 +663,7 @@ impl<'source_code> SemanticContext<'source_code> {
         self.scope.push(SemanticScope {
             range: FileRange::new(start, start),
             locals: HashMap::new(),
+            structures: HashMap::new(),
         });
         self.scope.last_mut().expect("we just pushed a scope")
     }
@@ -533,6 +679,10 @@ impl<'source_code> SemanticContext<'source_code> {
         );
     }
 
+    fn push_structure(&mut self, structure: Rc<SemanticStructure<'source_code>>) {
+        self.scope.last_mut().unwrap().structures.insert(structure.name.value(), structure);
+    }
+
     fn pop_scope(&mut self, location: FileLocation) {
         let mut scope = self.scope.pop().unwrap();
 
@@ -546,12 +696,14 @@ impl<'source_code> SemanticContext<'source_code> {
 pub struct SemanticScope<'source_code> {
     range: FileRange,
     pub locals: HashMap<&'source_code str, SemanticLocal<'source_code>>,
+    pub structures: HashMap<&'source_code str, Rc<SemanticStructure<'source_code>>>,
 }
 
 impl<'source_code> SemanticScope<'source_code> {
     fn new_top_level() -> Self {
         let mut this = Self {
             range: FileRange::new(FileLocation::default(), FileLocation::new(usize::MAX, usize::MAX, usize::MAX)),
+            structures: HashMap::new(),
             locals: HashMap::default(),
         };
 
@@ -607,6 +759,7 @@ impl<'source_code> SemanticReference<'source_code> {
     pub fn function_name(&self) -> &'source_code str {
         match &self.typ {
             SemanticType::Builtin(..) => todo!(),
+            SemanticType::Custom(..) => todo!(),
             SemanticType::Function(func) => func.name.value(),
             SemanticType::FunctionReference(func) => func.name(),
         }
@@ -615,6 +768,7 @@ impl<'source_code> SemanticReference<'source_code> {
     pub fn documentation(&self) -> Option<&'source_code str> {
         match &self.typ {
             SemanticType::Builtin(builtin) => Some(builtin.documentation()),
+            SemanticType::Custom(..) => None,
             SemanticType::Function(..) => None,
             SemanticType::FunctionReference(func) => func.documentation(),
         }
@@ -623,6 +777,7 @@ impl<'source_code> SemanticReference<'source_code> {
     pub fn inline_detail(&self) -> Option<&'source_code str> {
         match &self.typ {
             SemanticType::Builtin(builtin) => Some(builtin.inline_detail()),
+            SemanticType::Custom(..) => None,
             SemanticType::Function(..) => None,
             SemanticType::FunctionReference(func) => func.inline_detail(),
         }
@@ -631,6 +786,7 @@ impl<'source_code> SemanticReference<'source_code> {
     pub fn lsp_completion(&self) -> Cow<'source_code, str> {
         match &self.typ {
             SemanticType::Builtin(builtin) => Cow::Borrowed(builtin.name()),
+            SemanticType::Custom(custom) => Cow::Borrowed(&custom.name),
             SemanticType::Function(func) => Cow::Owned(format!("{}($1);$0", func.name.value())),
             SemanticType::FunctionReference(func) => func.lsp_completion(),
         }
@@ -649,9 +805,36 @@ impl<'source_code> SemanticReference<'source_code> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SemanticField<'source_code> {
+    pub attributes: &'source_code [Attribute<'source_code>],
+    pub name: Ranged<&'source_code str>,
+    pub ty: SemanticType<'source_code>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SemanticStructure<'source_code> {
+    pub attributes: &'source_code [Attribute<'source_code>],
+    pub name: Ranged<&'source_code str>,
+    pub fields: Vec<SemanticField<'source_code>>,
+}
+
+impl<'source_code> Display for SemanticStructure<'source_code> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.name)
+    }
+}
+
+impl<'source_code> PartialEq for SemanticStructure<'source_code> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name.range() == other.name.range() && self.name.value() == other.name.value()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum SemanticType<'source_code> {
     Builtin(BuiltinType),
+    Custom(Rc<SemanticStructure<'source_code>>),
     Function(SemanticFunction<'source_code>),
     FunctionReference(FunctionReference<'source_code>),
 }
@@ -665,6 +848,7 @@ impl<'source_code> SemanticType<'source_code> {
     pub fn declaration_range(&self) -> FileRange {
         match self {
             Self::Builtin(..) => FileRange::default(),
+            Self::Custom(custom) => custom.name.range(),
             Self::Function(func) => func.name.range(),
             Self::FunctionReference(func) => func.declaration_range(),
         }
@@ -673,6 +857,7 @@ impl<'source_code> SemanticType<'source_code> {
     pub fn parameter_count(&self) -> Option<usize> {
         match self {
             Self::Builtin(..) => None,
+            Self::Custom(..) => None,
             Self::Function(func) => Some(func.parameters.len()),
             Self::FunctionReference(func) => Some(func.parameter_count()),
         }
@@ -683,6 +868,7 @@ impl<'source_code> Display for SemanticType<'source_code> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Builtin(typ) => typ.fmt(f),
+            Self::Custom(custom) => custom.fmt(f),
             Self::Function(func) => func.fmt(f),
             Self::FunctionReference(func) => func.fmt(f),
         }

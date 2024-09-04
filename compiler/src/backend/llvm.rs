@@ -192,6 +192,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
             StatementKind::For(stmt) => self.compile_statement_for(function, block, stmt),
             StatementKind::If(stmt) => self.compile_statement_if(function, block, stmt),
             StatementKind::Return(stmt) => self.compile_statement_return(function, block, stmt),
+            StatementKind::Structure(..) => todo!("Structuren zijn nog niet ondersteund met LLVM"),
             StatementKind::Variable(stmt) => self.compile_statement_variable(function, block, stmt),
         }
     }
@@ -337,6 +338,11 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 
             PrimaryExpression::StringLiteral(literal) => {
                 self.builder.build_global_string_ptr(&literal, "value").unwrap().as_pointer_value().into()
+            }
+
+            PrimaryExpression::StructureInstantiation(structure) => {
+                _ = structure;
+                todo!("Structuren zijn nog niet ondersteund met LLVM")
             }
 
             PrimaryExpression::TemplateString { parts } => {

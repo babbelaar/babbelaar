@@ -7,7 +7,7 @@ edition = "2021"
 babbelaar = { path = "../babbelaar" }
 babbelaar-builtin = { path = "../builtin" }
 
-inkwell = { git = "https://github.com/TheDan64/inkwell", rev = "5c9f7fcbb0a667f7391b94beb65f1a670ad13221", features = ["llvm18-0"] }
+inkwell = { git = "https://github.com/TheDan64/inkwell", rev = "5c9f7fcbb0a667f7391b94beb65f1a670ad13221", features = ["llvm17-0"] }
 log = "0.4"
 
 [dev-dependencies]

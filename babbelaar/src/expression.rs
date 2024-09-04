@@ -9,10 +9,23 @@ pub enum PrimaryExpression<'source_code> {
     StringLiteral(&'source_code str),
     IntegerLiteral(i64),
     Reference(Ranged<&'source_code str>),
+    StructureInstantiation(StructureInstantiationExpression<'source_code>),
     TemplateString {
         parts: Vec<TemplateStringExpressionPart<'source_code>>,
     },
     Parenthesized(Box<Ranged<Expression<'source_code>>>),
+}
+
+#[derive(Debug, Clone)]
+pub struct StructureInstantiationExpression<'source_code> {
+    pub name: Ranged<&'source_code str>,
+    pub fields: Vec<FieldInstantiation<'source_code>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldInstantiation<'source_code> {
+    pub name: Ranged<&'source_code str>,
+    pub value: Box<Ranged<Expression<'source_code>>>,
 }
 
 #[derive(Debug, Clone)]

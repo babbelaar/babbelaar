@@ -1,25 +1,29 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
+
+use babbelaar::Structure;
 
 use crate::{Builtin, FunctionId, Value};
 
 #[derive(Default)]
-pub struct Scope {
-    pub parent: Option<Box<Scope>>,
+pub struct Scope<'source_code> {
+    pub parent: Option<Box<Scope<'source_code>>>,
     pub variables: HashMap<String, Value>,
+    pub structures: HashMap<String, Rc<Structure<'source_code>>>,
 }
 
-impl Scope {
+impl<'source_code> Scope<'source_code> {
     pub fn new() -> Self {
         Self {
             parent: None,
             variables: HashMap::new(),
+            structures: HashMap::new(),
         }
     }
 
-    pub fn new_top_level() -> Scope {
+    pub fn new_top_level() -> Self {
         let mut this = Self::new();
 
         for (func_idx, func) in Builtin::FUNCTIONS.iter().enumerate() {
@@ -37,6 +41,7 @@ impl Scope {
         Self {
             parent: Some(Box::new(self)),
             variables: HashMap::new(),
+            structures: HashMap::new(),
         }
     }
 

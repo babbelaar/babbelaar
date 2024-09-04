@@ -1,19 +1,23 @@
-
-functie main() {
-    volg i in reeks(0, 10) {
-        schrijf("Nu:");
-        hallo(i);
-    }
-
-    bekeer;
+structuur Hallo {
+    veld naam: Slinger,
 }
 
-functie hallo(j: g32) {
-    volg i in reeks(0, j) {
-        schrijf("Test");
+functie hai(h: Hallo) {
+    als h.naam == "Doei" {
+        schrijf("Doei!");
+        bekeer;
     }
 
-    bekeer;
+    schrijf(€"Hai, {h.naam}");
+
+    h.naam = "Doei";
+    hai(h);
 }
 
-main();
+hai(nieuwe Hallo {
+    naam: "adaf",
+});
+
+stel a = nieuwe Hallo {
+    naam: "gfsad",
+};

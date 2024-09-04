@@ -1,9 +1,9 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{cmp::Ordering, fmt::Display, hash::{DefaultHasher, Hash, Hasher}};
+use std::{cmp::Ordering, collections::HashMap, fmt::Display, hash::{DefaultHasher, Hash, Hasher}};
 
-use crate::{BuiltinFunction, BuiltinType, Comparison, FunctionStatement};
+use crate::{BuiltinFunction, BuiltinType, Comparison, FunctionStatement, Structure};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -20,6 +20,9 @@ pub enum Value {
     Function {
         name: String,
         id: FunctionId,
+    },
+    Object {
+        fields: HashMap<String, Value>,
     },
 }
 
@@ -53,6 +56,7 @@ impl Value {
             Self::String(..) => BuiltinType::Slinger,
             Self::MethodReference { .. } => todo!(),
             Self::Function { .. } => todo!(),
+            Self::Object { .. } => todo!(),
         }
     }
 
@@ -92,6 +96,7 @@ impl Display for Value {
             Self::String(str) => f.write_str(str),
             Self::MethodReference { lhs, method } => f.write_fmt(format_args!("{lhs}.{}()", method.name)),
             Self::Function { name, .. } => f.write_fmt(format_args!("functie {name}() {{ .. }}")),
+            Self::Object { .. } => f.write_str("te-doen(object-waarde-formatteren)"),
         }
     }
 }
@@ -105,6 +110,25 @@ pub struct FunctionId {
 impl<'source_code> From<&FunctionStatement<'source_code>> for FunctionId {
     fn from(value: &FunctionStatement<'source_code>) -> Self {
         let mut hasher = DefaultHasher::new();
+        "Function-".hash(&mut hasher);
+        value.name.value().hash(&mut hasher);
+        Self {
+            namespace: 0,
+            id: hasher.finish() as usize,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StructureId {
+    pub namespace: usize,
+    pub id: usize,
+}
+
+impl<'source_code> From<&Structure<'source_code>> for StructureId {
+    fn from(value: &Structure<'source_code>) -> Self {
+        let mut hasher = DefaultHasher::new();
+        "Structure-".hash(&mut hasher);
         value.name.value().hash(&mut hasher);
         Self {
             namespace: 0,

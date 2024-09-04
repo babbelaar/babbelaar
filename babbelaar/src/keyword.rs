@@ -13,10 +13,12 @@ pub enum Keyword {
     Bekeer,
     Functie,
     In,
+    Nieuwe,
     Onwaar,
     Reeks,
     Stel,
     Structuur,
+    Veld,
     Volg,
     Waar,
 }
@@ -40,9 +42,21 @@ impl Keyword {
                 completion: "functie ${1:naam}() {\n\t$0\n}",
                 inline_detail: "Een nieuwe functie.",
             }),
+            Self::Nieuwe => Some(LspCompletion {
+                completion: "nieuwe ${1:structuurnaam} {\n\t${0:velden}\n}",
+                inline_detail: "Een nieuw object",
+            }),
             Self::Stel => Some(LspCompletion {
                 completion: "stel ${1:variabele} = ${2:waarde};\n${0}",
                 inline_detail: "Een nieuwe variabele",
+            }),
+            Self::Structuur => Some(LspCompletion {
+                completion: "structuur ${1:naam} {\n\t${0:velden}\n}",
+                inline_detail: "Een nieuwe structuur",
+            }),
+            Self::Veld => Some(LspCompletion {
+                completion: "veld ${1:naam} = ${0:type},",
+                inline_detail: "Een nieuw veld",
             }),
             Self::Volg => Some(LspCompletion {
                 completion: "volg ${1:element} in reeks(${2:start}, ${3:eind}) {\n\t$0\n}",
@@ -60,6 +74,7 @@ impl DocumentationProvider for Keyword {
             Self::Bekeer => "Geef een waarde terug aan de aanroeper van de functie.",
             Self::Functie => "Definieer een nieuwe functie.",
             Self::In => "Herhaal over een stel waardes met `volg`.",
+            Self::Nieuwe => "Maak een nieuw object aan.",
             Self::Onwaar => "Een waarde van het type `booleaan`. Tegenovergestelde van `waar`",
             Self::Reeks => {
                 r#"Stel een reeks op van getallen.
@@ -72,6 +87,7 @@ volg i in reeks(0, 10) {
             }
             Self::Stel => "Bepaal een aanpaswaarde in deze scoop",
             Self::Structuur => "Definieer een datastructuur.",
+            Self::Veld => "Een onderdeel van een `structuur`.",
             Self::Volg => "Herhaal de sectie per waarde van de reeks.",
             Self::Waar => "Een waarde van het type `booleaan`. Tegenovergestelde van `onwaar`",
         }.into()
