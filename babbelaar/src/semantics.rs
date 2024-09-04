@@ -340,7 +340,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         ty
     }
 
-    fn find_local_by_name<'this, P>(&'this self, predicate: P) -> Option<&SemanticLocal<'source_code>>
+    fn find_local_by_name<'this, P>(&'this self, predicate: P) -> Option<&'this SemanticLocal<'source_code>>
             where P: Fn(&str) -> bool {
         for scope in self.context.scope.iter().rev() {
             for (local_name, local) in &scope.locals {
