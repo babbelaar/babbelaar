@@ -1,6 +1,6 @@
 {
     "Nieuwe werkwijze aanmaken": {
-        "prefix": ["werkwijze"],
+        "prefix": ["functie"],
         "body": ["werkwijze ${1:naam}() {", "\t$0", "}"],
         "description": "Een nieuwe werkwijze."
     },
