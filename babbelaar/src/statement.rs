@@ -12,6 +12,7 @@ pub struct Statement<'source_code> {
 
 #[derive(Debug, Clone)]
 pub enum StatementKind<'source_code> {
+    Assignment(Ranged<AssignStatement<'source_code>>),
     Expression(Ranged<Expression<'source_code>>),
     Function(FunctionStatement<'source_code>),
     For(ForStatement<'source_code>),
@@ -26,6 +27,15 @@ impl<'source_code> StatementKind<'source_code> {
     pub const fn is_expression(&self) -> bool {
         matches!(self, Self::Expression(..))
     }
+}
+
+/// In babbelaar, we have Assignment `=` statements instead of expressions,
+/// since this avoid bugs (IMO).
+#[derive(Clone, Debug)]
+pub struct AssignStatement<'source_code> {
+    pub range: FileRange,
+    pub dest: Ranged<Expression<'source_code>>,
+    pub expression: Ranged<Expression<'source_code>>,
 }
 
 #[derive(Clone, Debug)]

@@ -2,8 +2,7 @@
 // All Rights Reserved.
 
 use std::{
-    collections::HashMap,
-    rc::Rc,
+    cell::RefCell, collections::HashMap, rc::Rc
 };
 
 use babbelaar::*;
@@ -50,6 +49,12 @@ impl<'source_code, D> Interpreter<'source_code, D>
     fn execute_statement(&mut self, statement: &Statement<'source_code>) -> StatementResult {
         self.debugger.on_statement(statement);
         match &statement.kind {
+            StatementKind::Assignment(assignment) => {
+                let new_value = self.execute_expression(&assignment.expression);
+                self.execute_assign(&assignment.dest, new_value);
+                StatementResult::Continue
+            }
+
             StatementKind::Expression(expression) => {
                 self.execute_expression(expression);
                 StatementResult::Continue
@@ -93,6 +98,38 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
+    pub fn execute_assign(&mut self, expression: &Expression<'source_code>, new_value: Value) {
+        match expression {
+            Expression::Primary(PrimaryExpression::Reference(reference)) => {
+                if let Some(variable) = self.scope.find_mut(reference) {
+                    *variable = new_value;
+                    return;
+                }
+            }
+
+            Expression::Postfix(postfix) => {
+                let value = self.execute_expression(&postfix.lhs);
+                match &postfix.kind {
+                    PostfixExpressionKind::Member(member) => {
+                        let Value::Object { fields } = value else {
+                            panic!("Cannot assign to non-Object Value");
+                        };
+
+                        let mut fields = fields.borrow_mut();
+                        fields.insert(member.to_string(), new_value);
+                        return;
+                    }
+
+                    _ => (),
+                }
+            }
+
+            _ => (),
+        }
+
+        panic!("Invalid reference: {expression:#?}")
+    }
+
     pub fn execute_expression(&mut self, expression: &Ranged<Expression<'source_code>>) -> Value {
         self.debugger.on_expression(expression);
 
@@ -123,11 +160,11 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
             PrimaryExpression::StructureInstantiation(structure) => {
                 Value::Object {
-                    fields: structure.fields.iter()
+                    fields: Rc::new(RefCell::new(structure.fields.iter()
                         .map(|field| {
                             (field.name.to_string(), self.execute_expression(&field.value))
                         })
-                        .collect()
+                        .collect()))
                 }
             }
 
@@ -334,6 +371,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
             todo!("Invalid member reference: {member:?} for value {lhs:#?}");
         };
 
+        let fields = fields.borrow();
         fields.get(*member.value()).unwrap().clone()
     }
 

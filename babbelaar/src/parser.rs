@@ -6,7 +6,7 @@ use std::{fmt::Display, path::PathBuf};
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, Attribute, AttributeArgument, BiExpression, BiOperator, Builtin, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
+    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, BiExpression, BiOperator, Builtin, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseDiagnostic<'source_code>>;
@@ -102,9 +102,20 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
 
             _ => {
-                let expression = self.parse_expression()?;
-                self.expect_semicolon_after_statement()?;
-                StatementKind::Expression(expression)
+                let reset = self.cursor;
+
+                match self.parse_assign_statement()? {
+                    Some(statement) => {
+                        StatementKind::Assignment(Ranged::new(statement.range, statement))
+                    }
+                    None => {
+                        self.cursor = reset;
+
+                        let expression = self.parse_expression()?;
+                        self.expect_semicolon_after_statement()?;
+                        StatementKind::Expression(expression)
+                    }
+                }
             }
         };
 
@@ -114,6 +125,29 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             attributes,
             kind,
         })
+    }
+
+    fn parse_assign_statement(&mut self) -> Result<Option<AssignStatement<'source_code>>, ParseDiagnostic<'source_code>> {
+        let Ok(dest) = self.parse_postfix_expression() else {
+            return Ok(None);
+        };
+
+        let Ok(equals) = self.consume_token() else {
+            return Ok(None);
+        };
+
+        if equals.kind != TokenKind::Punctuator(Punctuator::Assignment) {
+            return Ok(None);
+        }
+
+        let expression = self.parse_expression()?;
+        self.expect_semicolon_after_statement()?;
+
+        Ok(Some(AssignStatement {
+            range: FileRange::new(dest.range().start(), expression.range().end()),
+            dest,
+            expression,
+        }))
     }
 
     pub fn parse_function(&mut self) -> Result<FunctionStatement<'source_code>, ParseDiagnostic<'source_code>> {

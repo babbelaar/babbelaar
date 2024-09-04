@@ -85,6 +85,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             StatementKind::Expression(expr) => {
                 self.analyze_expression(expr);
             }
+            StatementKind::Assignment(assign) => {
+                self.analyze_assignment_destination(assign.range(), &assign.dest);
+                self.analyze_expression(&assign.expression);
+            }
             StatementKind::For(statement) => self.analyze_for_statement(statement),
             StatementKind::Function(function) => self.analyze_function(function),
             StatementKind::If(statement) => self.analyze_if_statement(statement),
@@ -92,6 +96,27 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             StatementKind::Structure(..) => (),
             StatementKind::Variable(variable) => self.analyze_variable_statement(variable),
         }
+    }
+
+    fn analyze_assignment_destination(&mut self, range: FileRange, expression: &'source_code Expression<'source_code>) {
+        match expression {
+            Expression::Primary(PrimaryExpression::Reference(..)) => return,
+
+            Expression::Postfix(postfix) => {
+                if let PostfixExpressionKind::Member(..) = postfix.kind {
+                    return;
+                }
+            }
+
+            _ => (),
+        }
+
+        self.diagnostics.push(SemanticDiagnostic {
+            range,
+            kind: SemanticDiagnosticKind::ExpressionCannotBeUsedAsAssignmentDestination {
+                expression,
+            }
+        });
     }
 
     fn analyze_for_statement(&mut self, statement: &'source_code ForStatement<'source_code>) {
@@ -555,6 +580,11 @@ pub struct SemanticDiagnostic<'source_code> {
 
 #[derive(Debug, Clone, Error, AsRefStr)]
 pub enum SemanticDiagnosticKind<'source_code> {
+    #[error("Expressie is geen geldige toewijzing: `{expression:?}`")]
+    ExpressionCannotBeUsedAsAssignmentDestination {
+        expression: &'source_code Expression<'source_code>
+    },
+
     #[error("Functie `{name}` bestaat niet.")]
     InvalidFunctionReference { name: &'source_code str },
 

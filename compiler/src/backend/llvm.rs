@@ -187,6 +187,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 
     fn compile_statement(&mut self, function: &FunctionValue, block: &BasicBlock, statement: &Statement) {
         match &statement.kind {
+            StatementKind::Assignment(stmt) => self.compile_statement_assign(function, block, stmt),
             StatementKind::Function(..) => todo!(),
             StatementKind::Expression(expr) => { self.compile_expression(function, block, expr.value()); }
             StatementKind::For(stmt) => self.compile_statement_for(function, block, stmt),
@@ -350,6 +351,22 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
                 todo!()
             }
         }
+    }
+
+    fn compile_statement_assign(&mut self, function: &FunctionValue, block: &BasicBlock, stmt: &AssignStatement) {
+        todo!("Toewijzingen zijn nog niet ondersteund met LLVM")
+
+        // for stack in self.variables.iter().rev() {
+        //     let Some(variable) = stack.get(&stmt.name.to_string()) else {
+        //         continue;
+        //     };
+
+        //     let value = self.compile_expression(function, block, stmt.expression.value());
+        //     let value = self.create_basic_value(value);
+
+        //     self.builder.build_store(variable.clone().into_pointer_value(), value).unwrap();
+        //     break;
+        // }
     }
 
     fn compile_statement_for(&mut self, function: &FunctionValue, block: &BasicBlock, stmt: &ForStatement) {

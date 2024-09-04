@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{cmp::Ordering, collections::HashMap, fmt::Display, hash::{DefaultHasher, Hash, Hasher}};
+use std::{cell::RefCell, cmp::Ordering, collections::HashMap, fmt::Display, hash::{DefaultHasher, Hash, Hasher}, rc::Rc};
 
 use crate::{BuiltinFunction, BuiltinType, Comparison, FunctionStatement, Structure};
 
@@ -22,7 +22,7 @@ pub enum Value {
         id: FunctionId,
     },
     Object {
-        fields: HashMap<String, Value>,
+        fields: Rc<RefCell<HashMap<String, Value>>>,
     },
 }
 

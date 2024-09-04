@@ -8,7 +8,7 @@ functie hai(h: Hallo) {
         bekeer;
     }
 
-    schrijf(€"Hai, {h.naam}");
+    schrijf(€"Hai, {h.naam}!");
 
     h.naam = "Doei";
     hai(h);
@@ -18,6 +18,9 @@ hai(nieuwe Hallo {
     naam: "adaf",
 });
 
-stel a = nieuwe Hallo {
+stel abc = nieuwe Hallo {
     naam: "gfsad",
 };
+
+schrijf("");
+hai(abc);

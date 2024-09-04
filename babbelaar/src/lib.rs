@@ -30,7 +30,7 @@ pub use self::{
     lexer::Lexer,
     parser::{Parser, ParseDiagnostic},
     semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticLocalKind, SemanticReference, SemanticType},
-    statement::{ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
+    statement::{AssignStatement, ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
     structure::{Field, Structure},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     tree::ParseTree,

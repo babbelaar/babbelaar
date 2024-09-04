@@ -6,7 +6,7 @@
 
 use std::fmt::Write;
 
-use babbelaar::{BiExpression, BuiltinType, Expression, Field, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, BiExpression, BuiltinType, Expression, Field, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
 
 pub struct Formatter<'source> {
     #[allow(unused)]
@@ -136,6 +136,7 @@ impl<'source_code> Format for StatementKind<'source_code> {
         }
 
         match self {
+            Self::Assignment(statement) => statement.format(f),
             Self::Expression(expr) => {
                 expr.format(f);
                 f.write_char(';');
@@ -222,6 +223,15 @@ impl<'source_code> Format for MethodCallExpression<'source_code> {
         f.write_char('.');
         f.write_str(&self.method_name);
         self.call.format(f);
+    }
+}
+
+impl<'source_code> Format for AssignStatement<'source_code> {
+    fn format(&self, f: &mut Formatter<'_>) {
+        self.dest.format(f);
+        f.write_str(" = ");
+        self.expression.format(f);
+        f.write_str(";\n");
     }
 }
 

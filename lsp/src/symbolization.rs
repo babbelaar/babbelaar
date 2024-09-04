@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{Expression, FileRange, ForStatement, FunctionStatement, IfStatement, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Structure, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
+use babbelaar::{AssignStatement, Expression, FileRange, ForStatement, FunctionStatement, IfStatement, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Structure, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
@@ -27,6 +27,7 @@ impl<'source_code> Symbolizer<'source_code> {
 
     pub fn add_statement(&mut self, statement: &'source_code Statement<'source_code>) {
         match &statement.kind {
+            StatementKind::Assignment(statement) => self.add_statement_assign(statement),
             StatementKind::Expression(expression) => self.add_expression(expression),
             StatementKind::For(statement) => self.add_statement_for(statement),
             StatementKind::Function(statement) => self.add_statement_function(statement),
@@ -86,6 +87,10 @@ impl<'source_code> Symbolizer<'source_code> {
         }
 
         tokens
+    }
+
+    fn add_statement_assign(&mut self, statement: &'source_code AssignStatement<'source_code>) {
+        self.add_expression(&statement.expression);
     }
 
     fn add_statement_for(&mut self, statement: &'source_code ForStatement<'source_code>) {

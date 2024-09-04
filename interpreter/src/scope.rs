@@ -58,6 +58,31 @@ impl<'source_code> Scope<'source_code> {
             return parent.find(reference);
         }
 
-        return Value::Null;
+        Value::Null
+    }
+
+    pub fn find_mut(&mut self, reference: &str) -> Option<&mut Value> {
+        if let Some(value) = self.variables.get_mut(reference) {
+            return Some(value);
+        }
+
+        if let Some(parent) = self.parent.as_mut() {
+            return parent.find_mut(reference);
+        }
+
+        None
+    }
+
+    pub fn overwrite(&mut self, reference: &str, new: Value) -> bool {
+        if let Some(value) = self.variables.get_mut(reference) {
+            *value = new;
+            return true;
+        }
+
+        if let Some(parent) = self.parent.as_mut() {
+            return parent.overwrite(reference, new);
+        }
+
+        false
     }
 }
