@@ -490,6 +490,16 @@ impl Backend {
                             range: Some(convert_token_range(&token)),
                         });
                     }
+
+                    if let Some(builtin_typ) = Builtin::TYPES.iter().find(|x| x.name() == *ident) {
+                        hover = Some(Hover {
+                            contents: HoverContents::Markup(MarkupContent {
+                                kind: MarkupKind::Markdown,
+                                value: builtin_typ.documentation().to_string(),
+                            }),
+                            range: Some(convert_token_range(&token)),
+                        });
+                    }
                 }
 
                 TokenKind::Keyword(keyword) => {
