@@ -20,7 +20,7 @@
         "keywords": {
             "patterns": [
                 {
-                    "match": "\\b(volg|in|reeks|functie|bekeer|waar|onwaar|als|structuur|veld|nieuw)\\b",
+                    "match": "\\b(volg|in|reeks|werkwijze|bekeer|waar|onwaar|als|structuur|veld|nieuw)\\b",
                     "name": "keyword.control.babbelaar"
                 }
             ]

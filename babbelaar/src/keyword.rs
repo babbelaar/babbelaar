@@ -11,7 +11,6 @@ use crate::{DocumentationProvider, LspCompletion};
 pub enum Keyword {
     Als,
     Bekeer,
-    Functie,
     In,
     Nieuw,
     Onwaar,
@@ -21,6 +20,7 @@ pub enum Keyword {
     Veld,
     Volg,
     Waar,
+    Werkwijze,
 }
 
 impl Keyword {
@@ -38,9 +38,9 @@ impl Keyword {
                 completion: "als ${1:conditie} {\n\t${0:dan}\n}",
                 inline_detail: "Voorwaardelijk een sectie uitvoeren."
             }),
-            Self::Functie => Some(LspCompletion {
-                completion: "functie ${1:naam}() {\n\t$0\n}",
-                inline_detail: "Een nieuwe functie.",
+            Self::Werkwijze => Some(LspCompletion {
+                completion: "werkwijze ${1:naam}() {\n\t$0\n}",
+                inline_detail: "Een nieuwe werkwijze.",
             }),
             Self::Nieuw => Some(LspCompletion {
                 completion: "nieuw ${1:structuurnaam} {\n\t${0:velden}\n}",
@@ -71,8 +71,7 @@ impl DocumentationProvider for Keyword {
     fn provide_documentation(&self) -> std::borrow::Cow<'_, str> {
         match self {
             Self::Als => "Evalueer sectie als een voorwaarde geldt.",
-            Self::Bekeer => "Geef een waarde terug aan de aanroeper van de functie.",
-            Self::Functie => "Definieer een nieuwe functie.",
+            Self::Bekeer => "Geef een waarde terug aan de aanroeper van de werkwijze.",
             Self::In => "Herhaal over een stel waardes met `volg`.",
             Self::Nieuw => "Maak een nieuw object aan.",
             Self::Onwaar => "Een waarde van het type `booleaan`. Tegenovergestelde van `waar`",
@@ -90,6 +89,7 @@ volg i in reeks(0, 10) {
             Self::Veld => "Een onderdeel van een `structuur`.",
             Self::Volg => "Herhaal de sectie per waarde van de reeks.",
             Self::Waar => "Een waarde van het type `booleaan`. Tegenovergestelde van `onwaar`",
+            Self::Werkwijze => "Definieer een nieuwe werkwijze.",
         }.into()
     }
 }

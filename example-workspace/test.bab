@@ -3,7 +3,7 @@ structuur Persoon {
     veld achternaam: Slinger,
 }
 
-functie gedag(aan: Persoon) {
+werkwijze gedag(aan: Persoon) {
     schrijf(€"Hallo, {aan.voornaam} {aan.achternaam}");
 }
 

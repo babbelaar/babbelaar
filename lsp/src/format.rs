@@ -237,7 +237,7 @@ impl<'source_code> Format for AssignStatement<'source_code> {
 
 impl<'source_code> Format for FunctionStatement<'source_code> {
     fn format(&self, f: &mut Formatter<'_>) {
-        f.write_str("functie ");
+        f.write_str("werkwijze ");
         f.write_str(self.name.value());
         f.write_char('(');
         for (idx, param) in self.parameters.iter().enumerate() {

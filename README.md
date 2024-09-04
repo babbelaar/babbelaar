@@ -3,9 +3,10 @@ De eerste Nederlandse programmeertaal!
 
 ## Kenmerken
 
-### Functies
+### Werkwijzen
+Ook wel bekend als `functies`, `methodes`, `subroutines` en `procedures` in andere talen:
 ```bab
-functie hallo(voornaam: Slinger) {
+Werkwijze hallo(voornaam: Slinger) {
     schrijf(€"Hallo, {voornaam}!");
 }
 ```

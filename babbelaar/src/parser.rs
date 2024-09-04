@@ -82,7 +82,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 StatementKind::Return(self.parse_return_statement()?)
             }
 
-            TokenKind::Keyword(Keyword::Functie) => {
+            TokenKind::Keyword(Keyword::Werkwijze) => {
                 _ = self.consume_token().ok();
                 StatementKind::Function(self.parse_function()?)
             }
@@ -158,7 +158,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         };
         let name = Ranged::new(name_range, name);
 
-        self.expect_left_paren("functienaam")?;
+        self.expect_left_paren("werkwijzenaam")?;
 
         let mut parameters = Vec::new();
         while self.peek_punctuator() != Some(Punctuator::RightParenthesis) {
@@ -184,8 +184,8 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
         }
 
-        self.expect_right_paren("functienaam")?;
-        self.expect_left_curly_bracket("functieargumentenlijst")?;
+        self.expect_right_paren("werkwijzenaam")?;
+        self.expect_left_curly_bracket("werkwijzeargumentenlijst")?;
 
         let mut body = Vec::new();
         loop {
@@ -659,7 +659,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
 
             if !arguments.is_empty() {
-                if let Err(error) = self.expect_comma("argument in functieaanroep") {
+                if let Err(error) = self.expect_comma("argument in werkwijzeaanroep") {
                     self.handle_error(error)?;
                     break;
                 }
@@ -971,7 +971,7 @@ pub enum ParseDiagnostic<'source_code> {
     #[error("Ongeldig start van een statement: {token}")]
     StatementInvalidStart{ token: Token<'source_code> },
 
-    #[error("Ongeldig start van een functieaanroepstatement: {token}")]
+    #[error("Ongeldig start van een werkwijzeaanroepstatement: {token}")]
     ExpressionFunctionCallNotStartingWithIdentifier { token: Token<'source_code> },
 
     #[error("Open accolade verwacht `{{` na {context}, maar kreeg: {token}")]
@@ -1007,7 +1007,7 @@ pub enum ParseDiagnostic<'source_code> {
     #[error("Puntkomma verwacht ';' na statement, maar kreeg: {token}")]
     ExpectedSemicolonAfterStatement { token: Token<'source_code> },
 
-    #[error("Functienaam verwacht na `functie`, maar kreeg: {token}")]
+    #[error("Werkwijzenaam verwacht na `werkwijze`, maar kreeg: {token}")]
     FunctionStatementExpectedName { token: Token<'source_code> },
 
     #[error("{ident_purpose} verwacht na `{previous}`, maar kreeg: {token}")]

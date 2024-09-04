@@ -622,20 +622,20 @@ pub enum SemanticDiagnosticKind<'source_code> {
         expression: &'source_code Expression<'source_code>
     },
 
-    #[error("Functie `{name}` bestaat niet.")]
+    #[error("Werkwijze `{name}` bestaat niet.")]
     InvalidFunctionReference { name: &'source_code str },
 
     #[error("Kon waarde `{identifier}` niet vinden binnen deze scoop.")]
     InvalidIdentifierReference { identifier: &'source_code str },
 
-    #[error("Te weinig argument gegeven aan functie `{function_name}` ({arg_count} gegeven maar {param_count} verwacht)")]
+    #[error("Te weinig argumenten gegeven aan werkwijze `{function_name}` ({arg_count} gegeven maar {param_count} verwacht)")]
     TooFewArguments {
         function_name: &'source_code str,
         param_count: usize,
         arg_count: usize,
     },
 
-    #[error("Te veel argument gegeven aan functie `{function_name}` ({arg_count} gegeven maar {param_count} verwacht)")]
+    #[error("Te veel argumenten gegeven aan werkwijze `{function_name}` ({arg_count} gegeven maar {param_count} verwacht)")]
     TooManyArguments {
         function_name: &'source_code str,
         param_count: usize,
@@ -653,7 +653,7 @@ pub enum SemanticDiagnosticKind<'source_code> {
         rhs_type: SemanticType<'source_code>,
     },
 
-    #[error("Ongeldig argument gegeven voor functie: argument van type `{argument_type}` is niet gelijksoortig met parameter van type `{parameter_type}`.")]
+    #[error("Ongeldig argument gegeven voor werkwijze: argument van type `{argument_type}` is niet gelijksoortig met parameter van type `{parameter_type}`.")]
     IncompatibleArgumentParameterType {
         argument_type: SemanticType<'source_code>,
         parameter_type: SemanticType<'source_code>,
@@ -671,7 +671,7 @@ pub enum SemanticDiagnosticKind<'source_code> {
         name: &'source_code str,
     },
 
-    #[error("Type `{typ}` is een functie, en kan geen methodes bevatten.")]
+    #[error("Type `{typ}` is een werkwijze, en kan geen methodes bevatten.")]
     FunctionCannotHaveMethod {
         typ: SemanticType<'source_code>,
         name: &'source_code str,
@@ -862,7 +862,7 @@ impl<'source_code> SemanticReference<'source_code> {
     pub fn hover(&self) -> String {
         match self.local_kind {
             SemanticLocalKind::Function | SemanticLocalKind::FunctionReference => {
-                format!("```bab\nfunctie {}(..)\n```", self.local_name)
+                format!("```bab\nwerkwijze {}(..)\n```", self.local_name)
             }
 
             SemanticLocalKind::FieldReference => {

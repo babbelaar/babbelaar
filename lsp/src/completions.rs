@@ -56,7 +56,7 @@ impl<'b> CompletionEngine<'b> {
         let mut was_new_func = false;
         let mut prev_punc = None;
         let completion_mode = self.server.find_tokens_at(&self.params.text_document_position, |token, previous| {
-            was_new_func = previous.last().is_some_and(|tok| matches!(tok.kind, TokenKind::Keyword(Keyword::Functie)));
+            was_new_func = previous.last().is_some_and(|tok| matches!(tok.kind, TokenKind::Keyword(Keyword::Werkwijze)));
             prev_punc = previous.last().and_then(|x| if let TokenKind::Punctuator(punc) = x.kind { Some(punc) } else { None });
 
             if prev_punc == Some(Punctuator::Period) {

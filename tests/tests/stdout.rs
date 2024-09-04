@@ -24,7 +24,7 @@ use tests::interpret_and_return_stdout;
 )]
 #[case(
     r#"
-        functie hallo(a: g32) {
+        werkwijze hallo(a: g32) {
             schrijf(€"{a * 5}");
         }
 

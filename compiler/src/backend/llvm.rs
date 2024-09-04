@@ -295,7 +295,7 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
 
                         let retval = match postfix.lhs.value() {
                             Expression::Primary(PrimaryExpression::Reference(reference)) => {
-                                let func = self.module.get_function(reference.value()).expect(&format!("ICE: functie niet gevonden {}", reference.value()));
+                                let func = self.module.get_function(reference.value()).expect(&format!("ICE: Werkwijze niet gevonden {}", reference.value()));
                                 self.builder.build_direct_call(func, &args, "callExpr").expect(&format!("Failed to call: {}", reference.value()))
                             }
 

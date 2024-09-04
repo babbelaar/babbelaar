@@ -95,7 +95,7 @@ impl Display for Value {
             Self::Integer(i) => i.fmt(f),
             Self::String(str) => f.write_str(str),
             Self::MethodReference { lhs, method } => f.write_fmt(format_args!("{lhs}.{}()", method.name)),
-            Self::Function { name, .. } => f.write_fmt(format_args!("functie {name}() {{ .. }}")),
+            Self::Function { name, .. } => f.write_fmt(format_args!("werkwijze {name}() {{ .. }}")),
             Self::Object { .. } => f.write_str("te-doen(object-waarde-formatteren)"),
         }
     }

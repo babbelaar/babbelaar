@@ -7,7 +7,7 @@ use babbelaar::*;
 use rstest::rstest;
 
 #[rstest]
-#[case("functie hallo(afafg: Slinger) {
+#[case("werkwijze hallo(afafg: Slinger) {
     als
 }
 ")]

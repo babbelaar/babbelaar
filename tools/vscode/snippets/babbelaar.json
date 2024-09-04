@@ -1,13 +1,13 @@
 {
-    "Nieuwe functie aanmaken": {
-        "prefix": ["functie"],
-        "body": ["functie ${1:naam}() {", "\t$0", "}"],
-        "description": "Een nieuwe functie."
+    "Nieuwe werkwijze aanmaken": {
+        "prefix": ["werkwijze"],
+        "body": ["werkwijze ${1:naam}() {", "\t$0", "}"],
+        "description": "Een nieuwe werkwijze."
     },
     "Nieuwe structuur aanmaken": {
         "prefix": ["structuur"],
         "body": ["structuur ${1:naam} {", "\t$0", "}"],
-        "description": "Een nieuwe functie."
+        "description": "Een nieuwe structuur."
     },
     "Itereren met volg in reeks": {
         "prefix": ["volg", "volg-reeks"],

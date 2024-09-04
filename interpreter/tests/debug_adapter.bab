@@ -1,8 +1,8 @@
-functie a() {
+werkwijze a() {
 
 }
 
-functie hallo() {
+werkwijze hallo() {
     a();
 }
 
