@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Expression, FileRange, ForStatement, FunctionStatement, IfStatement, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Structure, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
+use babbelaar::{AssignStatement, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Structure, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
@@ -130,7 +130,29 @@ impl<'source_code> Symbolizer<'source_code> {
     }
 
     fn add_statement_structure(&mut self, statement: &'source_code Structure<'source_code>) {
-        _ = statement;
+        self.symbols.insert(LspSymbol {
+            name: statement.name.value().to_string(),
+            kind: LspTokenType::Class,
+            range: statement.name.range(),
+        });
+
+        for field in &statement.fields {
+            self.add_structure_field(field);
+        }
+    }
+
+    fn add_structure_field(&mut self, field: &'source_code Field<'source_code>) {
+        self.symbols.insert(LspSymbol {
+            name: field.name.value().to_string(),
+            kind: LspTokenType::Property,
+            range: field.name.range(),
+        });
+
+        self.symbols.insert(LspSymbol {
+            name: "Type".to_string(),
+            kind: LspTokenType::Class,
+            range: field.ty.range(),
+        });
     }
 
     fn add_statement_variable(&mut self, statement: &'source_code VariableStatement<'source_code>) {
