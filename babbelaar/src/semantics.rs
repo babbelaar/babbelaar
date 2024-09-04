@@ -66,6 +66,16 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
         for param in &function.parameters {
             let typ = self.resolve_type(&param.ty);
+
+            if let Some(tracker) = &mut self.context.definition_tracker {
+                tracker.insert(param.ty.range(), SemanticReference {
+                    local_name: param.ty.specifier.name(),
+                    local_kind: SemanticLocalKind::StructureReference,
+                    declaration_range: typ.declaration_range(),
+                    typ: typ.clone(),
+                });
+            }
+
             self.context.scope.last_mut().unwrap().locals.insert(&param.name, SemanticLocal {
                 kind: SemanticLocalKind::Parameter,
                 declaration_range: param.name.range(),

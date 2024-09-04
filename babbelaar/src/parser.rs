@@ -511,7 +511,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             TokenKind::TemplateString(template_string) => self.parse_template_string(template_string),
             TokenKind::Keyword(Keyword::Waar) => Ok(PrimaryExpression::Boolean(true)),
             TokenKind::Keyword(Keyword::Onwaar) => Ok(PrimaryExpression::Boolean(false)),
-            TokenKind::Keyword(Keyword::Nieuwe) => self.parse_structure_instantiation(),
+            TokenKind::Keyword(Keyword::Nieuw) => self.parse_structure_instantiation(),
 
             TokenKind::Punctuator(Punctuator::LeftParenthesis) => {
                 let expression = self.parse_expression()?;
@@ -898,13 +898,13 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     fn parse_structure_instantiation(&mut self) -> Result<PrimaryExpression<'source_code>, ParseDiagnostic<'source_code>> {
         let name_token = self.peek_token()?;
         let TokenKind::Identifier(name) = name_token.kind else {
-            return Err(ParseDiagnostic::ExpectedNameAfterNieuwe { token: name_token.clone() });
+            return Err(ParseDiagnostic::ExpectedNameAfterNieuw { token: name_token.clone() });
         };
 
         let name = Ranged::new(name_token.range(), name);
         _ = self.consume_token();
 
-        self.expect_left_curly_bracket("nieuwe")?;
+        self.expect_left_curly_bracket("nieuw")?;
 
         let mut expr = StructureInstantiationExpression {
             name,
@@ -990,7 +990,7 @@ pub enum ParseDiagnostic<'source_code> {
     ExpectedComma { token: Token<'source_code>, context: &'static str },
 
     #[error("Naam van structuur verwacht, maar kreeg: {token}")]
-    ExpectedNameAfterNieuwe { token: Token<'source_code> },
+    ExpectedNameAfterNieuw { token: Token<'source_code> },
 
     #[error("Naam van structuurveld verwacht, maar kreeg: {token}")]
     ExpectedNameOfField { token: Token<'source_code> },
@@ -1066,7 +1066,7 @@ impl<'source_code> ParseDiagnostic<'source_code> {
             Self::ExpectedColon { token, .. } => Some(token),
             Self::ExpectedComma { token, .. } => Some(token),
             Self::ExpectedSemicolonAfterStatement { token, .. } => Some(token),
-            Self::ExpectedNameAfterNieuwe { token } => Some(token),
+            Self::ExpectedNameAfterNieuw { token } => Some(token),
             Self::ExpectedNameOfField { token } => Some(token),
             Self::ExpectedNameOfStructuur { token } => Some(token),
             Self::ExpectedNameOfVariable { token } => Some(token),

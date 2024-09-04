@@ -7,7 +7,7 @@ functie gedag(aan: Persoon) {
     schrijf(€"Hallo, {aan.voornaam} {aan.achternaam}");
 }
 
-stel anoniem = nieuwe Persoon {
+stel anoniem = nieuw Persoon {
     voornaam: "John",
     achternaam: "Doe",
 };

@@ -13,7 +13,7 @@ pub enum Keyword {
     Bekeer,
     Functie,
     In,
-    Nieuwe,
+    Nieuw,
     Onwaar,
     Reeks,
     Stel,
@@ -42,8 +42,8 @@ impl Keyword {
                 completion: "functie ${1:naam}() {\n\t$0\n}",
                 inline_detail: "Een nieuwe functie.",
             }),
-            Self::Nieuwe => Some(LspCompletion {
-                completion: "nieuwe ${1:structuurnaam} {\n\t${0:velden}\n}",
+            Self::Nieuw => Some(LspCompletion {
+                completion: "nieuw ${1:structuurnaam} {\n\t${0:velden}\n}",
                 inline_detail: "Een nieuw object",
             }),
             Self::Stel => Some(LspCompletion {
@@ -74,7 +74,7 @@ impl DocumentationProvider for Keyword {
             Self::Bekeer => "Geef een waarde terug aan de aanroeper van de functie.",
             Self::Functie => "Definieer een nieuwe functie.",
             Self::In => "Herhaal over een stel waardes met `volg`.",
-            Self::Nieuwe => "Maak een nieuw object aan.",
+            Self::Nieuw => "Maak een nieuw object aan.",
             Self::Onwaar => "Een waarde van het type `booleaan`. Tegenovergestelde van `waar`",
             Self::Reeks => {
                 r#"Stel een reeks op van getallen.

@@ -384,7 +384,7 @@ impl<'source_code> Format for PrimaryExpression<'source_code> {
 
 impl<'source_code> Format for StructureInstantiationExpression<'source_code> {
     fn format(&self, f: &mut Formatter) {
-        f.write_str("nieuwe ");
+        f.write_str("nieuw ");
         f.write_str(&self.name);
         f.write_str(" ");
         f.with_curly_block(|f| {
