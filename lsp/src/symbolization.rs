@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Structure, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
+use babbelaar::{AssignStatement, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
@@ -184,6 +184,7 @@ impl<'source_code> Symbolizer<'source_code> {
                         kind: match reference.local_kind {
                             SemanticLocalKind::FieldReference => LspTokenType::Property,
                             SemanticLocalKind::Iterator => LspTokenType::Variable,
+                            SemanticLocalKind::StructureReference => LspTokenType::Class,
                             SemanticLocalKind::Parameter => LspTokenType::ParameterName,
                             SemanticLocalKind::Function => LspTokenType::Function,
                             SemanticLocalKind::FunctionReference => LspTokenType::Function,
@@ -205,6 +206,10 @@ impl<'source_code> Symbolizer<'source_code> {
                         self.add_expression(expression);
                     }
                 }
+            }
+
+            Expression::Primary(PrimaryExpression::StructureInstantiation(instantiation)) => {
+                self.add_expression_structure_instantiation(instantiation);
             }
 
             Expression::Primary(..) => (),
@@ -239,6 +244,14 @@ impl<'source_code> Symbolizer<'source_code> {
                 });
             }
         }
+    }
+
+    fn add_expression_structure_instantiation(&mut self, expression: &StructureInstantiationExpression) {
+        self.symbols.insert(LspSymbol {
+            name: expression.name.value().to_string(),
+            kind: LspTokenType::Class,
+            range: expression.name.range(),
+        });
     }
 }
 

@@ -325,6 +325,15 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         let all_valid_fields: HashMap<&str, &SemanticField<'source_code>> = structure.fields.iter().map(|x| (*x.name.value(), x)).collect();
         let mut fields_left = all_valid_fields.clone();
 
+        if let Some(tracker) = &mut self.context.definition_tracker {
+            tracker.insert(instantiation.name.range(), SemanticReference {
+                local_name: &instantiation.name,
+                local_kind: SemanticLocalKind::StructureReference,
+                declaration_range: structure.name.range(),
+                typ: SemanticType::Custom(Rc::clone(&structure)),
+            });
+        }
+
         for field_instantiation in &instantiation.fields {
             let name = &field_instantiation.name;
             match fields_left.remove(name.value()) {
@@ -850,6 +859,18 @@ impl<'source_code> SemanticReference<'source_code> {
                 format!("```bab\nveld {}: {}\n```", self.local_name, self.typ)
             }
 
+            SemanticLocalKind::StructureReference => {
+                let mut fields = String::new();
+
+                if let SemanticType::Custom(typ) = &self.typ {
+                    for field in &typ.fields {
+                        fields += &format!("\n    veld {}: {}", field.name.value(), field.ty);
+                    }
+                }
+
+                format!("```bab\nstructuur {} {{{fields}\n}}\n```", self.local_name)
+            }
+
             SemanticLocalKind::Variable => {
                 format!("```bab\nstel {}: {}\n```", self.local_name, self.typ)
             }
@@ -935,6 +956,7 @@ impl<'source_code> Display for SemanticType<'source_code> {
 pub enum SemanticLocalKind {
     Parameter,
     FieldReference,
+    StructureReference,
     Iterator,
     Function,
     FunctionReference,
@@ -947,6 +969,7 @@ impl SemanticLocalKind {
         match self {
             Self::Parameter => false,
             Self::FieldReference => false,
+            Self::StructureReference => true,
             Self::Iterator => false,
             Self::Function => true,
             Self::FunctionReference => true,
