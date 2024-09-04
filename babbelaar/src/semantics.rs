@@ -342,6 +342,15 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                             },
                         });
                     }
+
+                    if let Some(tracker) = &mut self.context.definition_tracker {
+                        tracker.insert(field_instantiation.name.range(), SemanticReference {
+                            local_name: &field.name,
+                            local_kind: SemanticLocalKind::FieldReference,
+                            declaration_range: field.name.range(),
+                            typ: field.ty.clone(),
+                        });
+                    }
                 }
                 None => {
                     if all_valid_fields.contains_key(name.value()) {
@@ -503,6 +512,15 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         if let SemanticType::Custom(structure) = &typ {
             for field in &structure.fields {
                 if field.name.value() == member.value() {
+                    if let Some(tracker) = &mut self.context.definition_tracker {
+                        tracker.insert(member.range(), SemanticReference {
+                            local_name: &member,
+                            local_kind: SemanticLocalKind::FieldReference,
+                            declaration_range: field.name.range(),
+                            typ: field.ty.clone(),
+                        });
+                    }
+
                     return field.ty.clone();
                 }
             }
@@ -828,6 +846,14 @@ impl<'source_code> SemanticReference<'source_code> {
                 format!("```bab\nfunctie {}(..)\n```", self.local_name)
             }
 
+            SemanticLocalKind::FieldReference => {
+                format!("```bab\nveld {}: {}\n```", self.local_name, self.typ)
+            }
+
+            SemanticLocalKind::Variable => {
+                format!("```bab\nstel {}: {}\n```", self.local_name, self.typ)
+            }
+
             _ => {
                 format!("```bab\n{}: {}\n```", self.local_name, self.typ)
             }
@@ -908,6 +934,7 @@ impl<'source_code> Display for SemanticType<'source_code> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SemanticLocalKind {
     Parameter,
+    FieldReference,
     Iterator,
     Function,
     FunctionReference,
@@ -919,6 +946,7 @@ impl SemanticLocalKind {
     pub const fn is_function(&self) -> bool {
         match self {
             Self::Parameter => false,
+            Self::FieldReference => false,
             Self::Iterator => false,
             Self::Function => true,
             Self::FunctionReference => true,

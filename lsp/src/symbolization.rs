@@ -160,6 +160,7 @@ impl<'source_code> Symbolizer<'source_code> {
                     self.symbols.insert(LspSymbol {
                         name: identifier.value().to_string(),
                         kind: match reference.local_kind {
+                            SemanticLocalKind::FieldReference => LspTokenType::Property,
                             SemanticLocalKind::Iterator => LspTokenType::Variable,
                             SemanticLocalKind::Parameter => LspTokenType::ParameterName,
                             SemanticLocalKind::Function => LspTokenType::Function,
