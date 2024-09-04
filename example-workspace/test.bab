@@ -1,26 +1,15 @@
-structuur Hallo {
-    veld naam: Slinger,
+structuur Persoon {
+    veld voornaam: Slinger,
+    veld achternaam: Slinger,
 }
 
-functie hai(h: Hallo) {
-    als h.naam == "Doei" {
-        schrijf("Doei!");
-        bekeer;
-    }
-
-    schrijf(€"Hai, {h.naam}!");
-
-    h.naam = "Doei";
-    hai(h);
+functie gedag(aan: Persoon) {
+    schrijf(€"Hallo, {aan.voornaam} {aan.achternaam}");
 }
 
-hai(nieuwe Hallo {
-    naam: "adaf",
-});
-
-stel abc = nieuwe Hallo {
-    naam: "gfsad",
+stel anoniem = nieuwe Persoon {
+    voornaam: "John",
+    achternaam: "Doe",
 };
 
-schrijf("");
-hai(abc);
+gedag(anoniem);

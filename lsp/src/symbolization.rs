@@ -149,7 +149,7 @@ impl<'source_code> Symbolizer<'source_code> {
         });
 
         self.symbols.insert(LspSymbol {
-            name: "Type".to_string(),
+            name: field.ty.specifier.name().to_string(),
             kind: LspTokenType::Class,
             range: field.ty.range(),
         });

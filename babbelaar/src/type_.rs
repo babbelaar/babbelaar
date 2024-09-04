@@ -21,3 +21,13 @@ pub enum TypeSpecifier<'source_code> {
         name: Ranged<&'source_code str>,
     },
 }
+
+impl<'source_code> TypeSpecifier<'source_code> {
+    #[must_use]
+    pub const fn name(&self) -> &str {
+        match self {
+            Self::BuiltIn(ty) => ty.name(),
+            Self::Custom { name } => name.value(),
+        }
+    }
+}
