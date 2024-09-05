@@ -220,7 +220,10 @@ impl Backend {
 
                     Diagnostic {
                         range: convert_file_range(e.range()),
-                        severity: Some(DiagnosticSeverity::ERROR),
+                        severity: Some(match e.severity() {
+                            SemanticDiagnosticSeverity::Error => DiagnosticSeverity::ERROR,
+                            SemanticDiagnosticSeverity::Warning => DiagnosticSeverity::WARNING,
+                        }),
                         code: Some(NumberOrString::String(e.kind().name().to_string())),
                         code_description: None,
                         source: None,

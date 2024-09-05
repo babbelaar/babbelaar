@@ -1,6 +1,7 @@
 structuur Persoon {
     veld voornaam: Slinger,
     veld achternaam: Slinger,
+    veld leeftijd: g32,
 }
 
 werkwijze gedag(aan: Persoon) {
@@ -8,8 +9,8 @@ werkwijze gedag(aan: Persoon) {
 }
 
 stel anoniem = nieuw Persoon {
-    voornaam: "John",
-    achternaam: "Doe",
 };
 
 gedag(anoniem);
+
+stel mijnNaam = "hoi";

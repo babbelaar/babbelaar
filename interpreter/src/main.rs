@@ -98,8 +98,13 @@ fn analyze(tree: &ParseTree<'_>) {
     analyzer.analyze_tree(&tree);
 
     let diags = analyzer.into_diagnostics();
+    let mut has_error = false;
     for diagnostic in &diags {
-        eprintln!("Fout: {}", diagnostic.kind());
+        eprintln!("{}: {}", diagnostic.severity(), diagnostic.kind());
+
+        if diagnostic.severity() == SemanticDiagnosticSeverity::Error {
+            has_error = true;
+        }
     }
 
     if !diags.is_empty() {
@@ -111,7 +116,9 @@ fn analyze(tree: &ParseTree<'_>) {
                 if diags.len() == 1 {  "probleem" } else { "problemen" }
             );
         }
+    }
 
+    if has_error {
         exit(2);
     }
 }

@@ -96,6 +96,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             StatementKind::Expression(expr) => {
                 if self.analyze_expression(expr).usage == SemanticUsage::Pure {
                     let diag = SemanticDiagnostic::new(expr.range(), SemanticDiagnosticKind::UnusedPureValue)
+                        .warn()
                         .with_action(BabbelaarCodeAction::new(
                             BabbelaarCodeActionType::RemovePureStatement,
                             vec![
@@ -740,6 +741,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 pub struct SemanticDiagnostic<'source_code> {
     range: FileRange,
     kind: SemanticDiagnosticKind<'source_code>,
+    severity: SemanticDiagnosticSeverity,
     related: Vec<SemanticRelatedInformation<'source_code>>,
     actions: Vec<BabbelaarCodeAction>,
 }
@@ -750,6 +752,7 @@ impl<'source_code> SemanticDiagnostic<'source_code> {
         Self {
             range,
             kind,
+            severity: SemanticDiagnosticSeverity::Error,
             related: Vec::new(),
             actions: Vec::new(),
         }
@@ -790,6 +793,32 @@ impl<'source_code> SemanticDiagnostic<'source_code> {
         }
 
         self
+    }
+
+    #[must_use]
+    pub fn severity(&self) -> SemanticDiagnosticSeverity {
+        self.severity
+    }
+
+    #[must_use]
+    fn warn(mut self) -> Self {
+        self.severity = SemanticDiagnosticSeverity::Warning;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SemanticDiagnosticSeverity {
+    Error,
+    Warning,
+}
+
+impl Display for SemanticDiagnosticSeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Error => f.write_str("Fout"),
+            Self::Warning => f.write_str("Waarschuwing"),
+        }
     }
 }
 

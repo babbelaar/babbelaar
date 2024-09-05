@@ -107,6 +107,22 @@ impl FileRange {
 
         self.start.offset <= location.offset && self.end.offset >= location.offset
     }
+
+    #[must_use]
+    pub fn as_full_line(&self) -> Self {
+        Self {
+            start: FileLocation {
+                offset: self.start.offset - self.start.column,
+                line: self.start.line,
+                column: 0,
+            },
+            end: FileLocation {
+                offset: self.end.offset + 1,
+                line: self.end.line + 1,
+                column: 0,
+            }
+        }
+    }
 }
 
 impl From<(FileLocation, FileLocation)> for FileRange {
@@ -246,6 +262,9 @@ pub enum BabbelaarCodeActionType {
 
     #[error("vul structuurvelden van `{structure}`")]
     FillStructureFields { structure: String },
+
+    #[error("verwijder puur statement")]
+    RemovePureStatement,
 }
 
 #[derive(Debug, Clone)]
