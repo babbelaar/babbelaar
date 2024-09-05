@@ -110,9 +110,11 @@ impl<'source_code> Lexer<'source_code> {
     }
 
     fn consume_string(&mut self) -> Option<Token<'source_code>> {
+        let begin = self.current_location();
+
         assert_eq!(self.next_char().unwrap(), '"');
 
-        let begin = self.current_location();
+        let offset_begin = self.current_location().offset();
 
         loop {
             let Some(c) = self.peek_char() else {
@@ -126,10 +128,12 @@ impl<'source_code> Lexer<'source_code> {
             self.consume_char();
         }
 
-        let end = self.current_location();
-        let str = &self.input[begin.offset()..end.offset()];
+        let offset_end = self.current_location().offset();
+        let str = &self.input[offset_begin..offset_end];
 
         self.consume_char();
+
+        let end = self.current_location();
 
         Some(Token {
             kind: TokenKind::StringLiteral(str),
