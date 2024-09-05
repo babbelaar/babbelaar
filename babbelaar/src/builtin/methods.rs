@@ -23,6 +23,7 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
             },
         ],
         return_type: BuiltinType::Bool,
+        must_use: true,
     },
     BuiltinFunction {
         name: "isLeeg",
@@ -32,6 +33,7 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
         lsp_completion: None,
         parameters: &[],
         return_type: BuiltinType::Bool,
+        must_use: true,
     },
     BuiltinFunction {
         name: "begintMet",
@@ -46,6 +48,7 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
             },
         ],
         return_type: BuiltinType::Bool,
+        must_use: true,
     },
     BuiltinFunction {
         name: "eindigtMet",
@@ -60,6 +63,7 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
             },
         ],
         return_type: BuiltinType::Bool,
+        must_use: true,
     },
     BuiltinFunction {
         name: "naarKleineLetters",
@@ -69,6 +73,7 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
         lsp_completion: None,
         parameters: &[],
         return_type: BuiltinType::Slinger,
+        must_use: true,
     },
     BuiltinFunction {
         name: "naarHoofdletters",
@@ -78,6 +83,7 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
         lsp_completion: None,
         parameters: &[],
         return_type: BuiltinType::Slinger,
+        must_use: true,
     },
     BuiltinFunction {
         name: "lengte",
@@ -87,6 +93,7 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
         lsp_completion: None,
         parameters: &[],
         return_type: BuiltinType::G32,
+        must_use: true,
     },
 ];
 

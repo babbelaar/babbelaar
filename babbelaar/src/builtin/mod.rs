@@ -32,6 +32,7 @@ impl Builtin {
                 }
             ],
             return_type: BuiltinType::Null,
+            must_use: true,
         },
         BuiltinFunction {
             name: "lees",
@@ -41,6 +42,7 @@ impl Builtin {
             lsp_completion: Some("lees();$0"),
             parameters: &[],
             return_type: BuiltinType::Null,
+            must_use: true,
         }
     ];
 

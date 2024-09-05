@@ -54,7 +54,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
     }
 
-    fn analyze_expression(&mut self, expression: &'source_code Expression<'source_code>) -> SemanticType<'source_code> {
+    fn analyze_expression(&mut self, expression: &'source_code Expression<'source_code>) -> SemanticValue<'source_code> {
         match expression {
             Expression::BiExpression(bi) => self.analyze_bi_expression(bi),
             Expression::Postfix(postfix) => self.analyze_postfix_expression(postfix),
@@ -94,7 +94,19 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
         match &statement.kind {
             StatementKind::Expression(expr) => {
-                self.analyze_expression(expr);
+                if self.analyze_expression(expr).usage == SemanticUsage::Pure {
+                    let diag = SemanticDiagnostic::new(expr.range(), SemanticDiagnosticKind::UnusedPureValue)
+                        .with_action(BabbelaarCodeAction::new(
+                            BabbelaarCodeActionType::RemovePureStatement,
+                            vec![
+                                FileEdit::new(
+                                    expr.range().as_full_line(),
+                                    String::new()
+                                )
+                            ]
+                        ));
+                    self.diagnostics.push(diag);
+                }
             }
             StatementKind::Assignment(assign) => {
                 self.analyze_assignment_destination(assign.range(), &assign.dest);
@@ -192,7 +204,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     fn analyze_variable_statement(&mut self, statement: &'source_code VariableStatement<'source_code>) {
-        let typ = self.analyze_expression(&statement.expression);
+        let typ = self.analyze_expression(&statement.expression).ty;
         self.context.scope.last_mut().unwrap().locals.insert(&statement.name, SemanticLocal {
             kind: SemanticLocalKind::Variable,
             declaration_range: statement.name.range(),
@@ -200,9 +212,9 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         });
     }
 
-    fn analyze_bi_expression(&mut self, expression: &'source_code BiExpression<'source_code>) -> SemanticType<'source_code> {
-        let lhs_type = self.analyze_expression(&expression.lhs);
-        let rhs_type = self.analyze_expression(&expression.rhs);
+    fn analyze_bi_expression(&mut self, expression: &'source_code BiExpression<'source_code>) -> SemanticValue<'source_code> {
+        let lhs_type = self.analyze_expression(&expression.lhs).ty;
+        let rhs_type = self.analyze_expression(&expression.rhs).ty;
 
         if lhs_type != rhs_type {
             self.diagnostics.push(SemanticDiagnostic::new(
@@ -214,10 +226,13 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             ));
         }
 
-        lhs_type
+        SemanticValue {
+            ty: lhs_type,
+            usage: SemanticUsage::Pure,
+        }
     }
 
-    fn analyze_function_call_expression(&mut self, lhs: SemanticType<'source_code>, expression: &'source_code FunctionCallExpression<'source_code>) -> SemanticType<'source_code> {
+    fn analyze_function_call_expression(&mut self, lhs: SemanticType<'source_code>, expression: &'source_code FunctionCallExpression<'source_code>) -> SemanticValue<'source_code> {
         let function_name = match lhs {
             SemanticType::Builtin(builtin) => builtin.name(),
             SemanticType::Custom(custom) => &custom.name,
@@ -230,7 +245,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 expression.token_left_paren,
                 SemanticDiagnosticKind::InvalidFunctionReference { name: &function_name }
             ));
-            return SemanticType::Builtin(BuiltinType::Null);
+            return SemanticValue::null();
         };
 
         let function_hint = SemanticRelatedInformation::new(
@@ -253,11 +268,11 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 expression.token_right_paren,
                 SemanticDiagnosticKind::TooManyArguments { function_name, param_count, arg_count },
             ).with_related(function_hint.clone()));
-            return SemanticType::Builtin(BuiltinType::Null);
+            return SemanticValue::null();
         }
 
         for (arg_idx, arg) in expression.arguments.iter().enumerate() {
-            let argument_type = self.analyze_expression(arg);
+            let argument_type = self.analyze_expression(arg).ty;
             let function = self.find_function(&function_name).unwrap();
 
             let Some(parameter_type) = self.resolve_parameter_type(&function, arg_idx) else {
@@ -282,11 +297,11 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             }
         }
 
-        SemanticType::Builtin(BuiltinType::Null)
+        SemanticValue::null()
     }
 
-    fn analyze_primary_expression(&mut self, expression: &'source_code PrimaryExpression<'source_code>) -> SemanticType<'source_code> {
-        match expression {
+    fn analyze_primary_expression(&mut self, expression: &'source_code PrimaryExpression<'source_code>) -> SemanticValue<'source_code> {
+        let ty = match expression {
             PrimaryExpression::Boolean(..) => {
                 SemanticType::Builtin(BuiltinType::Bool)
             }
@@ -299,7 +314,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 SemanticType::Builtin(BuiltinType::Slinger)
             }
 
-            PrimaryExpression::StructureInstantiation(structure) => self.analyze_structure_instantiation(structure),
+            PrimaryExpression::StructureInstantiation(structure) => self.analyze_structure_instantiation(structure).ty,
 
             PrimaryExpression::TemplateString { parts } => {
                 for part in parts {
@@ -322,7 +337,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                         reference.range(),
                         SemanticDiagnosticKind::InvalidIdentifierReference { identifier: &reference }
                     ));
-                    return SemanticType::Builtin(BuiltinType::Null);
+                    return SemanticValue::null();
                 };
 
                 let local_reference = SemanticReference {
@@ -340,14 +355,19 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 typ
             }
 
-            PrimaryExpression::Parenthesized(expr) => self.analyze_expression(expr),
+            PrimaryExpression::Parenthesized(expr) => return self.analyze_expression(expr),
+        };
+
+        SemanticValue {
+            ty,
+            usage: SemanticUsage::Pure,
         }
     }
 
-    fn analyze_structure_instantiation(&mut self, instantiation: &'source_code StructureInstantiationExpression<'source_code>) -> SemanticType<'source_code> {
+    fn analyze_structure_instantiation(&mut self, instantiation: &'source_code StructureInstantiationExpression<'source_code>) -> SemanticValue<'source_code> {
         let ty = self.resolve_type_by_name(&instantiation.name);
         let SemanticType::Custom(structure) = &ty else {
-            return SemanticType::null();
+            return SemanticValue::null();
         };
 
         let struct_hint = SemanticRelatedInformation::new(
@@ -372,7 +392,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             match fields_left.remove(name.value()) {
                 Some(field) => {
                     let declaration_type = &field.ty;
-                    let definition_type = self.analyze_expression(&field_instantiation.value);
+                    let definition_type = self.analyze_expression(&field_instantiation.value).ty;
                     if declaration_type != &definition_type {
                         let action = self.try_create_conversion_action(declaration_type, &definition_type, field_instantiation);
 
@@ -422,7 +442,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             }
         }
 
-        ty
+        SemanticValue {
+            ty,
+            usage: SemanticUsage::Pure,
+        }
     }
 
     fn find_local_by_name<'this, P>(&'this self, predicate: P) -> Option<&'this SemanticLocal<'source_code>>
@@ -566,8 +589,8 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         })
     }
 
-    fn analyze_postfix_expression(&mut self, postfix: &'source_code PostfixExpression<'source_code>) -> SemanticType<'source_code> {
-        let lhs = self.analyze_expression(&postfix.lhs);
+    fn analyze_postfix_expression(&mut self, postfix: &'source_code PostfixExpression<'source_code>) -> SemanticValue<'source_code> {
+        let lhs = self.analyze_expression(&postfix.lhs).ty;
         match &postfix.kind {
             PostfixExpressionKind::Call(call) => self.analyze_function_call_expression(lhs, call),
             PostfixExpressionKind::Member(member) => self.analyze_member_expression(lhs, *member),
@@ -575,14 +598,14 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
     }
 
-    fn analyze_member_expression(&mut self, typ: SemanticType<'source_code>, member: Ranged<&'source_code str>) -> SemanticType<'source_code> {
+    fn analyze_member_expression(&mut self, typ: SemanticType<'source_code>, member: Ranged<&'source_code str>) -> SemanticValue<'source_code> {
         let SemanticType::Custom(structure) = &typ else {
             self.diagnostics.push(SemanticDiagnostic::new(
                 member.range(),
                 SemanticDiagnosticKind::InvalidMember { typ, name: member.value() }
             ));
 
-            return SemanticType::null()
+            return SemanticValue::null()
         };
 
         for field in &structure.fields {
@@ -596,7 +619,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     });
                 }
 
-                return field.ty.clone();
+                return SemanticValue {
+                    ty: field.ty.clone(),
+                    usage: SemanticUsage::Pure,
+                };
             }
         }
 
@@ -612,15 +638,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
         self.diagnostics.push(diag.with_related(struct_hint));
 
-        SemanticType::null()
+        SemanticValue::null()
     }
 
-    fn analyze_method_expression(&mut self, typ: SemanticType<'source_code>, expression: &MethodCallExpression<'source_code>) -> SemanticType<'source_code> {
+    fn analyze_method_expression(&mut self, typ: SemanticType<'source_code>, expression: &MethodCallExpression<'source_code>) -> SemanticValue<'source_code> {
         match typ {
             SemanticType::Builtin(builtin) => {
                 for method in builtin.methods() {
                     if method.name == *expression.method_name {
-                        return SemanticType::Builtin(method.return_type);
+                        return SemanticValue {
+                            ty: SemanticType::Builtin(method.return_type),
+                            usage: if method.must_use { SemanticUsage::Pure } else { SemanticUsage::Indifferent },
+                        };
                     }
                 }
 
@@ -629,7 +658,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value() }
                 ));
 
-                SemanticType::null()
+                SemanticValue::null()
             }
 
             SemanticType::Custom(ref custom) => {
@@ -645,7 +674,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
                 self.diagnostics.push(diag.with_related(struct_hint));
 
-                SemanticType::null()
+                SemanticValue::null()
             }
 
             SemanticType::Function(..) | SemanticType::FunctionReference(..) => {
@@ -654,7 +683,8 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     SemanticDiagnosticKind::FunctionCannotHaveMethod { typ, name: expression.method_name.value() }
                 ));
 
-                SemanticType::null()
+                // default SemanticUsage of functions should be default-must_use
+                SemanticValue::null()
             }
         }
     }
@@ -891,6 +921,9 @@ pub enum SemanticDiagnosticKind<'source_code> {
         declaration_type: String,
         definition_type: String,
     },
+
+    #[error("Pure waarde ongebruikt")]
+    UnusedPureValue,
 }
 
 impl<'source_code> SemanticDiagnosticKind<'source_code> {
@@ -1286,4 +1319,26 @@ impl<'source_code> FunctionReference<'source_code> {
             Self::Custom(..) => None,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct SemanticValue<'source_code> {
+    ty: SemanticType<'source_code>,
+    usage: SemanticUsage,
+}
+
+impl<'source_code> SemanticValue<'source_code> {
+    #[must_use]
+    fn null() -> Self {
+        Self {
+            ty: SemanticType::null(),
+            usage: SemanticUsage::Indifferent,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SemanticUsage {
+    Indifferent,
+    Pure,
 }

@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Expression, FileEdit, FileRange, FunctionCallExpression, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StructureInstantiationExpression, TemplateStringExpressionPart};
-use tower_lsp::lsp_types::{CodeActionParams, VersionedTextDocumentIdentifier};
+use tower_lsp::lsp_types::VersionedTextDocumentIdentifier;
 
 #[derive(Debug)]
 pub struct CodeActionItem {
@@ -93,9 +93,6 @@ impl<'source_code> CodeActionsAnalyzable for FunctionCallExpression<'source_code
         for arg in &self.arguments {
             if arg.range().contains(ctx.cursor_range.start()) {
                 arg.analyze(ctx);
-            } else {
-                log::warn!("Note:  loc={:?}   {:#?}", ctx.cursor_range.start(), arg.range());
-
             }
         }
     }

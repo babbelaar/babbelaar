@@ -16,6 +16,7 @@ pub struct BuiltinFunction {
     pub lsp_completion: Option<&'static str>,
     pub parameters: &'static [BuiltinFunctionParameter],
     pub return_type: BuiltinType,
+    pub must_use: bool,
 }
 
 impl BuiltinFunction {
