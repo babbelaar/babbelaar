@@ -242,7 +242,6 @@ impl Backend {
                     info!("Error: {res:#?}");
                     break;
                 };
-                info!("Statement: {statement:#?}");
                 if statement.range.end().line() < caret_line {
                     continue;
                 }
@@ -250,24 +249,30 @@ impl Backend {
                 if statement.range.end().column() < caret_column {
                     continue;
                 }
+                // info!("Statement: {statement:#?}");
 
                 let StatementKind::Expression(expr) = statement.kind else {
+                    log::warn!("Cannot give signature help for a non-expression Statement");
                     return Ok(None);
                 };
 
                 let Expression::Postfix(postfix) = expr.as_ref() else {
+                    log::warn!("Cannot give signature help for a non-postfix Expression");
                     return Ok(None);
                 };
 
                 let PostfixExpressionKind::Call(..) = &postfix.kind else {
+                    log::warn!("Cannot give signature help for a non-call Postfix Expression");
                     return Ok(None);
                 };
 
                 let Expression::Primary(PrimaryExpression::Reference(calling_name)) = postfix.lhs.value() else {
+                    log::warn!("Cannot give signature help for a non-identifier Call Postfix Expression");
                     return Ok(None);
                 };
 
                 let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| &x.name == calling_name.value()) else {
+                    log::warn!("Cannot give signature help for a non-builtin function");
                     return Ok(None);
                 };
 
@@ -305,7 +310,7 @@ impl Backend {
             )),
             completion_provider: Some(CompletionOptions {
                 resolve_provider: Some(false),
-                trigger_characters: Some(vec![".".to_string()]),
+                trigger_characters: Some(vec![".".to_string(), ",".to_string(), "{".to_string()]),
                 work_done_progress_options: WorkDoneProgressOptions::default(),
                 completion_item: Some(CompletionOptionsCompletionItem {
                     label_details_support: Some(true),

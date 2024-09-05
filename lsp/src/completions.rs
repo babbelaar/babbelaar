@@ -38,8 +38,8 @@ impl<'b> CompletionEngine<'b> {
         let mode = self.detect_completion_mode().await?;
 
         match mode {
-            Some(CompletionMode::FieldInstantiation { range, field, structure }) => {
-                self.complete_field_instantiation(range, field, structure).await?;
+            Some(CompletionMode::FieldInstantiation { range, field, structure, new_line }) => {
+                self.complete_field_instantiation(range, field, structure, new_line).await?;
                 Ok(true)
             }
 
@@ -106,8 +106,24 @@ impl<'b> CompletionEngine<'b> {
                                     range: token.range(),
                                     field: ident.to_string(),
                                     structure: struct_ident.to_string(),
+                                    new_line: false,
                                 }));
                             }
+                        }
+                    }
+                }
+            }
+
+            if let TokenKind::Punctuator(Punctuator::Comma) = &token.kind {
+                if let Some((keyword_idx, last_keyword)) = last_keyword {
+                    if last_keyword == Keyword::Nieuw {
+                        if let Some(TokenKind::Identifier(struct_ident)) = previous.get(keyword_idx + 1).map(|x| &x.kind) {
+                            return Ok(Some(CompletionMode::FieldInstantiation {
+                                range: token.range(),
+                                field: String::new(),
+                                structure: struct_ident.to_string(),
+                                new_line: true,
+                            }));
                         }
                     }
                 }
@@ -193,7 +209,7 @@ impl<'b> CompletionEngine<'b> {
         }).await
     }
 
-    async fn complete_field_instantiation(&mut self, range: FileRange, field_to_complete: String, structure: String) -> Result<()> {
+    async fn complete_field_instantiation(&mut self, range: FileRange, field_to_complete: String, structure: String, new_line: bool) -> Result<()> {
         let document = &self.params.text_document_position.text_document;
 
         self.server.with_semantics(document, |analyzer| {
@@ -201,6 +217,8 @@ impl<'b> CompletionEngine<'b> {
                 if let Some(structure) = scope.structures.get(structure.as_str()) {
                     for field in &structure.fields {
                         if let Some(idx) = field.name.find(&field_to_complete) {
+                            let value_hint = field.ty.value_or_field_name_hint();
+                            let new_line = if new_line { "\n" } else { "" };
                             self.completions.push(CompletionItem {
                                 label: field.name.to_string(),
                                 label_details: Some(CompletionItemLabelDetails {
@@ -208,7 +226,7 @@ impl<'b> CompletionEngine<'b> {
                                     description: Some(field.ty.to_string()),
                                 }),
                                 filter_text: Some(field.name[idx..].to_string()),
-                                insert_text: Some(format!("{}: $0", field.name.value())),
+                                insert_text: Some(format!("{new_line}{}: ${{1:{value_hint}}},$0", field.name.value())),
                                 detail: Some(field.ty.to_string()),
                                 insert_text_format: Some(InsertTextFormat::SNIPPET),
                                 kind: Some(CompletionItemKind::FIELD),
@@ -391,6 +409,11 @@ async fn check_if_snippets_are_supported_by_the_client_inner(server: &Backend) -
 enum CompletionMode {
     Method((FileRange, String)),
     Function((FileRange, String)),
-    FieldInstantiation { range: FileRange, field: String, structure: String },
+    FieldInstantiation {
+        range: FileRange,
+        field: String,
+        structure: String,
+        new_line: bool,
+    },
     Structure { range: FileRange, name: String },
 }

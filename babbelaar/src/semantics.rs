@@ -1141,6 +1141,20 @@ impl<'source_code> SemanticType<'source_code> {
             Self::FunctionReference(func) => Some(func.parameter_count()),
         }
     }
+
+    /// A hint to a name that could be used as the name for a field or value.
+    #[must_use]
+    pub fn value_or_field_name_hint(&self) -> &str {
+        match self {
+            Self::Builtin(BuiltinType::Slinger) => "tekst",
+            Self::Builtin(BuiltinType::G32) => "getal",
+            Self::Builtin(builtin) => builtin.name(),
+            Self::Custom(custom) => &custom.name,
+
+            Self::Function(..) => "",
+            Self::FunctionReference(..) => "",
+        }
+    }
 }
 
 impl<'source_code> Display for SemanticType<'source_code> {
