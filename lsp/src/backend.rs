@@ -12,6 +12,7 @@ use tokio::task::block_in_place;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 
+use crate::actions::CodeActionItem;
 use crate::conversion::convert_file_range_to_location;
 use crate::CodeActionRepository;
 use crate::UrlExtension;
@@ -627,56 +628,93 @@ impl Backend {
     }
 
     pub async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
-        let repo = self.code_actions.read().await;
         let mut actions = vec![];
 
-        for diagnostic in params.context.diagnostics {
-            let Some(serde_json::Value::Array(action_ids)) = &diagnostic.data else {
-                warn!("Invalid CodeAction data: {:#?}", diagnostic.data);
-                continue
-            };
-
-            for id in action_ids {
-                let serde_json::Value::Number(id) = id else { continue };
-                let Some(id) = id.as_u64() else { continue };
-
-                let Some(item) = repo.get(id as usize) else { continue };
-                let document = OptionalVersionedTextDocumentIdentifier {
-                    uri: item.document.uri.clone(),
-                    version: Some(item.document.version),
-                };
-
-                actions.push(CodeActionOrCommand::CodeAction(CodeAction {
-                    title: item.action.type_().to_string(),
-                    kind: Some(CodeActionKind::QUICKFIX),
-                    diagnostics: Some(vec![diagnostic.clone()]),
-                    edit: Some(WorkspaceEdit {
-                        changes: None,
-                        document_changes: Some(DocumentChanges::Edits(vec![
-                            TextDocumentEdit {
-                                text_document: document.clone(),
-                                edits: item.action.edits()
-                                    .iter()
-                                    .map(|edit| {
-                                        OneOf::Left(TextEdit {
-                                            range: convert_file_range(edit.replacement_range()),
-                                            new_text: edit.new_text().to_string(),
-                                        })
-                                    })
-                                    .collect()
-                            }
-                        ])),
-                        change_annotations: None
-                    }),
-                    command: None,
-                    is_preferred: None,
-                    disabled: None,
-                    data: None,
-                }))
-            }
-
-        }
+        self.create_code_actions_by_diagnostics(&mut actions, &params.context.diagnostics).await;
 
         Ok(Some(actions))
+    }
+
+    async fn create_code_actions_by_diagnostics(&self, result: &mut Vec<CodeActionOrCommand>, diagnostics: &[Diagnostic]) {
+        for diagnostic in diagnostics {
+            self.create_code_actions_by_diagnostic(result, diagnostic).await;
+        }
+    }
+
+    async fn create_code_actions_by_diagnostic(&self, result: &mut Vec<CodeActionOrCommand>, diagnostic: &Diagnostic) {
+        let Some(serde_json::Value::Array(action_ids)) = &diagnostic.data else {
+            warn!("Invalid CodeAction data: {:#?}", diagnostic.data);
+            return;
+        };
+
+        for id in action_ids {
+            let serde_json::Value::Number(id) = id else { continue };
+            let Some(id) = id.as_u64() else { continue };
+
+            let diagnostic = Some(diagnostic.clone());
+            let action = self.create_code_action_by_id(id, diagnostic).await;
+            if let Some(action) = action {
+                result.push(action);
+            }
+        }
+    }
+
+    async fn create_code_action_by_id(&self, id: u64, diagnostic: Option<Diagnostic>) -> Option<CodeActionOrCommand> {
+        let repo = self.code_actions.read().await;
+
+        let Some(item) = repo.get(id as usize) else {
+            warn!("Could not find CodeAction in the repository with id {id}");
+            return None;
+        };
+
+        let document = OptionalVersionedTextDocumentIdentifier {
+            uri: item.document.uri.clone(),
+            version: Some(item.document.version),
+        };
+
+        // If this Code Action is created by a diagnostic, it is preferred.
+        let is_preferred = Some(diagnostic.is_some());
+        let diagnostics = diagnostic.map(|diagnostic| vec![diagnostic.clone()]);
+        let edit = Some(self.create_workspace_edit_by_code_action_item(item, document));
+
+        Some(CodeActionOrCommand::CodeAction(CodeAction {
+            title: item.action.type_().to_string(),
+            kind: Some(CodeActionKind::QUICKFIX),
+            diagnostics,
+            edit,
+            command: None,
+            is_preferred,
+            disabled: None,
+            data: None,
+        }))
+    }
+
+    fn create_workspace_edit_by_code_action_item(&self, item: &CodeActionItem, document: OptionalVersionedTextDocumentIdentifier) -> WorkspaceEdit {
+        let edit = self.create_text_document_edit(item, document);
+        let edits = DocumentChanges::Edits(vec![edit]);
+
+        WorkspaceEdit {
+            changes: None,
+            document_changes: Some(edits),
+            change_annotations: None
+        }
+    }
+
+    fn create_text_document_edit(&self, item: &CodeActionItem, text_document: OptionalVersionedTextDocumentIdentifier) -> TextDocumentEdit {
+        let mut edits = Vec::new();
+
+        for edit in item.action.edits() {
+            let edit = TextEdit {
+                range: convert_file_range(edit.replacement_range()),
+                new_text: edit.new_text().to_string(),
+            };
+
+            edits.push(OneOf::Left(edit));
+        }
+
+        TextDocumentEdit {
+            text_document,
+            edits,
+        }
     }
 }
