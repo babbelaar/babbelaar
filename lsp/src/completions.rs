@@ -2,7 +2,7 @@
 // All Rights Reserved.
 
 use babbelaar::*;
-use log::{info, warn};
+use log::warn;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams, CompletionResponse, Documentation, InsertTextFormat, MarkupContent, MarkupKind};
 
 use crate::{Backend, BabbelaarLspResult as Result};
@@ -40,6 +40,11 @@ impl<'b> CompletionEngine<'b> {
         match mode {
             Some(CompletionMode::FieldInstantiation { range, field, structure }) => {
                 self.complete_field_instantiation(range, field, structure).await?;
+                Ok(true)
+            }
+
+            Some(CompletionMode::Structure { range, name }) => {
+                self.complete_structure_name(range, name).await?;
                 Ok(true)
             }
 
@@ -86,6 +91,13 @@ impl<'b> CompletionEngine<'b> {
 
             // TODO: this should be replaced by looking at the syntactic tree structure.
             if let TokenKind::Identifier(ident) = &token.kind {
+                if previous.last().is_some_and(|last| last.kind == TokenKind::Keyword(Keyword::Nieuw)) {
+                    return Ok(Some(CompletionMode::Structure {
+                        range: token.range(),
+                        name: ident.to_string(),
+                    }));
+                }
+
                 if let Some((keyword_idx, last_keyword)) = last_keyword {
                     if last_keyword == Keyword::Nieuw {
                         if let Some(TokenKind::Identifier(struct_ident)) = previous.get(keyword_idx + 1).map(|x| &x.kind) {
@@ -154,6 +166,28 @@ impl<'b> CompletionEngine<'b> {
                     ..Default::default()
                 });
             }
+
+            Ok(())
+        }).await
+    }
+
+    async fn complete_structure_name(&mut self, range: FileRange, structure_to_complete: String) -> Result<()> {
+        let document = &self.params.text_document_position.text_document;
+
+        self.server.with_semantics(document, |analyzer| {
+            analyzer.scopes_surrounding(range.start(), |scope| {
+                for (name, _) in &scope.structures {
+                    if let Some(idx) = name.find(&structure_to_complete) {
+                        self.completions.push(CompletionItem {
+                            label: name.to_string(),
+                            filter_text: Some(name[idx..].to_string()),
+                            kind: Some(CompletionItemKind::FIELD),
+                            documentation: None,
+                            ..Default::default()
+                        })
+                    }
+                }
+            });
 
             Ok(())
         }).await
@@ -358,4 +392,5 @@ enum CompletionMode {
     Method((FileRange, String)),
     Function((FileRange, String)),
     FieldInstantiation { range: FileRange, field: String, structure: String },
+    Structure { range: FileRange, name: String },
 }
