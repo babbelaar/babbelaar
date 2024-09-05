@@ -3,6 +3,7 @@
 
 use std::{borrow::Cow, collections::{HashMap, HashSet}, fmt::Display, rc::Rc};
 
+use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
@@ -252,12 +253,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 expression.token_right_paren,
                 SemanticDiagnosticKind::TooManyArguments { function_name, param_count, arg_count },
             ).with_related(function_hint.clone()));
+            return SemanticType::Builtin(BuiltinType::Null);
         }
 
         for (arg_idx, arg) in expression.arguments.iter().enumerate() {
             let argument_type = self.analyze_expression(arg);
             let function = self.find_function(&function_name).unwrap();
-            let parameter_type = self.resolve_parameter_type(&function, arg_idx);
+
+            let Some(parameter_type) = self.resolve_parameter_type(&function, arg_idx) else {
+                warn!("Cannot check type of parameter with index {arg_idx}");
+                break;
+            };
+
             if argument_type != parameter_type {
                 let param_hint = self.resolve_parameter_name(&function, arg_idx)
                     .map(|x| SemanticRelatedInformation::new(
@@ -543,20 +550,20 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
     }
 
-    fn resolve_parameter_type<'this>(&'this mut self, function: &SemanticReference<'source_code>, arg_idx: usize) -> SemanticType<'source_code> {
-        match &function.typ {
+    fn resolve_parameter_type<'this>(&'this mut self, function: &SemanticReference<'source_code>, arg_idx: usize) -> Option<SemanticType<'source_code>> {
+        Some(match &function.typ {
             SemanticType::Builtin(..) => todo!(),
             SemanticType::Custom(..) => todo!(),
             SemanticType::Function(func) => {
-                self.resolve_type(&func.parameters[arg_idx].ty)
+                self.resolve_type(&func.parameters.get(arg_idx)?.ty)
             }
             SemanticType::FunctionReference(FunctionReference::Builtin(func)) => {
-                SemanticType::Builtin(func.parameters[arg_idx].typ)
+                SemanticType::Builtin(func.parameters.get(arg_idx)?.typ)
             }
             SemanticType::FunctionReference(FunctionReference::Custom(func)) => {
-                self.resolve_type(&func.parameters[arg_idx].ty)
+                self.resolve_type(&func.parameters.get(arg_idx)?.ty)
             }
-        }
+        })
     }
 
     fn analyze_postfix_expression(&mut self, postfix: &'source_code PostfixExpression<'source_code>) -> SemanticType<'source_code> {
