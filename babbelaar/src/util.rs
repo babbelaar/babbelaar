@@ -89,10 +89,20 @@ impl FileRange {
 
     #[must_use]
     pub const fn contains(&self, location: FileLocation) -> bool {
-        if self.start.line <= location.line && self.end.line >= location.line {
-            if self.start.column <= location.column && self.end.column >= location.column {
-                return true;
-            }
+        let start = if location.line == self.start.line {
+            self.start.column <= location.column
+        } else {
+            location.line > self.start.line
+        };
+
+        let end = if location.line == self.end.line {
+            self.end.column >= location.column
+        } else {
+            location.line < self.end.line
+        };
+
+        if start && end {
+            return true;
         }
 
         self.start.offset <= location.offset && self.end.offset >= location.offset
