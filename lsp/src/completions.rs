@@ -2,7 +2,7 @@
 // All Rights Reserved.
 
 use babbelaar::*;
-use log::warn;
+use log::{info, warn};
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams, CompletionResponse, Documentation, InsertTextFormat, MarkupContent, MarkupKind};
 
 use crate::{Backend, BabbelaarLspResult as Result};
@@ -35,7 +35,14 @@ impl<'b> CompletionEngine<'b> {
     }
 
     async fn do_completions(&mut self) -> Result<bool> {
-        match self.detect_completion_mode().await? {
+        let mode = self.detect_completion_mode().await?;
+
+        match mode {
+            Some(CompletionMode::FieldInstantiation { range, field, structure }) => {
+                self.complete_field_instantiation(range, field, structure).await?;
+                Ok(true)
+            }
+
             Some(CompletionMode::Function((range, ident))) => {
                 self.complete_global_function(&ident).await?;
                 self.complete_variable(range).await?;
@@ -55,7 +62,45 @@ impl<'b> CompletionEngine<'b> {
     async fn detect_completion_mode(&self) -> Result<Option<CompletionMode>> {
         let mut was_new_func = false;
         let mut prev_punc = None;
+
         let completion_mode = self.server.find_tokens_at(&self.params.text_document_position, |token, previous| {
+            let last_keyword = previous.iter().enumerate().rev()
+                .filter_map(|(idx, token)| {
+                    if let TokenKind::Keyword(kw) = token.kind {
+                        Some((idx, kw))
+                    } else {
+                        None
+                    }
+                })
+                .next();
+
+            let last_punctuator = previous.iter().rev()
+                .filter_map(|token| {
+                    if let TokenKind::Punctuator(punctuator) = token.kind {
+                        Some(punctuator)
+                    } else {
+                        None
+                    }
+                })
+                .next();
+
+            // TODO: this should be replaced by looking at the syntactic tree structure.
+            if let TokenKind::Identifier(ident) = &token.kind {
+                if let Some((keyword_idx, last_keyword)) = last_keyword {
+                    if last_keyword == Keyword::Nieuw {
+                        if let Some(TokenKind::Identifier(struct_ident)) = previous.get(keyword_idx + 1).map(|x| &x.kind) {
+                            if last_punctuator == Some(Punctuator::Comma) || last_punctuator == Some(Punctuator::LeftCurlyBracket) {
+                                return Ok(Some(CompletionMode::FieldInstantiation {
+                                    range: token.range(),
+                                    field: ident.to_string(),
+                                    structure: struct_ident.to_string(),
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+
             was_new_func = previous.last().is_some_and(|tok| matches!(tok.kind, TokenKind::Keyword(Keyword::Werkwijze)));
             prev_punc = previous.last().and_then(|x| if let TokenKind::Punctuator(punc) = x.kind { Some(punc) } else { None });
 
@@ -109,6 +154,37 @@ impl<'b> CompletionEngine<'b> {
                     ..Default::default()
                 });
             }
+
+            Ok(())
+        }).await
+    }
+
+    async fn complete_field_instantiation(&mut self, range: FileRange, field_to_complete: String, structure: String) -> Result<()> {
+        let document = &self.params.text_document_position.text_document;
+
+        self.server.with_semantics(document, |analyzer| {
+            analyzer.scopes_surrounding(range.start(), |scope| {
+                if let Some(structure) = scope.structures.get(structure.as_str()) {
+                    for field in &structure.fields {
+                        if let Some(idx) = field.name.find(&field_to_complete) {
+                            self.completions.push(CompletionItem {
+                                label: field.name.to_string(),
+                                label_details: Some(CompletionItemLabelDetails {
+                                    detail: Some(field.ty.to_string()),
+                                    description: Some(field.ty.to_string()),
+                                }),
+                                filter_text: Some(field.name[idx..].to_string()),
+                                insert_text: Some(format!("{}: $0", field.name.value())),
+                                detail: Some(field.ty.to_string()),
+                                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                                kind: Some(CompletionItemKind::FIELD),
+                                documentation: None,
+                                ..Default::default()
+                            })
+                        }
+                    }
+                }
+            });
 
             Ok(())
         }).await
@@ -281,4 +357,5 @@ async fn check_if_snippets_are_supported_by_the_client_inner(server: &Backend) -
 enum CompletionMode {
     Method((FileRange, String)),
     Function((FileRange, String)),
+    FieldInstantiation { range: FileRange, field: String, structure: String },
 }

@@ -283,7 +283,7 @@ impl SymbolMap {
         };
         let mut sym_end = sym_begin.clone();
 
-        eprintln!("sym_begin={:?} range={range:?}", sym_begin.range);
+        // eprintln!("sym_begin={:?} range={range:?}", sym_begin.range);
 
         sym_begin.range = FileRange::new(sym_begin.range.start(), range.start());
         sym_end.range = FileRange::new(range.end(), sym_end.range.end());
