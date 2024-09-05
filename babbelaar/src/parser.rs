@@ -766,7 +766,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let token = self.consume_token()?;
 
         if token.kind != TokenKind::Punctuator(Punctuator::Comma) {
-            return Err(ParseDiagnostic::ExpectedComma { token, context });
+            self.handle_error(ParseDiagnostic::ExpectedComma { token, context })?;
         }
 
         Ok(())
@@ -776,7 +776,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let token = self.consume_token()?;
 
         if token.kind != TokenKind::Punctuator(Punctuator::Colon) {
-            return Err(ParseDiagnostic::ExpectedColon { token, context });
+            self.handle_error(ParseDiagnostic::ExpectedColon { token, context })?;
         }
 
         Ok(())
