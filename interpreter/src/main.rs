@@ -99,7 +99,7 @@ fn analyze(tree: &ParseTree<'_>) {
 
     let diags = analyzer.into_diagnostics();
     for diagnostic in &diags {
-        eprintln!("Fout: {}", &diagnostic.kind);
+        eprintln!("Fout: {}", diagnostic.kind());
     }
 
     if !diags.is_empty() {

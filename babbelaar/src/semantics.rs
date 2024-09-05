@@ -121,12 +121,12 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             _ => (),
         }
 
-        self.diagnostics.push(SemanticDiagnostic {
+        self.diagnostics.push(SemanticDiagnostic::new(
             range,
-            kind: SemanticDiagnosticKind::ExpressionCannotBeUsedAsAssignmentDestination {
+            SemanticDiagnosticKind::ExpressionCannotBeUsedAsAssignmentDestination {
                 expression,
             }
-        });
+        ));
     }
 
     fn analyze_for_statement(&mut self, statement: &'source_code ForStatement<'source_code>) {
@@ -178,10 +178,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         let mut names = HashSet::new();
         for field in &structure.fields {
             if !names.insert(field.name.value()) {
-                self.diagnostics.push(SemanticDiagnostic {
-                    range: field.name.range(),
-                    kind: SemanticDiagnosticKind::DuplicateFieldName { name: field.name.value() },
-                });
+                self.diagnostics.push(SemanticDiagnostic::new(
+                    field.name.range(),
+                    SemanticDiagnosticKind::DuplicateFieldName { name: field.name.value() },
+                ));
             }
 
             self.analyze_attributes_for_field(field);
@@ -204,13 +204,13 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         let rhs_type = self.analyze_expression(&expression.rhs);
 
         if lhs_type != rhs_type {
-            self.diagnostics.push(SemanticDiagnostic {
-                range: expression.operator.range(),
-                kind: SemanticDiagnosticKind::IncompatibleTypes {
+            self.diagnostics.push(SemanticDiagnostic::new(
+                expression.operator.range(),
+                SemanticDiagnosticKind::IncompatibleTypes {
                     lhs_type: lhs_type.clone(),
                     rhs_type,
                 }
-            });
+            ));
         }
 
         lhs_type
@@ -225,10 +225,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         };
 
         let Some(function) = self.find_function(&function_name) else {
-            self.diagnostics.push(SemanticDiagnostic {
-                range: expression.token_left_paren,
-                kind: SemanticDiagnosticKind::InvalidFunctionReference { name: &function_name }
-            });
+            self.diagnostics.push(SemanticDiagnostic::new(
+                expression.token_left_paren,
+                SemanticDiagnosticKind::InvalidFunctionReference { name: &function_name }
+            ));
             return SemanticType::Builtin(BuiltinType::Null);
         };
 
@@ -236,17 +236,17 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         let arg_count = expression.arguments.len();
 
         if param_count > arg_count {
-            self.diagnostics.push(SemanticDiagnostic {
-                range: expression.token_right_paren,
-                kind: SemanticDiagnosticKind::TooFewArguments { function_name, param_count, arg_count },
-            });
+            self.diagnostics.push(SemanticDiagnostic::new(
+                expression.token_right_paren,
+                SemanticDiagnosticKind::TooFewArguments { function_name, param_count, arg_count },
+            ));
         }
 
         if param_count < arg_count {
-            self.diagnostics.push(SemanticDiagnostic {
-                range: expression.token_right_paren,
-                kind: SemanticDiagnosticKind::TooManyArguments { function_name, param_count, arg_count },
-            });
+            self.diagnostics.push(SemanticDiagnostic::new(
+                expression.token_right_paren,
+                SemanticDiagnosticKind::TooManyArguments { function_name, param_count, arg_count },
+            ));
         }
 
         for (arg_idx, arg) in expression.arguments.iter().enumerate() {
@@ -254,13 +254,13 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             let function = self.find_function(&function_name).unwrap();
             let parameter_type = self.resolve_parameter_type(&function, arg_idx);
             if argument_type != parameter_type {
-                self.diagnostics.push(SemanticDiagnostic {
-                    range: arg.range(),
-                    kind: SemanticDiagnosticKind::IncompatibleArgumentParameterType {
+                self.diagnostics.push(SemanticDiagnostic::new(
+                    arg.range(),
+                    SemanticDiagnosticKind::IncompatibleArgumentParameterType {
                         argument_type,
                         parameter_type,
                     },
-                })
+                ))
             }
         }
 
@@ -300,10 +300,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
             PrimaryExpression::Reference(reference) => {
                 let Some(local) = self.find_local_by_name(|name| &name == reference.value()) else {
-                    self.diagnostics.push(SemanticDiagnostic {
-                        range: reference.range(),
-                        kind: SemanticDiagnosticKind::InvalidIdentifierReference { identifier: &reference }
-                    });
+                    self.diagnostics.push(SemanticDiagnostic::new(
+                        reference.range(),
+                        SemanticDiagnosticKind::InvalidIdentifierReference { identifier: &reference }
+                    ));
                     return SemanticType::Builtin(BuiltinType::Null);
                 };
 
@@ -351,15 +351,15 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     let declaration_type = &field.ty;
                     let definition_type = self.analyze_expression(&field_instantiation.value);
                     if declaration_type != &definition_type {
-                        self.diagnostics.push(SemanticDiagnostic {
-                            range: name.range(),
-                            kind: SemanticDiagnosticKind::IncompatibleFieldTypes {
+                        self.diagnostics.push(SemanticDiagnostic::new(
+                            name.range(),
+                            SemanticDiagnosticKind::IncompatibleFieldTypes {
                                 struct_name: structure.name.value(),
                                 field_name: name.value(),
                                 declaration_type: declaration_type.to_string(),
                                 definition_type: definition_type.to_string(),
                             },
-                        });
+                        ));
                     }
 
                     if let Some(tracker) = &mut self.context.definition_tracker {
@@ -373,18 +373,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 }
                 None => {
                     if all_valid_fields.contains_key(name.value()) {
-                        self.diagnostics.push(SemanticDiagnostic {
-                            range: name.range(),
-                            kind: SemanticDiagnosticKind::DuplicateFieldInstantiation { name: name.value() },
-                        });
+                        self.diagnostics.push(SemanticDiagnostic::new(
+                            name.range(),
+                            SemanticDiagnosticKind::DuplicateFieldInstantiation { name: name.value() },
+                        ));
                     } else {
-                        self.diagnostics.push(SemanticDiagnostic {
-                            range: name.range(),
-                            kind: SemanticDiagnosticKind::InvalidFieldInstantiation {
+                        self.diagnostics.push(SemanticDiagnostic::new(
+                            name.range(),
+                            SemanticDiagnosticKind::InvalidFieldInstantiation {
                                 struct_name: structure.name.value(),
                                 field_name: name.value()
                             },
-                        });
+                        ));
                     }
                 }
             }
@@ -479,10 +479,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             }
         }
 
-        self.diagnostics.push(SemanticDiagnostic {
-            range: name.range(),
-            kind: SemanticDiagnosticKind::UnknownType { name: &name },
-        });
+        self.diagnostics.push(SemanticDiagnostic::new(
+            name.range(),
+            SemanticDiagnosticKind::UnknownType { name: &name },
+        ));
 
         SemanticType::Builtin(BuiltinType::Null)
     }
@@ -545,10 +545,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             }
         }
 
-        self.diagnostics.push(SemanticDiagnostic {
-            range: member.range(),
-            kind: SemanticDiagnosticKind::InvalidMember { typ, name: member.value() }
-        });
+        self.diagnostics.push(SemanticDiagnostic::new(
+            member.range(),
+            SemanticDiagnosticKind::InvalidMember { typ, name: member.value() }
+        ));
 
         SemanticType::null()
     }
@@ -562,28 +562,28 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     }
                 }
 
-                self.diagnostics.push(SemanticDiagnostic {
-                    range: expression.method_name.range(),
-                    kind: SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value() }
-                });
+                self.diagnostics.push(SemanticDiagnostic::new(
+                    expression.method_name.range(),
+                    SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value() }
+                ));
 
                 SemanticType::null()
             }
 
             SemanticType::Custom(..) => {
-                self.diagnostics.push(SemanticDiagnostic {
-                    range: expression.method_name.range(),
-                    kind: SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value() }
-                });
+                self.diagnostics.push(SemanticDiagnostic::new(
+                    expression.method_name.range(),
+                    SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value() }
+                ));
 
                 SemanticType::null()
             }
 
             SemanticType::Function(..) | SemanticType::FunctionReference(..) => {
-                self.diagnostics.push(SemanticDiagnostic {
-                    range: expression.method_name.range(),
-                    kind: SemanticDiagnosticKind::FunctionCannotHaveMethod { typ, name: expression.method_name.value() }
-                });
+                self.diagnostics.push(SemanticDiagnostic::new(
+                    expression.method_name.range(),
+                    SemanticDiagnosticKind::FunctionCannotHaveMethod { typ, name: expression.method_name.value() }
+                ));
 
                 SemanticType::null()
             }
@@ -592,27 +592,47 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
     fn analyze_attributes_for_statement(&mut self, statement: &Statement<'source_code>) {
         for attribute in &statement.attributes {
-            self.diagnostics.push(SemanticDiagnostic {
-                range: attribute.name.range(),
-                kind: SemanticDiagnosticKind::UnknownAttribute { name: &attribute.name },
-            });
+            self.diagnostics.push(SemanticDiagnostic::new(
+                attribute.name.range(),
+                SemanticDiagnosticKind::UnknownAttribute { name: &attribute.name },
+            ));
         }
     }
 
     fn analyze_attributes_for_field(&mut self, field: &SemanticField<'source_code>) {
         for attribute in field.attributes {
-            self.diagnostics.push(SemanticDiagnostic {
-                range: attribute.name.range(),
-                kind: SemanticDiagnosticKind::UnknownAttribute { name: &attribute.name },
-            });
+            self.diagnostics.push(SemanticDiagnostic::new(
+                attribute.name.range(),
+                SemanticDiagnosticKind::UnknownAttribute { name: &attribute.name },
+            ));
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SemanticDiagnostic<'source_code> {
-    pub range: FileRange,
-    pub kind: SemanticDiagnosticKind<'source_code>,
+    range: FileRange,
+    kind: SemanticDiagnosticKind<'source_code>,
+}
+
+impl<'source_code> SemanticDiagnostic<'source_code> {
+    #[must_use]
+    pub fn new(range: FileRange, kind: SemanticDiagnosticKind<'source_code>) -> Self {
+        Self {
+            range,
+            kind,
+        }
+    }
+
+    #[must_use]
+    pub fn range(&self) -> FileRange {
+        self.range
+    }
+
+    #[must_use]
+    pub fn kind(&self) -> &SemanticDiagnosticKind<'source_code> {
+        &self.kind
+    }
 }
 
 #[derive(Debug, Clone, Error, AsRefStr)]

@@ -185,12 +185,12 @@ impl Backend {
                 .into_iter()
                 .map(|e| {
                     Diagnostic {
-                        range: convert_file_range(e.range),
+                        range: convert_file_range(e.range()),
                         severity: Some(DiagnosticSeverity::ERROR),
-                        code: Some(NumberOrString::String(e.kind.name().to_string())),
+                        code: Some(NumberOrString::String(e.kind().name().to_string())),
                         code_description: None,
                         source: None,
-                        message: e.kind.to_string(),
+                        message: e.kind().to_string(),
                         related_information: None,
                         tags: None,
                         data: None,
