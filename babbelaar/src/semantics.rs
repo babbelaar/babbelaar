@@ -1155,6 +1155,18 @@ impl<'source_code> SemanticType<'source_code> {
             Self::FunctionReference(..) => "",
         }
     }
+
+    /// A hint to a value that could be used as the default value.
+    #[must_use]
+    pub fn default_value_hint(&self) -> &str {
+        match self {
+            Self::Builtin(BuiltinType::Slinger) => "\"\"",
+            Self::Builtin(BuiltinType::G32) => "0",
+            Self::Builtin(BuiltinType::Bool) => "onwaar",
+
+            _ => "",
+        }
+    }
 }
 
 impl<'source_code> Display for SemanticType<'source_code> {

@@ -243,6 +243,9 @@ impl BabbelaarCodeAction {
 pub enum BabbelaarCodeActionType {
     #[error("zet Slinger `\"{number}\"` om naar getal `{number}`")]
     ChangeStringToNumber { number: isize },
+
+    #[error("vul structuurvelden van `{structure}`")]
+    FillStructureFields { structure: String },
 }
 
 #[derive(Debug, Clone)]

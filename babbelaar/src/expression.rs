@@ -20,6 +20,7 @@ pub enum PrimaryExpression<'source_code> {
 pub struct StructureInstantiationExpression<'source_code> {
     pub name: Ranged<&'source_code str>,
     pub fields: Vec<FieldInstantiation<'source_code>>,
+    pub range: FileRange,
 }
 
 #[derive(Debug, Clone)]

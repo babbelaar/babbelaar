@@ -511,7 +511,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             TokenKind::TemplateString(template_string) => self.parse_template_string(template_string),
             TokenKind::Keyword(Keyword::Waar) => Ok(PrimaryExpression::Boolean(true)),
             TokenKind::Keyword(Keyword::Onwaar) => Ok(PrimaryExpression::Boolean(false)),
-            TokenKind::Keyword(Keyword::Nieuw) => self.parse_structure_instantiation(),
+            TokenKind::Keyword(Keyword::Nieuw) => self.parse_structure_instantiation(range.start()),
 
             TokenKind::Punctuator(Punctuator::LeftParenthesis) => {
                 let expression = self.parse_expression()?;
@@ -526,6 +526,8 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 Ok(replacement_token)
             }
         }?;
+
+        let range = FileRange::new(range.start(), self.token_end);
 
         Ok(Ranged::new(range, expression))
     }
@@ -895,7 +897,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         })
     }
 
-    fn parse_structure_instantiation(&mut self) -> Result<PrimaryExpression<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_structure_instantiation(&mut self, start: FileLocation) -> Result<PrimaryExpression<'source_code>, ParseDiagnostic<'source_code>> {
         let name_token = self.peek_token()?;
         let TokenKind::Identifier(name) = name_token.kind else {
             return Err(ParseDiagnostic::ExpectedNameAfterNieuw { token: name_token.clone() });
@@ -909,6 +911,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let mut expr = StructureInstantiationExpression {
             name,
             fields: Vec::new(),
+            range: FileRange::new(start, start),
         };
 
         loop {
@@ -955,6 +958,8 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 break;
             }
         }
+
+        expr.range = FileRange::new(start, self.token_end);
 
         Ok(PrimaryExpression::StructureInstantiation(expr))
     }

@@ -12,7 +12,8 @@ use tokio::task::block_in_place;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 
-use crate::actions::CodeActionItem;
+use crate::actions::CodeActionsAnalysisContext;
+use crate::actions::CodeActionsAnalyzable;
 use crate::conversion::convert_file_range_to_location;
 use crate::CodeActionRepository;
 use crate::UrlExtension;
@@ -128,14 +129,23 @@ impl Backend {
         result
     }
 
+    pub async fn with_syntax<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
+    where
+        F: FnOnce(ParseTree<'_>, &str) -> Result<R>,
+    {
+        self.lexed_document(text_document, |tokens, contents| {
+            let mut parser = Parser::new(text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
+            let tree = parser.parse_tree()?;
+
+            f(tree, contents)
+        }).await
+    }
+
     pub async fn with_semantics<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
         F: FnOnce(SemanticAnalyzer) -> Result<R>,
     {
-        self.lexed_document(text_document, |tokens, _| {
-            let mut parser = Parser::new(text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
-            let tree = parser.parse_tree()?;
-
+        self.with_syntax(text_document, |tree, _| {
             let mut analyzer = SemanticAnalyzer::new();
             analyzer.analyze_tree(&tree);
 
@@ -631,6 +641,7 @@ impl Backend {
         let mut actions = vec![];
 
         self.create_code_actions_by_diagnostics(&mut actions, &params.context.diagnostics).await;
+        self.create_code_actions_based_on_semantics(&mut actions, &params).await?;
 
         Ok(Some(actions))
     }
@@ -675,7 +686,7 @@ impl Backend {
         // If this Code Action is created by a diagnostic, it is preferred.
         let is_preferred = Some(diagnostic.is_some());
         let diagnostics = diagnostic.map(|diagnostic| vec![diagnostic.clone()]);
-        let edit = Some(self.create_workspace_edit_by_code_action_item(item, document));
+        let edit = Some(self.create_workspace_edit_by_code_action_item(&item.action, document));
 
         Some(CodeActionOrCommand::CodeAction(CodeAction {
             title: item.action.type_().to_string(),
@@ -689,8 +700,8 @@ impl Backend {
         }))
     }
 
-    fn create_workspace_edit_by_code_action_item(&self, item: &CodeActionItem, document: OptionalVersionedTextDocumentIdentifier) -> WorkspaceEdit {
-        let edit = self.create_text_document_edit(item, document);
+    fn create_workspace_edit_by_code_action_item(&self, action: &BabbelaarCodeAction, document: OptionalVersionedTextDocumentIdentifier) -> WorkspaceEdit {
+        let edit = self.create_text_document_edit(action, document);
         let edits = DocumentChanges::Edits(vec![edit]);
 
         WorkspaceEdit {
@@ -700,10 +711,10 @@ impl Backend {
         }
     }
 
-    fn create_text_document_edit(&self, item: &CodeActionItem, text_document: OptionalVersionedTextDocumentIdentifier) -> TextDocumentEdit {
+    fn create_text_document_edit(&self, action: &BabbelaarCodeAction, text_document: OptionalVersionedTextDocumentIdentifier) -> TextDocumentEdit {
         let mut edits = Vec::new();
 
-        for edit in item.action.edits() {
+        for edit in action.edits() {
             let edit = TextEdit {
                 range: convert_file_range(edit.replacement_range()),
                 new_text: edit.new_text().to_string(),
@@ -716,5 +727,64 @@ impl Backend {
             text_document,
             edits,
         }
+    }
+
+    async fn create_code_actions_based_on_semantics(&self, actions: &mut Vec<CodeActionOrCommand>, params: &CodeActionParams) -> Result<()> {
+        let start = FileLocation::new(
+            usize::MAX,
+            params.range.start.line as _,
+            params.range.start.character as _,
+        );
+
+        let end = FileLocation::new(
+            usize::MAX,
+            params.range.end.line as _,
+            params.range.end.character as _,
+        );
+
+        let document = OptionalVersionedTextDocumentIdentifier {
+            uri: params.text_document.uri.clone(),
+            version: None,
+        };
+
+        self.with_syntax(&params.text_document, |tree, contents| {
+            let mut analyzer = SemanticAnalyzer::new();
+            analyzer.analyze_tree(&tree);
+
+            let line = if let Some(line) = contents.lines().nth(start.line()) {
+                if line.len() > start.column() {
+                    &line[..start.column()]
+                } else {
+                    line
+                }
+            } else {
+                ""
+            };
+
+            let mut ctx = CodeActionsAnalysisContext {
+                semantics: &analyzer,
+                items: Vec::new(),
+                cursor_range: FileRange::new(start, end),
+                line_indentation: &line[..line.len() - line.trim_start().len()],
+            };
+
+            tree.analyze(&mut ctx);
+
+            for action in ctx.items {
+                let edit = self.create_workspace_edit_by_code_action_item(&action, document.clone());
+                actions.push(CodeActionOrCommand::CodeAction(CodeAction {
+                    title: action.type_().to_string(),
+                    kind: Some(CodeActionKind::QUICKFIX),
+                    diagnostics: None,
+                    edit: Some(edit),
+                    command: None,
+                    is_preferred: Some(false),
+                    disabled: None,
+                    data: None,
+                }));
+            }
+
+            Ok(())
+        }).await
     }
 }
