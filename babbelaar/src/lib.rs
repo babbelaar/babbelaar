@@ -35,6 +35,6 @@ pub use self::{
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     tree::ParseTree,
     type_::{Parameter, Type, TypeSpecifier},
-    util::{DocumentationProvider, FileLocation, FileRange, LspCompletion, OptionExt, Ranged},
+    util::{BabbelaarCodeAction, BabbelaarCodeActionType, DocumentationProvider, FileEdit, FileLocation, FileRange, LspCompletion, OptionExt, Ranged},
     value::{FunctionId, StructureId, Value},
 };

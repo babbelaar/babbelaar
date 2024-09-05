@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::{HashMap, HashSet}, fmt::Display, rc::Rc};
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, Attribute, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, Attribute, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer<'source_code> {
@@ -367,15 +367,17 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     let declaration_type = &field.ty;
                     let definition_type = self.analyze_expression(&field_instantiation.value);
                     if declaration_type != &definition_type {
+                        let action = self.try_create_conversion_action(declaration_type, &definition_type, field_instantiation);
+
                         self.diagnostics.push(SemanticDiagnostic::new(
-                            name.range(),
+                            field_instantiation.value.range(),
                             SemanticDiagnosticKind::IncompatibleFieldTypes {
                                 struct_name: structure.name.value(),
                                 field_name: name.value(),
                                 declaration_type: declaration_type.to_string(),
                                 definition_type: definition_type.to_string(),
                             },
-                        ).with_related(struct_hint.clone()));
+                        ).with_related(struct_hint.clone()).with_action(action));
                     }
 
                     if let Some(tracker) = &mut self.context.definition_tracker {
@@ -667,6 +669,34 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             ));
         }
     }
+
+    fn try_create_conversion_action(
+        &self,
+        declaration_type: &SemanticType<'source_code>,
+        definition_type: &SemanticType<'source_code>,
+        field_instantiation: &crate::FieldInstantiation<'source_code>,
+    ) -> Option<BabbelaarCodeAction> {
+        let SemanticType::Builtin(declaration_type) = declaration_type else { return None };
+        let SemanticType::Builtin(definition_type) = definition_type else { return None };
+
+        if *declaration_type == BuiltinType::G32 && *definition_type == BuiltinType::Slinger {
+            if let Expression::Primary(PrimaryExpression::StringLiteral(literal)) = field_instantiation.value.value() {
+                if let Ok(value) = literal.trim().parse::<isize>() {
+                    return Some(BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::ChangeStringToNumber { number: value, },
+                        vec![
+                            FileEdit::new(
+                                field_instantiation.value.range(),
+                                value.to_string(),
+                            )
+                        ]
+                    ));
+                }
+            }
+        }
+
+        None
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -674,6 +704,7 @@ pub struct SemanticDiagnostic<'source_code> {
     range: FileRange,
     kind: SemanticDiagnosticKind<'source_code>,
     related: Vec<SemanticRelatedInformation<'source_code>>,
+    actions: Vec<BabbelaarCodeAction>,
 }
 
 impl<'source_code> SemanticDiagnostic<'source_code> {
@@ -683,6 +714,7 @@ impl<'source_code> SemanticDiagnostic<'source_code> {
             range,
             kind,
             related: Vec::new(),
+            actions: Vec::new(),
         }
     }
 
@@ -705,6 +737,19 @@ impl<'source_code> SemanticDiagnostic<'source_code> {
     fn with_related(mut self, info: impl Into<Option<SemanticRelatedInformation<'source_code>>>) -> Self {
         if let Some(info) = info.into() {
             self.related.push(info);
+        }
+
+        self
+    }
+
+    #[must_use]
+    pub fn actions(&self) -> &[BabbelaarCodeAction] {
+        &self.actions
+    }
+
+    fn with_action(mut self, action: impl Into<Option<BabbelaarCodeAction>>) -> Self {
+        if let Some(action) = action.into() {
+            self.actions.push(action);
         }
 
         self

@@ -8,10 +8,12 @@ use log::info;
 use log::warn;
 use tokio::spawn;
 use tokio::sync::RwLock;
+use tokio::task::block_in_place;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 
 use crate::conversion::convert_file_range_to_location;
+use crate::CodeActionRepository;
 use crate::UrlExtension;
 use crate::{
     BabbelaarLspResult as Result,
@@ -21,12 +23,12 @@ use crate::{
     symbolization::{LspTokenType, Symbolizer},
 };
 
-
 #[derive(Debug, Clone)]
 pub struct Backend {
     pub(super) client: Client,
     pub(super) client_configuration: Arc<RwLock<Option<InitializeParams>>>,
     pub(super) file_store: Arc<RwLock<HashMap<Url, Arc<str>>>>,
+    pub(super) code_actions: Arc<RwLock<CodeActionRepository>>,
 }
 
 impl Backend {
@@ -144,7 +146,7 @@ impl Backend {
         let path = document.uri.to_path()?;
 
         let text_document = TextDocumentIdentifier {
-            uri: document.uri,
+            uri: document.uri.clone(),
         };
 
         let diags = self.lexed_document(&text_document, |tokens, _| {
@@ -195,6 +197,16 @@ impl Backend {
                                 .collect()
                     );
 
+                    let actions: Vec<_> = e.actions().iter()
+                        .map(|x| {
+                            block_in_place(|| {
+                                let mut actions = self.code_actions.blocking_write();
+                                let id = actions.add(x.clone(), document.clone());
+                                serde_json::Value::Number(id.into())
+                            })
+                        })
+                        .collect();
+
                     Diagnostic {
                         range: convert_file_range(e.range()),
                         severity: Some(DiagnosticSeverity::ERROR),
@@ -204,7 +216,7 @@ impl Backend {
                         message: e.kind().to_string(),
                         related_information,
                         tags: None,
-                        data: None,
+                        data: Some(serde_json::Value::Array(actions)),
                     }
                 })
             );
@@ -337,6 +349,7 @@ impl Backend {
                 },
             })),
             definition_provider: Some(OneOf::Left(true)),
+            code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
             ..ServerCapabilities::default()
         }
     }
@@ -606,5 +619,59 @@ impl Backend {
                 });
             Ok(reference)
         }).await
+    }
+
+    pub async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        let repo = self.code_actions.read().await;
+        let mut actions = vec![];
+
+        for diagnostic in params.context.diagnostics {
+            let Some(serde_json::Value::Array(action_ids)) = &diagnostic.data else {
+                warn!("Invalid CodeAction data: {:#?}", diagnostic.data);
+                continue
+            };
+
+            for id in action_ids {
+                let serde_json::Value::Number(id) = id else { continue };
+                let Some(id) = id.as_u64() else { continue };
+
+                let Some(item) = repo.get(id as usize) else { continue };
+                let document = OptionalVersionedTextDocumentIdentifier {
+                    uri: item.document.uri.clone(),
+                    version: Some(item.document.version),
+                };
+
+                actions.push(CodeActionOrCommand::CodeAction(CodeAction {
+                    title: item.action.type_().to_string(),
+                    kind: Some(CodeActionKind::QUICKFIX),
+                    diagnostics: Some(vec![diagnostic.clone()]),
+                    edit: Some(WorkspaceEdit {
+                        changes: None,
+                        document_changes: Some(DocumentChanges::Edits(vec![
+                            TextDocumentEdit {
+                                text_document: document.clone(),
+                                edits: item.action.edits()
+                                    .iter()
+                                    .map(|edit| {
+                                        OneOf::Left(TextEdit {
+                                            range: convert_file_range(edit.replacement_range()),
+                                            new_text: edit.new_text().to_string(),
+                                        })
+                                    })
+                                    .collect()
+                            }
+                        ])),
+                        change_annotations: None
+                    }),
+                    command: None,
+                    is_preferred: None,
+                    disabled: None,
+                    data: None,
+                }))
+            }
+
+        }
+
+        Ok(Some(actions))
     }
 }

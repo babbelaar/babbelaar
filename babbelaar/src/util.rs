@@ -3,6 +3,8 @@
 
 use std::{borrow::Cow, fmt::Display, ops::{Deref, DerefMut}};
 
+use thiserror::Error;
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileLocation {
     offset: usize,
@@ -199,4 +201,62 @@ pub trait DocumentationProvider {
 pub struct LspCompletion<'a> {
     pub completion: &'a str,
     pub inline_detail: &'a str,
+}
+
+#[derive(Debug, Clone)]
+pub struct BabbelaarCodeAction {
+    ty: BabbelaarCodeActionType,
+    edits: Vec<FileEdit>,
+}
+
+impl BabbelaarCodeAction {
+    #[must_use]
+    pub fn new(ty: BabbelaarCodeActionType, edits: Vec<FileEdit>) -> Self {
+        Self {
+            ty,
+            edits,
+        }
+    }
+
+    #[must_use]
+    pub fn type_(&self) -> &BabbelaarCodeActionType {
+        &self.ty
+    }
+
+    #[must_use]
+    pub fn edits(&self) -> &[FileEdit] {
+        &self.edits
+    }
+}
+
+#[derive(Debug, Clone, Error)]
+pub enum BabbelaarCodeActionType {
+    #[error("zet Slinger `\"{number}\"` om naar getal `{number}`")]
+    ChangeStringToNumber { number: isize },
+}
+
+#[derive(Debug, Clone)]
+pub struct FileEdit {
+    replacement_range: FileRange,
+    new_text: String,
+}
+
+impl FileEdit {
+    #[must_use]
+    pub fn new(replacement_range: FileRange, new_text: String) -> Self {
+        Self {
+            replacement_range,
+            new_text,
+        }
+    }
+
+    #[must_use]
+    pub fn replacement_range(&self) -> FileRange {
+        self.replacement_range
+    }
+
+    #[must_use]
+    pub fn new_text(&self) -> &str {
+        &self.new_text
+    }
 }

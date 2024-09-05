@@ -157,6 +157,7 @@ dependencies = [
  "babbelaar-interpreter",
  "log",
  "rstest",
+ "serde_json",
  "strum",
  "thiserror",
  "tokio",

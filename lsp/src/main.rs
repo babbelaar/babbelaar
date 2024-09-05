@@ -1,6 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+mod actions;
 mod backend;
 mod completions;
 mod conversion;
@@ -20,6 +21,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{LanguageServer, LspService, Server};
 
 pub use self::{
+    actions::CodeActionRepository,
     backend::Backend,
     conversion::{UrlExtension, convert_file_range, convert_position, convert_token_range},
     completions::CompletionEngine,
@@ -92,6 +94,10 @@ impl LanguageServer for Backend {
         Ok(self.goto_definition(params).await?)
     }
 
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+        Ok(self.code_action(params).await?)
+    }
+
     async fn shutdown(&self) -> Result<()> {
         Ok(())
     }
@@ -109,6 +115,7 @@ async fn main() {
             client,
             client_configuration: Arc::new(RwLock::new(None)),
             file_store: Arc::new(RwLock::new(HashMap::new())),
+            code_actions: Arc::new(RwLock::new(CodeActionRepository::new()))
         }
     });
 
