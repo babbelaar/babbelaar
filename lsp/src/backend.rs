@@ -11,6 +11,7 @@ use tokio::sync::RwLock;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 
+use crate::conversion::convert_file_range_to_location;
 use crate::UrlExtension;
 use crate::{
     BabbelaarLspResult as Result,
@@ -184,6 +185,16 @@ impl Backend {
                 analyzer.into_diagnostics()
                 .into_iter()
                 .map(|e| {
+                    let related_information = Some(
+                            e.related_info()
+                                .iter()
+                                .map(|x| DiagnosticRelatedInformation {
+                                    location: convert_file_range_to_location(text_document.uri.clone(), x.range()),
+                                    message: x.message().to_string(),
+                                })
+                                .collect()
+                    );
+
                     Diagnostic {
                         range: convert_file_range(e.range()),
                         severity: Some(DiagnosticSeverity::ERROR),
@@ -191,7 +202,7 @@ impl Backend {
                         code_description: None,
                         source: None,
                         message: e.kind().to_string(),
-                        related_information: None,
+                        related_information,
                         tags: None,
                         data: None,
                     }

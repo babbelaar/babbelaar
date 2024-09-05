@@ -232,6 +232,11 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             return SemanticType::Builtin(BuiltinType::Null);
         };
 
+        let function_hint = SemanticRelatedInformation::new(
+            function.declaration_range,
+            SemanticRelatedMessage::FunctionDefinedHere { name: function_name }
+        );
+
         let param_count = function.typ.parameter_count().expect("This reference to be a function, verified by self.find_function()");
         let arg_count = expression.arguments.len();
 
@@ -239,14 +244,14 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             self.diagnostics.push(SemanticDiagnostic::new(
                 expression.token_right_paren,
                 SemanticDiagnosticKind::TooFewArguments { function_name, param_count, arg_count },
-            ));
+            ).with_related(function_hint.clone()));
         }
 
         if param_count < arg_count {
             self.diagnostics.push(SemanticDiagnostic::new(
                 expression.token_right_paren,
                 SemanticDiagnosticKind::TooManyArguments { function_name, param_count, arg_count },
-            ));
+            ).with_related(function_hint.clone()));
         }
 
         for (arg_idx, arg) in expression.arguments.iter().enumerate() {
@@ -254,13 +259,19 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             let function = self.find_function(&function_name).unwrap();
             let parameter_type = self.resolve_parameter_type(&function, arg_idx);
             if argument_type != parameter_type {
+                let param_hint = self.resolve_parameter_name(&function, arg_idx)
+                    .map(|x| SemanticRelatedInformation::new(
+                        x.range(),
+                        SemanticRelatedMessage::ParameterDeclaredHere { name: x.value() }
+                    ));
+
                 self.diagnostics.push(SemanticDiagnostic::new(
                     arg.range(),
                     SemanticDiagnosticKind::IncompatibleArgumentParameterType {
                         argument_type,
                         parameter_type,
                     },
-                ))
+                ).with_related(param_hint).with_related(function_hint.clone()))
             }
         }
 
@@ -332,6 +343,11 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             return SemanticType::null();
         };
 
+        let struct_hint = SemanticRelatedInformation::new(
+            structure.name.range(),
+            SemanticRelatedMessage::StructureDefinedHere { name: &structure.name }
+        );
+
         let all_valid_fields: HashMap<&str, &SemanticField<'source_code>> = structure.fields.iter().map(|x| (*x.name.value(), x)).collect();
         let mut fields_left = all_valid_fields.clone();
 
@@ -359,7 +375,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                                 declaration_type: declaration_type.to_string(),
                                 definition_type: definition_type.to_string(),
                             },
-                        ));
+                        ).with_related(struct_hint.clone()));
                     }
 
                     if let Some(tracker) = &mut self.context.definition_tracker {
@@ -372,11 +388,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     }
                 }
                 None => {
-                    if all_valid_fields.contains_key(name.value()) {
-                        self.diagnostics.push(SemanticDiagnostic::new(
+                    if let Some(duplicate_field) = all_valid_fields.get(name.value()) {
+                        let field_def_hint = SemanticRelatedInformation::new(
+                            duplicate_field.name.range(),
+                            SemanticRelatedMessage::DuplicateFieldFirstUse { name: &duplicate_field.name }
+                        );
+
+                        let diag = SemanticDiagnostic::new(
                             name.range(),
                             SemanticDiagnosticKind::DuplicateFieldInstantiation { name: name.value() },
-                        ));
+                        );
+
+                        self.diagnostics.push(diag.with_related(field_def_hint).with_related(struct_hint.clone()));
                     } else {
                         self.diagnostics.push(SemanticDiagnostic::new(
                             name.range(),
@@ -384,7 +407,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                                 struct_name: structure.name.value(),
                                 field_name: name.value()
                             },
-                        ));
+                        ).with_related(struct_hint.clone()));
                     }
                 }
             }
@@ -502,6 +525,22 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
     }
 
+    fn resolve_parameter_name<'this>(&'this mut self, function: &SemanticReference<'source_code>, arg_idx: usize) -> Option<Ranged<&'source_code str>> {
+        match &function.typ {
+            SemanticType::Builtin(..) => todo!(),
+            SemanticType::Custom(..) => todo!(),
+            SemanticType::Function(func) => {
+                Some(Ranged::new(func.parameters[arg_idx].name.range(), &func.parameters[arg_idx].name))
+            }
+            SemanticType::FunctionReference(FunctionReference::Builtin(..)) => {
+                None
+            }
+            SemanticType::FunctionReference(FunctionReference::Custom(func)) => {
+                Some(func.name)
+            }
+        }
+    }
+
     fn resolve_parameter_type<'this>(&'this mut self, function: &SemanticReference<'source_code>, arg_idx: usize) -> SemanticType<'source_code> {
         match &function.typ {
             SemanticType::Builtin(..) => todo!(),
@@ -528,27 +567,41 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     fn analyze_member_expression(&mut self, typ: SemanticType<'source_code>, member: Ranged<&'source_code str>) -> SemanticType<'source_code> {
-        if let SemanticType::Custom(structure) = &typ {
-            for field in &structure.fields {
-                if field.name.value() == member.value() {
-                    if let Some(tracker) = &mut self.context.definition_tracker {
-                        tracker.insert(member.range(), SemanticReference {
-                            local_name: &member,
-                            local_kind: SemanticLocalKind::FieldReference,
-                            declaration_range: field.name.range(),
-                            typ: field.ty.clone(),
-                        });
-                    }
+        let SemanticType::Custom(structure) = &typ else {
+            self.diagnostics.push(SemanticDiagnostic::new(
+                member.range(),
+                SemanticDiagnosticKind::InvalidMember { typ, name: member.value() }
+            ));
 
-                    return field.ty.clone();
+            return SemanticType::null()
+        };
+
+        for field in &structure.fields {
+            if field.name.value() == member.value() {
+                if let Some(tracker) = &mut self.context.definition_tracker {
+                    tracker.insert(member.range(), SemanticReference {
+                        local_name: &member,
+                        local_kind: SemanticLocalKind::FieldReference,
+                        declaration_range: field.name.range(),
+                        typ: field.ty.clone(),
+                    });
                 }
+
+                return field.ty.clone();
             }
         }
 
-        self.diagnostics.push(SemanticDiagnostic::new(
+        let struct_hint = SemanticRelatedInformation::new(
+            structure.name.range(),
+            SemanticRelatedMessage::StructureDefinedHere { name: &structure.name }
+        );
+
+        let diag = SemanticDiagnostic::new(
             member.range(),
             SemanticDiagnosticKind::InvalidMember { typ, name: member.value() }
-        ));
+        );
+
+        self.diagnostics.push(diag.with_related(struct_hint));
 
         SemanticType::null()
     }
@@ -570,11 +623,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 SemanticType::null()
             }
 
-            SemanticType::Custom(..) => {
-                self.diagnostics.push(SemanticDiagnostic::new(
+            SemanticType::Custom(ref custom) => {
+                let struct_hint = SemanticRelatedInformation::new(
+                    custom.name.range(),
+                    SemanticRelatedMessage::StructureDefinedHere { name: &custom.name }
+                );
+
+                let diag = SemanticDiagnostic::new(
                     expression.method_name.range(),
                     SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value() }
-                ));
+                );
+
+                self.diagnostics.push(diag.with_related(struct_hint));
 
                 SemanticType::null()
             }
@@ -613,6 +673,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 pub struct SemanticDiagnostic<'source_code> {
     range: FileRange,
     kind: SemanticDiagnosticKind<'source_code>,
+    related: Vec<SemanticRelatedInformation<'source_code>>,
 }
 
 impl<'source_code> SemanticDiagnostic<'source_code> {
@@ -621,6 +682,7 @@ impl<'source_code> SemanticDiagnostic<'source_code> {
         Self {
             range,
             kind,
+            related: Vec::new(),
         }
     }
 
@@ -633,6 +695,64 @@ impl<'source_code> SemanticDiagnostic<'source_code> {
     pub fn kind(&self) -> &SemanticDiagnosticKind<'source_code> {
         &self.kind
     }
+
+    #[must_use]
+    pub fn related_info(&self) -> &[SemanticRelatedInformation<'source_code>] {
+        &self.related
+    }
+
+    #[must_use]
+    fn with_related(mut self, info: impl Into<Option<SemanticRelatedInformation<'source_code>>>) -> Self {
+        if let Some(info) = info.into() {
+            self.related.push(info);
+        }
+
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SemanticRelatedInformation<'source_code> {
+    range: FileRange,
+    message: SemanticRelatedMessage<'source_code>,
+}
+
+impl<'source_code> SemanticRelatedInformation<'source_code> {
+    #[must_use]
+    pub fn new(range: FileRange, message: SemanticRelatedMessage<'source_code>) -> Self {
+        Self {
+            range,
+            message: message.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn range(&self) -> FileRange {
+        self.range
+    }
+
+    #[must_use]
+    pub fn message(&self) -> &SemanticRelatedMessage<'source_code> {
+        &self.message
+    }
+}
+
+#[derive(Debug, Clone, Error, AsRefStr)]
+pub enum SemanticRelatedMessage<'source_code> {
+    #[error("`{name}` is hier voor het eerst geïnitialiseerd")]
+    DuplicateFieldFirstUse { name: &'source_code str },
+
+    #[error("veld `{name}` is hier gedefinieerd")]
+    FieldDefinedHere { name: &'source_code str },
+
+    #[error("werkwijze `{name}` is hier gedefinieerd")]
+    FunctionDefinedHere { name: &'source_code str },
+
+    #[error("parameter `{name}` is hier gedeclareerd")]
+    ParameterDeclaredHere { name: &'source_code str },
+
+    #[error("structuur `{name}` is hier gedefinieerd")]
+    StructureDefinedHere { name: &'source_code str },
 }
 
 #[derive(Debug, Clone, Error, AsRefStr)]
