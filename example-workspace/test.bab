@@ -6,9 +6,11 @@ structuur Persoon {
 
 werkwijze gedag(aan: Persoon) {
     schrijf(€"Hallo, {aan.voornaam} {aan.achternaam}");
+
 }
 
 stel anoniem = nieuw Persoon {
+
 };
 
 gedag(anoniem);

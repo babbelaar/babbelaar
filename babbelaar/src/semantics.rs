@@ -7,7 +7,7 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, Attribute, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, Attribute, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer<'source_code> {
@@ -441,6 +441,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     }
                 }
             }
+        }
+
+        if !fields_left.is_empty() {
+            let names = fields_left.keys().map(|x| *x).join("`, `");
+            self.diagnostics.push(SemanticDiagnostic::new(instantiation.range, SemanticDiagnosticKind::MissingFieldInitializers {
+                names,
+                field_word: if fields_left.len() == 1 {
+                    "Het veld"
+                } else {
+                    "De velden"
+                },
+            }));
         }
 
         SemanticValue {
@@ -953,6 +965,12 @@ pub enum SemanticDiagnosticKind<'source_code> {
 
     #[error("Pure waarde ongebruikt")]
     UnusedPureValue,
+
+    #[error("{field_word} `{names}` ontbreken een toewijzing")]
+    MissingFieldInitializers {
+        names: String,
+        field_word: &'static str,
+    },
 }
 
 impl<'source_code> SemanticDiagnosticKind<'source_code> {
