@@ -220,8 +220,6 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
             self.analyze_function(&method.function);
         }
-
-        // TODO
     }
 
     fn analyze_variable_statement(&mut self, statement: &'source_code VariableStatement<'source_code>) {
@@ -697,6 +695,17 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             SemanticType::Custom(ref custom) => {
                 for method in &custom.methods {
                     if method.name() == *expression.method_name {
+                        if let Some(tracker) = &mut self.context.definition_tracker {
+                            let local_reference = SemanticReference {
+                                local_name: method.name(),
+                                local_kind: SemanticLocalKind::Method,
+                                declaration_range: method.function.name.range(),
+                                typ: SemanticType::FunctionReference(FunctionReference::Custom(method.function)), // is this okay?
+                            };
+
+                            tracker.insert(expression.method_name.range(), local_reference);
+                        }
+
                         return SemanticValue {
                             ty: method.return_type(),
                             usage: method.return_type_usage(),
@@ -1099,8 +1108,9 @@ pub struct SemanticFunction<'source_code> {
 
 impl<'source_code> Display for SemanticFunction<'source_code> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("werkwijze ")?;
         f.write_str(&self.name)?;
-        f.write_str("())")
+        f.write_str("()")
     }
 }
 
@@ -1210,7 +1220,7 @@ pub struct SemanticMethod<'source_code> {
 
 impl<'source_code> SemanticMethod<'source_code> {
     #[must_use]
-    fn name(&self) -> &str {
+    fn name(&self) -> &'source_code str {
         &self.function.name
     }
 
@@ -1324,6 +1334,7 @@ pub enum SemanticLocalKind {
     Function,
     FunctionReference,
     Variable,
+    Method,
 }
 
 impl SemanticLocalKind {
@@ -1337,6 +1348,7 @@ impl SemanticLocalKind {
             Self::Function => true,
             Self::FunctionReference => true,
             Self::Variable => false,
+            Self::Method => true,
         }
     }
 }
