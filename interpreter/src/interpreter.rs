@@ -29,6 +29,10 @@ impl<'source_code, D> Interpreter<'source_code, D>
     }
 
     pub fn execute_tree(&mut self, tree: &ParseTree<'source_code>) {
+        for statement in tree.structures() {
+            _ = self.execute_statement(statement);
+        }
+
         for statement in tree.functions() {
             _ = self.execute_statement(statement);
         }
@@ -111,7 +115,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
                 let value = self.execute_expression(&postfix.lhs);
                 match &postfix.kind {
                     PostfixExpressionKind::Member(member) => {
-                        let Value::Object { fields } = value else {
+                        let Value::Object { fields, .. } = value else {
                             panic!("Cannot assign to non-Object Value");
                         };
 
@@ -160,6 +164,10 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
             PrimaryExpression::StructureInstantiation(structure) => {
                 Value::Object {
+                    structure: *self.structures.iter()
+                        .find(|(_, structure)| structure.name.value() == structure.name.value())
+                        .unwrap_or_else(|| panic!("failed to find structure `{}`, structures: {:#?}", structure.name.value(), self.structures))
+                        .0,
                     fields: Rc::new(RefCell::new(structure.fields.iter()
                         .map(|field| {
                             (field.name.to_string(), self.execute_expression(&field.value))
@@ -279,6 +287,18 @@ impl<'source_code, D> Interpreter<'source_code, D>
                 (method.function)(self, arguments)
             }
 
+            Value::MethodIdReference { lhs, method } => {
+                let structure = self.structures.get(&method.structure).unwrap();
+                let method = Rc::clone(&structure.methods[method.index].function);
+
+                arguments.push(*lhs);
+                for argument in &func.arguments {
+                    arguments.push(self.execute_expression(argument));
+                }
+
+                self.execute_function(method.clone(), arguments)
+            }
+
             Value::Function { id, .. } => {
                 for argument in &func.arguments {
                     arguments.push(self.execute_expression(argument));
@@ -367,7 +387,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
     }
 
     fn execute_member_reference(&mut self, lhs: Value, member: &Ranged<&'source_code str>) -> Value {
-        let Value::Object { fields } = lhs else {
+        let Value::Object { fields, .. } = lhs else {
             todo!("Invalid member reference: {member:?} for value {lhs:#?}");
         };
 
@@ -376,8 +396,40 @@ impl<'source_code, D> Interpreter<'source_code, D>
     }
 
     fn execute_method_invocation(&mut self, lhs: Value, expression: &MethodCallExpression<'source_code>) -> Value {
-        let method = lhs.get_method(&expression.method_name).unwrap();
+        let method = self.get_method(&lhs, &expression.method_name).unwrap();
         self.execute_function_call(method, &expression.call)
+    }
+
+    fn get_method(&self, value: &Value, method_name: &str) -> Option<Value> {
+        match value.typ() {
+            ValueType::Builtin(builtin) => {
+                for method in builtin.methods() {
+                    if method.name == method_name {
+                        return Some(Value::MethodReference {
+                            lhs: Box::new(value.clone()),
+                            method,
+                        });
+                    }
+                }
+            }
+
+            ValueType::Structure(structure_id) => {
+                let structure = self.structures.get(&structure_id).expect("illegal StructureId");
+                for (index, method) in structure.methods.iter().enumerate() {
+                    if *method.function.name == method_name {
+                        return Some(Value::MethodIdReference {
+                            lhs: Box::new(value.clone()),
+                            method: MethodId {
+                                structure: structure_id,
+                                index,
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        None
     }
 }
 

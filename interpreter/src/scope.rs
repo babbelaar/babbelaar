@@ -7,7 +7,7 @@ use babbelaar::Structure;
 
 use crate::{Builtin, FunctionId, Value};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Scope<'source_code> {
     pub parent: Option<Box<Scope<'source_code>>>,
     pub variables: HashMap<String, Value>,

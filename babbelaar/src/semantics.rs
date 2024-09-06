@@ -181,16 +181,24 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             ty: self.resolve_type(&x.ty),
         }).collect();
 
-        let structure = Rc::new(SemanticStructure {
+        let methods = structure.methods.iter().map(|x| SemanticMethod {
+            function: SemanticFunction {
+                name: x.function.name,
+                parameters: &x.function.parameters,
+            }
+        }).collect();
+
+        let semantic_structure = Rc::new(SemanticStructure {
             attributes: &statement.attributes,
             name: structure.name,
             fields,
+            methods,
         });
 
-        self.context.push_structure(Rc::clone(&structure));
+        self.context.push_structure(Rc::clone(&semantic_structure));
 
         let mut names = HashSet::new();
-        for field in &structure.fields {
+        for field in &semantic_structure.fields {
             if !names.insert(field.name.value()) {
                 self.diagnostics.push(SemanticDiagnostic::new(
                     field.name.range(),
@@ -199,6 +207,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             }
 
             self.analyze_attributes_for_field(field);
+        }
+
+        let mut names = HashSet::new();
+        for method in &structure.methods {
+            if !names.insert(method.function.name.value()) {
+                self.diagnostics.push(SemanticDiagnostic::new(
+                    method.function.name.range(),
+                    SemanticDiagnosticKind::DuplicateMethodName { name: method.function.name.value(), structure: &structure.name },
+                ));
+            }
+
+            self.analyze_function(&method.function);
         }
 
         // TODO
@@ -675,6 +695,15 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             }
 
             SemanticType::Custom(ref custom) => {
+                for method in &custom.methods {
+                    if method.name() == *expression.method_name {
+                        return SemanticValue {
+                            ty: method.return_type(),
+                            usage: method.return_type_usage(),
+                        };
+                    }
+                }
+
                 let struct_hint = SemanticRelatedInformation::new(
                     custom.name.range(),
                     SemanticRelatedMessage::StructureDefinedHere { name: &custom.name }
@@ -946,6 +975,9 @@ pub enum SemanticDiagnosticKind<'source_code> {
     #[error("Veldnaam `{name}` wordt meerdere keren gebruikt")]
     DuplicateFieldName { name: &'source_code str },
 
+    #[error("Werkwijzenaam `{name}` in structuur `{structure}` wordt meerdere keren gebruikt")]
+    DuplicateMethodName { name: &'source_code str, structure: &'source_code str },
+
     #[error("Veld met naam `{name}` wordt meerdere keren een waarde toegekend")]
     DuplicateFieldInstantiation { name: &'source_code str },
 
@@ -1060,8 +1092,8 @@ impl<'source_code> SemanticScope<'source_code> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct SemanticFunction<'source_code> {
-    name: Ranged<&'source_code str>,
-    parameters: &'source_code [Parameter<'source_code>],
+    pub name: Ranged<&'source_code str>,
+    pub parameters: &'source_code [Parameter<'source_code>],
     // type ...
 }
 
@@ -1172,10 +1204,33 @@ pub struct SemanticField<'source_code> {
 }
 
 #[derive(Debug, Clone)]
+pub struct SemanticMethod<'source_code> {
+    pub function: SemanticFunction<'source_code>,
+}
+
+impl<'source_code> SemanticMethod<'source_code> {
+    #[must_use]
+    fn name(&self) -> &str {
+        &self.function.name
+    }
+
+    #[must_use]
+    fn return_type(&self) -> SemanticType<'source_code> {
+        SemanticType::null()
+    }
+
+    #[must_use]
+    fn return_type_usage(&self) -> SemanticUsage {
+        SemanticUsage::Indifferent
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SemanticStructure<'source_code> {
     pub attributes: &'source_code [Attribute<'source_code>],
     pub name: Ranged<&'source_code str>,
     pub fields: Vec<SemanticField<'source_code>>,
+    pub methods: Vec<SemanticMethod<'source_code>>,
 }
 
 impl<'source_code> Display for SemanticStructure<'source_code> {

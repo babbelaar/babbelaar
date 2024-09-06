@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::rc::Rc;
+
 use crate::{Attribute, FileRange, FunctionStatement, Ranged, Type};
 
 #[derive(Debug, Clone)]
@@ -13,7 +15,9 @@ pub struct Field<'source_code> {
 #[derive(Debug, Clone)]
 pub struct Method<'source_code> {
     pub range: FileRange,
-    pub function: FunctionStatement<'source_code>,
+
+    /// This is an [`Rc`] for the interpreter's convenience sake.
+    pub function: Rc<FunctionStatement<'source_code>>,
 }
 
 #[derive(Debug, Clone)]

@@ -7,7 +7,7 @@ use crate::BuiltinFunction;
 
 use super::methods::{METHODS_BOOL, METHODS_G32, METHODS_NULL, METHODS_SLINGER};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub enum BuiltinType {
     Bool,
     G32,

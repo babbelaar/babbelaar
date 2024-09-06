@@ -17,11 +17,16 @@ pub enum Value {
         lhs: Box<Value>,
         method: &'static BuiltinFunction,
     },
+    MethodIdReference {
+        lhs: Box<Value>,
+        method: MethodId,
+    },
     Function {
         name: String,
         id: FunctionId,
     },
     Object {
+        structure: StructureId,
         fields: Rc<RefCell<HashMap<String, Value>>>,
     },
 }
@@ -48,29 +53,17 @@ impl Value {
         }
     }
 
-    pub fn typ(&self) -> BuiltinType {
+    pub fn typ(&self) -> ValueType {
         match self {
-            Self::Bool(..) => BuiltinType::Bool,
-            Self::Integer(..) => BuiltinType::G32,
-            Self::Null => BuiltinType::Null,
-            Self::String(..) => BuiltinType::Slinger,
+            Self::Bool(..) => BuiltinType::Bool.into(),
+            Self::Integer(..) => BuiltinType::G32.into(),
+            Self::Null => BuiltinType::Null.into(),
+            Self::String(..) => BuiltinType::Slinger.into(),
             Self::MethodReference { .. } => todo!(),
+            Self::MethodIdReference { .. } => todo!(),
             Self::Function { .. } => todo!(),
-            Self::Object { .. } => todo!(),
+            Self::Object { structure, .. } => structure.into(),
         }
-    }
-
-    pub fn get_method(&self, method_name: &str) -> Option<Value> {
-        for method in self.typ().methods().iter() {
-            if method.name == method_name {
-                return Some(Value::MethodReference {
-                    lhs: Box::new(self.clone()),
-                    method,
-                });
-            }
-        }
-
-        None
     }
 }
 
@@ -95,9 +88,40 @@ impl Display for Value {
             Self::Integer(i) => i.fmt(f),
             Self::String(str) => f.write_str(str),
             Self::MethodReference { lhs, method } => f.write_fmt(format_args!("{lhs}.{}()", method.name)),
+            Self::MethodIdReference { .. } => f.write_str("werkwijze"),
             Self::Function { name, .. } => f.write_fmt(format_args!("werkwijze {name}() {{ .. }}")),
             Self::Object { .. } => f.write_str("te-doen(object-waarde-formatteren)"),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Hash)]
+pub enum ValueType {
+    Builtin(BuiltinType),
+    Structure(StructureId),
+}
+
+impl From<BuiltinType> for ValueType {
+    fn from(value: BuiltinType) -> Self {
+        Self::Builtin(value)
+    }
+}
+
+impl From<&BuiltinType> for ValueType {
+    fn from(value: &BuiltinType) -> Self {
+        Self::Builtin(*value)
+    }
+}
+
+impl From<&StructureId> for ValueType {
+    fn from(value: &StructureId) -> Self {
+        Self::Structure(*value)
+    }
+}
+
+impl From<StructureId> for ValueType {
+    fn from(value: StructureId) -> Self {
+        Self::Structure(value)
     }
 }
 
@@ -135,4 +159,10 @@ impl<'source_code> From<&Structure<'source_code>> for StructureId {
             id: hasher.finish() as usize,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MethodId {
+    pub structure: StructureId,
+    pub index: usize,
 }

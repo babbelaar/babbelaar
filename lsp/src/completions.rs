@@ -290,6 +290,17 @@ impl<'b> CompletionEngine<'b> {
                     }
 
                     SemanticType::Custom(custom) => {
+                        for method in &custom.methods {
+                            let name = &method.function.name;
+                            self.completions.push(CompletionItem {
+                                label: format!("{}()", name.value()),
+                                kind: Some(CompletionItemKind::METHOD),
+                                insert_text: Some(format!("{}($1);$0", name.value())),
+                                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                                ..Default::default()
+                            });
+                        }
+
                         for field in &custom.fields {
                             self.completions.push(CompletionItem {
                                 label: field.name.to_string(),
