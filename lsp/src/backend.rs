@@ -657,6 +657,10 @@ impl Backend {
     }
 
     async fn create_code_actions_by_diagnostic(&self, result: &mut Vec<CodeActionOrCommand>, diagnostic: &Diagnostic) {
+        if diagnostic.data.is_none() {
+            return;
+        }
+
         let Some(serde_json::Value::Array(action_ids)) = &diagnostic.data else {
             warn!("Invalid CodeAction data: {:#?}", diagnostic.data);
             return;
