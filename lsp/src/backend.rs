@@ -15,7 +15,6 @@ use tower_lsp::Client;
 use crate::actions::CodeActionsAnalysisContext;
 use crate::actions::CodeActionsAnalyzable;
 use crate::conversion::convert_file_range_to_location;
-use crate::BabbelaarLspError;
 use crate::CodeActionRepository;
 use crate::UrlExtension;
 use crate::{
@@ -110,7 +109,7 @@ impl Backend {
         }
 
         let path = uri.to_path()?;
-        let contents = match tokio::fs::read_to_string(&path).await {
+        let mut contents = match tokio::fs::read_to_string(&path).await {
             Ok(contents) => contents,
             Err(e) => {
                 self.client
@@ -119,6 +118,12 @@ impl Backend {
                 return Err(e.into());
             }
         };
+
+        // Either `read_to_string` omits the trailing empty line, or the editor assumes
+        // there is one regardless of the disk contents, but we have to append one to be sure.
+        if !contents.ends_with("\n\n") {
+            contents += "\n";
+        }
 
         let contents = Arc::from(contents);
         {
