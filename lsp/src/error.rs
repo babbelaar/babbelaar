@@ -20,6 +20,9 @@ pub enum BabbelaarLspError {
 
     #[error("geopend document heeft geen bestandspad as URL")]
     UrlNotFilePath,
+
+    #[error("ongeldige data verstuurd: {explanation}")]
+    InvalidDataSent { explanation: String },
 }
 
 impl From<IoError> for BabbelaarLspError {

@@ -15,6 +15,7 @@ use tower_lsp::Client;
 use crate::actions::CodeActionsAnalysisContext;
 use crate::actions::CodeActionsAnalyzable;
 use crate::conversion::convert_file_range_to_location;
+use crate::BabbelaarLspError;
 use crate::CodeActionRepository;
 use crate::UrlExtension;
 use crate::{
@@ -733,36 +734,40 @@ impl Backend {
     }
 
     async fn create_code_actions_based_on_semantics(&self, actions: &mut Vec<CodeActionOrCommand>, params: &CodeActionParams) -> Result<()> {
-        let start = FileLocation::new(
-            usize::MAX,
-            params.range.start.line as _,
-            params.range.start.character as _,
-        );
-
-        let end = FileLocation::new(
-            usize::MAX,
-            params.range.end.line as _,
-            params.range.end.character as _,
-        );
-
         let document = OptionalVersionedTextDocumentIdentifier {
             uri: params.text_document.uri.clone(),
             version: None,
         };
 
         self.with_syntax(&params.text_document, |tree, contents| {
+            let start = FileLocation::new(
+                usize::MAX,
+                params.range.start.line as _,
+                params.range.start.character as _,
+            );
+
+            let end = FileLocation::new(
+                usize::MAX,
+                params.range.end.line as _,
+                params.range.end.character as _,
+            );
+
+            let line = contents.lines().nth(start.line())
+                .ok_or_else(|| BabbelaarLspError::InvalidDataSent { explanation: "no such line".into() })?;
+
+            let (idx, _) = line.char_indices().nth(start.column())
+                .unwrap_or((line.len(), ' '));
+
+            let start = FileLocation::new(start.offset(), start.line(), idx);
+
+            let (idx, _) = line.char_indices().nth(end.column())
+                .unwrap_or((line.len(), ' '));
+            let end = FileLocation::new(end.offset(), end.line(), idx);
+
+            let line = &line[..start.column()];
+
             let mut analyzer = SemanticAnalyzer::new();
             analyzer.analyze_tree(&tree);
-
-            let line = if let Some(line) = contents.lines().nth(start.line()) {
-                if line.len() > start.column() {
-                    &line[..start.column()]
-                } else {
-                    line
-                }
-            } else {
-                ""
-            };
 
             let mut ctx = CodeActionsAnalysisContext {
                 semantics: &analyzer,
