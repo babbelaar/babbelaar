@@ -754,14 +754,15 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(range)
     }
 
-    fn expect_left_curly_bracket(&mut self, context: &'static str) -> Result<(), ParseDiagnostic<'source_code>> {
+    fn expect_left_curly_bracket(&mut self, context: &'static str) -> Result<FileRange, ParseDiagnostic<'source_code>> {
         let token = self.consume_token()?;
+        let range = token.range();
 
         if token.kind != TokenKind::Punctuator(Punctuator::LeftCurlyBracket) {
             self.handle_error(ParseDiagnostic::ExpectedLeftCurlyBracket { token, context })?;
         }
 
-        Ok(())
+        Ok(range)
     }
 
     fn expect_comma(&mut self, context: &'static str) -> Result<(), ParseDiagnostic<'source_code>> {
@@ -906,17 +907,19 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let name = Ranged::new(name_token.range(), name);
         _ = self.consume_token();
 
-        self.expect_left_curly_bracket("nieuw")?;
+        let left_curly_bracket = self.expect_left_curly_bracket("nieuw")?;
 
         let mut expr = StructureInstantiationExpression {
             name,
             fields: Vec::new(),
             range: FileRange::new(start, start),
+            left_curly_bracket,
+            right_curly_bracket: FileRange::default(),
         };
 
         loop {
             if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
-                _ = self.consume_token()?;
+                expr.right_curly_bracket = self.consume_token()?.range();
                 break;
             }
 
@@ -957,6 +960,10 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 self.handle_error(ParseDiagnostic::UnexpectedTokenInsideStructureInstantiation { token: self.peek_token()?.clone() })?;
                 break;
             }
+        }
+
+        if expr.right_curly_bracket == FileRange::default() {
+            expr.right_curly_bracket = FileRange::new(self.token_begin, self.token_end);
         }
 
         expr.range = FileRange::new(start, self.token_end);

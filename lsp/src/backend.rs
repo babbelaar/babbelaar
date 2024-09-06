@@ -761,29 +761,17 @@ impl Backend {
                 params.range.end.character as _,
             );
 
-            let line = contents.lines().nth(start.line())
-                .ok_or_else(|| BabbelaarLspError::InvalidDataSent { explanation: "no such line".into() })?;
-
-            let (idx, _) = line.char_indices().nth(start.column())
-                .unwrap_or((line.len(), ' '));
-
-            let start = FileLocation::new(start.offset(), start.line(), idx);
-
-            let (idx, _) = line.char_indices().nth(end.column())
-                .unwrap_or((line.len(), ' '));
-            let end = FileLocation::new(end.offset(), end.line(), idx);
-
-            let line = &line[..start.column()];
-
             let mut analyzer = SemanticAnalyzer::new();
             analyzer.analyze_tree(&tree);
 
             let mut ctx = CodeActionsAnalysisContext {
                 semantics: &analyzer,
                 items: Vec::new(),
-                cursor_range: FileRange::new(start, end),
-                line_indentation: &line[..line.len() - line.trim_start().len()],
+                cursor_range: FileRange::default(),
+                contents,
             };
+
+            ctx.cursor_range = ctx.create_range_and_calculate_byte_column(start, end)?;
 
             tree.analyze(&mut ctx);
 

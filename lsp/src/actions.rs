@@ -3,8 +3,10 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Expression, FileEdit, FileRange, FunctionCallExpression, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StructureInstantiationExpression, TemplateStringExpressionPart};
+use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Expression, FileEdit, FileLocation, FileRange, FunctionCallExpression, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StructureInstantiationExpression, TemplateStringExpressionPart};
 use tower_lsp::lsp_types::VersionedTextDocumentIdentifier;
+
+use crate::BabbelaarLspError;
 
 #[derive(Debug)]
 pub struct CodeActionItem {
@@ -51,9 +53,37 @@ pub struct CodeActionsAnalysisContext<'ctx> {
     pub semantics: &'ctx SemanticAnalyzer<'ctx>,
     pub items: Vec<BabbelaarCodeAction>,
     pub cursor_range: FileRange,
+    pub contents: &'ctx str,
+}
 
-    /// Contains the line indentation
-    pub line_indentation: &'ctx str,
+impl<'ctx> CodeActionsAnalysisContext<'ctx> {
+    pub fn create_range_and_calculate_byte_column(&self, start: FileLocation, end: FileLocation) -> Result<FileRange, BabbelaarLspError> {
+        let line = self.contents.lines().nth(start.line())
+            .ok_or_else(|| BabbelaarLspError::InvalidDataSent {
+                explanation: format!("er is geen lijn op {}, we hebben er {}. De laatste is \"{:?}\"", start.line(), self.contents.lines().count(), self.contents.lines().last())
+            })?;
+
+        let start = map_column_from_char_to_byte_offset(line, start);
+        let end = map_column_from_char_to_byte_offset(line, end);
+
+        Ok(FileRange::new(start, end))
+    }
+
+    pub fn indentation_at(&self, start: FileLocation) -> Option<&'ctx str> {
+        let line = self.contents.lines().nth(start.line())?;
+
+        let line = &line[..start.column()];
+        Some(&line[..line.len() - line.trim_start().len()])
+    }
+}
+
+fn map_column_from_char_to_byte_offset(line: &str, location: FileLocation) -> FileLocation {
+    let column = line.char_indices()
+        .nth(location.column())
+        .unwrap_or((line.len(), ' '))
+        .0;
+
+    FileLocation::new(location.offset(), location.line(), column)
 }
 
 pub trait CodeActionsAnalyzable {
@@ -213,6 +243,8 @@ impl<'source_code> CodeActionsAnalyzable for StructureInstantiationExpression<'s
             field.value.analyze(ctx);
         }
 
+        let indent = ctx.indentation_at(self.name.range().start()).unwrap_or("invalid").to_string() + "    ";
+
         ctx.semantics.scopes_surrounding(self.name.range().start(), |scope| {
             if let Some(structure) = scope.structures.get(self.name.value()) {
                 let mut str = String::new();
@@ -222,10 +254,8 @@ impl<'source_code> CodeActionsAnalyzable for StructureInstantiationExpression<'s
                         continue;
                     }
 
-                    if !str.is_empty() {
-                        str += "\n";
-                        str += ctx.line_indentation;
-                    }
+                    str += "\n";
+                    str += &indent;
 
                     str += field.name.value();
                     str += ": ";
@@ -233,8 +263,10 @@ impl<'source_code> CodeActionsAnalyzable for StructureInstantiationExpression<'s
                     str += ",";
                 }
 
-                if !str.is_empty() {
-                    let edit = FileEdit::new(ctx.cursor_range, str);
+                str += "\n";
+
+                if !str.trim().is_empty() {
+                    let edit = FileEdit::new(FileRange::new(self.left_curly_bracket.end(), self.right_curly_bracket.start()), str);
 
                     ctx.items.push(BabbelaarCodeAction::new(
                         BabbelaarCodeActionType::FillStructureFields { structure: structure.name.to_string() },
