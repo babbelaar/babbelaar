@@ -523,7 +523,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 (self.cursor, self.token_begin, self.token_end) = reset;
                 let replacement_token = PrimaryExpression::Reference(Ranged::new(token.range(), ""));
                 self.handle_error(ParseDiagnostic::UnknownStartOfExpression { token })?;
-                Ok(replacement_token)
+                return Ok(Ranged::new(FileRange::new(self.token_begin, self.token_end), replacement_token));
             }
         }?;
 
