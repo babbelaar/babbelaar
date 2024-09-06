@@ -900,11 +900,15 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
     fn parse_structure_instantiation(&mut self, start: FileLocation) -> Result<PrimaryExpression<'source_code>, ParseDiagnostic<'source_code>> {
         let name_token = self.peek_token()?;
-        let TokenKind::Identifier(name) = name_token.kind else {
-            return Err(ParseDiagnostic::ExpectedNameAfterNieuw { token: name_token.clone() });
+        let name = match &name_token.kind {
+            TokenKind::Identifier(name) => Ranged::new(name_token.range(), *name),
+
+            _ => {
+                self.handle_error(ParseDiagnostic::ExpectedNameAfterNieuw { token: name_token.clone() })?;
+                Ranged::new(FileRange::new(self.token_begin, self.token_begin), "")
+            }
         };
 
-        let name = Ranged::new(name_token.range(), name);
         _ = self.consume_token();
 
         let left_curly_bracket = self.expect_left_curly_bracket("nieuw")?;
