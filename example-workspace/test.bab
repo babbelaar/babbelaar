@@ -2,8 +2,8 @@ structuur Persoon {
     veld voornaam: Slinger,
     veld achternaam: Slinger,
 
-    werkwijze hallo() {
-        schrijf("Hallo");
+    werkwijze hallo(a: Slinger) {
+        schrijf(€"Hallo {a}");
     }
 
     veld leeftijd: g32,
@@ -11,7 +11,7 @@ structuur Persoon {
 
 werkwijze gedag(aan: Persoon) {
     schrijf(€"Hallo, {aan.voornaam} {aan.achternaam}");
-    aan.hallo();
+    aan.hallo(1);
 }
 
 stel anoniem = nieuw Persoon {

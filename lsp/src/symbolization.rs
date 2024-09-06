@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
+use babbelaar::{AssignStatement, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
@@ -139,6 +139,10 @@ impl<'source_code> Symbolizer<'source_code> {
         for field in &statement.fields {
             self.add_structure_field(field);
         }
+
+        for field in &statement.methods {
+            self.add_structure_method(field);
+        }
     }
 
     fn add_structure_field(&mut self, field: &'source_code Field<'source_code>) {
@@ -153,6 +157,10 @@ impl<'source_code> Symbolizer<'source_code> {
             kind: LspTokenType::Class,
             range: field.ty.range(),
         });
+    }
+
+    fn add_structure_method(&mut self, method: &'source_code Method<'source_code>) {
+        self.add_statement_function(&method.function);
     }
 
     fn add_statement_variable(&mut self, statement: &'source_code VariableStatement<'source_code>) {
@@ -188,6 +196,7 @@ impl<'source_code> Symbolizer<'source_code> {
                             SemanticLocalKind::Parameter => LspTokenType::ParameterName,
                             SemanticLocalKind::Function => LspTokenType::Function,
                             SemanticLocalKind::FunctionReference => LspTokenType::Function,
+                            SemanticLocalKind::Method => LspTokenType::Method,
                             SemanticLocalKind::Variable => LspTokenType::Variable,
                         },
                         range: identifier.range(),

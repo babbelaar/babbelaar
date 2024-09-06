@@ -267,6 +267,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             return SemanticValue::null();
         };
 
+
+        self.analyze_function_parameters(&function_name, function, expression);
+
+        SemanticValue::null()
+    }
+
+    fn analyze_function_parameters(
+        &mut self,
+        function_name: &'source_code str,
+        function: SemanticReference<'source_code>,
+        expression: &'source_code FunctionCallExpression<'source_code>,
+    ) {
         let function_hint = SemanticRelatedInformation::new(
             function.declaration_range,
             SemanticRelatedMessage::FunctionDefinedHere { name: function_name }
@@ -287,12 +299,11 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 expression.token_right_paren,
                 SemanticDiagnosticKind::TooManyArguments { function_name, param_count, arg_count },
             ).with_related(function_hint.clone()));
-            return SemanticValue::null();
+            return;
         }
 
         for (arg_idx, arg) in expression.arguments.iter().enumerate() {
             let argument_type = self.analyze_expression(arg).ty;
-            let function = self.find_function(&function_name).unwrap();
 
             let Some(parameter_type) = self.resolve_parameter_type(&function, arg_idx) else {
                 warn!("Cannot check type of parameter with index {arg_idx}");
@@ -315,8 +326,6 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 ).with_related(param_hint).with_related(function_hint.clone()))
             }
         }
-
-        SemanticValue::null()
     }
 
     fn analyze_primary_expression(&mut self, expression: &'source_code PrimaryExpression<'source_code>) -> SemanticValue<'source_code> {
@@ -672,7 +681,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         SemanticValue::null()
     }
 
-    fn analyze_method_expression(&mut self, typ: SemanticType<'source_code>, expression: &MethodCallExpression<'source_code>) -> SemanticValue<'source_code> {
+    fn analyze_method_expression(&mut self, typ: SemanticType<'source_code>, expression: &'source_code MethodCallExpression<'source_code>) -> SemanticValue<'source_code> {
         match typ {
             SemanticType::Builtin(builtin) => {
                 for method in builtin.methods() {
@@ -695,16 +704,18 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             SemanticType::Custom(ref custom) => {
                 for method in &custom.methods {
                     if method.name() == *expression.method_name {
-                        if let Some(tracker) = &mut self.context.definition_tracker {
-                            let local_reference = SemanticReference {
-                                local_name: method.name(),
-                                local_kind: SemanticLocalKind::Method,
-                                declaration_range: method.function.name.range(),
-                                typ: SemanticType::FunctionReference(FunctionReference::Custom(method.function)), // is this okay?
-                            };
+                        let local_reference = SemanticReference {
+                            local_name: method.name(),
+                            local_kind: SemanticLocalKind::Method,
+                            declaration_range: method.function.name.range(),
+                            typ: SemanticType::FunctionReference(FunctionReference::Custom(method.function)), // is this okay?
+                        };
 
-                            tracker.insert(expression.method_name.range(), local_reference);
+                        if let Some(tracker) = &mut self.context.definition_tracker {
+                            tracker.insert(expression.method_name.range(), local_reference.clone());
                         }
+
+                        self.analyze_function_parameters(method.name(), local_reference, &expression.call);
 
                         return SemanticValue {
                             ty: method.return_type(),
