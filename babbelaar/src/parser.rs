@@ -6,7 +6,7 @@ use std::{fmt::Display, path::PathBuf};
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, BiExpression, BiOperator, Builtin, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
+    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, BiExpression, BiOperator, Builtin, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
 };
 
 pub type ParseResult<'source_code, T> = Result<T, ParseDiagnostic<'source_code>>;
@@ -278,6 +278,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let mut structure = Structure {
             name,
             fields: Vec::new(),
+            methods: Vec::new(),
         };
 
         self.expect_left_curly_bracket("structuurnaam")?;
@@ -288,10 +289,27 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 break;
             }
 
+            let mut require_comma = true;
+
             match self.peek_token()?.kind {
                 TokenKind::Keyword(Keyword::Veld) => {
                     _ = self.consume_token();
                     structure.fields.push(self.parse_structure_field()?);
+                }
+
+                TokenKind::Keyword(Keyword::Werkwijze) => {
+                    let start = self.consume_token()?.begin;
+
+                    let function = self.parse_function()?;
+
+                    let range = FileRange::new(start, self.token_end);
+
+                    structure.methods.push(Method {
+                        range,
+                        function,
+                    });
+
+                    require_comma = false;
                 }
 
                 _ => {
@@ -306,7 +324,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 continue;
             }
 
-            if self.peek_punctuator() != Some(Punctuator::RightCurlyBracket) {
+            if require_comma && self.peek_punctuator() != Some(Punctuator::RightCurlyBracket) {
                 self.handle_error(ParseDiagnostic::UnexpectedTokenInsideStructure { token: self.peek_token()?.clone() })?;
                 break;
             }
