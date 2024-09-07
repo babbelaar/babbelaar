@@ -14,6 +14,9 @@
         },
         {
             "include": "#constant.numeric"
+        },
+        {
+            "include": "#comments"
         }
     ],
     "repository": {
@@ -48,6 +51,29 @@
                     "name": "string.quoted.double.template.babbelaar"
                 }
             ]
-        }
+        },
+        "comments": {
+			"patterns": [
+				{
+					"begin": "/\\*",
+					"captures": {
+						"0": {
+							"name": "punctuation.definition.comment.babbelaar.comments"
+						}
+					},
+					"end": "\\*/",
+					"name": "comment.block.babbelaar.comments"
+				},
+				{
+					"captures": {
+						"1": {
+							"name": "punctuation.definition.comment.babbelaar.comments"
+						}
+					},
+					"match": "(//).*$\\n?",
+					"name": "comment.line.double-slash.babbelaar"
+				}
+			]
+		}
     }
 }
