@@ -1187,11 +1187,11 @@ impl<'source_code> SemanticReference<'source_code> {
     pub fn hover(&self) -> String {
         match self.local_kind {
             SemanticLocalKind::Function | SemanticLocalKind::FunctionReference => {
-                format!("```bab\nwerkwijze {}(..)\n```", self.local_name)
+                format!("```babbelaar\nwerkwijze {}(..)\n```", self.local_name)
             }
 
             SemanticLocalKind::FieldReference => {
-                format!("```bab\nveld {}: {}\n```", self.local_name, self.typ)
+                format!("```babbelaar\nveld {}: {}\n```", self.local_name, self.typ)
             }
 
             SemanticLocalKind::StructureReference => {
@@ -1203,15 +1203,15 @@ impl<'source_code> SemanticReference<'source_code> {
                     }
                 }
 
-                format!("```bab\nstructuur {} {{{fields}\n}}\n```", self.local_name)
+                format!("```babbelaar\nstructuur {} {{{fields}\n}}\n```", self.local_name)
             }
 
             SemanticLocalKind::Variable => {
-                format!("```bab\nstel {}: {}\n```", self.local_name, self.typ)
+                format!("```babbelaar\nstel {}: {}\n```", self.local_name, self.typ)
             }
 
             _ => {
-                format!("```bab\n{}: {}\n```", self.local_name, self.typ)
+                format!("```babbelaar\n{}: {}\n```", self.local_name, self.typ)
             }
         }
     }
