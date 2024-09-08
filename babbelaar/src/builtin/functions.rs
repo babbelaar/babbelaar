@@ -5,7 +5,7 @@ use std::{borrow::Cow, fmt::{Debug, Display}, io::stdin};
 
 use crate::{BuiltinType, Interpreter, Value};
 
-pub type BuiltinFunctionSignature = &'static (dyn Fn(&mut dyn Interpreter, Vec<Value>) -> Value + Send + Sync);
+pub type BuiltinFunctionSignature = &'static (dyn Fn(&mut dyn Interpreter, Vec<Value>, Option<Value>) -> Value + Send + Sync);
 
 #[derive(Clone, Copy)]
 pub struct BuiltinFunction {
@@ -74,7 +74,7 @@ pub struct BuiltinFunctionParameter {
     pub typ: BuiltinType,
 }
 
-pub fn schrijf(_: &mut dyn Interpreter, args: Vec<Value>) -> Value {
+pub fn schrijf(_: &mut dyn Interpreter, args: Vec<Value>, _this: Option<Value>) -> Value {
     for (arg_idx, arg) in args.into_iter().enumerate() {
         if arg_idx != 0 {
             print!(" ");
@@ -88,7 +88,7 @@ pub fn schrijf(_: &mut dyn Interpreter, args: Vec<Value>) -> Value {
     Value::Null
 }
 
-pub fn lees(_: &mut dyn Interpreter, _: Vec<Value>) -> Value {
+pub fn lees(_: &mut dyn Interpreter, _: Vec<Value>, _: Option<Value>) -> Value {
     let mut line = String::new();
     stdin().read_line(&mut line).unwrap();
     line.truncate(line.trim_end().len());

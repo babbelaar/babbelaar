@@ -276,42 +276,31 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
     fn execute_function_call(&mut self, lhs: Value, func: &FunctionCallExpression<'source_code>) -> Value {
         let mut arguments: Vec<Value> = Vec::with_capacity(func.arguments.len());
+        for argument in &func.arguments {
+            arguments.push(self.execute_expression(argument));
+        }
 
         match lhs {
             Value::MethodReference { lhs, method } => {
-                arguments.push(*lhs);
-                for argument in &func.arguments {
-                    arguments.push(self.execute_expression(argument));
-                }
-
-                (method.function)(self, arguments)
+                (method.function)(self, arguments, Some(*lhs))
             }
 
             Value::MethodIdReference { lhs, method } => {
                 let structure = self.structures.get(&method.structure).unwrap();
                 let method = Rc::clone(&structure.methods[method.index].function);
 
-                arguments.push(*lhs);
-                for argument in &func.arguments {
-                    arguments.push(self.execute_expression(argument));
-                }
-
-                self.execute_function(method.clone(), arguments)
+                self.execute_function(method.clone(), arguments, Some(*lhs))
             }
 
             Value::Function { id, .. } => {
-                for argument in &func.arguments {
-                    arguments.push(self.execute_expression(argument));
-                }
-
-                self.execute_function_by_id(id, arguments, func.token_left_paren).unwrap()
+                self.execute_function_by_id(id, arguments, None, func.token_left_paren).unwrap()
             }
 
             _ => panic!("Unexpected lhs: {lhs:#?}"),
         }
     }
 
-    fn execute_function_by_id(&mut self, id: FunctionId, arguments: Vec<Value>, caller_location: FileRange) -> Option<Value> {
+    fn execute_function_by_id(&mut self, id: FunctionId, arguments: Vec<Value>, this: Option<Value>, caller_location: FileRange) -> Option<Value> {
         if id.namespace == usize::MAX {
             let function = Builtin::FUNCTIONS[id.id];
 
@@ -322,7 +311,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
                 callee_location: None,
             }, &arguments);
 
-            let value = (function.function)(self, arguments);
+            let value = (function.function)(self, arguments, this);
 
             self.debugger.leave_function(DebuggerFunction {
                 ty: DebuggerFunctionType::Normal,
@@ -342,7 +331,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
                 callee_location: Some(func.name.range()),
             }, &arguments);
 
-            let value = self.execute_function(Rc::clone(&func), arguments);
+            let value = self.execute_function(Rc::clone(&func), arguments, this);
 
             self.debugger.leave_function(DebuggerFunction {
                 ty: DebuggerFunctionType::Normal,
@@ -355,7 +344,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    fn execute_function(&mut self, func: Rc<FunctionStatement<'source_code>>, arguments: Vec<Value>) -> Value {
+    fn execute_function(&mut self, func: Rc<FunctionStatement<'source_code>>, arguments: Vec<Value>, this: Option<Value>) -> Value {
         self.scope = std::mem::take(&mut self.scope).push();
 
         for idx in 0..func.parameters.len() {

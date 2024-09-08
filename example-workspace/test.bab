@@ -3,7 +3,7 @@ structuur Persoon {
     veld achternaam: Slinger,
 
     werkwijze hallo(a: Slinger, b: Slinger) {
-        // schrijf(€"Hallo {a} {b}");
+        schrijf(€"Hallo {a} {b}");
     }
 
     veld leeftijd: g32,
