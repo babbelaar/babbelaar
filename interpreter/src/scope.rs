@@ -12,19 +12,21 @@ pub struct Scope<'source_code> {
     pub parent: Option<Box<Scope<'source_code>>>,
     pub variables: HashMap<String, Value>,
     pub structures: HashMap<String, Rc<Structure<'source_code>>>,
+    pub this: Option<Value>,
 }
 
 impl<'source_code> Scope<'source_code> {
-    pub fn new() -> Self {
+    pub fn new(this: Option<Value>) -> Self {
         Self {
             parent: None,
             variables: HashMap::new(),
             structures: HashMap::new(),
+            this,
         }
     }
 
     pub fn new_top_level() -> Self {
-        let mut this = Self::new();
+        let mut this = Self::new(None);
 
         for (func_idx, func) in Builtin::FUNCTIONS.iter().enumerate() {
             let id = FunctionId {
@@ -38,10 +40,21 @@ impl<'source_code> Scope<'source_code> {
     }
 
     pub fn push(self) -> Self {
+        let this = self.this.clone();
         Self {
             parent: Some(Box::new(self)),
             variables: HashMap::new(),
             structures: HashMap::new(),
+            this,
+        }
+    }
+
+    pub fn push_function(self, this: Option<Value>) -> Self {
+        Self {
+            parent: Some(Box::new(self)),
+            variables: HashMap::new(),
+            structures: HashMap::new(),
+            this,
         }
     }
 

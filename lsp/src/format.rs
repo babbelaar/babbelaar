@@ -6,7 +6,7 @@
 
 use std::fmt::Write;
 
-use babbelaar::{AssignStatement, BiExpression, BuiltinType, Expression, Field, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, BiExpression, BuiltinType, Expression, Field, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
 
 pub struct Formatter<'source> {
     #[allow(unused)]
@@ -359,6 +359,7 @@ impl<'source_code> Format for PrimaryExpression<'source_code> {
                 // TODO use source code for original formatting, e.g. with number separators etc.
                 _ = f.write_fmt(format_args!("{integer}"));
             }
+            Self::ReferenceThis => f.write_str(Keyword::Dit.as_ref()),
             Self::Reference(s) => f.write_str(s.value()),
             Self::StringLiteral(s) => {
                 f.write_char('"');

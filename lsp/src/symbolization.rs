@@ -198,6 +198,7 @@ impl<'source_code> Symbolizer<'source_code> {
                             SemanticLocalKind::FunctionReference => LspTokenType::Function,
                             SemanticLocalKind::Method => LspTokenType::Method,
                             SemanticLocalKind::Variable => LspTokenType::Variable,
+                            SemanticLocalKind::ReferenceThis => LspTokenType::ParameterName,
                         },
                         range: identifier.range(),
                     });

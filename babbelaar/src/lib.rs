@@ -29,7 +29,7 @@ pub use self::{
     keyword::Keyword,
     lexer::Lexer,
     parser::{Parser, ParseDiagnostic},
-    semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticLocalKind, SemanticReference, SemanticType},
+    semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticLocalKind, SemanticReference, SemanticStructure, SemanticType},
     statement::{AssignStatement, ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
     structure::{Field, Method, Structure},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},

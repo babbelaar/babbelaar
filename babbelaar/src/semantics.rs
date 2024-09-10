@@ -7,7 +7,7 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, Attribute, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, Attribute, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer<'source_code> {
@@ -54,16 +54,16 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
     }
 
-    fn analyze_expression(&mut self, expression: &'source_code Expression<'source_code>) -> SemanticValue<'source_code> {
-        match expression {
+    fn analyze_expression(&mut self, expression: &'source_code Ranged<Expression<'source_code>>) -> SemanticValue<'source_code> {
+        match expression.value() {
             Expression::BiExpression(bi) => self.analyze_bi_expression(bi),
             Expression::Postfix(postfix) => self.analyze_postfix_expression(postfix),
-            Expression::Primary(primary) => self.analyze_primary_expression(primary),
+            Expression::Primary(primary) => self.analyze_primary_expression(primary, expression.range()),
         }
     }
 
-    fn analyze_function(&mut self, function: &'source_code FunctionStatement<'source_code>) {
-        self.context.push_scope(function.range.start());
+    fn analyze_function(&mut self, function: &'source_code FunctionStatement<'source_code>, this: Option<SemanticType<'source_code>>) {
+        self.context.push_function_scope(function.range.start(), this);
 
         for param in &function.parameters {
             let typ = self.resolve_type(&param.ty);
@@ -114,7 +114,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 self.analyze_expression(&assign.expression);
             }
             StatementKind::For(statement) => self.analyze_for_statement(statement),
-            StatementKind::Function(function) => self.analyze_function(function),
+            StatementKind::Function(function) => self.analyze_function(function, None),
             StatementKind::If(statement) => self.analyze_if_statement(statement),
             StatementKind::Return(function) => self.analyze_return_statement(function),
             StatementKind::Structure(..) => (),
@@ -144,7 +144,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     fn analyze_for_statement(&mut self, statement: &'source_code ForStatement<'source_code>) {
-        let scope = self.context.push_scope(statement.keyword.start());
+        let scope = self.context.push_block_scope(statement.keyword.start());
         scope.locals.insert(&statement.iterator_name, SemanticLocal {
             kind: SemanticLocalKind::Iterator,
             declaration_range: statement.iterator_name.range(),
@@ -157,7 +157,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     fn analyze_if_statement(&mut self, statement: &'source_code IfStatement<'source_code>) {
-        self.context.push_scope(statement.condition.range().start());
+        self.context.push_block_scope(statement.condition.range().start());
 
         self.analyze_expression(&statement.condition);
 
@@ -209,6 +209,8 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
             self.analyze_attributes_for_field(field);
         }
 
+        let this_type = Some(SemanticType::Custom(Rc::clone(&semantic_structure)));
+
         let mut names = HashSet::new();
         for method in &structure.methods {
             if !names.insert(method.function.name.value()) {
@@ -218,7 +220,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 ));
             }
 
-            self.analyze_function(&method.function);
+            self.analyze_function(&method.function, this_type.clone());
         }
     }
 
@@ -328,7 +330,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
     }
 
-    fn analyze_primary_expression(&mut self, expression: &'source_code PrimaryExpression<'source_code>) -> SemanticValue<'source_code> {
+    fn analyze_primary_expression(&mut self, expression: &'source_code PrimaryExpression<'source_code>, range: FileRange) -> SemanticValue<'source_code> {
         let ty = match expression {
             PrimaryExpression::Boolean(..) => {
                 SemanticType::Builtin(BuiltinType::Bool)
@@ -340,6 +342,35 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
             PrimaryExpression::StringLiteral(..) => {
                 SemanticType::Builtin(BuiltinType::Slinger)
+            }
+
+            PrimaryExpression::ReferenceThis => {
+                let Some(scope) = self.context.scope.last() else {
+                    log::warn!("How come we have no scope?");
+                    debug_assert!(false);
+                    return SemanticValue {
+                        ty: SemanticType::null(),
+                        usage: SemanticUsage::Indifferent
+                    };
+                };
+
+                if let Some(this) = &scope.this {
+                    if let Some(tracker) = &mut self.context.definition_tracker {
+                        tracker.insert(range, SemanticReference {
+                            local_name: Keyword::Dit.as_ref(),
+                            local_kind: SemanticLocalKind::ReferenceThis,
+                            declaration_range: this.declaration_range(),
+                            typ: this.clone(),
+                        });
+                    }
+
+                    this.clone()
+                } else {
+                    let diag = SemanticDiagnostic::new(range, SemanticDiagnosticKind::ThisOutsideStructure)
+                        .with_related(SemanticRelatedInformation::new(scope.range, SemanticRelatedMessage::WerkwijzeNotInsideStructuur));
+                    self.diagnostics.push(diag);
+                    SemanticType::null()
+                }
             }
 
             PrimaryExpression::StructureInstantiation(structure) => self.analyze_structure_instantiation(structure).ty,
@@ -925,6 +956,9 @@ pub enum SemanticRelatedMessage<'source_code> {
 
     #[error("structuur `{name}` is hier gedefinieerd")]
     StructureDefinedHere { name: &'source_code str },
+
+    #[error("werkwijze zit niet in een structuur")]
+    WerkwijzeNotInsideStructuur,
 }
 
 #[derive(Debug, Clone, Error, AsRefStr)]
@@ -1018,6 +1052,9 @@ pub enum SemanticDiagnosticKind<'source_code> {
     #[error("Pure waarde ongebruikt")]
     UnusedPureValue,
 
+    #[error("`dit` kan uitsluitend gebruikt worden binnen een `structuur`")]
+    ThisOutsideStructure,
+
     #[error("{field_word} `{names}` ontbreken een toewijzing")]
     MissingFieldInitializers {
         names: String,
@@ -1050,11 +1087,23 @@ impl<'source_code> SemanticContext<'source_code> {
         }
     }
 
-    pub fn push_scope(&mut self, start: FileLocation) -> &mut SemanticScope<'source_code> {
+    pub fn push_function_scope(&mut self, start: FileLocation, this: Option<SemanticType<'source_code>>) -> &mut SemanticScope<'source_code> {
         self.scope.push(SemanticScope {
             range: FileRange::new(start, start),
             locals: HashMap::new(),
             structures: HashMap::new(),
+            this,
+        });
+        self.scope.last_mut().expect("we just pushed a scope")
+    }
+
+    pub fn push_block_scope(&mut self, start: FileLocation) -> &mut SemanticScope<'source_code> {
+        let this = self.scope.last().and_then(|x| x.this.clone());
+        self.scope.push(SemanticScope {
+            range: FileRange::new(start, start),
+            locals: HashMap::new(),
+            structures: HashMap::new(),
+            this,
         });
         self.scope.last_mut().expect("we just pushed a scope")
     }
@@ -1075,6 +1124,7 @@ impl<'source_code> SemanticContext<'source_code> {
     }
 
     fn pop_scope(&mut self, location: FileLocation) {
+        debug_assert!(self.scope.len() > 1);
         let mut scope = self.scope.pop().unwrap();
 
         scope.range = FileRange::new(scope.range.start(), location);
@@ -1088,6 +1138,7 @@ pub struct SemanticScope<'source_code> {
     range: FileRange,
     pub locals: HashMap<&'source_code str, SemanticLocal<'source_code>>,
     pub structures: HashMap<&'source_code str, Rc<SemanticStructure<'source_code>>>,
+    pub this: Option<SemanticType<'source_code>>,
 }
 
 impl<'source_code> SemanticScope<'source_code> {
@@ -1096,6 +1147,7 @@ impl<'source_code> SemanticScope<'source_code> {
             range: FileRange::new(FileLocation::default(), FileLocation::new(usize::MAX, usize::MAX, usize::MAX)),
             structures: HashMap::new(),
             locals: HashMap::default(),
+            this: None,
         };
 
         for func in Builtin::FUNCTIONS {
@@ -1346,6 +1398,7 @@ pub enum SemanticLocalKind {
     FunctionReference,
     Variable,
     Method,
+    ReferenceThis,
 }
 
 impl SemanticLocalKind {
@@ -1360,6 +1413,7 @@ impl SemanticLocalKind {
             Self::FunctionReference => true,
             Self::Variable => false,
             Self::Method => true,
+            Self::ReferenceThis => false,
         }
     }
 }

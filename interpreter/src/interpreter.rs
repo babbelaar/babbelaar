@@ -194,6 +194,10 @@ impl<'source_code, D> Interpreter<'source_code, D>
                 Value::String(string)
             }
 
+            PrimaryExpression::ReferenceThis => {
+                self.scope.this.clone().unwrap()
+            }
+
             PrimaryExpression::Parenthesized(expression) => self.execute_expression(expression),
         }
     }
@@ -345,7 +349,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
     }
 
     fn execute_function(&mut self, func: Rc<FunctionStatement<'source_code>>, arguments: Vec<Value>, this: Option<Value>) -> Value {
-        self.scope = std::mem::take(&mut self.scope).push();
+        self.scope = std::mem::take(&mut self.scope).push_function(this);
 
         for idx in 0..func.parameters.len() {
             let name = func.parameters[idx].name.to_string();

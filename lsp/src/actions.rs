@@ -167,6 +167,7 @@ impl<'source_code> CodeActionsAnalyzable for PrimaryExpression<'source_code> {
             }
 
             Self::Reference(..) => (),
+            Self::ReferenceThis => (),
             Self::StringLiteral(..) => (),
 
             Self::StructureInstantiation(structure) => {

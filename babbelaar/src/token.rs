@@ -106,6 +106,15 @@ impl<'source_code> TokenKind<'source_code> {
             Self::IllegalCharacter(..) => "ongeldig teken",
         }
     }
+
+    #[must_use]
+    pub fn can_be_variable(&self) -> bool {
+        match self {
+            Self::Identifier(..) => true,
+            Self::Keyword(Keyword::Dit) => true,
+            _ => false,
+        }
+    }
 }
 
 impl<'source_code> Display for TokenKind<'source_code> {

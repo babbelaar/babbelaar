@@ -9,6 +9,7 @@ pub enum PrimaryExpression<'source_code> {
     StringLiteral(&'source_code str),
     IntegerLiteral(i64),
     Reference(Ranged<&'source_code str>),
+    ReferenceThis,
     StructureInstantiation(StructureInstantiationExpression<'source_code>),
     TemplateString {
         parts: Vec<TemplateStringExpressionPart<'source_code>>,

@@ -530,6 +530,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             TokenKind::Keyword(Keyword::Waar) => Ok(PrimaryExpression::Boolean(true)),
             TokenKind::Keyword(Keyword::Onwaar) => Ok(PrimaryExpression::Boolean(false)),
             TokenKind::Keyword(Keyword::Nieuw) => self.parse_structure_instantiation(range.start()),
+            TokenKind::Keyword(Keyword::Dit) => Ok(PrimaryExpression::ReferenceThis),
 
             TokenKind::Punctuator(Punctuator::LeftParenthesis) => {
                 let expression = self.parse_expression()?;

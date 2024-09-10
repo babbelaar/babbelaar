@@ -11,6 +11,7 @@ use crate::{DocumentationProvider, LspCompletion};
 pub enum Keyword {
     Als,
     Bekeer,
+    Dit,
     In,
     Nieuw,
     Onwaar,
@@ -62,6 +63,10 @@ impl Keyword {
                 completion: "volg ${1:element} in reeks(${2:start}, ${3:eind}) {\n\t$0\n}",
                 inline_detail: "Volg in reeks."
             }),
+            Self::Dit => Some(LspCompletion {
+                completion: "dit.$0",
+                inline_detail: "De huidige waarde binnen een werkwijze van een structuur",
+            }),
             _ => None,
         }
     }
@@ -72,6 +77,35 @@ impl DocumentationProvider for Keyword {
         match self {
             Self::Als => "Evalueer sectie als een voorwaarde geldt.",
             Self::Bekeer => "Geef een waarde terug aan de aanroeper van de werkwijze.",
+            Self::Dit => r#"De huidige waarde binnen een werkwijze van een structuur.
+## Voorbeeld
+Gegeven is het volgende stukje Babbelaar:
+```babbelaar
+structuur Persoon {
+    veld voornaam: Slinger,
+    veld achternaam: Slinger,
+
+    werkwijze zegGedag() {
+        schrijf(€"Hallo, ik ben {dit.voornaam} {dit.achternaam}");
+    }
+}
+
+stel anoniemePersoon = Persoon {
+    voornaam: "John",
+    achternaam: "Doe",
+};
+
+anoniemePersoon.zegGedag();
+```
+### Uitleg
+`dit` in deze context verwijst naar de `Persoon`, en als `zegGedag` aangeroepen wordt, is `dit` hetzelfde als de `anoniemePersoon`.
+
+### Uitvoer
+De uitvoer is als volgt:
+```
+Hallo, ik ben John Doe
+```
+"#,
             Self::In => "Herhaal over een stel waardes met `volg`.",
             Self::Nieuw => "Maak een nieuw object aan.",
             Self::Onwaar => "Een waarde van het type `booleaan`. Tegenovergestelde van `waar`",

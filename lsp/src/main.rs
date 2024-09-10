@@ -13,8 +13,11 @@ mod symbolization;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use std::{fs::File, io::Write, pin::Pin};
+
 use log::{info, warn, LevelFilter};
 use logger::Logger;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -105,8 +108,16 @@ impl LanguageServer for Backend {
 
 #[tokio::main]
 async fn main() {
+    // let stdin = Reader::new();
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
+
+    run(stdin, stdout).await;
+}
+
+pub async fn run<I, O>(stdin: I, stdout: O)
+        where I: AsyncRead + std::marker::Unpin,
+              O: AsyncWrite {
     log::set_max_level(LevelFilter::Trace);
 
     let (service, socket) = LspService::new(|client| {
@@ -120,4 +131,39 @@ async fn main() {
     });
 
     Server::new(stdin, stdout, socket).serve(service).await;
+}
+
+struct Reader {
+    reader: tokio::io::Stdin,
+    file: File,
+}
+
+impl Reader {
+    #[allow(unused)]
+    pub fn new() -> Self {
+        Self {
+            reader: tokio::io::stdin(),
+            file: File::create("/tmp/babbelaar-lsp.out").unwrap(),
+        }
+    }
+}
+
+impl AsyncRead for Reader {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+
+        let mut vec = vec![0; buf.remaining()];
+        let mut temp_buf = ReadBuf::new(&mut vec);
+
+        let result = AsyncRead::poll_read(Pin::new(&mut this.reader), cx, &mut temp_buf);
+        buf.put_slice(temp_buf.filled());
+
+        this.file.write_all(temp_buf.filled()).unwrap();
+
+        result
+    }
 }

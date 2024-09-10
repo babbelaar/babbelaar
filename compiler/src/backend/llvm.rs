@@ -346,6 +346,10 @@ impl<'a, 'ctx> Compiler<'a, 'ctx> {
                 todo!("Structuren zijn nog niet ondersteund met LLVM")
             }
 
+            PrimaryExpression::ReferenceThis => {
+                todo!("`dit` is nog niet ondersteund met LLVM")
+            }
+
             PrimaryExpression::TemplateString { parts } => {
                 _ = parts;
                 todo!()
