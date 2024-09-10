@@ -27,8 +27,44 @@ impl BuiltinType {
     }
 
     #[must_use]
-    pub const fn documentation(&self) -> &'static str {
-        self.inline_detail()
+    pub fn documentation(&self) -> String {
+        format!("# {name}\n{description}\n## Voorvertoning\n```babbelaar\n{preview}\n```\n",
+            name = self.name(),
+            description = self.inline_detail(),
+            preview = self.structure_preview(),
+        )
+    }
+
+    #[must_use]
+    pub fn structure_preview(&self) -> String {
+        let mut str = format!("structuur {} {{\n", self.name());
+
+        for method in self.methods() {
+            for docu_line in method.documentation.lines() {
+                str += "\n    /// ";
+                str += docu_line;
+            }
+
+            str += "\n    werkwijze ";
+            str += method.name;
+            str += "(";
+            for (idx, param) in method.parameters.iter().enumerate() {
+                if idx != 0 {
+                    str += ", ";
+                }
+                str += param.name;
+                str += ": ";
+                str += param.typ.name();
+            }
+
+            str += ") -> ";
+            str += method.return_type.name();
+            str += " { /* (ingebouwd) */ }\n";
+        }
+
+        str += "\n}";
+
+        str
     }
 
     #[must_use]

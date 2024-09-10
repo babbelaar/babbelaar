@@ -1209,12 +1209,12 @@ impl<'source_code> SemanticReference<'source_code> {
         }
     }
 
-    pub fn documentation(&self) -> Option<&'source_code str> {
+    pub fn documentation(&self) -> Option<Cow<'source_code, str>> {
         match &self.typ {
-            SemanticType::Builtin(builtin) => Some(builtin.documentation()),
+            SemanticType::Builtin(builtin) => Some(builtin.documentation().into()),
             SemanticType::Custom(..) => None,
             SemanticType::Function(..) => None,
-            SemanticType::FunctionReference(func) => func.documentation(),
+            SemanticType::FunctionReference(func) => func.documentation().map(Cow::from),
         }
     }
 
