@@ -94,7 +94,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
         match &statement.kind {
             StatementKind::Expression(expr) => {
-                if self.analyze_expression(expr).usage == SemanticUsage::Pure {
+                if let SemanticUsage::Pure(pure) = self.analyze_expression(expr).usage {
                     let diag = SemanticDiagnostic::new(expr.range(), SemanticDiagnosticKind::UnusedPureValue)
                         .warn()
                         .with_action(BabbelaarCodeAction::new(
@@ -106,6 +106,16 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                                 )
                             ]
                         ));
+
+                    let diag = match pure {
+                        PureValue::FieldReference { declaration, name } => diag
+                            .with_related(SemanticRelatedInformation::new(
+                                declaration,
+                                SemanticRelatedMessage::UsageOfPureValueField { name },
+                            )),
+                        _ => diag,
+                    };
+
                     self.diagnostics.push(diag);
                 }
             }
@@ -249,7 +259,9 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
         SemanticValue {
             ty: lhs_type,
-            usage: SemanticUsage::Pure,
+            usage: SemanticUsage::Pure(PureValue::Operator {
+                operator_range: expression.operator.range(),
+            }),
         }
     }
 
@@ -419,7 +431,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
         SemanticValue {
             ty,
-            usage: SemanticUsage::Pure,
+            usage: SemanticUsage::Pure(PureValue::ConstantValue),
         }
     }
 
@@ -515,7 +527,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
         SemanticValue {
             ty,
-            usage: SemanticUsage::Pure,
+            usage: SemanticUsage::Pure(PureValue::ConstantValue),
         }
     }
 
@@ -692,7 +704,10 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
                 return SemanticValue {
                     ty: field.ty.clone(),
-                    usage: SemanticUsage::Pure,
+                    usage: SemanticUsage::Pure(PureValue::FieldReference {
+                        declaration: field.name.range(),
+                        name: field.name.value(),
+                    }),
                 };
             }
         }
@@ -719,7 +734,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                     if method.name == *expression.method_name {
                         return SemanticValue {
                             ty: SemanticType::Builtin(method.return_type),
-                            usage: if method.must_use { SemanticUsage::Pure } else { SemanticUsage::Indifferent },
+                            usage: if method.must_use { SemanticUsage::Pure(PureValue::ReturnValue) } else { SemanticUsage::Indifferent },
                         };
                     }
                 }
@@ -959,6 +974,9 @@ pub enum SemanticRelatedMessage<'source_code> {
 
     #[error("werkwijze zit niet in een structuur")]
     WerkwijzeNotInsideStructuur,
+
+    #[error("los gebruik van het veld `{name}` heeft geen effect")]
+    UsageOfPureValueField { name: &'source_code str },
 }
 
 #[derive(Debug, Clone, Error, AsRefStr)]
@@ -1049,7 +1067,7 @@ pub enum SemanticDiagnosticKind<'source_code> {
         definition_type: String,
     },
 
-    #[error("Pure waarde ongebruikt")]
+    #[error("Pure waarde ongebruikt. Stelling heeft geen gevolg.")]
     UnusedPureValue,
 
     #[error("`dit` kan uitsluitend gebruikt worden binnen een `structuur`")]
@@ -1293,7 +1311,7 @@ impl<'source_code> SemanticMethod<'source_code> {
     }
 
     #[must_use]
-    fn return_type_usage(&self) -> SemanticUsage {
+    fn return_type_usage(&self) -> SemanticUsage<'source_code> {
         SemanticUsage::Indifferent
     }
 }
@@ -1503,7 +1521,7 @@ impl<'source_code> FunctionReference<'source_code> {
 #[derive(Debug)]
 pub struct SemanticValue<'source_code> {
     ty: SemanticType<'source_code>,
-    usage: SemanticUsage,
+    usage: SemanticUsage<'source_code>,
 }
 
 impl<'source_code> SemanticValue<'source_code> {
@@ -1517,7 +1535,20 @@ impl<'source_code> SemanticValue<'source_code> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SemanticUsage {
+pub enum SemanticUsage<'source_code> {
     Indifferent,
-    Pure,
+    Pure(PureValue<'source_code>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PureValue<'source_code> {
+    ConstantValue,
+    FieldReference {
+        declaration: FileRange,
+        name: &'source_code str,
+    },
+    Operator {
+        operator_range: FileRange,
+    },
+    ReturnValue,
 }

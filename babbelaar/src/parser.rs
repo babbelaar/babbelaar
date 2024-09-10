@@ -618,8 +618,8 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     fn parse_postfix_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseDiagnostic<'source_code>> {
-        let start = self.next_start();
         let mut expression = self.parse_primary_expression()?.map(|x| Expression::Primary(x));
+        let start = expression.range().start();
 
         loop {
             let expr = match self.peek_punctuator() {
@@ -822,13 +822,6 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         match self.tokens.get(self.cursor - 1) {
             Some(token) => token.end,
             None => self.token_begin,
-        }
-    }
-
-    fn next_start(&self) -> FileLocation {
-        match self.tokens.get(self.cursor) {
-            Some(token) => token.end,
-            None => self.token_end,
         }
     }
 
