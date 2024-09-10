@@ -257,13 +257,13 @@ impl BabbelaarCodeAction {
 
 #[derive(Debug, Clone, Error)]
 pub enum BabbelaarCodeActionType {
-    #[error("zet Slinger `\"{number}\"` om naar getal `{number}`")]
+    #[error("Zet Slinger `\"{number}\"` om naar getal `{number}`")]
     ChangeStringToNumber { number: isize },
 
-    #[error("vul structuurvelden van `{structure}`")]
+    #[error("Vul structuurvelden van `{structure}`")]
     FillStructureFields { structure: String },
 
-    #[error("verwijder puur statement")]
+    #[error("Verwijder puur statement")]
     RemovePureStatement,
 }
 
