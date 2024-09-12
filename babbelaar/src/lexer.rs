@@ -157,6 +157,17 @@ impl<'source_code> Lexer<'source_code> {
 
             if c == '{' {
                 self.consume_char();
+
+                let remaining = &self.input[self.current_location().offset()..];
+                if let Some(quote) = remaining.find('"') {
+                    let remaining = &remaining[..quote];
+
+                    if !remaining.contains('}') {
+                        parts.push(TemplateStringToken::Expression(Vec::new()));
+                        continue;
+                    }
+                }
+
                 let mut tokens = Vec::new();
                 loop {
                     let token = self.next()?;
