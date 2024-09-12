@@ -1,13 +1,2 @@
-structuur Persoon {
-    veld voornaam: Slinger,
-
-    werkwijze gedag(manier: Slinger) {
-        schrijf(€"{manier}, {dit.voornaam}");
-    }
-}
-
-stel anoniem = nieuw Persoon {
-    voornaam: "John",
-};
-
-anoniem.gedag("Goedemorgen");
+stel abc = "";
+schrijf(€"Hoi {}");

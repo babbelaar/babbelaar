@@ -1,5 +1,6 @@
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -38,7 +39,20 @@ impl Backend {
             where F: FnMut(Token, Vec<Token>) -> Result<Option<R>> {
         self.lexed_document(&params.text_document, |tokens, _| {
             let mut previous = Vec::new();
-            for token in tokens {
+            let mut tokens = VecDeque::from(tokens);
+            while let Some(token) = tokens.pop_front() {
+                if let TokenKind::TemplateString(str) = &token.kind {
+                    for tok in str {
+                        if let TemplateStringToken::Expression(expr_tokens) = tok {
+                            for token in expr_tokens.iter().rev() {
+                                tokens.push_front(token.clone());
+                            }
+                        }
+                    }
+
+                    continue;
+                }
+
                 if token.begin.line() != params.position.line as usize {
                     previous.push(token);
                     continue;
