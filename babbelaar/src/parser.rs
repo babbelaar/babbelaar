@@ -718,15 +718,21 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 TemplateStringToken::Plain { str, .. } => TemplateStringExpressionPart::String(str),
                 TemplateStringToken::Expression(tokens) => {
                     let mut parser = Parser::new(self.path.clone(), &tokens);
-                    let expr = parser.parse_expression()?;
+                    match parser.parse_expression() {
+                        Ok(expr) => {
+                            if parser.cursor < tokens.len() {
+                                self.handle_error(ParseDiagnostic::ResidualTokensInTemplateString {
+                                    token: tokens[parser.cursor].clone(),
+                                })?;
+                            }
 
-                    if parser.cursor < tokens.len() {
-                        self.handle_error(ParseDiagnostic::ResidualTokensInTemplateString {
-                            token: tokens[parser.cursor].clone(),
-                        })?;
+                            TemplateStringExpressionPart::Expression(expr)
+                        }
+                        Err(e) => {
+                            self.handle_error(e)?;
+                            TemplateStringExpressionPart::String("")
+                        }
                     }
-
-                    TemplateStringExpressionPart::Expression(expr)
                 }
             };
 
