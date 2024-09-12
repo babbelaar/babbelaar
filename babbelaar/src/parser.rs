@@ -710,7 +710,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         })
     }
 
-    fn parse_template_string(&self, template_string: Vec<TemplateStringToken<'source_code>>) -> ParseResult<'source_code, PrimaryExpression<'source_code>> {
+    fn parse_template_string(&mut self, template_string: Vec<TemplateStringToken<'source_code>>) -> ParseResult<'source_code, PrimaryExpression<'source_code>> {
         let mut parts = Vec::new();
 
         for token in template_string {
@@ -721,9 +721,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                     let expr = parser.parse_expression()?;
 
                     if parser.cursor < tokens.len() {
-                        return Err(ParseDiagnostic::ResidualTokensInTemplateString {
+                        self.handle_error(ParseDiagnostic::ResidualTokensInTemplateString {
                             token: tokens[parser.cursor].clone(),
-                        });
+                        })?;
                     }
 
                     TemplateStringExpressionPart::Expression(expr)
