@@ -632,10 +632,17 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                 }
 
                 Some(Punctuator::Period) => {
-                    let period = self.consume_token()?;
+                    let Ok(period) = self.consume_token() else {
+                        break;
+                    };
+
                     let reset = (self.token_begin, self.token_end, self.cursor);
 
-                    let ident_token = self.consume_token()?;
+                    let Ok(ident_token) = self.consume_token() else {
+                        (self.token_begin, self.token_end, self.cursor) = reset;
+                        break;
+                    };
+
                     let TokenKind::Identifier(name) = ident_token.kind else {
                         self.handle_error(ParseDiagnostic::PostfixMemberOrReferenceExpectedIdentifier { token: ident_token, period })?;
                         (self.token_begin, self.token_end, self.cursor) = reset;
