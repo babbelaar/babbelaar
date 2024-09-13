@@ -27,14 +27,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: cargo build --verbose --release
+        run: cargo build --verbose --release --all
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}
           # A file, directory or wildcard pattern that describes what to upload
           # Required.
-          path: ./target/release
+          path: ./target/release/babbelaar*
 
           # The desired behavior if no files are found using the provided path.
           # Available Options:
