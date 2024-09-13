@@ -12,7 +12,7 @@ mod scope;
 use std::{path::{Path, PathBuf}, process::exit};
 
 pub use babbelaar::*;
-use babbelaar_compiler::LlvmContext;
+// use babbelaar_compiler::LlvmContext;
 use clap::Subcommand;
 use colored::Colorize;
 
@@ -62,7 +62,8 @@ fn main() {
 
     match args.command {
         Commands::Bouwen { bestand } => {
-            compile(bestand)
+            _ = bestand;
+            // compile(bestand)
         }
 
         Commands::Debug { bestand } => {
@@ -74,15 +75,15 @@ fn main() {
     }
 }
 
-fn compile(bestand: PathBuf) {
-    let source_code = std::fs::read_to_string(&bestand).unwrap();
-    let mut babbelaar = BabbelaarContext::new(bestand, source_code);
-    let mut llvm = LlvmContext::new();
+// fn compile(bestand: PathBuf) {
+//     let source_code = std::fs::read_to_string(&bestand).unwrap();
+//     let mut babbelaar = BabbelaarContext::new(bestand, source_code);
+//     let mut llvm = LlvmContext::new();
 
-    babbelaar.with_tree(|tree| llvm.parse_tree(tree)).unwrap();
+//     babbelaar.with_tree(|tree| llvm.parse_tree(tree)).unwrap();
 
-    llvm.finish();
-}
+//     llvm.finish();
+// }
 
 pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
     parse(path, |tree| {

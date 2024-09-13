@@ -2,12 +2,14 @@ target
 .vscode
 .cargo
 .smeder
+.idea
 
 out
 dist
 node_modules
 .vscode-test/
 *.vsix
+profile.json
 
 # Visual Studio
 .vs/
