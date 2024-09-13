@@ -9,7 +9,7 @@ thiserror = "1"
 strum = { version = "0.26", features = ["derive"] }
 
 babbelaar = { path = "../babbelaar" }
-babbelaar-compiler = { path = "../compiler" }
+# babbelaar-compiler = { path = "../compiler" }
 clap = { version = "4.5.16", features = ["derive"] }
 colored = "2.1"
 
