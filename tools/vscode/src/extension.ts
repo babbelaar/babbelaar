@@ -45,6 +45,9 @@ import {
 	ServerOptions,
 } from "vscode-languageclient/node";
 
+import { ensureLspServer } from "./downloadBabbelaar";
+import { BabbelaarContext } from "./babbelaarContext";
+
 let client: LanguageClient;
 // type a = Parameters<>;
 
@@ -95,8 +98,17 @@ const taskProvider = new BabbelaarTaskProvider();
 const taskProviderSubscription = tasks.registerTaskProvider("babbelaar", taskProvider);
 
 export async function activate(context: ExtensionContext) {
-	let disposable = commands.registerCommand("babbelaar.herstarten", async => {
-		startClient();
+	const babbelaarContext: BabbelaarContext = {
+		ext: context,
+		version: context.extension.packageJSON.version?.trim(),
+	};
+
+	if (!babbelaarContext.version || `${babbelaarContext.version}`.length === 0) {
+		window.showErrorMessage("Ongeldige Babbelaar-extensie: versie is niet ingesteld.");
+	}
+
+	let disposable = commands.registerCommand("babbelaar.herstarten", async () => {
+		await startClient(babbelaarContext);
 	});
 
 	debug.registerDebugAdapterTrackerFactory('*', {
@@ -122,16 +134,19 @@ export async function activate(context: ExtensionContext) {
 
 	context.subscriptions.push(disposable);
 
-	startClient();
+	await startClient(babbelaarContext);
 }
 
-function startClient() {
+async function startClient(context: BabbelaarContext) {
+	const command = await ensureLspServer(context);
+	if (!command)
+		return;
+
 	if (client) {
 		client.stop();
 	}
 
 	const traceOutputChannel = window.createOutputChannel("Babbelaar Taalserveerder trace");
-	const command = process.env.SERVER_PATH || "babbelaar-lsp";
 	const run: Executable = {
 		command,
 		options: {
@@ -146,11 +161,8 @@ function startClient() {
 		run,
 		debug: run,
 	};
-	// If the extension is launched in debug mode then the debug server options are used
-	// Otherwise the run options are used
-	// Options to control the language client
+
 	let clientOptions: LanguageClientOptions = {
-		// Register the server for plain text documents
 		documentSelector: [{ scheme: "file", language: "babbelaar" }],
 		synchronize: {
 			// Notify the server about file changes to '.clientrc files contained in the workspace
@@ -160,7 +172,7 @@ function startClient() {
 	};
 
 	// Create the language client and start the client.
-	client = new LanguageClient("babbelaar-lsp", "babbelaar-lsp", serverOptions, clientOptions);
+	client = new LanguageClient("babbelaar-lsp", "Babbelaar Taalondersteuning", serverOptions, clientOptions);
 	// activateInlayHints(context);
 	client.start();
 }
