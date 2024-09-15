@@ -1,6 +1,7 @@
 {
     "name": "babbelaar",
     "displayName": "Babbelaar",
+    "publisher": "babbelaar",
     "description": "Taalondersteuning voor de Nederlandse programmeertaal",
     "version": "0.0.1",
     "engines": {
@@ -11,6 +12,27 @@
         "Programming Languages"
     ],
     "main": "./out/extension.js",
+    "activationEvents": [
+        "workspaceContains:**/*.bab"
+    ],
+    "homepage": "https://babbelaar.dev/",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/babbelaar/babbelaar"
+    },
+    "bugs": {
+        "url": "https://github.com/babbelaar/babbelaar/issues"
+    },
+    "author": {
+        "name": "Tristan Gerritsen",
+        "url": "https://tristangerritsen.com/"
+    },
+    "cpu": [
+        "arm64", "x64"
+    ],
+    "os": [
+        "darwin", "linux", "win32"
+    ],
     "contributes": {
         "breakpoints": [
             {
