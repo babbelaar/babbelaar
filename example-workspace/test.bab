@@ -1,5 +1,6 @@
 structuur Persoon {
-    veld hallo: Slinger,
+    veld voornaam: Slinger,
+    veld achternaam: Slinger,
 
     werkwijze zegGedag() {
 

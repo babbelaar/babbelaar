@@ -165,8 +165,8 @@ impl Backend {
     where
         F: FnOnce(SemanticAnalyzer) -> Result<R>,
     {
-        self.with_syntax(text_document, |tree, _| {
-            let mut analyzer = SemanticAnalyzer::new();
+        self.with_syntax(text_document, |tree, source_code| {
+            let mut analyzer = SemanticAnalyzer::new(source_code);
             analyzer.analyze_tree(&tree);
 
             f(analyzer)
@@ -193,7 +193,7 @@ impl Backend {
 
             let mut diags = Vec::new();
 
-            let mut analyzer = SemanticAnalyzer::new();
+            let mut analyzer = SemanticAnalyzer::new(source_code);
             analyzer.analyze_tree(&tree);
 
             for err in parser.errors {
@@ -411,8 +411,8 @@ impl Backend {
     }
 
     pub async fn on_semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>> {
-        self.lexed_document(&params.text_document, |tokens, _| {
-            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone());
+        self.lexed_document(&params.text_document, |tokens, source_code| {
+            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone(), source_code);
 
             for token in &tokens {
                 symbolizer.add_token(token);
@@ -527,8 +527,8 @@ impl Backend {
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
 
-        self.lexed_document(&params.text_document, |tokens, _| {
-            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone());
+        self.lexed_document(&params.text_document, |tokens, source_code| {
+            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone(), source_code);
 
             for token in &tokens {
                 symbolizer.add_token(token);
@@ -808,7 +808,7 @@ impl Backend {
             version: None,
         };
 
-        self.with_syntax(&params.text_document, |tree, contents| {
+        self.with_syntax(&params.text_document, |tree, source_code| {
             let start = FileLocation::new(
                 usize::MAX,
                 params.range.start.line as _,
@@ -821,14 +821,14 @@ impl Backend {
                 params.range.end.character as _,
             );
 
-            let mut analyzer = SemanticAnalyzer::new();
+            let mut analyzer = SemanticAnalyzer::new(source_code);
             analyzer.analyze_tree(&tree);
 
             let mut ctx = CodeActionsAnalysisContext {
                 semantics: &analyzer,
                 items: Vec::new(),
                 cursor_range: FileRange::default(),
-                contents,
+                contents: source_code,
             };
 
             ctx.cursor_range = ctx.create_range_and_calculate_byte_column(start, end)?;

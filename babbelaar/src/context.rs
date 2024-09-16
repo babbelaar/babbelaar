@@ -66,7 +66,7 @@ impl BabbelaarContext {
     pub fn ensure_analyzed(&mut self) {
         self.ensure_parsed();
 
-        self.inner.with_dependent_mut(|_, state| {
+        self.inner.with_dependent_mut(|ctx, state| {
             let tree = state.tree.as_mut().unwrap();
 
             tree.with_dependent_mut(|tree, analyzer_value| {
@@ -74,7 +74,7 @@ impl BabbelaarContext {
                     return;
                 }
 
-                let mut analyzer = SemanticAnalyzer::new();
+                let mut analyzer = SemanticAnalyzer::new(&ctx.source_code);
                 analyzer.analyze_tree(tree.as_ref().unwrap());
 
                 *analyzer_value = Some(analyzer);

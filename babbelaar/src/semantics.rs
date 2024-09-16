@@ -7,20 +7,22 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, Attribute, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, Attribute, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer<'source_code> {
     pub context: SemanticContext<'source_code>,
     diagnostics: Vec<SemanticDiagnostic<'source_code>>,
+    source_code: &'source_code str,
 }
 
 impl<'source_code> SemanticAnalyzer<'source_code> {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(source_code: &'source_code str,) -> Self {
         Self {
             context: SemanticContext::new(),
             diagnostics: Vec::new(),
+            source_code,
         }
     }
 
@@ -201,6 +203,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         let semantic_structure = Rc::new(SemanticStructure {
             attributes: &statement.attributes,
             name: structure.name,
+            left_curly_range: structure.left_curly_range,
             fields,
             methods,
         });
@@ -502,13 +505,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                         self.diagnostics.push(diag.with_related(field_def_hint).with_related(struct_hint.clone()));
                     } else {
                         let definition_type = self.analyze_expression(&field_instantiation.value).ty;
-
-                        let (add_location, add_text) = if let Some(last) = structure.fields.last()  {
-                            let location = FileLocation::new(0, last.name.range().start().line(), usize::MAX);
-                            (location, format!("\n    veld {}: {},", field_instantiation.name.value(), definition_type.name()))
-                        } else {
-                            (structure.name.range().end(), format!("    veld {}: {},\n", field_instantiation.name.value(), definition_type.name()))
-                        };
+                        let create_field_action = self.create_action_create_field(&structure, &field_instantiation.name, definition_type);
 
                         self.diagnostics.push(
                             SemanticDiagnostic::new(
@@ -518,10 +515,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                                     field_name: name.value()
                                 },
                             )
-                            .with_action(BabbelaarCodeAction::new(
-                                BabbelaarCodeActionType::CreateField { name: field_instantiation.name.to_string() },
-                                vec![FileEdit::new(add_location.as_zero_range(), add_text)]
-                            ))
+                            .with_action(create_field_action)
                             .with_related(struct_hint.clone()),
                         );
                     }
@@ -870,6 +864,25 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         }
 
         None
+    }
+
+    #[must_use]
+    fn create_action_create_field(&self, structure: &SemanticStructure<'_>, name: &str, ty: SemanticType<'_>) -> BabbelaarCodeAction {
+        let (add_location, add_text) = if let Some(last) = structure.fields.last() {
+            let indent = self.source_code.indentation_at(last.name.range().start()).unwrap_or_default();
+            let location = FileLocation::new(0, last.name.range().start().line(), usize::MAX);
+
+            (location, format!("\n{indent}veld {name}: {ty},"))
+        } else {
+            let indent = self.source_code.indentation_at(structure.name.range().start()).unwrap_or_default();
+
+            (structure.left_curly_range.end(), format!("\n{indent}    veld {name}: {ty},"))
+        };
+
+        BabbelaarCodeAction::new(
+            BabbelaarCodeActionType::CreateField { name: name.to_string() },
+            vec![FileEdit::new(add_location.as_zero_range(), add_text)]
+        )
     }
 }
 
@@ -1349,6 +1362,7 @@ impl<'source_code> SemanticMethod<'source_code> {
 pub struct SemanticStructure<'source_code> {
     pub attributes: &'source_code [Attribute<'source_code>],
     pub name: Ranged<&'source_code str>,
+    pub left_curly_range: FileRange,
     pub fields: Vec<SemanticField<'source_code>>,
     pub methods: Vec<SemanticMethod<'source_code>>,
 }

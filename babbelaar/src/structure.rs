@@ -23,6 +23,7 @@ pub struct Method<'source_code> {
 #[derive(Debug, Clone)]
 pub struct Structure<'source_code> {
     pub name: Ranged<&'source_code str>,
+    pub left_curly_range: FileRange,
     pub fields: Vec<Field<'source_code>>,
     pub methods: Vec<Method<'source_code>>,
 }

@@ -83,13 +83,6 @@ impl<'ctx> CodeActionsAnalysisContext<'ctx> {
 
         Ok(FileRange::new(start, end))
     }
-
-    pub fn indentation_at(&self, start: FileLocation) -> Option<&'ctx str> {
-        let line = self.contents.lines().nth(start.line())?;
-
-        let line = &line[..start.column()];
-        Some(&line[..line.len() - line.trim_start().len()])
-    }
 }
 
 pub fn map_column_from_char_to_byte_offset(line: &str, location: FileLocation) -> FileLocation {
@@ -259,7 +252,7 @@ impl<'source_code> CodeActionsAnalyzable for StructureInstantiationExpression<'s
             field.value.analyze(ctx);
         }
 
-        let indent = ctx.indentation_at(self.name.range().start()).unwrap_or("invalid").to_string() + "    ";
+        let indent = ctx.contents.indentation_at(self.name.range().start()).unwrap_or("invalid").to_string() + "    ";
 
         ctx.semantics.scopes_surrounding(self.name.range().start(), |scope| {
             if let Some(structure) = scope.structures.get(self.name.value()) {

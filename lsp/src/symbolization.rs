@@ -17,11 +17,11 @@ pub struct Symbolizer<'source_code> {
 }
 
 impl<'source_code> Symbolizer<'source_code> {
-    pub fn new(uri: Url) -> Self {
+    pub fn new(uri: Url, source_code: &'source_code str) -> Self {
         Self {
             uri,
             symbols: SymbolMap::default(),
-            semantic_analyzer: SemanticAnalyzer::new(),
+            semantic_analyzer: SemanticAnalyzer::new(source_code),
         }
     }
 
@@ -446,7 +446,7 @@ mod tests {
     fn test_add_token(#[case] input: &'static str) {
         let tokens: Vec<Token<'static>> = Lexer::new(input).collect();
 
-        let mut symbolizer = Symbolizer::new(Url::parse("file:///test.h").unwrap());
+        let mut symbolizer = Symbolizer::new(Url::parse("file:///test.h").unwrap(), input);
         for token in &tokens {
             symbolizer.add_token(token);
         }

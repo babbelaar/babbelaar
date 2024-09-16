@@ -86,16 +86,16 @@ fn main() {
 // }
 
 pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
-    parse(path, |tree| {
-        analyze(&tree);
+    parse(path, |source_code, tree| {
+        analyze(&tree, source_code);
 
         let mut interpreter = Interpreter::new(debugger);
         interpreter.execute_tree(&tree);
     });
 }
 
-fn analyze(tree: &ParseTree<'_>) {
-    let mut analyzer = SemanticAnalyzer::new();
+fn analyze(tree: &ParseTree<'_>, source_code: &str) {
+    let mut analyzer = SemanticAnalyzer::new(source_code);
     analyzer.analyze_tree(&tree);
 
     let diags = analyzer.into_diagnostics();
@@ -124,7 +124,7 @@ fn analyze(tree: &ParseTree<'_>) {
     }
 }
 
-fn parse(path: &Path, f: impl FnOnce(ParseTree<'_>)) {
+fn parse(path: &Path, f: impl FnOnce(&str, ParseTree<'_>)) {
     let source_code = std::fs::read_to_string(path).unwrap();
 
     let lexer = Lexer::new(&source_code);
@@ -132,7 +132,7 @@ fn parse(path: &Path, f: impl FnOnce(ParseTree<'_>)) {
 
     let mut parser = Parser::new(path.to_path_buf(), &tokens);
     match parser.parse_tree() {
-        Ok(tree) => f(tree),
+        Ok(tree) => f(&source_code, tree),
         Err(e) => {
             eprintln!("{}: {}", "fout".red().bold(), e.to_string().bold());
 

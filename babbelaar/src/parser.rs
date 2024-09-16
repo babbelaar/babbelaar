@@ -280,13 +280,14 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
         });
 
+        let left_curly_range = self.expect_left_curly_bracket("structuurnaam")?;
+
         let mut structure = Structure {
             name,
+            left_curly_range,
             fields: Vec::new(),
             methods: Vec::new(),
         };
-
-        self.expect_left_curly_bracket("structuurnaam")?;
 
         loop {
             if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {

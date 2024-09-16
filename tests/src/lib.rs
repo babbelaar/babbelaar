@@ -11,7 +11,7 @@ fn parse<'a>(input: &'a str) -> ParseTree<'a> {
     let mut parser = Parser::new(PathBuf::new(), &tokens);
     let tree = parser.parse_tree().unwrap();
 
-    let mut semantics = SemanticAnalyzer::new();
+    let mut semantics = SemanticAnalyzer::new(input);
     semantics.analyze_tree(&tree);
     let diagnostics = semantics.into_diagnostics();
     assert!(diagnostics.iter().find(|x| x.severity() == SemanticDiagnosticSeverity::Error).is_none(), "Diagnostics: {diagnostics:#?}");
