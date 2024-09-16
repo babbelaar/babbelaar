@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Expression, FileEdit, FileLocation, FileRange, FunctionCallExpression, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StructureInstantiationExpression, TemplateStringExpressionPart};
+use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Expression, FileEdit, FileLocation, FileRange, FunctionCallExpression, ParseDiagnostic, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StrExt, StructureInstantiationExpression, TemplateStringExpressionPart};
 use tower_lsp::lsp_types::VersionedTextDocumentIdentifier;
 
 use crate::BabbelaarLspError;
@@ -57,6 +57,21 @@ pub struct CodeActionsAnalysisContext<'ctx> {
 }
 
 impl<'ctx> CodeActionsAnalysisContext<'ctx> {
+    pub fn create_location_by_offset(&self, offset: usize) -> Result<FileLocation, BabbelaarLspError> {
+        if offset == 0 {
+            return Ok(FileLocation::default());
+        }
+
+        let line = self.contents[..offset].lines().count() - 1;
+        let column = self.contents[..offset].lines().last()
+            .ok_or_else(|| BabbelaarLspError::InvalidDataSent {
+                explanation: format!("het bestand bevat geen regels, maar we zoeken offset {offset}")
+            })?
+            .len();
+
+        Ok(FileLocation::new(offset, line, column))
+    }
+
     pub fn create_range_and_calculate_byte_column(&self, start: FileLocation, end: FileLocation) -> Result<FileRange, BabbelaarLspError> {
         let line = self.contents.lines().nth(start.line())
             .ok_or_else(|| BabbelaarLspError::InvalidDataSent {
@@ -77,7 +92,7 @@ impl<'ctx> CodeActionsAnalysisContext<'ctx> {
     }
 }
 
-fn map_column_from_char_to_byte_offset(line: &str, location: FileLocation) -> FileLocation {
+pub fn map_column_from_char_to_byte_offset(line: &str, location: FileLocation) -> FileLocation {
     let column = line.char_indices()
         .nth(location.column())
         .unwrap_or((line.len(), ' '))
@@ -276,5 +291,70 @@ impl<'source_code> CodeActionsAnalyzable for StructureInstantiationExpression<'s
                 }
             }
         })
+    }
+}
+
+impl<'source_code> CodeActionsAnalyzable for ParseDiagnostic<'source_code> {
+    fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
+        match self {
+            Self::ExpectedColon { token, .. } => {
+                let whitespace_size = ctx.contents[..token.range().start().offset()].count_space_at_end();
+                let location = ctx.create_location_by_offset(token.begin.offset() - whitespace_size).unwrap_or_default();
+                let edit = FileEdit::new(location.as_zero_range(), ":");
+
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: ":" },
+                        vec![edit]
+                    )
+                );
+            },
+
+            Self::ExpectedCommaAfterStructureMember { location, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: "," },
+                        vec![
+                            FileEdit::new(location.as_zero_range(), ",")
+                        ]
+                    ),
+                );
+            }
+
+            Self::ExpectedSemicolonAfterStatement { token, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: ";" },
+                        vec![
+                            FileEdit::new(token.range().end().as_zero_range(), ";")
+                        ]
+                    ),
+                );
+            }
+
+            Self::ExpectedStructureMemberPrefixVeld { token } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::AddKeyword{ keyword: "veld" },
+                        vec![
+                            FileEdit::new(token.begin.as_zero_range(), "veld ")
+                        ]
+                    ),
+                );
+            }
+
+            Self::ExpectedStructureMethodPrefixWerkwijze { token } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::AddKeyword{ keyword: "werkwijze" },
+                        vec![
+                            FileEdit::new(token.begin.as_zero_range(), "werkwijze ")
+                        ]
+                    ),
+                );
+            }
+
+            _ => (),
+        }
     }
 }

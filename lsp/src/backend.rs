@@ -180,7 +180,7 @@ impl Backend {
             uri: document.uri.clone(),
         };
 
-        let diags = self.lexed_document(&text_document, |tokens, _| {
+        let diags = self.lexed_document(&text_document, |tokens, source_code| {
             let mut parser = Parser::new(path, &tokens).attempt_to_ignore_errors();
 
             let tree = match parser.parse_tree() {
@@ -193,26 +193,43 @@ impl Backend {
 
             let mut diags = Vec::new();
 
-            let parse_errors = parser.errors
-                .into_iter()
-                .flat_map(|err| {
-                    Some(Diagnostic {
-                        range: convert_file_range(err.range()?),
-                        severity: Some(DiagnosticSeverity::ERROR),
-                        code: Some(NumberOrString::String(err.name().to_string())),
-                        code_description: None,
-                        source: None,
-                        message: err.to_string(),
-                        related_information: None,
-                        tags: None,
-                        data: None,
-                    })
-                });
-
-            diags.extend(parse_errors);
-
             let mut analyzer = SemanticAnalyzer::new();
             analyzer.analyze_tree(&tree);
+
+            for err in parser.errors {
+                let Some(range) = err.range() else { continue };
+
+                let mut ctx = CodeActionsAnalysisContext {
+                    semantics: &analyzer,
+                    items: Vec::new(),
+                    cursor_range: FileRange::default(),
+                    contents: source_code,
+                };
+
+                err.analyze(&mut ctx);
+
+                let actions: Vec<_> = ctx.items.iter()
+                    .map(|x| {
+                        block_in_place(|| {
+                            let mut actions = self.code_actions.blocking_write();
+                            let id = actions.add(x.clone(), document.clone());
+                            serde_json::Value::Number(id.into())
+                        })
+                    })
+                    .collect();
+
+                diags.push(Diagnostic {
+                    range: convert_file_range(range),
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: Some(NumberOrString::String(err.name().to_string())),
+                    code_description: None,
+                    source: None,
+                    message: err.to_string(),
+                    related_information: None,
+                    tags: None,
+                    data: Some(serde_json::Value::Array(actions)),
+                });
+            }
 
             diags.extend(
                 analyzer.into_diagnostics()

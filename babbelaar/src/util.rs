@@ -36,6 +36,14 @@ impl FileLocation {
     pub const fn column(&self) -> usize {
         self.column
     }
+
+    #[must_use]
+    pub const fn as_zero_range(&self) -> FileRange {
+        FileRange {
+            start: *self,
+            end: *self,
+        }
+    }
 }
 
 impl From<(usize, usize, usize)> for FileLocation {
@@ -257,11 +265,17 @@ impl BabbelaarCodeAction {
 
 #[derive(Debug, Clone, Error)]
 pub enum BabbelaarCodeActionType {
+    #[error("Sleutelwoord `{keyword}` toevoegen")]
+    AddKeyword { keyword: &'static str, },
+
     #[error("Zet Slinger `\"{number}\"` om naar getal `{number}`")]
     ChangeStringToNumber { number: isize },
 
     #[error("Vul structuurvelden van `{structure}`")]
     FillStructureFields { structure: String },
+
+    #[error("`{text}` invoegen")]
+    Insert { text: &'static str, },
 
     #[error("Verwijder puur statement")]
     RemovePureStatement,
@@ -275,10 +289,10 @@ pub struct FileEdit {
 
 impl FileEdit {
     #[must_use]
-    pub fn new(replacement_range: FileRange, new_text: String) -> Self {
+    pub fn new(replacement_range: FileRange, new_text: impl Into<String>) -> Self {
         Self {
             replacement_range,
-            new_text,
+            new_text: new_text.into(),
         }
     }
 
@@ -311,5 +325,23 @@ impl<'s, T> StrIterExt for T
         }
 
         s
+    }
+}
+
+pub trait StrExt {
+    #[must_use]
+    fn count_whitespace_at_end(&self) -> usize;
+
+    #[must_use]
+    fn count_space_at_end(&self) -> usize;
+}
+
+impl StrExt for str {
+    fn count_whitespace_at_end(&self) -> usize {
+        self.len() - self.trim_end().len()
+    }
+
+    fn count_space_at_end(&self) -> usize {
+        self.len() - self.trim_end_matches(|c: char| c == ' ').len()
     }
 }
