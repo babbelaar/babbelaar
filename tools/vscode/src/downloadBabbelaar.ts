@@ -35,7 +35,7 @@ async function ensureLspServerUsingDownload(context: BabbelaarContext): Promise<
 	if (!executableName)
         return null;
 
-    const path = dir + "/" + executableName.file;
+    let path = dir + "/" + executableName.file;
     if (existsSync(path))
         return await ensureExecutable(path);
 
@@ -46,7 +46,10 @@ async function ensureLspServerUsingDownload(context: BabbelaarContext): Promise<
         return null;
 
     await writeFile(path, Buffer.from(babbelaar.arrayBuffer));
-    return await ensureExecutable(path);
+    path = await ensureExecutable(path);
+
+    window.showInformationMessage("Babbelaar is gedownload");
+    return path;
 }
 
 async function downloadLspClient(ctx: BabbelaarContext, executableName: ExecutableName): Promise<BabbelaarDownload|undefined> {
