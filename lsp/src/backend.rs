@@ -690,8 +690,8 @@ impl Backend {
     pub async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
         self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
             let pos = params.text_document_position_params.position;
-            let location = FileLocation::new(0, pos.line as _, pos.character as _);
-            let reference = analyzer.find_reference_at(location)
+            let location = analyzer.source_code.canonicalize_position(pos);
+            let reference = analyzer.find_declaration_range_at(location)
                 .map(|(range, reference)| {
                     let target_range = convert_file_range(reference.declaration_range);
                     GotoDefinitionResponse::Link(vec![
