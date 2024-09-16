@@ -279,6 +279,9 @@ pub enum BabbelaarCodeActionType {
 
     #[error("Verwijder puur statement")]
     RemovePureStatement,
+
+    #[error("Verwijder extra tekens")]
+    RemoveResidualTokens,
 }
 
 #[derive(Debug, Clone)]

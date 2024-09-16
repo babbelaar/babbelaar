@@ -755,6 +755,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                             if parser.cursor < tokens.len() {
                                 self.handle_error(ParseDiagnostic::ResidualTokensInTemplateString {
                                     token: tokens[parser.cursor].clone(),
+                                    range: FileRange::new(tokens[parser.cursor].begin, tokens.last().unwrap().end),
                                 })?;
                             }
 
@@ -1045,9 +1046,6 @@ pub enum ParseDiagnostic<'source_code> {
     #[error("Ongeldig start van een statement: {token}")]
     StatementInvalidStart{ token: Token<'source_code> },
 
-    #[error("Ongeldig start van een werkwijzeaanroepstatement: {token}")]
-    ExpressionFunctionCallNotStartingWithIdentifier { token: Token<'source_code> },
-
     #[error("Open accolade verwacht `{{` na {context}, maar kreeg: {token}")]
     ExpectedLeftCurlyBracket { token: Token<'source_code>, context: &'static str },
 
@@ -1115,7 +1113,7 @@ pub enum ParseDiagnostic<'source_code> {
     RangeExpectedKeyword { token: Token<'source_code> },
 
     #[error("Resterende token na expressie binnen sjabloonslinger: {token}")]
-    ResidualTokensInTemplateString { token: Token<'source_code> },
+    ResidualTokensInTemplateString { token: Token<'source_code>, range: FileRange },
 
     #[error("Parametertype verwacht, maar kreeg: {token}")]
     TypeExpectedSpecifierName { token: Token<'source_code> },
@@ -1139,7 +1137,6 @@ impl<'source_code> ParseDiagnostic<'source_code> {
             Self::EndOfFile => None,
             Self::AttributeArgumentExpectedComma { token } => Some(token),
             Self::StatementInvalidStart { token } => Some(token),
-            Self::ExpressionFunctionCallNotStartingWithIdentifier { token } => Some(token),
             Self::ExpectedLeftCurlyBracket { token, .. } => Some(token),
             Self::ExpectedLeftParen { token, .. } => Some(token),
             Self::ExpectedRightParen { token, .. } => Some(token),
@@ -1162,7 +1159,7 @@ impl<'source_code> ParseDiagnostic<'source_code> {
             Self::ParameterExpectedComma { token } => token.as_ref(),
             Self::PostfixMemberOrReferenceExpectedIdentifier { token, .. } => Some(token),
             Self::RangeExpectedKeyword { token } => Some(token),
-            Self::ResidualTokensInTemplateString { token } => Some(token),
+            Self::ResidualTokensInTemplateString { token, .. } => Some(token),
             Self::TypeExpectedSpecifierName { token } => Some(token),
             Self::UnknownStartOfExpression { token } => Some(token),
             Self::UnexpectedTokenAtStartOfStructureMember { token } => Some(token),
@@ -1176,6 +1173,7 @@ impl<'source_code> ParseDiagnostic<'source_code> {
             Self::ExpectedColon { range, .. } => Some(*range),
             Self::ExpectedCommaAfterStructureMember { location, .. } => Some(location.as_zero_range()),
             Self::PostfixMemberOrReferenceExpectedIdentifier { period, .. } => Some(period.range()),
+            Self::ResidualTokensInTemplateString { range, .. } => Some(*range),
             _ => Some(self.token()?.range()),
         }
     }

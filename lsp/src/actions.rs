@@ -297,6 +297,54 @@ impl<'source_code> CodeActionsAnalyzable for StructureInstantiationExpression<'s
 impl<'source_code> CodeActionsAnalyzable for ParseDiagnostic<'source_code> {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         match self {
+            Self::EndOfFile => (),
+
+            Self::AttributeArgumentExpectedComma { token } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: "," },
+                        vec![
+                            FileEdit::new(token.begin.as_zero_range(), ", ")
+                        ]
+                    ),
+                );
+            }
+
+            Self::StatementInvalidStart{ .. } => (),
+
+            Self::ExpectedLeftCurlyBracket { token, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: "{" },
+                        vec![
+                            FileEdit::new(token.begin.as_zero_range(), "{ ")
+                        ]
+                    ),
+                );
+            }
+
+            Self::ExpectedLeftParen { token, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: "(" },
+                        vec![
+                            FileEdit::new(token.begin.as_zero_range(), "(")
+                        ]
+                    ),
+                );
+            }
+
+            Self::ExpectedRightParen { token, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: ")" },
+                        vec![
+                            FileEdit::new(token.begin.as_zero_range(), ")")
+                        ]
+                    ),
+                );
+            }
+
             Self::ExpectedColon { token, .. } => {
                 let whitespace_size = ctx.contents[..token.range().start().offset()].count_space_at_end();
                 let location = ctx.create_location_by_offset(token.begin.offset() - whitespace_size).unwrap_or_default();
@@ -310,12 +358,42 @@ impl<'source_code> CodeActionsAnalyzable for ParseDiagnostic<'source_code> {
                 );
             },
 
+            Self::ExpectedComma { token, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: "{" },
+                        vec![
+                            FileEdit::new(token.begin.as_zero_range(), "{ ")
+                        ]
+                    ),
+                );
+            }
+
             Self::ExpectedCommaAfterStructureMember { location, .. } => {
                 ctx.items.push(
                     BabbelaarCodeAction::new(
                         BabbelaarCodeActionType::Insert{ text: "," },
                         vec![
                             FileEdit::new(location.as_zero_range(), ",")
+                        ]
+                    ),
+                );
+            }
+
+            Self::ExpectedNameAfterNieuw { .. } => (),
+
+            Self::ExpectedNameOfField { .. } => (),
+
+            Self::ExpectedNameOfStructuur { .. } => (),
+
+            Self::ExpectedNameOfVariable { .. } => (),
+
+            Self::ExpectedEqualsInsideVariable { token } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: "=" },
+                        vec![
+                            FileEdit::new(token.range().start().as_zero_range(), " = ")
                         ]
                     ),
                 );
@@ -354,7 +432,62 @@ impl<'source_code> CodeActionsAnalyzable for ParseDiagnostic<'source_code> {
                 );
             }
 
-            _ => (),
+            Self::FunctionStatementExpectedName { .. } => (),
+
+            Self::ExpectedIdentifier { .. } => (),
+
+            Self::ForStatementExpectedIteratorName { .. } => (),
+
+            Self::ForStatementExpectedInKeyword { token, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::AddKeyword { keyword: "in" },
+                        vec![
+                            FileEdit::new(token.range().start().as_zero_range(), "in ")
+                        ]
+                    ),
+                );
+            }
+
+            Self::ParameterExpectedName { .. } => (),
+
+            Self::ParameterExpectedComma { token } => {
+                if let Some(token) = token {
+                   ctx.items.push(
+                        BabbelaarCodeAction::new(
+                            BabbelaarCodeActionType::Insert{ text: ", " },
+                            vec![
+                                FileEdit::new(token.begin.as_zero_range(), ", ")
+                            ]
+                        ),
+                    );
+                }
+            }
+
+            Self::PostfixMemberOrReferenceExpectedIdentifier { .. } => (),
+
+            Self::RangeExpectedKeyword { .. } => (),
+
+            Self::ResidualTokensInTemplateString { range, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::RemoveResidualTokens,
+                        vec![
+                            FileEdit::new(*range, "")
+                        ]
+                    ),
+                );
+            }
+
+            Self::TypeExpectedSpecifierName { .. } => (),
+
+            Self::UnknownStartOfExpression { .. } => (),
+
+            Self::UnexpectedTokenAtStartOfStructureMember { .. } => (),
+
+            Self::UnexpectedTokenAtStartOfStructureInstantiation { .. } => (),
+
+            Self::UnexpectedTokenInsideStructureInstantiation { .. } => (),
         }
     }
 }

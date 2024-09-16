@@ -1,9 +1,8 @@
 structuur Persoon {
-    veld voornaam: Slinger,
-    veld achternaam: Slinger,
+    veld hallo: Slinger,
 
     werkwijze zegGedag() {
-        schrijf(€"Hallo, ik ben {dit.voornaam} {dit.achternaam}");
+
     }
 }
 
