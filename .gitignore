@@ -1,8 +1,10 @@
 target
-.vscode
 .cargo
 .smeder
 .idea
+
+.vscode/*
+!.vscode/extensions.json
 
 out
 dist

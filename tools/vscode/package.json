@@ -1,8 +1,9 @@
 {
     "name": "babbelaar",
     "displayName": "Babbelaar",
+    "publisher": "babbelaar",
     "description": "Taalondersteuning voor de Nederlandse programmeertaal",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "engines": {
         "vscode": "^1.90.0"
     },
@@ -10,7 +11,31 @@
         "Debuggers",
         "Programming Languages"
     ],
-    "main": "./out/extension.js",
+    "main": "./dist/extension.js",
+    "activationEvents": [
+        "workspaceContains:**/*.bab"
+    ],
+    "homepage": "https://babbelaar.dev/",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/babbelaar/babbelaar"
+    },
+    "bugs": {
+        "url": "https://github.com/babbelaar/babbelaar/issues"
+    },
+    "author": {
+        "name": "Tristan Gerritsen",
+        "url": "https://tristangerritsen.com/"
+    },
+    "cpu": [
+        "arm64",
+        "x64"
+    ],
+    "os": [
+        "darwin",
+        "linux",
+        "win32"
+    ],
     "contributes": {
         "breakpoints": [
             {
@@ -113,12 +138,19 @@
         ]
     },
     "scripts": {
-        "vscode:prepublish": "npm run compile",
-        "compile": "tsc -p ./",
-        "watch": "tsc -watch -p ./",
+        "compile": "tsc -p ./ && npm run check-types && node esbuild.js",
+        "check-types": "tsc --noEmit",
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
+        "watch": "npm-run-all -p watch:*",
+        "watch:esbuild": "node esbuild.js --watch",
+        "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+        "vscode:prepublish": "npm run package",
+        "package": "npm run check-types && node esbuild.js --production",
         "test": "vscode-test"
+    },
+    "dependencies": {
+        "vscode-languageclient": "^7.0.0"
     },
     "devDependencies": {
         "@types/mocha": "^10.0.6",
@@ -128,8 +160,8 @@
         "@typescript-eslint/parser": "^7.11.0",
         "@vscode/test-cli": "^0.0.9",
         "@vscode/test-electron": "^2.4.0",
+        "esbuild": "^0.23.1",
         "eslint": "^8.57.0",
-        "typescript": "^5.5.3",
-        "vscode-languageclient": "^7.0.0"
+        "typescript": "^5.5.3"
     }
 }
