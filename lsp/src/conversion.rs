@@ -42,3 +42,23 @@ impl UrlExtension for Url {
         self.to_file_path().map_err(|()| BabbelaarLspError::UrlNotFilePath)
     }
 }
+
+pub trait StrExtension {
+    #[must_use]
+    fn canonicalize_position(&self, position: Position) -> FileLocation;
+}
+
+impl StrExtension for str {
+    fn canonicalize_position(&self, position: Position) -> FileLocation {
+        let line = position.line as usize - 1;
+        let column = position.character as usize;
+
+        let line_offset = self.char_indices()
+            .filter(|(_, c)| *c == '\n')
+            .map(|(offset, _)| offset + 1)
+            .nth(line)
+            .unwrap_or(usize::MAX);
+
+        FileLocation::new(line_offset.saturating_add(column), line, column)
+    }
+}

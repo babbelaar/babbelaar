@@ -5,7 +5,7 @@ use crate::{BuiltinType, Ranged};
 
 #[derive(Debug, Clone)]
 pub struct Parameter<'source_code> {
-    pub name: Ranged<String>,
+    pub name: Ranged<&'source_code str>,
     pub ty: Ranged<Type<'source_code>>,
 }
 

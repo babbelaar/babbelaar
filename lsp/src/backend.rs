@@ -16,6 +16,7 @@ use tower_lsp::Client;
 use crate::actions::CodeActionsAnalysisContext;
 use crate::actions::CodeActionsAnalyzable;
 use crate::conversion::convert_file_range_to_location;
+use crate::conversion::StrExtension;
 use crate::CodeActionRepository;
 use crate::UrlExtension;
 use crate::{
@@ -631,8 +632,8 @@ impl Backend {
         if hover.is_none() {
             hover = self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
                 let pos = params.text_document_position_params.position;
-                let location = FileLocation::new(0, pos.line as _, pos.character as _);
-                let reference = analyzer.find_reference_at(location)
+                let location = analyzer.source_code.canonicalize_position(pos);
+                let reference = analyzer.find_declaration_range_at(location)
                     .map(|(range, reference)| {
                         Hover {
                             contents: HoverContents::Markup(MarkupContent {
@@ -864,7 +865,7 @@ impl Backend {
         let location = FileLocation::new(0, pos.line as _, pos.character as _);
 
         self.with_semantics(&params.text_document_position.text_document, |analyzer| {
-            let Some(declaration_range) = analyzer.find_declaration_range_at(location) else {
+            let Some((declaration_range, _)) = analyzer.find_declaration_range_at(location) else {
                 return Ok(None);
             };
 

@@ -12,8 +12,8 @@ use crate::{statement::VariableStatement, Attribute, BabbelaarCodeAction, Babbel
 #[derive(Debug)]
 pub struct SemanticAnalyzer<'source_code> {
     pub context: SemanticContext<'source_code>,
+    pub source_code: &'source_code str,
     diagnostics: Vec<SemanticDiagnostic<'source_code>>,
-    source_code: &'source_code str,
 }
 
 impl<'source_code> SemanticAnalyzer<'source_code> {
@@ -79,7 +79,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
                 });
             }
 
-            self.context.scope.last_mut().unwrap().locals.insert(&param.name, SemanticLocal {
+            self.context.push_local(&param.name, SemanticLocal {
                 kind: SemanticLocalKind::Parameter,
                 declaration_range: param.name.range(),
                 typ,
@@ -239,7 +239,7 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
     fn analyze_variable_statement(&mut self, statement: &'source_code VariableStatement<'source_code>) {
         let typ = self.analyze_expression(&statement.expression).ty;
-        self.context.scope.last_mut().unwrap().locals.insert(&statement.name, SemanticLocal {
+        self.context.push_local(&statement.name, SemanticLocal {
             kind: SemanticLocalKind::Variable,
             declaration_range: statement.name.range(),
             typ,
@@ -597,14 +597,20 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     #[must_use]
-    pub fn find_declaration_range_at(&self, location: FileLocation) -> Option<FileRange> {
+    pub fn find_declaration_range_at(&self, location: FileLocation) -> Option<(FileRange, SemanticReference<'source_code>)> {
+        if let Some(tracker) = &self.context.declaration_tracker {
+            if let Some(reference) = tracker.iter().find(|x| x.declaration_range.contains(location)).cloned() {
+                return Some((reference.declaration_range, reference));
+            }
+        }
+
         for (range, reference) in self.context.definition_tracker.as_ref()? {
             if range.contains(location) {
-                return Some(*range);
+                return Some((*range, reference.clone()));
             }
 
             if reference.declaration_range.contains(location) {
-                return Some(reference.declaration_range);
+                return Some((reference.declaration_range, reference.clone()));
             }
         }
 
@@ -1149,6 +1155,7 @@ pub struct SemanticContext<'source_code> {
     pub previous_scopes: Vec<SemanticScope<'source_code>>,
 
     pub definition_tracker: Option<HashMap<FileRange, SemanticReference<'source_code>>>,
+    pub declaration_tracker: Option<Vec<SemanticReference<'source_code>>>,
 }
 
 impl<'source_code> SemanticContext<'source_code> {
@@ -1159,6 +1166,7 @@ impl<'source_code> SemanticContext<'source_code> {
             ],
             previous_scopes: Vec::new(),
             definition_tracker: Some(HashMap::new()),
+            declaration_tracker: Some(Vec::new()),
         }
     }
 
@@ -1184,6 +1192,15 @@ impl<'source_code> SemanticContext<'source_code> {
     }
 
     fn push_function(&mut self, function: SemanticFunction<'source_code>) {
+        if let Some(tracker) = &mut self.declaration_tracker {
+            tracker.push(SemanticReference {
+                local_name: &function.name,
+                local_kind: SemanticLocalKind::Function,
+                declaration_range: function.name.range(),
+                typ: SemanticType::Function(function),
+            });
+        }
+
         self.scope.last_mut().unwrap().locals.insert(
             &function.name,
             SemanticLocal {
@@ -1195,6 +1212,33 @@ impl<'source_code> SemanticContext<'source_code> {
     }
 
     fn push_structure(&mut self, structure: Rc<SemanticStructure<'source_code>>) {
+        if let Some(tracker) = &mut self.declaration_tracker {
+            tracker.push(SemanticReference {
+                local_name: &structure.name,
+                local_kind: SemanticLocalKind::StructureReference,
+                declaration_range: structure.name.range(),
+                typ: SemanticType::Custom(Rc::clone(&structure)),
+            });
+
+            for method in &structure.methods {
+                tracker.push(SemanticReference {
+                    local_name: method.name(),
+                    local_kind: SemanticLocalKind::Method,
+                    declaration_range: method.function.name.range(),
+                    typ: SemanticType::FunctionReference(FunctionReference::Custom(method.function)), // is this okay?
+                });
+            }
+
+            for field in &structure.fields {
+                tracker.push(SemanticReference {
+                    local_name: &field.name,
+                    local_kind: SemanticLocalKind::FieldReference,
+                    declaration_range: field.name.range(),
+                    typ: field.ty.clone(),
+                });
+            }
+        }
+
         self.scope.last_mut().unwrap().structures.insert(structure.name.value(), structure);
     }
 
@@ -1205,6 +1249,19 @@ impl<'source_code> SemanticContext<'source_code> {
         scope.range = FileRange::new(scope.range.start(), location);
 
         self.previous_scopes.push(scope);
+    }
+
+    fn push_local(&mut self, name: &'source_code Ranged<&'source_code str>, local: SemanticLocal<'source_code>) {
+        if let Some(tracker) = &mut self.declaration_tracker {
+            tracker.push(SemanticReference {
+                local_name: name.value(),
+                local_kind: local.kind,
+                declaration_range: name.range(),
+                typ: local.typ.clone(),
+            });
+        }
+
+        self.scope.last_mut().as_mut().unwrap().locals.insert(name.value(), local);
     }
 }
 
@@ -1258,7 +1315,7 @@ impl<'source_code> PartialEq for SemanticFunction<'source_code> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SemanticLocal<'source_code> {
     pub kind: SemanticLocalKind,
     pub declaration_range: FileRange,

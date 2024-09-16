@@ -420,14 +420,14 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         })
     }
 
-    fn parse_parameter_name(&mut self) -> Result<Ranged<String>, ParseDiagnostic<'source_code>> {
+    fn parse_parameter_name(&mut self) -> Result<Ranged<&'source_code str>, ParseDiagnostic<'source_code>> {
         let name = self.consume_token()?;
         let name_range = name.range();
         let TokenKind::Identifier(name) = name.kind else {
             return Err(ParseDiagnostic::ParameterExpectedName { token: name });
         };
 
-        Ok(Ranged::new(name_range, name.to_string()))
+        Ok(Ranged::new(name_range, name))
     }
 
     fn parse_type(&mut self) -> Result<Ranged<Type<'source_code>>, ParseDiagnostic<'source_code>> {
