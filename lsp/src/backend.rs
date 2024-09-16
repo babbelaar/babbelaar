@@ -406,6 +406,7 @@ impl Backend {
             })),
             definition_provider: Some(OneOf::Left(true)),
             code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+            rename_provider: Some(OneOf::Left(true)),
             ..ServerCapabilities::default()
         }
     }
@@ -850,6 +851,45 @@ impl Backend {
             }
 
             Ok(())
+        }).await
+    }
+
+    pub async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+        let text_document = OptionalVersionedTextDocumentIdentifier {
+            uri: params.text_document_position.text_document.uri.clone(),
+            version: None,
+        };
+
+        let pos = params.text_document_position.position;
+        let location = FileLocation::new(0, pos.line as _, pos.character as _);
+
+        self.with_semantics(&params.text_document_position.text_document, |analyzer| {
+            let Some(declaration_range) = analyzer.find_declaration_range_at(location) else {
+                return Ok(None);
+            };
+
+            let Some(references) = analyzer.find_references_of(declaration_range) else {
+                return Ok(None);
+            };
+
+            let edits = references.into_iter()
+                    .chain(std::iter::once(declaration_range))
+                    .map(|range| OneOf::Left(TextEdit {
+                        range: convert_file_range(range),
+                        new_text: params.new_name.clone(),
+                    }))
+                    .collect();
+
+            let edits = TextDocumentEdit {
+                text_document,
+                edits,
+            };
+
+            Ok(Some(WorkspaceEdit {
+                changes: None,
+                document_changes: Some(DocumentChanges::Edits(vec![edits])),
+                change_annotations: None,
+            }))
         }).await
     }
 }

@@ -596,6 +596,21 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
         self.context.definition_tracker.as_ref()?.get(&range).cloned()
     }
 
+    #[must_use]
+    pub fn find_declaration_range_at(&self, location: FileLocation) -> Option<FileRange> {
+        for (range, reference) in self.context.definition_tracker.as_ref()? {
+            if range.contains(location) {
+                return Some(*range);
+            }
+
+            if reference.declaration_range.contains(location) {
+                return Some(reference.declaration_range);
+            }
+        }
+
+        None
+    }
+
     pub fn find_reference_at(&self, location: FileLocation) -> Option<(FileRange, SemanticReference<'source_code>)> {
         for (range, reference) in self.context.definition_tracker.as_ref()? {
             if range.contains(location) {

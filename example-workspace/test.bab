@@ -3,7 +3,7 @@ structuur Persoon {
     veld achternaam: Slinger,
 
     werkwijze zegGedag() {
-
+        stel a = dit.achternaam;
     }
 }
 

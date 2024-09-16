@@ -102,6 +102,10 @@ impl LanguageServer for Backend {
     async fn shutdown(&self) -> Result<()> {
         Ok(())
     }
+
+    async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+        Ok(self.rename(params).await?)
+    }
 }
 
 #[tokio::main]

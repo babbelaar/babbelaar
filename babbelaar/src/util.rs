@@ -96,7 +96,11 @@ impl FileRange {
     }
 
     #[must_use]
-    pub const fn contains(&self, location: FileLocation) -> bool {
+    pub fn contains(&self, location: FileLocation) -> bool {
+        if location == FileLocation::default() {
+            return self.start == location;
+        }
+
         let start = if location.line == self.start.line {
             self.start.column <= location.column
         } else {
