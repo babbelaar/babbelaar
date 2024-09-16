@@ -271,6 +271,9 @@ pub enum BabbelaarCodeActionType {
     #[error("Zet Slinger `\"{number}\"` om naar getal `{number}`")]
     ChangeStringToNumber { number: isize },
 
+    #[error("Maak veld `{name}` aan")]
+    CreateField { name: String },
+
     #[error("Vul structuurvelden van `{structure}`")]
     FillStructureFields { structure: String },
 

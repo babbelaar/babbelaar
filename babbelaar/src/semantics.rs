@@ -501,13 +501,29 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
 
                         self.diagnostics.push(diag.with_related(field_def_hint).with_related(struct_hint.clone()));
                     } else {
-                        self.diagnostics.push(SemanticDiagnostic::new(
-                            name.range(),
-                            SemanticDiagnosticKind::InvalidFieldInstantiation {
-                                struct_name: structure.name.value(),
-                                field_name: name.value()
-                            },
-                        ).with_related(struct_hint.clone()));
+                        let definition_type = self.analyze_expression(&field_instantiation.value).ty;
+
+                        let (add_location, add_text) = if let Some(last) = structure.fields.last()  {
+                            let location = FileLocation::new(0, last.name.range().start().line(), usize::MAX);
+                            (location, format!("\n    veld {}: {},", field_instantiation.name.value(), definition_type.name()))
+                        } else {
+                            (structure.name.range().end(), format!("    veld {}: {},\n", field_instantiation.name.value(), definition_type.name()))
+                        };
+
+                        self.diagnostics.push(
+                            SemanticDiagnostic::new(
+                                name.range(),
+                                SemanticDiagnosticKind::InvalidFieldInstantiation {
+                                    struct_name: structure.name.value(),
+                                    field_name: name.value()
+                                },
+                            )
+                            .with_action(BabbelaarCodeAction::new(
+                                BabbelaarCodeActionType::CreateField { name: field_instantiation.name.to_string() },
+                                vec![FileEdit::new(add_location.as_zero_range(), add_text)]
+                            ))
+                            .with_related(struct_hint.clone()),
+                        );
                     }
                 }
             }
@@ -1404,6 +1420,16 @@ impl<'source_code> SemanticType<'source_code> {
             Self::Builtin(BuiltinType::Bool) => "onwaar",
 
             _ => "",
+        }
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Builtin(builtin) => builtin.name(),
+            Self::Custom(custom) => custom.name.value(),
+            Self::Function(func) => func.name.value(),
+            Self::FunctionReference(func) => func.name(),
         }
     }
 }
