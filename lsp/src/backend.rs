@@ -533,9 +533,38 @@ impl Backend {
         self.on_semantic_tokens_full(params).await
     }
 
-    pub async fn document_highlight(&self, _params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
-        let highlights = Vec::new();
-        Ok(Some(highlights))
+    pub async fn document_highlight(&self, params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
+        let res = self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
+
+            let pos = params.text_document_position_params.position;
+            let location = FileLocation::new(0, pos.line as _, pos.character as _);
+
+            let Some((_, reference)) = analyzer.find_reference_at(location) else {
+                return Ok(Some(Vec::new()));
+            };
+
+            let Some(references) = analyzer.find_references_of(reference.declaration_range) else {
+                return Ok(Some(Vec::new()));
+            };
+
+            let mut highlights = vec![
+                DocumentHighlight {
+                    range: convert_file_range(reference.declaration_range),
+                    kind: None,
+                }
+            ];
+
+            for reference in references {
+                highlights.push(DocumentHighlight {
+                    range: convert_file_range(reference),
+                    kind: None,
+                });
+            }
+
+            Ok(Some(highlights))
+        }).await?;
+
+        Ok(res)
     }
 
     pub async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {

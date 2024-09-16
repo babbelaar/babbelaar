@@ -1,2 +1,22 @@
-stel abc = "";
-schrijf(€"Hoi {}");
+structuur Persoon {
+    veld voornaam: Slinger,
+    veld achternaam: Slinger,
+
+    werkwijze zegGedag() {
+        schrijf(€"Hallo, ik ben {dit.voornaam} {dit.achternaam}");
+    }
+}
+
+structuur Dier {
+    veld naam: Slinger,
+
+    werkwijze zegGedag() {
+        schrijf(€"Hallo, ik ben een {dit.naam}");
+    }
+}
+
+stel anoniem = nieuw Persoon {
+    voornaam: "Pietje",
+    achternaam: "Bel",
+};
+anoniem.zegGedag();

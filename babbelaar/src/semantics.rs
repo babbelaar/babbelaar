@@ -597,6 +597,19 @@ impl<'source_code> SemanticAnalyzer<'source_code> {
     }
 
     #[must_use]
+    pub fn find_references_of(&self, declaration_range: FileRange) -> Option<HashSet<FileRange>> {
+        let mut result = HashSet::new();
+
+        for (range, reference) in self.context.definition_tracker.as_ref()? {
+            if reference.declaration_range == declaration_range {
+                result.insert(*range);
+            }
+        }
+
+        Some(result)
+    }
+
+    #[must_use]
     pub fn into_diagnostics(self) -> Vec<SemanticDiagnostic<'source_code>> {
         self.diagnostics
     }

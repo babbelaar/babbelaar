@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use std::{fs::File, io::Write, pin::Pin};
 
-use log::{info, warn, LevelFilter};
+use log::{info, LevelFilter};
 use logger::Logger;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::RwLock;
@@ -75,10 +75,8 @@ impl LanguageServer for Backend {
         Ok(self.on_semantic_tokens_full(params).await?)
     }
 
-    async fn document_highlight(&self, _params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
-        // TODO is this needed anymore?
-        warn!("Got document_highlight, will always return empty Vec, do we need it?");
-        Ok(Some(Vec::new()))
+    async fn document_highlight(&self, params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
+        Ok(self.document_highlight(params).await?)
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
