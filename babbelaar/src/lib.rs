@@ -13,6 +13,7 @@ mod lexer;
 mod parser;
 mod semantics;
 mod statement;
+mod string;
 mod structure;
 mod token;
 mod tree;
@@ -31,6 +32,7 @@ pub use self::{
     parser::{Parser, ParseDiagnostic},
     semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticLocalKind, SemanticReference, SemanticStructure, SemanticType},
     statement::{AssignStatement, ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
+    string::{BabString, IntoBabString, Slice},
     structure::{Field, Method, Structure},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     tree::ParseTree,
