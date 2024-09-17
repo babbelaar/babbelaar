@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{borrow::Cow, fmt::Display, ops::{Deref, DerefMut}};
+use std::{borrow::Cow, fmt::Display, hash::{DefaultHasher, Hash, Hasher}, ops::{Deref, DerefMut}, path::{Path, PathBuf}, sync::Arc};
 
 use thiserror::Error;
 
@@ -363,5 +363,68 @@ impl StrExt for str {
 
         let line = &line[..start.column()];
         Some(&line[..line.len() - line.trim_start().len()])
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceCode {
+    id: FileId,
+    path: Arc<PathBuf>,
+    contents: Arc<str>,
+}
+
+impl SourceCode {
+    #[must_use]
+    #[cfg(test)]
+    pub fn new_test(contents: impl Into<String>) -> Self {
+        Self::new(PathBuf::new(), contents.into())
+    }
+
+    #[must_use]
+    pub fn new(path: impl Into<PathBuf>, contents: String) -> Self {
+        let path = Arc::new(path.into());
+        let id = FileId::from_path(&path);
+        let contents = Arc::<str>::from(contents);
+
+        Self {
+            id,
+            path,
+            contents,
+        }
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> FileId {
+        self.id
+    }
+
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    #[must_use]
+    pub fn contents(&self) -> &str {
+        &self.contents
+    }
+}
+
+impl Deref for SourceCode {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.contents()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileId(usize);
+
+impl FileId {
+    #[must_use]
+    pub fn from_path(path: &Path) -> Self {
+        let mut hasher = DefaultHasher::new();
+        path.hash(&mut hasher);
+        Self(hasher.finish() as _)
     }
 }

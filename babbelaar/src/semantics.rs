@@ -7,18 +7,18 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, Attribute, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, Attribute, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer<'source_code> {
     pub context: SemanticContext<'source_code>,
-    pub source_code: &'source_code str,
+    pub source_code: &'source_code SourceCode,
     diagnostics: Vec<SemanticDiagnostic<'source_code>>,
 }
 
 impl<'source_code> SemanticAnalyzer<'source_code> {
     #[must_use]
-    pub fn new(source_code: &'source_code str,) -> Self {
+    pub fn new(source_code: &'source_code SourceCode) -> Self {
         Self {
             context: SemanticContext::new(),
             diagnostics: Vec::new(),

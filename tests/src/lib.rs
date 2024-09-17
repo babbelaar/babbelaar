@@ -3,10 +3,10 @@
 
 use std::{path::PathBuf, sync::{Arc, Mutex}};
 
-use babbelaar::{Expression, Lexer, ParseTree, Parser, Ranged, SemanticAnalyzer, SemanticDiagnosticSeverity, Token, Value};
+use babbelaar::{Expression, Lexer, ParseTree, Parser, Ranged, SemanticAnalyzer, SemanticDiagnosticSeverity, SourceCode, Token, Value};
 use babbelaar_interpreter::{Debugger, Interpreter};
 
-fn parse<'a>(input: &'a str) -> ParseTree<'a> {
+fn parse<'a>(input: &'a SourceCode) -> ParseTree<'a> {
     let tokens: Vec<Token> = Lexer::new(input).collect();
     let mut parser = Parser::new(PathBuf::new(), &tokens);
     let tree = parser.parse_tree().unwrap();
@@ -19,7 +19,7 @@ fn parse<'a>(input: &'a str) -> ParseTree<'a> {
     tree
 }
 
-pub fn parse_expression<'a>(input: &'a str) -> Ranged<Expression<'a>> {
+fn parse_expression<'a>(input: &'a SourceCode) -> Ranged<Expression<'a>> {
     let tokens: Vec<Token> = Lexer::new(input).collect();
     let mut parser = Parser::new(PathBuf::new(), &tokens);
 
@@ -29,7 +29,7 @@ pub fn parse_expression<'a>(input: &'a str) -> Ranged<Expression<'a>> {
     expr
 }
 
-pub fn interpret_statements(input: &str) {
+pub fn interpret_statements(input: &SourceCode) {
     let mut interpreter = Interpreter::new(());
     for statement in parse(input).all() {
         interpreter.execute(&statement)
@@ -37,11 +37,13 @@ pub fn interpret_statements(input: &str) {
 }
 
 pub fn interpret_expression(input: &str) -> Value {
-    let expression = parse_expression(input);
+    let input = SourceCode::new(PathBuf::new(), input.into());
+    let expression = parse_expression(&input);
     Interpreter::new(()).execute_expression(&expression)
 }
 
 pub fn interpret_and_return_stdout(input: &str) -> Vec<String> {
+    let input = SourceCode::new(PathBuf::new(), input.into());
     let buffer = Arc::new(Mutex::new(Vec::new()));
 
     {
@@ -49,7 +51,7 @@ pub fn interpret_and_return_stdout(input: &str) -> Vec<String> {
             buffer: Arc::clone(&buffer),
         });
 
-        for statement in parse(input).all() {
+        for statement in parse(&input).all() {
             interpreter.execute(&statement)
         }
     }

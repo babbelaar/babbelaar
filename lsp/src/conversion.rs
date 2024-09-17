@@ -50,7 +50,7 @@ pub trait StrExtension {
 
 impl StrExtension for str {
     fn canonicalize_position(&self, position: Position) -> FileLocation {
-        let line = position.line as usize - 1;
+        let line = (position.line as usize).saturating_sub(1);
         let column = position.character as usize;
 
         let line_offset = self.char_indices()

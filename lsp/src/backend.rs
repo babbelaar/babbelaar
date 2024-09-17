@@ -7,6 +7,7 @@ use std::sync::Arc;
 use babbelaar::*;
 use log::info;
 use log::warn;
+use request::InlayHintRefreshRequest;
 use tokio::spawn;
 use tokio::sync::RwLock;
 use tokio::task::block_in_place;
@@ -31,7 +32,7 @@ use crate::{
 pub struct Backend {
     pub(super) client: Client,
     pub(super) client_configuration: Arc<RwLock<Option<InitializeParams>>>,
-    pub(super) file_store: Arc<RwLock<HashMap<Url, Arc<str>>>>,
+    pub(super) file_store: Arc<RwLock<HashMap<Url, SourceCode>>>,
     pub(super) code_actions: Arc<RwLock<CodeActionRepository>>,
 }
 
@@ -106,7 +107,7 @@ impl Backend {
 
     pub async fn lexed_document<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
-        F: FnOnce(Vec<Token>, &str) -> Result<R>,
+        F: FnOnce(Vec<Token>, &SourceCode) -> Result<R>,
     {
         self.with_contents(&text_document.uri, |contents| {
             let tokens = babbelaar::Lexer::new(&contents).collect();
@@ -116,7 +117,7 @@ impl Backend {
 
     pub async fn with_contents<F, R>(&self, uri: &Url, f: F) -> Result<R>
     where
-        F: FnOnce(&str) -> Result<R>,
+        F: FnOnce(&SourceCode) -> Result<R>,
     {
         let contents = self.file_store.read().await.get(&uri).cloned();
         if let Some(contents) = contents {
@@ -140,10 +141,10 @@ impl Backend {
             contents += "\n";
         }
 
-        let contents = Arc::from(contents);
+        let contents = SourceCode::new(path, contents);
         {
             let mut store = self.file_store.write().await;
-            store.insert(uri.clone(), Arc::clone(&contents));
+            store.insert(uri.clone(), contents.clone());
         }
 
         let result = f(&contents);
@@ -152,7 +153,7 @@ impl Backend {
 
     pub async fn with_syntax<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
-        F: FnOnce(ParseTree<'_>, &str) -> Result<R>,
+        F: FnOnce(ParseTree<'_>, &SourceCode) -> Result<R>,
     {
         self.lexed_document(text_document, |tokens, contents| {
             let mut parser = Parser::new(text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
@@ -467,7 +468,7 @@ impl Backend {
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "Babbelaar Taalserveerder".to_string(),
-                version: None,
+                version: Some(env!("CARGO_PKG_VERSION").to_string()),
             }),
             capabilities: self.capabilities(),
         })
@@ -492,6 +493,8 @@ impl Backend {
     pub async fn did_open(&self, params: DidOpenTextDocumentParams) {
         _ = self.with_contents(&params.text_document.uri, |_| { Ok(()) }).await.ok();
 
+        _ = self.client.send_request::<InlayHintRefreshRequest>(()).await.ok();
+
         let this = (*self).clone();
         spawn(async move {
             let this = this;
@@ -509,7 +512,8 @@ impl Backend {
     pub async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
         {
             let mut file_store = self.file_store.write().await;
-            file_store.insert(params.text_document.uri.clone(), Arc::from(std::mem::take(&mut params.content_changes[0].text)));
+            let path = params.text_document.uri.to_path().unwrap();
+            file_store.insert(params.text_document.uri.clone(), SourceCode::new(path, std::mem::take(&mut params.content_changes[0].text)));
         }
         let this = (*self).clone();
         spawn(async move {

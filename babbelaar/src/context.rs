@@ -5,7 +5,7 @@ use std::{fmt::Debug, path::PathBuf};
 
 use self_cell::self_cell;
 
-use crate::{Lexer, ParseDiagnostic, ParseTree, Parser, SemanticAnalyzer, Token};
+use crate::{Lexer, ParseDiagnostic, ParseTree, Parser, SemanticAnalyzer, SourceCode, Token};
 
 pub struct BabbelaarContext {
     inner: BabbelaarContextImpl,
@@ -13,6 +13,7 @@ pub struct BabbelaarContext {
 
 impl BabbelaarContext {
     pub fn new(path: PathBuf, source_code: String) -> Self {
+        let source_code = SourceCode::new(path.clone(), source_code);
         Self {
             inner: BabbelaarContextImpl::new(
                 BabbelaarContextData {
@@ -86,7 +87,7 @@ impl BabbelaarContext {
 #[derive(Debug)]
 struct BabbelaarContextData {
     path: PathBuf,
-    source_code: String,
+    source_code: SourceCode,
 }
 
 #[derive(Debug, Default)]

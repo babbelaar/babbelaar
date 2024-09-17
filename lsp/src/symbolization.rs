@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
+use babbelaar::{AssignStatement, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
@@ -17,7 +17,7 @@ pub struct Symbolizer<'source_code> {
 }
 
 impl<'source_code> Symbolizer<'source_code> {
-    pub fn new(uri: Url, source_code: &'source_code str) -> Self {
+    pub fn new(uri: Url, source_code: &'source_code SourceCode) -> Self {
         Self {
             uri,
             symbols: SymbolMap::default(),
@@ -435,18 +435,21 @@ impl From<LspTokenType> for SymbolKind {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
-    use babbelaar::Lexer;
+    use babbelaar::{Lexer, SourceCode};
     use rstest::rstest;
 
     #[rstest]
     #[case(
         "€\"Hallo {naam}\""
     )]
-    fn test_add_token(#[case] input: &'static str) {
-        let tokens: Vec<Token<'static>> = Lexer::new(input).collect();
+    fn test_add_token(#[case] input: &str) {
+        let input = SourceCode::new(PathBuf::new(), input.into());
+        let tokens: Vec<Token<'_>> = Lexer::new(&input).collect();
 
-        let mut symbolizer = Symbolizer::new(Url::parse("file:///test.h").unwrap(), input);
+        let mut symbolizer = Symbolizer::new(Url::parse("file:///test.h").unwrap(), &input);
         for token in &tokens {
             symbolizer.add_token(token);
         }

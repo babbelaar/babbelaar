@@ -1,10 +1,10 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-import { Executable, LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
+import { Executable, LanguageClient, LanguageClientOptions, ServerOptions, TextDocumentFeature } from "vscode-languageclient/node";
 import { BabbelaarContext } from "./babbelaarContext";
 import { ensureLspServer } from "./downloadBabbelaar";
-import { window, workspace } from "vscode";
+import { InlayHint, window, workspace } from "vscode";
 
 let client: LanguageClient;
 
@@ -49,6 +49,7 @@ async function startClient(context: BabbelaarContext) {
 
 	// Create the language client and start the client.
 	client = new LanguageClient("babbelaar-lsp", "Babbelaar Taalondersteuning", serverOptions, clientOptions);
+	client.registerProposedFeatures();
 	// activateInlayHints(context);
 	client.start();
 }

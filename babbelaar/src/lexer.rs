@@ -3,10 +3,10 @@
 
 use std::str::CharIndices;
 
-use crate::{FileLocation, Keyword, Punctuator, TemplateStringToken, Token, TokenKind};
+use crate::{FileLocation, Keyword, Punctuator, SourceCode, TemplateStringToken, Token, TokenKind};
 
 pub struct Lexer<'source_code> {
-    input: &'source_code str,
+    input: &'source_code SourceCode,
     chars: CharIndices<'source_code>,
 
     current: Option<(FileLocation, char)>,
@@ -15,7 +15,7 @@ pub struct Lexer<'source_code> {
 }
 
 impl<'source_code> Lexer<'source_code> {
-    pub fn new(input: &'source_code str) -> Self {
+    pub fn new(input: &'source_code SourceCode) -> Self {
         Self {
             input,
             chars: input.char_indices(),
@@ -374,6 +374,8 @@ pub enum LexerError {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
     use rstest::rstest;
 
@@ -389,7 +391,8 @@ mod tests {
         end: FileLocation::new(1, 0, 1),
     })]
     fn next_text(#[case] input: &'static str, #[case] expected: Token<'static>) {
-        let actual = Lexer::new(input).next();
+        let source_code = SourceCode::new(PathBuf::new(), input.to_string());
+        let actual = Lexer::new(&source_code).next();
 
         assert_eq!(actual, Some(expected));
     }

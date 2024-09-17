@@ -1193,7 +1193,7 @@ pub enum ParserErrorBehavior {
 
 #[cfg(test)]
 mod tests {
-    use crate::Lexer;
+    use crate::{Lexer, SourceCode};
 
     use super::*;
     use rstest::rstest;
@@ -1202,8 +1202,9 @@ mod tests {
     #[case(" schrijf(\"Hallo\") ")]
     #[case("schrijf(\"Hallo\")")]
     fn parse_function_call_expression(#[case] input: &str) {
-        let tokens: Vec<Token<'_>> = Lexer::new(input).collect();
-        let mut parser = Parser::new(PathBuf::new(), &tokens);
+        let source_code = SourceCode::new_test(input);
+        let tokens: Vec<Token<'_>> = Lexer::new(&source_code).collect();
+        let mut parser = Parser::new(source_code.path().to_path_buf(), &tokens);
         let expression = parser.parse_expression().unwrap();
         assert!(
             matches!(
