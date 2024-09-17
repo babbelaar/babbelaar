@@ -153,7 +153,7 @@ impl Backend {
 
     pub async fn with_syntax<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
-        F: FnOnce(ParseTree<'_>, &SourceCode) -> Result<R>,
+        F: FnOnce(ParseTree, &SourceCode) -> Result<R>,
     {
         self.lexed_document(text_document, |tokens, contents| {
             let mut parser = Parser::new(text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
@@ -168,7 +168,7 @@ impl Backend {
         F: FnOnce(SemanticAnalyzer) -> Result<R>,
     {
         self.with_syntax(text_document, |tree, source_code| {
-            let mut analyzer = SemanticAnalyzer::new(source_code);
+            let mut analyzer = SemanticAnalyzer::new(source_code.clone());
             analyzer.analyze_tree(&tree);
 
             f(analyzer)
@@ -195,7 +195,7 @@ impl Backend {
 
             let mut diags = Vec::new();
 
-            let mut analyzer = SemanticAnalyzer::new(source_code);
+            let mut analyzer = SemanticAnalyzer::new(source_code.clone());
             analyzer.analyze_tree(&tree);
 
             for err in parser.errors {
@@ -324,7 +324,7 @@ impl Backend {
                     return Ok(None);
                 };
 
-                let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| &x.name == calling_name.value()) else {
+                let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| x.name == calling_name.value()) else {
                     log::warn!("Cannot give signature help for a non-builtin function");
                     return Ok(None);
                 };
@@ -440,7 +440,7 @@ impl Backend {
     pub async fn format(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let mut end = Position::default();
 
-        let result = self.lexed_document(&params.text_document, |tokens, source| {
+        let result = self.lexed_document(&params.text_document, |tokens, _| {
             let mut result = String::new();
             let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens);
 
@@ -450,7 +450,7 @@ impl Backend {
             }
 
             for statement in parser.parse_tree().unwrap_or_default().all() {
-                result += &statement.format_to_string(source);
+                result += &statement.format_to_string();
                 result += "\n";
             }
 
@@ -596,7 +596,7 @@ impl Backend {
         self.find_tokens_at(&params.text_document_position_params, |token, _| {
             match &token.kind {
                 TokenKind::Identifier(ident) => {
-                    if let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| x.name == *ident) {
+                    if let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| ident == x.name) {
                         hover = Some(Hover {
                             contents: HoverContents::Markup(MarkupContent {
                                 kind: MarkupKind::Markdown,
@@ -827,7 +827,7 @@ impl Backend {
                 params.range.end.character as _,
             );
 
-            let mut analyzer = SemanticAnalyzer::new(source_code);
+            let mut analyzer = SemanticAnalyzer::new(source_code.clone());
             analyzer.analyze_tree(&tree);
 
             let mut ctx = CodeActionsAnalysisContext {

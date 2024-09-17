@@ -5,6 +5,8 @@ use std::{borrow::Cow, fmt::Display, hash::{DefaultHasher, Hash, Hasher}, ops::{
 
 use thiserror::Error;
 
+use crate::BabString;
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileLocation {
     offset: usize,
@@ -370,21 +372,21 @@ impl StrExt for str {
 pub struct SourceCode {
     id: FileId,
     path: Arc<PathBuf>,
-    contents: Arc<str>,
+    contents: BabString,
 }
 
 impl SourceCode {
     #[must_use]
     #[cfg(test)]
-    pub fn new_test(contents: impl Into<String>) -> Self {
+    pub fn new_test(contents: impl Into<BabString>) -> Self {
         Self::new(PathBuf::new(), contents.into())
     }
 
     #[must_use]
-    pub fn new(path: impl Into<PathBuf>, contents: String) -> Self {
+    pub fn new(path: impl Into<PathBuf>, contents: impl Into<BabString>) -> Self {
         let path = Arc::new(path.into());
         let id = FileId::from_path(&path);
-        let contents = Arc::<str>::from(contents);
+        let contents = contents.into();
 
         Self {
             id,
@@ -404,13 +406,13 @@ impl SourceCode {
     }
 
     #[must_use]
-    pub fn contents(&self) -> &str {
+    pub fn contents(&self) -> &BabString {
         &self.contents
     }
 }
 
 impl Deref for SourceCode {
-    type Target = str;
+    type Target = BabString;
 
     fn deref(&self) -> &Self::Target {
         self.contents()

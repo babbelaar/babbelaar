@@ -10,22 +10,22 @@ use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenT
 
 use crate::conversion::convert_file_range_to_location;
 
-pub struct Symbolizer<'source_code> {
+pub struct Symbolizer {
     uri: Url,
     symbols: SymbolMap,
-    semantic_analyzer: SemanticAnalyzer<'source_code>,
+    semantic_analyzer: SemanticAnalyzer,
 }
 
-impl<'source_code> Symbolizer<'source_code> {
-    pub fn new(uri: Url, source_code: &'source_code SourceCode) -> Self {
+impl Symbolizer {
+    pub fn new(uri: Url, source_code: &SourceCode) -> Self {
         Self {
             uri,
             symbols: SymbolMap::default(),
-            semantic_analyzer: SemanticAnalyzer::new(source_code),
+            semantic_analyzer: SemanticAnalyzer::new(source_code.clone()),
         }
     }
 
-    pub fn add_statement(&mut self, statement: &'source_code Statement<'source_code>) {
+    pub fn add_statement(&mut self, statement: &Statement) {
         match &statement.kind {
             StatementKind::Assignment(statement) => self.add_statement_assign(statement),
             StatementKind::Expression(expression) => self.add_expression(expression),
@@ -89,17 +89,17 @@ impl<'source_code> Symbolizer<'source_code> {
         tokens
     }
 
-    fn add_statement_assign(&mut self, statement: &'source_code AssignStatement<'source_code>) {
+    fn add_statement_assign(&mut self, statement: &AssignStatement) {
         self.add_expression(&statement.expression);
     }
 
-    fn add_statement_for(&mut self, statement: &'source_code ForStatement<'source_code>) {
+    fn add_statement_for(&mut self, statement: &ForStatement) {
         for statement in &statement.body {
             self.add_statement(statement);
         }
     }
 
-    fn add_statement_function(&mut self, statement: &'source_code FunctionStatement<'source_code>) {
+    fn add_statement_function(&mut self, statement: &FunctionStatement) {
         self.symbols.insert(LspSymbol {
             name: statement.name.value().to_string(),
             kind: LspTokenType::Method,
@@ -115,7 +115,7 @@ impl<'source_code> Symbolizer<'source_code> {
         }
     }
 
-    fn add_statement_if(&mut self, statement: &'source_code IfStatement<'source_code>) {
+    fn add_statement_if(&mut self, statement: &IfStatement) {
         self.add_expression(&statement.condition);
 
         for statement in &statement.body {
@@ -123,13 +123,13 @@ impl<'source_code> Symbolizer<'source_code> {
         }
     }
 
-    fn add_statement_return(&mut self, statement: &'source_code ReturnStatement<'source_code>) {
+    fn add_statement_return(&mut self, statement: &ReturnStatement) {
         if let Some(expr) = &statement.expression {
             self.add_expression(expr);
         }
     }
 
-    fn add_statement_structure(&mut self, statement: &'source_code Structure<'source_code>) {
+    fn add_statement_structure(&mut self, statement: &Structure) {
         self.symbols.insert(LspSymbol {
             name: statement.name.value().to_string(),
             kind: LspTokenType::Class,
@@ -145,7 +145,7 @@ impl<'source_code> Symbolizer<'source_code> {
         }
     }
 
-    fn add_structure_field(&mut self, field: &'source_code Field<'source_code>) {
+    fn add_structure_field(&mut self, field: &Field) {
         self.symbols.insert(LspSymbol {
             name: field.name.value().to_string(),
             kind: LspTokenType::Property,
@@ -159,15 +159,15 @@ impl<'source_code> Symbolizer<'source_code> {
         });
     }
 
-    fn add_structure_method(&mut self, method: &'source_code Method<'source_code>) {
+    fn add_structure_method(&mut self, method: &Method) {
         self.add_statement_function(&method.function);
     }
 
-    fn add_statement_variable(&mut self, statement: &'source_code VariableStatement<'source_code>) {
+    fn add_statement_variable(&mut self, statement: &VariableStatement) {
         self.add_expression(&statement.expression);
     }
 
-    fn add_parameter(&mut self, parameter: &'source_code Parameter<'source_code>) {
+    fn add_parameter(&mut self, parameter: &Parameter) {
         self.symbols.insert(LspSymbol {
             name: parameter.name.value().to_string(),
             kind: LspTokenType::ParameterName,
@@ -181,7 +181,7 @@ impl<'source_code> Symbolizer<'source_code> {
         });
     }
 
-    fn add_expression(&mut self, expression: &'source_code Expression<'source_code>) {
+    fn add_expression(&mut self, expression: &Expression) {
         match expression {
             Expression::Postfix(expression) => self.add_expression_postfix(expression),
 
@@ -378,8 +378,8 @@ impl LspTokenType {
     }
 }
 
-impl<'source_code> From<&TokenKind<'source_code>> for LspTokenType {
-    fn from(value: &TokenKind<'source_code>) -> Self {
+impl From<&TokenKind> for LspTokenType {
+    fn from(value: &TokenKind) -> Self {
         match value {
             TokenKind::Keyword(..) => LspTokenType::Keyword,
             TokenKind::StringLiteral(..) => LspTokenType::String,
@@ -438,16 +438,16 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use babbelaar::{Lexer, SourceCode};
+    use babbelaar::{BabString, Lexer, SourceCode};
     use rstest::rstest;
 
     #[rstest]
     #[case(
         "€\"Hallo {naam}\""
     )]
-    fn test_add_token(#[case] input: &str) {
-        let input = SourceCode::new(PathBuf::new(), input.into());
-        let tokens: Vec<Token<'_>> = Lexer::new(&input).collect();
+    fn test_add_token(#[case] input: &'static str) {
+        let input = SourceCode::new(PathBuf::new(), BabString::new_static(input));
+        let tokens: Vec<Token> = Lexer::new(&input).collect();
 
         let mut symbolizer = Symbolizer::new(Url::parse("file:///test.h").unwrap(), &input);
         for token in &tokens {

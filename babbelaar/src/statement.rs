@@ -1,28 +1,28 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{util::FileRange, Attribute, Expression, Parameter, RangeExpression, Ranged, Structure};
+use crate::{util::FileRange, Attribute, BabString, Expression, Parameter, RangeExpression, Ranged, Structure};
 
 #[derive(Debug, Clone)]
-pub struct Statement<'source_code> {
+pub struct Statement {
     pub range: FileRange,
-    pub attributes: Vec<Attribute<'source_code>>,
-    pub kind: StatementKind<'source_code>,
+    pub attributes: Vec<Attribute>,
+    pub kind: StatementKind,
 }
 
 #[derive(Debug, Clone)]
-pub enum StatementKind<'source_code> {
-    Assignment(Ranged<AssignStatement<'source_code>>),
-    Expression(Ranged<Expression<'source_code>>),
-    Function(FunctionStatement<'source_code>),
-    For(ForStatement<'source_code>),
-    If(IfStatement<'source_code>),
-    Return(ReturnStatement<'source_code>),
-    Structure(Structure<'source_code>),
-    Variable(VariableStatement<'source_code>),
+pub enum StatementKind {
+    Assignment(Ranged<AssignStatement>),
+    Expression(Ranged<Expression>),
+    Function(FunctionStatement),
+    For(ForStatement),
+    If(IfStatement),
+    Return(ReturnStatement),
+    Structure(Structure),
+    Variable(VariableStatement),
 }
 
-impl<'source_code> StatementKind<'source_code> {
+impl StatementKind {
     #[must_use]
     pub const fn is_expression(&self) -> bool {
         matches!(self, Self::Expression(..))
@@ -32,44 +32,44 @@ impl<'source_code> StatementKind<'source_code> {
 /// In babbelaar, we have Assignment `=` statements instead of expressions,
 /// since this avoid bugs (IMO).
 #[derive(Clone, Debug)]
-pub struct AssignStatement<'source_code> {
+pub struct AssignStatement {
     pub range: FileRange,
-    pub dest: Ranged<Expression<'source_code>>,
-    pub expression: Ranged<Expression<'source_code>>,
+    pub dest: Ranged<Expression>,
+    pub expression: Ranged<Expression>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ForStatement<'source_code> {
+pub struct ForStatement {
     pub file_range: FileRange,
     pub keyword: FileRange,
-    pub iterator_name: Ranged<&'source_code str>,
-    pub range: RangeExpression<'source_code>,
-    pub body: Vec<Statement<'source_code>>,
+    pub iterator_name: Ranged<BabString>,
+    pub range: RangeExpression,
+    pub body: Vec<Statement>,
 }
 
 #[derive(Clone, Debug)]
-pub struct FunctionStatement<'source_code> {
+pub struct FunctionStatement {
     pub range: FileRange,
-    pub name: Ranged<&'source_code str>,
-    pub parameters: Vec<Parameter<'source_code>>,
-    pub body: Option<Vec<Statement<'source_code>>>,
+    pub name: Ranged<BabString>,
+    pub parameters: Vec<Parameter>,
+    pub body: Option<Vec<Statement>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct IfStatement<'source_code> {
+pub struct IfStatement {
     pub range: FileRange,
-    pub condition: Ranged<Expression<'source_code>>,
-    pub body: Vec<Statement<'source_code>>,
+    pub condition: Ranged<Expression>,
+    pub body: Vec<Statement>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ReturnStatement<'source_code> {
-    pub expression: Option<Ranged<Expression<'source_code>>>,
+pub struct ReturnStatement {
+    pub expression: Option<Ranged<Expression>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct VariableStatement<'source_code> {
+pub struct VariableStatement {
     pub range: FileRange,
-    pub name: Ranged<&'source_code str>,
-    pub expression: Ranged<Expression<'source_code>>,
+    pub name: Ranged<BabString>,
+    pub expression: Ranged<Expression>,
 }

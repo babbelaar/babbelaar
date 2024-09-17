@@ -3,15 +3,15 @@
 
 use std::{path::PathBuf, sync::{Arc, Mutex}};
 
-use babbelaar::{Expression, Lexer, ParseTree, Parser, Ranged, SemanticAnalyzer, SemanticDiagnosticSeverity, SourceCode, Token, Value};
+use babbelaar::{BabString, Expression, Lexer, ParseTree, Parser, Ranged, SemanticAnalyzer, SemanticDiagnosticSeverity, SourceCode, Token, Value};
 use babbelaar_interpreter::{Debugger, Interpreter};
 
-fn parse<'a>(input: &'a SourceCode) -> ParseTree<'a> {
+fn parse<'a>(input: &'a SourceCode) -> ParseTree {
     let tokens: Vec<Token> = Lexer::new(input).collect();
     let mut parser = Parser::new(PathBuf::new(), &tokens);
     let tree = parser.parse_tree().unwrap();
 
-    let mut semantics = SemanticAnalyzer::new(input);
+    let mut semantics = SemanticAnalyzer::new(input.clone());
     semantics.analyze_tree(&tree);
     let diagnostics = semantics.into_diagnostics();
     assert!(diagnostics.iter().find(|x| x.severity() == SemanticDiagnosticSeverity::Error).is_none(), "Diagnostics: {diagnostics:#?}");
@@ -19,7 +19,7 @@ fn parse<'a>(input: &'a SourceCode) -> ParseTree<'a> {
     tree
 }
 
-fn parse_expression<'a>(input: &'a SourceCode) -> Ranged<Expression<'a>> {
+fn parse_expression<'a>(input: &'a SourceCode) -> Ranged<Expression> {
     let tokens: Vec<Token> = Lexer::new(input).collect();
     let mut parser = Parser::new(PathBuf::new(), &tokens);
 
@@ -37,13 +37,13 @@ pub fn interpret_statements(input: &SourceCode) {
 }
 
 pub fn interpret_expression(input: &str) -> Value {
-    let input = SourceCode::new(PathBuf::new(), input.into());
+    let input = SourceCode::new(PathBuf::new(), BabString::new(input));
     let expression = parse_expression(&input);
     Interpreter::new(()).execute_expression(&expression)
 }
 
 pub fn interpret_and_return_stdout(input: &str) -> Vec<String> {
-    let input = SourceCode::new(PathBuf::new(), input.into());
+    let input = SourceCode::new(PathBuf::new(), BabString::new(input));
     let buffer = Arc::new(Mutex::new(Vec::new()));
 
     {

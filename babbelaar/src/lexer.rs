@@ -3,7 +3,7 @@
 
 use std::str::CharIndices;
 
-use crate::{FileLocation, Keyword, Punctuator, SourceCode, TemplateStringToken, Token, TokenKind};
+use crate::{FileLocation, Keyword, Punctuator, Slice, SourceCode, TemplateStringToken, Token, TokenKind};
 
 pub struct Lexer<'source_code> {
     input: &'source_code SourceCode,
@@ -25,7 +25,7 @@ impl<'source_code> Lexer<'source_code> {
         }
     }
 
-    pub fn next(&mut self) -> Option<Token<'source_code>> {
+    pub fn next(&mut self) -> Option<Token> {
         self.skip_whitespace();
 
         let ch = self.peek_char()?;
@@ -74,7 +74,7 @@ impl<'source_code> Lexer<'source_code> {
         tok
     }
 
-    fn consume_single_char_token(&mut self, kind: TokenKind<'source_code>) -> Option<Token<'source_code>> {
+    fn consume_single_char_token(&mut self, kind: TokenKind) -> Option<Token> {
         let begin = self.current_location();
 
         self.consume_char();
@@ -88,7 +88,7 @@ impl<'source_code> Lexer<'source_code> {
         })
     }
 
-    fn consume_single_or_double_char_token(&mut self, single: Punctuator, double: Punctuator) -> Option<Token<'source_code>> {
+    fn consume_single_or_double_char_token(&mut self, single: Punctuator, double: Punctuator) -> Option<Token> {
         let begin = self.current_location();
 
         let char = self.next_char()?;
@@ -109,7 +109,7 @@ impl<'source_code> Lexer<'source_code> {
         })
     }
 
-    fn consume_string(&mut self) -> Option<Token<'source_code>> {
+    fn consume_string(&mut self) -> Option<Token> {
         let begin = self.current_location();
 
         assert_eq!(self.next_char().unwrap(), '"');
@@ -129,7 +129,7 @@ impl<'source_code> Lexer<'source_code> {
         }
 
         let offset_end = self.current_location().offset();
-        let str = &self.input[offset_begin..offset_end];
+        let str = self.input.slice(offset_begin..offset_end);
 
         self.consume_char();
 
@@ -142,7 +142,7 @@ impl<'source_code> Lexer<'source_code> {
         })
     }
 
-    fn consume_template_string(&mut self) -> Option<Token<'source_code>> {
+    fn consume_template_string(&mut self) -> Option<Token> {
         assert_eq!(self.next_char().unwrap(), '€');
         let begin = self.current_location();
 
@@ -194,9 +194,9 @@ impl<'source_code> Lexer<'source_code> {
 
             if let Some(TemplateStringToken::Plain{ begin, end, str }) = parts.last_mut() {
                 *end = end_pos;
-                *str = &self.input[begin.offset()..end_pos.offset()];
+                *str = self.input.slice(begin.offset()..end_pos.offset());
             } else {
-                let str = &self.input[begin.offset()..end.offset()];
+                let str = self.input.slice(begin.offset()..end.offset());
                 parts.push(TemplateStringToken::Plain {
                     begin,
                     end,
@@ -215,7 +215,7 @@ impl<'source_code> Lexer<'source_code> {
         })
     }
 
-    fn consume_identifier_or_keyword(&mut self) -> Option<Token<'source_code>> {
+    fn consume_identifier_or_keyword(&mut self) -> Option<Token> {
         let begin = self.current_location();
 
         loop {
@@ -231,9 +231,9 @@ impl<'source_code> Lexer<'source_code> {
         }
 
         let end = self.current_location();
-        let str = &self.input[begin.offset()..end.offset()];
+        let str = self.input.slice(begin.offset()..end.offset());
 
-        let kind = match Keyword::parse(str) {
+        let kind = match Keyword::parse(&str) {
             Some(keyword) => TokenKind::Keyword(keyword),
             None => TokenKind::Identifier(str)
         };
@@ -245,7 +245,7 @@ impl<'source_code> Lexer<'source_code> {
         })
     }
 
-    fn consume_number(&mut self) -> Option<Token<'source_code>> {
+    fn consume_number(&mut self) -> Option<Token> {
         let begin = self.current_location();
 
         loop {
@@ -332,7 +332,7 @@ impl<'source_code> Lexer<'source_code> {
         }
     }
 
-    fn handle_solidus(&mut self) -> Option<Token<'source_code>> {
+    fn handle_solidus(&mut self) -> Option<Token> {
         self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus))
     }
 
@@ -354,7 +354,7 @@ impl<'source_code> Lexer<'source_code> {
 }
 
 impl<'source_code> Iterator for Lexer<'source_code> {
-    type Item = Token<'source_code>;
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next()
@@ -378,19 +378,20 @@ mod tests {
 
     use super::*;
     use rstest::rstest;
+    use crate::BabString;
 
     #[rstest]
     #[case("h", Token {
-        kind: TokenKind::Identifier("h"),
+        kind: TokenKind::Identifier(BabString::new_static("h")),
         begin: FileLocation::new(0, 0, 0),
         end: FileLocation::new(1, 0, 1),
     })]
     #[case("s ", Token {
-        kind: TokenKind::Identifier("s"),
+        kind: TokenKind::Identifier(BabString::new_static("s")),
         begin: FileLocation::new(0, 0, 0),
         end: FileLocation::new(1, 0, 1),
     })]
-    fn next_text(#[case] input: &'static str, #[case] expected: Token<'static>) {
+    fn next_text(#[case] input: &'static str, #[case] expected: Token) {
         let source_code = SourceCode::new(PathBuf::new(), input.to_string());
         let actual = Lexer::new(&source_code).next();
 

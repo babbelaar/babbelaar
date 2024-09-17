@@ -6,24 +6,24 @@ use std::{fmt::Display, path::PathBuf, rc::Rc};
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, BiExpression, BiOperator, Builtin, BuiltinType, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
+    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, BabString, BiExpression, BiOperator, Builtin, BuiltinType, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
 };
 
-pub type ParseResult<'source_code, T> = Result<T, ParseDiagnostic<'source_code>>;
+pub type ParseResult<T> = Result<T, ParseDiagnostic>;
 
 #[derive(Clone)]
-pub struct Parser<'tokens, 'source_code> {
+pub struct Parser<'tokens> {
     pub path: PathBuf,
-    tokens: &'tokens [Token<'source_code>],
+    tokens: &'tokens [Token],
     pub cursor: usize,
     pub token_begin: FileLocation,
     pub token_end: FileLocation,
-    pub errors: Vec<ParseDiagnostic<'source_code>>,
+    pub errors: Vec<ParseDiagnostic>,
     error_behavior: ParserErrorBehavior,
 }
 
-impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
-    pub fn new(path: PathBuf, tokens: &'tokens [Token<'source_code>]) -> Self {
+impl<'tokens> Parser<'tokens> {
+    pub fn new(path: PathBuf, tokens: &'tokens [Token]) -> Self {
         Self {
             path,
             error_behavior: ParserErrorBehavior::Propagate,
@@ -43,7 +43,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
     }
 
-    pub fn parse_tree(&mut self) -> Result<ParseTree<'source_code>, ParseDiagnostic<'source_code>> {
+    pub fn parse_tree(&mut self) -> Result<ParseTree, ParseDiagnostic> {
         let mut tree = ParseTree::new(self.path.clone());
 
         while !self.is_at_end() {
@@ -57,7 +57,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(tree)
     }
 
-    pub fn parse_statement(&mut self) -> Result<Statement<'source_code>, ParseDiagnostic<'source_code>> {
+    pub fn parse_statement(&mut self) -> Result<Statement, ParseDiagnostic> {
         let start = self.peek_token()?.begin;
         let mut attributes = Vec::new();
 
@@ -127,7 +127,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         })
     }
 
-    fn parse_assign_statement(&mut self) -> Result<Option<AssignStatement<'source_code>>, ParseDiagnostic<'source_code>> {
+    fn parse_assign_statement(&mut self) -> Result<Option<AssignStatement>, ParseDiagnostic> {
         let Ok(dest) = self.parse_postfix_expression() else {
             return Ok(None);
         };
@@ -150,14 +150,14 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }))
     }
 
-    pub fn parse_function(&mut self) -> Result<FunctionStatement<'source_code>, ParseDiagnostic<'source_code>> {
+    pub fn parse_function(&mut self) -> Result<FunctionStatement, ParseDiagnostic> {
         let name = self.consume_token()?;
         let name_range = name.range();
         let name = match name.kind {
             TokenKind::Identifier(name) => name,
             _ => {
                 self.handle_error(ParseDiagnostic::FunctionStatementExpectedName { token: name.clone() })?;
-                ""
+                BabString::empty()
             }
         };
         let name = Ranged::new(name_range, name);
@@ -214,18 +214,18 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(FunctionStatement { name, body, parameters, range })
     }
 
-    fn consume_identifier(&mut self, ident_purpose: &'static str, previous: &'source_code str) -> Result<Ranged<&'source_code str>, ParseDiagnostic<'source_code>> {
+    fn consume_identifier(&mut self, ident_purpose: &'static str, previous: BabString) -> Result<Ranged<BabString>, ParseDiagnostic> {
         let token = self.consume_token()?;
         let range = token.range();
         if let TokenKind::Identifier(name) = token.kind {
             Ok(Ranged::new(range, name))
         } else {
             self.handle_error(ParseDiagnostic::ExpectedIdentifier { token, previous, ident_purpose })?;
-            Ok(Ranged::new(FileRange::new(range.start(), range.start()), ""))
+            Ok(Ranged::new(FileRange::new(range.start(), range.start()), BabString::empty()))
         }
     }
 
-    fn handle_error(&mut self, error: ParseDiagnostic<'source_code>) -> Result<(), ParseDiagnostic<'source_code>> {
+    fn handle_error(&mut self, error: ParseDiagnostic) -> Result<(), ParseDiagnostic> {
         match self.error_behavior {
             ParserErrorBehavior::AttemptToIgnore => {
                 self.errors.push(error);
@@ -240,7 +240,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         self.cursor >= self.tokens.len()
     }
 
-    fn parse_return_statement(&mut self) -> Result<ReturnStatement<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_return_statement(&mut self) -> Result<ReturnStatement, ParseDiagnostic> {
         match self.peek_punctuator() {
             Some(Punctuator::Semicolon) => {
                 _ = self.consume_token()?;
@@ -269,14 +269,14 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
     }
 
-    fn parse_structure_statement(&mut self) -> Result<Structure<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_structure_statement(&mut self) -> Result<Structure, ParseDiagnostic> {
         let name_token = self.consume_token()?;
 
         let name = Ranged::new(name_token.range(), match name_token.kind {
             TokenKind::Identifier(ident) => ident,
             _ => {
                 self.handle_error(ParseDiagnostic::ExpectedNameOfStructuur { token: name_token })?;
-                ""
+                BabString::empty()
             }
         });
 
@@ -358,14 +358,14 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(structure)
     }
 
-    fn parse_structure_field(&mut self) -> Result<Field<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_structure_field(&mut self) -> Result<Field, ParseDiagnostic> {
         let name_token = self.consume_token()?;
 
         let name = Ranged::new(name_token.range(), match name_token.kind {
             TokenKind::Identifier(ident) => ident,
             _ => {
                 self.handle_error(ParseDiagnostic::ExpectedNameOfField { token: name_token })?;
-                ""
+                BabString::empty()
             }
         });
 
@@ -378,7 +378,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         })
     }
 
-    fn parse_variable_statement(&mut self) -> Result<VariableStatement<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_variable_statement(&mut self) -> Result<VariableStatement, ParseDiagnostic> {
         let name_token = self.consume_token()?;
         let name_range = name_token.range();
 
@@ -386,7 +386,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             TokenKind::Identifier(ident) => ident,
             _ => {
                 self.handle_error(ParseDiagnostic::ExpectedNameOfVariable { token: name_token })?;
-                ""
+                BabString::empty()
             }
         };
 
@@ -407,7 +407,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         })
     }
 
-    fn parse_parameter(&mut self) -> Result<Parameter<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_parameter(&mut self) -> Result<Parameter, ParseDiagnostic> {
         let name = self.parse_parameter_name()?;
 
         self.expect_colon("parameternaam")?;
@@ -420,7 +420,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         })
     }
 
-    fn parse_parameter_name(&mut self) -> Result<Ranged<&'source_code str>, ParseDiagnostic<'source_code>> {
+    fn parse_parameter_name(&mut self) -> Result<Ranged<BabString>, ParseDiagnostic> {
         let name = self.consume_token()?;
         let name_range = name.range();
         let TokenKind::Identifier(name) = name.kind else {
@@ -430,16 +430,16 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(Ranged::new(name_range, name))
     }
 
-    fn parse_type(&mut self) -> Result<Ranged<Type<'source_code>>, ParseDiagnostic<'source_code>> {
+    fn parse_type(&mut self) -> Result<Ranged<Type>, ParseDiagnostic> {
         let name_token = self.consume_token()?;
         let name_range = name_token.range();
-        let TokenKind::Identifier(name) = name_token.kind else {
+        let TokenKind::Identifier(ref name) = name_token.kind else {
             self.handle_error(ParseDiagnostic::TypeExpectedSpecifierName { token: name_token })?;
             return Ok(Ranged::new(name_range, Type {
                 specifier: Ranged::new(name_range, TypeSpecifier::BuiltIn(BuiltinType::Null)),
             }))
         };
-        let name = Ranged::new(name_token.range(), name);
+        let name = Ranged::new(name_token.range(), name.clone());
 
         let specifier = match Builtin::type_by_name(name.value()) {
             Some(builtin) => TypeSpecifier::BuiltIn(builtin),
@@ -452,14 +452,14 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(Ranged::new(name_token.range(), ty))
     }
 
-    fn parse_for_statement(&mut self) -> Result<ForStatement<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_for_statement(&mut self) -> Result<ForStatement, ParseDiagnostic> {
         let keyword = self.consume_token()?.range();
         let iterator = self.consume_token()?;
-        let iterator_name = match iterator.kind {
-            TokenKind::Identifier(iterator_name) => iterator_name,
+        let iterator_name = match &iterator.kind {
+            TokenKind::Identifier(iterator_name) => iterator_name.clone(),
             _ => {
                 self.handle_error(ParseDiagnostic::ForStatementExpectedIteratorName { token: iterator.clone() })?;
-                ""
+                BabString::empty()
             }
         };
 
@@ -467,7 +467,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
         let in_keyword = self.consume_token()?;
         if in_keyword.kind != TokenKind::Keyword(Keyword::In) {
-            self.handle_error(ParseDiagnostic::ForStatementExpectedInKeyword { token: in_keyword, iterator_name })?;
+            self.handle_error(ParseDiagnostic::ForStatementExpectedInKeyword { token: in_keyword, iterator_name: iterator_name.clone() })?;
         }
 
         let range = self.parse_range()?;
@@ -492,7 +492,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(ForStatement { keyword, iterator_name, range, body, file_range })
     }
 
-    fn parse_if_statement(&mut self) -> Result<IfStatement<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_if_statement(&mut self) -> Result<IfStatement, ParseDiagnostic> {
         let start = self.previous_end();
         let condition = match self.parse_expression() {
             Ok(expression) => expression,
@@ -531,7 +531,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(IfStatement { condition, body, range })
     }
 
-    fn parse_range(&mut self) -> Result<RangeExpression<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_range(&mut self) -> Result<RangeExpression, ParseDiagnostic> {
         let range_keyword = self.consume_token()?;
         if range_keyword.kind != TokenKind::Keyword(Keyword::Reeks) {
             self.handle_error(ParseDiagnostic::RangeExpectedKeyword { token: range_keyword })?;
@@ -550,7 +550,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(RangeExpression { start, end })
     }
 
-    fn parse_primary_expression(&mut self) -> Result<Ranged<PrimaryExpression<'source_code>>, ParseDiagnostic<'source_code>> {
+    fn parse_primary_expression(&mut self) -> Result<Ranged<PrimaryExpression>, ParseDiagnostic> {
         let reset = (self.cursor, self.token_begin, self.token_end);
         let token = self.consume_token()?;
         let range = token.range();
@@ -558,7 +558,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         let expression = match token.kind {
             TokenKind::StringLiteral(literal) => Ok(PrimaryExpression::StringLiteral(literal)),
             TokenKind::Integer(integer) => Ok(PrimaryExpression::IntegerLiteral(integer)),
-            TokenKind::Identifier(identifier) => Ok(PrimaryExpression::Reference(Ranged::new(token.range(), identifier))),
+            TokenKind::Identifier(ref identifier) => Ok(PrimaryExpression::Reference(Ranged::new(token.range(), identifier.clone()))),
             TokenKind::TemplateString(template_string) => self.parse_template_string(template_string),
             TokenKind::Keyword(Keyword::Waar) => Ok(PrimaryExpression::Boolean(true)),
             TokenKind::Keyword(Keyword::Onwaar) => Ok(PrimaryExpression::Boolean(false)),
@@ -573,7 +573,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 
             _ => {
                 (self.cursor, self.token_begin, self.token_end) = reset;
-                let replacement_token = PrimaryExpression::Reference(Ranged::new(token.range(), ""));
+                let replacement_token = PrimaryExpression::Reference(Ranged::new(token.range(), BabString::empty()));
                 self.handle_error(ParseDiagnostic::UnknownStartOfExpression { token })?;
                 return Ok(Ranged::new(FileRange::new(self.token_begin, self.token_end), replacement_token));
             }
@@ -585,33 +585,33 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
     }
 
     #[allow(unused)] // TODO evaluate further need of this function
-    fn parse_ranged<F, T>(&mut self, f: F) -> Result<Ranged<T>, ParseDiagnostic<'source_code>>
-            where F: FnOnce(&mut Self) -> Result<T, ParseDiagnostic<'source_code>> {
+    fn parse_ranged<F, T>(&mut self, f: F) -> Result<Ranged<T>, ParseDiagnostic>
+            where F: FnOnce(&mut Self) -> Result<T, ParseDiagnostic> {
         let start = self.token_begin;
         let value = f(self)?;
         let end = self.token_end;
         Ok(Ranged::new(FileRange::new(start, end), value))
     }
 
-    pub fn parse_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseDiagnostic<'source_code>> {
+    pub fn parse_expression(&mut self) -> Result<Ranged<Expression>, ParseDiagnostic> {
         self.parse_relational_expression()
     }
 
-    fn parse_relational_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseDiagnostic<'source_code>> {
+    fn parse_relational_expression(&mut self) -> Result<Ranged<Expression>, ParseDiagnostic> {
         self.parse_bi_expression(Self::parse_additive_expression, &[
             (Punctuator::Equals, BiOperator::Comparison(Comparison::Equality)),
             // TODO the rest
         ])
     }
 
-    fn parse_additive_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseDiagnostic<'source_code>> {
+    fn parse_additive_expression(&mut self) -> Result<Ranged<Expression>, ParseDiagnostic> {
         self.parse_bi_expression(Self::parse_multiplicative_expression, &[
             (Punctuator::PlusSign, BiOperator::Add),
             (Punctuator::HyphenMinus, BiOperator::Subtract),
         ])
     }
 
-    fn parse_multiplicative_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseDiagnostic<'source_code>> {
+    fn parse_multiplicative_expression(&mut self) -> Result<Ranged<Expression>, ParseDiagnostic> {
         self.parse_bi_expression(Self::parse_postfix_expression, &[
             (Punctuator::Asterisk, BiOperator::Multiply),
             (Punctuator::PercentageSign, BiOperator::Modulo),
@@ -619,8 +619,8 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         ])
     }
 
-    fn parse_bi_expression<F>(&mut self, mut operand: F, operators: &[(Punctuator, BiOperator)]) -> Result<Ranged<Expression<'source_code>>, ParseDiagnostic<'source_code>>
-            where F: FnMut(&mut Self) -> Result<Ranged<Expression<'source_code>>, ParseDiagnostic<'source_code>> {
+    fn parse_bi_expression<F>(&mut self, mut operand: F, operators: &[(Punctuator, BiOperator)]) -> Result<Ranged<Expression>, ParseDiagnostic>
+            where F: FnMut(&mut Self) -> Result<Ranged<Expression>, ParseDiagnostic> {
         let mut expr = operand(self)?;
 
         loop {
@@ -650,7 +650,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(expr)
     }
 
-    fn parse_postfix_expression(&mut self) -> Result<Ranged<Expression<'source_code>>, ParseDiagnostic<'source_code>> {
+    fn parse_postfix_expression(&mut self) -> Result<Ranged<Expression>, ParseDiagnostic> {
         let mut expression = self.parse_primary_expression()?.map(|x| Expression::Primary(x));
         let start = expression.range().start();
 
@@ -676,13 +676,13 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                         break;
                     };
 
-                    let TokenKind::Identifier(name) = ident_token.kind else {
+                    let TokenKind::Identifier(name) = &ident_token.kind else {
                         self.handle_error(ParseDiagnostic::PostfixMemberOrReferenceExpectedIdentifier { token: ident_token, period })?;
                         (self.token_begin, self.token_end, self.cursor) = reset;
                         break;
                     };
 
-                    let name = Ranged::new(ident_token.range(), name);
+                    let name = Ranged::new(ident_token.range(), name.clone());
 
                     if self.peek_punctuator() == Some(Punctuator::LeftParenthesis) {
                         let token_left_paren = self.consume_token()?.range();
@@ -711,7 +711,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(expression)
     }
 
-    fn parse_function_call_expression(&mut self, token_left_paren: FileRange) -> Result<FunctionCallExpression<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_function_call_expression(&mut self, token_left_paren: FileRange) -> Result<FunctionCallExpression, ParseDiagnostic> {
         let mut arguments = Vec::new();
         while let Ok(token) = self.peek_token() {
             if token.kind == TokenKind::Punctuator(Punctuator::RightParenthesis) {
@@ -743,7 +743,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         })
     }
 
-    fn parse_template_string(&mut self, template_string: Vec<TemplateStringToken<'source_code>>) -> ParseResult<'source_code, PrimaryExpression<'source_code>> {
+    fn parse_template_string(&mut self, template_string: Vec<TemplateStringToken>) -> ParseResult<PrimaryExpression> {
         let mut parts = Vec::new();
 
         for token in template_string {
@@ -764,7 +764,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
                         }
                         Err(e) => {
                             self.handle_error(e)?;
-                            TemplateStringExpressionPart::String("")
+                            TemplateStringExpressionPart::String(BabString::empty())
                         }
                     }
                 }
@@ -776,7 +776,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(PrimaryExpression::TemplateString { parts })
     }
 
-    fn peek_token(&self) -> Result<&Token<'source_code>, ParseDiagnostic<'source_code>> {
+    fn peek_token(&self) -> Result<&Token, ParseDiagnostic> {
         match self.tokens.get(self.cursor) {
             Some(token) => Ok(token),
             None => Err(ParseDiagnostic::EndOfFile),
@@ -791,7 +791,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
     }
 
-    fn consume_token(&mut self) -> Result<Token<'source_code>, ParseDiagnostic<'source_code>> {
+    fn consume_token(&mut self) -> Result<Token, ParseDiagnostic> {
         let token = self.peek_token()?.clone();
         self.token_begin = token.begin;
         self.token_end = token.end;
@@ -799,7 +799,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(token)
     }
 
-    fn expect_left_paren(&mut self, context: &'static str) -> Result<FileRange, ParseDiagnostic<'source_code>> {
+    fn expect_left_paren(&mut self, context: &'static str) -> Result<FileRange, ParseDiagnostic> {
         let token = self.consume_token()?;
 
         if token.kind != TokenKind::Punctuator(Punctuator::LeftParenthesis) {
@@ -809,7 +809,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(token.range())
     }
 
-    fn expect_right_paren(&mut self, context: &'static str) -> Result<FileRange, ParseDiagnostic<'source_code>> {
+    fn expect_right_paren(&mut self, context: &'static str) -> Result<FileRange, ParseDiagnostic> {
         let token = self.consume_token()?;
         let range = token.range();
 
@@ -820,7 +820,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(range)
     }
 
-    fn expect_left_curly_bracket(&mut self, context: &'static str) -> Result<FileRange, ParseDiagnostic<'source_code>> {
+    fn expect_left_curly_bracket(&mut self, context: &'static str) -> Result<FileRange, ParseDiagnostic> {
         let token = self.consume_token()?;
         let range = token.range();
 
@@ -831,7 +831,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(range)
     }
 
-    fn expect_comma(&mut self, context: &'static str) -> Result<(), ParseDiagnostic<'source_code>> {
+    fn expect_comma(&mut self, context: &'static str) -> Result<(), ParseDiagnostic> {
         let token = self.consume_token()?;
 
         if token.kind != TokenKind::Punctuator(Punctuator::Comma) {
@@ -841,7 +841,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(())
     }
 
-    fn expect_colon(&mut self, context: &'static str) -> Result<(), ParseDiagnostic<'source_code>> {
+    fn expect_colon(&mut self, context: &'static str) -> Result<(), ParseDiagnostic> {
         let token = self.consume_token()?;
 
         if token.kind != TokenKind::Punctuator(Punctuator::Colon) {
@@ -852,7 +852,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(())
     }
 
-    fn expect_semicolon_after_statement(&mut self) -> Result<(), ParseDiagnostic<'source_code>> {
+    fn expect_semicolon_after_statement(&mut self) -> Result<(), ParseDiagnostic> {
         let token = match self.consume_token() {
             Ok(token) => token,
             Err(ParseDiagnostic::EndOfFile) => return self.handle_error(ParseDiagnostic::ExpectedSemicolonAfterStatement { token: self.tokens[self.cursor - 1].clone() }),
@@ -873,12 +873,12 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         }
     }
 
-    fn parse_attribute(&mut self) -> Result<Attribute<'source_code>, ParseDiagnostic<'source_code>> {
-        let name = match self.consume_identifier("Attribuutnaam", "@") {
+    fn parse_attribute(&mut self) -> Result<Attribute, ParseDiagnostic> {
+        let name = match self.consume_identifier("Attribuutnaam", BabString::new_static("@")) {
             Ok(name) => name,
             Err(e) => {
                 self.handle_error(e)?;
-                Ranged::new(FileRange::default(), "")
+                Ranged::new(FileRange::default(), BabString::empty())
             }
         };
 
@@ -901,7 +901,7 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         })
     }
 
-    fn parse_attribute_argument_list(&mut self) -> Result<Vec<AttributeArgument<'source_code>>, ParseDiagnostic<'source_code>> {
+    fn parse_attribute_argument_list(&mut self) -> Result<Vec<AttributeArgument>, ParseDiagnostic> {
         let mut arguments = Vec::new();
 
         loop {
@@ -940,12 +940,12 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         Ok(arguments)
     }
 
-    fn parse_attribute_argument(&mut self) -> Result<AttributeArgument<'source_code>, ParseDiagnostic<'source_code>> {
-        let name = match self.consume_identifier("Argumentnaam", "(") {
+    fn parse_attribute_argument(&mut self) -> Result<AttributeArgument, ParseDiagnostic> {
+        let name = match self.consume_identifier("Argumentnaam", BabString::new_static("(")) {
             Ok(name) => name,
             Err(e) => {
                 self.handle_error(e)?;
-                Ranged::new(FileRange::default(), "")
+                Ranged::new(FileRange::default(), BabString::empty())
             }
         };
 
@@ -958,14 +958,14 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
         })
     }
 
-    fn parse_structure_instantiation(&mut self, start: FileLocation) -> Result<PrimaryExpression<'source_code>, ParseDiagnostic<'source_code>> {
+    fn parse_structure_instantiation(&mut self, start: FileLocation) -> Result<PrimaryExpression, ParseDiagnostic> {
         let name_token = self.peek_token()?;
         let name = match &name_token.kind {
-            TokenKind::Identifier(name) => Ranged::new(name_token.range(), *name),
+            TokenKind::Identifier(name) => Ranged::new(name_token.range(), name.clone()),
 
             _ => {
                 self.handle_error(ParseDiagnostic::ExpectedNameAfterNieuw { token: name_token.clone() })?;
-                Ranged::new(FileRange::new(self.token_begin, self.token_begin), "")
+                Ranged::new(FileRange::new(self.token_begin, self.token_begin), BabString::empty())
             }
         };
 
@@ -988,9 +988,9 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
             }
 
             let token = self.peek_token()?;
-            match token.kind {
+            match &token.kind {
                 TokenKind::Identifier(name) => {
-                    let name = Ranged::new(token.range(), name);
+                    let name = Ranged::new(token.range(), name.clone());
                     _ = self.consume_token();
 
                     self.expect_colon("structuurveldverwijzing")?;
@@ -1037,103 +1037,103 @@ impl<'tokens, 'source_code> Parser<'tokens, 'source_code> {
 }
 
 #[derive(Clone, Debug, thiserror::Error, AsRefStr)]
-pub enum ParseDiagnostic<'source_code> {
+pub enum ParseDiagnostic {
     #[error("Onverwacht einde van het bestand")]
     EndOfFile,
 
     #[error("Komma `,` of gesloten rond haakje `)` verwacht binnen attribuutargumentlijst, maar kreeg: {token}")]
-    AttributeArgumentExpectedComma { token: Token<'source_code> },
+    AttributeArgumentExpectedComma { token: Token },
 
     #[error("Ongeldig start van een statement: {token}")]
-    StatementInvalidStart{ token: Token<'source_code> },
+    StatementInvalidStart{ token: Token },
 
     #[error("Open accolade verwacht `{{` na {context}, maar kreeg: {token}")]
-    ExpectedLeftCurlyBracket { token: Token<'source_code>, context: &'static str },
+    ExpectedLeftCurlyBracket { token: Token, context: &'static str },
 
     #[error("Open rond haakje verwacht '(' na {context}, maar kreeg: {token}")]
-    ExpectedLeftParen { token: Token<'source_code>, context: &'static str },
+    ExpectedLeftParen { token: Token, context: &'static str },
 
     #[error("Gesloten rond haakje verwacht ')' na {context}, maar kreeg: {token}")]
-    ExpectedRightParen { token: Token<'source_code>, context: &'static str },
+    ExpectedRightParen { token: Token, context: &'static str },
 
     #[error("Dubbele punt verwacht ':' na {context}, maar kreeg: {token}")]
-    ExpectedColon { token: Token<'source_code>, range: FileRange, context: &'static str },
+    ExpectedColon { token: Token, range: FileRange, context: &'static str },
 
     #[error("Komma verwacht ',' na {context}, maar kreeg: {token}")]
-    ExpectedComma { token: Token<'source_code>, context: &'static str },
+    ExpectedComma { token: Token, context: &'static str },
 
     #[error("Na een structuurlid hoort een komma `;`")]
-    ExpectedCommaAfterStructureMember { token: Token<'source_code>, location: FileLocation },
+    ExpectedCommaAfterStructureMember { token: Token, location: FileLocation },
 
     #[error("Naam van structuur verwacht, maar kreeg: {token}")]
-    ExpectedNameAfterNieuw { token: Token<'source_code> },
+    ExpectedNameAfterNieuw { token: Token },
 
     #[error("Naam van structuurveld verwacht, maar kreeg: {token}")]
-    ExpectedNameOfField { token: Token<'source_code> },
+    ExpectedNameOfField { token: Token },
 
     #[error("Naam van structuur verwacht, maar kreeg: {token}")]
-    ExpectedNameOfStructuur { token: Token<'source_code> },
+    ExpectedNameOfStructuur { token: Token },
 
     #[error("Naam van stelling verwacht, maar kreeg: {token}")]
-    ExpectedNameOfVariable { token: Token<'source_code> },
+    ExpectedNameOfVariable { token: Token },
 
     #[error("Is-teken `=` verwacht tussen naam van stelling en de toewijzing, maar kreeg: {token}")]
-    ExpectedEqualsInsideVariable { token: Token<'source_code> },
+    ExpectedEqualsInsideVariable { token: Token },
 
     #[error("Puntkomma verwacht ';' na statement, maar kreeg: {token}")]
-    ExpectedSemicolonAfterStatement { token: Token<'source_code> },
+    ExpectedSemicolonAfterStatement { token: Token },
 
     #[error("Onjuiste velddeclaratie, velden moeten starten met `veld`")]
-    ExpectedStructureMemberPrefixVeld { token: Token<'source_code> },
+    ExpectedStructureMemberPrefixVeld { token: Token },
 
     #[error("Onjuiste structuurwerkwijze, deze hoort te starten met `werkwijze`")]
-    ExpectedStructureMethodPrefixWerkwijze { token: Token<'source_code> },
+    ExpectedStructureMethodPrefixWerkwijze { token: Token },
 
     #[error("Werkwijzenaam verwacht na `werkwijze`, maar kreeg: {token}")]
-    FunctionStatementExpectedName { token: Token<'source_code> },
+    FunctionStatementExpectedName { token: Token },
 
     #[error("{ident_purpose} verwacht na `{previous}`, maar kreeg: {token}")]
-    ExpectedIdentifier { token: Token<'source_code>, previous: &'source_code str, ident_purpose: &'static str },
+    ExpectedIdentifier { token: Token, previous: BabString, ident_purpose: &'static str },
 
     #[error("Iteratornaam verwacht na `volg`, maar kreeg: {token}")]
-    ForStatementExpectedIteratorName { token: Token<'source_code> },
+    ForStatementExpectedIteratorName { token: Token },
 
     #[error("Sleutelwoord 'in' verwacht na `volg {}`, maar kreeg: {token}", iterator_name.value())]
-    ForStatementExpectedInKeyword { token: Token<'source_code>, iterator_name: Ranged<&'source_code str> },
+    ForStatementExpectedInKeyword { token: Token, iterator_name: Ranged<BabString> },
 
     #[error("Parameternaam verwacht, maar kreeg: {token}")]
-    ParameterExpectedName { token: Token<'source_code> },
+    ParameterExpectedName { token: Token },
 
     #[error("Komma `,` of gesloten rond haakje `)` verwacht binnen parameterlijst, maar kreeg: {}", token.as_ref().map(|x| x as &dyn Display).unwrap_or_else(|| &"(niets)" as &'static dyn Display))]
-    ParameterExpectedComma { token: Option<Token<'source_code>> },
+    ParameterExpectedComma { token: Option<Token> },
 
     #[error("Methode of structuurlid verwacht na punt `.`, maar kreeg: {token}")]
-    PostfixMemberOrReferenceExpectedIdentifier { token: Token<'source_code>, period: Token<'source_code> },
+    PostfixMemberOrReferenceExpectedIdentifier { token: Token, period: Token },
 
     #[error("Sleutelwoord `reeks` verwacht, maar kreeg: {token}")]
-    RangeExpectedKeyword { token: Token<'source_code> },
+    RangeExpectedKeyword { token: Token },
 
     #[error("Resterende token na expressie binnen sjabloonslinger: {token}")]
-    ResidualTokensInTemplateString { token: Token<'source_code>, range: FileRange },
+    ResidualTokensInTemplateString { token: Token, range: FileRange },
 
     #[error("Parametertype verwacht, maar kreeg: {token}")]
-    TypeExpectedSpecifierName { token: Token<'source_code> },
+    TypeExpectedSpecifierName { token: Token },
 
     #[error("Onbekend start van een expressie: {token}")]
-    UnknownStartOfExpression { token: Token<'source_code> },
+    UnknownStartOfExpression { token: Token },
 
     #[error("Onbekend start van een structuurlid: {token}")]
-    UnexpectedTokenAtStartOfStructureMember { token: Token<'source_code> },
+    UnexpectedTokenAtStartOfStructureMember { token: Token },
 
     #[error("Verwijzing naar structuurveld verwacht, maar kreeg: {token}")]
-    UnexpectedTokenAtStartOfStructureInstantiation { token: Token<'source_code> },
+    UnexpectedTokenAtStartOfStructureInstantiation { token: Token },
 
     #[error("Onverwachte token binnen structuur: `{token}`")]
-    UnexpectedTokenInsideStructureInstantiation { token: Token<'source_code> },
+    UnexpectedTokenInsideStructureInstantiation { token: Token },
 }
 
-impl<'source_code> ParseDiagnostic<'source_code> {
-    pub fn token(&self) -> Option<&Token<'source_code>> {
+impl ParseDiagnostic {
+    pub fn token(&self) -> Option<&Token> {
         match self {
             Self::EndOfFile => None,
             Self::AttributeArgumentExpectedComma { token } => Some(token),
@@ -1201,9 +1201,9 @@ mod tests {
     #[rstest]
     #[case(" schrijf(\"Hallo\") ")]
     #[case("schrijf(\"Hallo\")")]
-    fn parse_function_call_expression(#[case] input: &str) {
-        let source_code = SourceCode::new_test(input);
-        let tokens: Vec<Token<'_>> = Lexer::new(&source_code).collect();
+    fn parse_function_call_expression(#[case] input: &'static str) {
+        let source_code = SourceCode::new_test(BabString::new_static(input));
+        let tokens: Vec<Token> = Lexer::new(&source_code).collect();
         let mut parser = Parser::new(source_code.path().to_path_buf(), &tokens);
         let expression = parser.parse_expression().unwrap();
         assert!(

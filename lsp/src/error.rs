@@ -16,7 +16,7 @@ pub enum BabbelaarLspError {
     IoError(IoError),
 
     #[error("parseerfout: {0}")]
-    ParseError(String),
+    ParseError(ParseDiagnostic),
 
     #[error("geopend document heeft geen bestandspad as URL")]
     UrlNotFilePath,
@@ -31,9 +31,9 @@ impl From<IoError> for BabbelaarLspError {
     }
 }
 
-impl From<ParseDiagnostic<'_>> for BabbelaarLspError {
-    fn from(value: ParseDiagnostic<'_>) -> Self {
-        Self::ParseError(value.to_string())
+impl From<ParseDiagnostic> for BabbelaarLspError {
+    fn from(value: ParseDiagnostic) -> Self {
+        Self::ParseError(value)
     }
 }
 

@@ -50,7 +50,7 @@ impl CodeActionRepository {
 }
 
 pub struct CodeActionsAnalysisContext<'ctx> {
-    pub semantics: &'ctx SemanticAnalyzer<'ctx>,
+    pub semantics: &'ctx SemanticAnalyzer,
     pub items: Vec<BabbelaarCodeAction>,
     pub cursor_range: FileRange,
     pub contents: &'ctx str,
@@ -98,7 +98,7 @@ pub trait CodeActionsAnalyzable {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>);
 }
 
-impl<'source_code> CodeActionsAnalyzable for BiExpression<'source_code> {
+impl CodeActionsAnalyzable for BiExpression {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         if self.lhs.range().contains(ctx.cursor_range.start()) {
             self.lhs.analyze(ctx);
@@ -110,7 +110,7 @@ impl<'source_code> CodeActionsAnalyzable for BiExpression<'source_code> {
     }
 }
 
-impl<'source_code> CodeActionsAnalyzable for Expression<'source_code> {
+impl CodeActionsAnalyzable for Expression {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         match self {
             Self::Primary(expr) => expr.analyze(ctx),
@@ -120,7 +120,7 @@ impl<'source_code> CodeActionsAnalyzable for Expression<'source_code> {
     }
 }
 
-impl<'source_code> CodeActionsAnalyzable for FunctionCallExpression<'source_code> {
+impl CodeActionsAnalyzable for FunctionCallExpression {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         let range = FileRange::new(self.token_left_paren.start(), self.token_right_paren.end());
         if !range.contains(ctx.cursor_range.start()) {
@@ -136,7 +136,7 @@ impl<'source_code> CodeActionsAnalyzable for FunctionCallExpression<'source_code
     }
 }
 
-impl<'source_code> CodeActionsAnalyzable for ParseTree<'source_code> {
+impl CodeActionsAnalyzable for ParseTree {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         for stmt in self.all() {
             stmt.analyze(ctx);
@@ -144,7 +144,7 @@ impl<'source_code> CodeActionsAnalyzable for ParseTree<'source_code> {
     }
 }
 
-impl<'source_code> CodeActionsAnalyzable for PostfixExpression<'source_code> {
+impl CodeActionsAnalyzable for PostfixExpression {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         if self.lhs.range().contains(ctx.cursor_range.start()) {
             self.lhs.analyze(ctx);
@@ -164,7 +164,7 @@ impl<'source_code> CodeActionsAnalyzable for PostfixExpression<'source_code> {
     }
 }
 
-impl<'source_code> CodeActionsAnalyzable for PrimaryExpression<'source_code> {
+impl CodeActionsAnalyzable for PrimaryExpression {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         match self {
             Self::Boolean(..) => (),
@@ -193,7 +193,7 @@ impl<'source_code> CodeActionsAnalyzable for PrimaryExpression<'source_code> {
     }
 }
 
-impl<'source_code> CodeActionsAnalyzable for Statement<'source_code> {
+impl CodeActionsAnalyzable for Statement {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         match &self.kind {
             StatementKind::Expression(expr) => {
@@ -242,7 +242,7 @@ impl<'source_code> CodeActionsAnalyzable for Statement<'source_code> {
     }
 }
 
-impl<'source_code> CodeActionsAnalyzable for StructureInstantiationExpression<'source_code> {
+impl CodeActionsAnalyzable for StructureInstantiationExpression {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         if !self.range.contains(ctx.cursor_range.start()) {
             return;
@@ -287,7 +287,7 @@ impl<'source_code> CodeActionsAnalyzable for StructureInstantiationExpression<'s
     }
 }
 
-impl<'source_code> CodeActionsAnalyzable for ParseDiagnostic<'source_code> {
+impl CodeActionsAnalyzable for ParseDiagnostic {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         match self {
             Self::EndOfFile => (),

@@ -1,33 +1,33 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{BuiltinType, Ranged};
+use crate::{BabString, BuiltinType, Ranged};
 
 #[derive(Debug, Clone)]
-pub struct Parameter<'source_code> {
-    pub name: Ranged<&'source_code str>,
-    pub ty: Ranged<Type<'source_code>>,
+pub struct Parameter {
+    pub name: Ranged<BabString>,
+    pub ty: Ranged<Type>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Type<'source_code> {
-    pub specifier: Ranged<TypeSpecifier<'source_code>>,
+pub struct Type {
+    pub specifier: Ranged<TypeSpecifier>,
 }
 
 #[derive(Debug, Clone)]
-pub enum TypeSpecifier<'source_code> {
+pub enum TypeSpecifier {
     BuiltIn(BuiltinType),
     Custom {
-        name: Ranged<&'source_code str>,
+        name: Ranged<BabString>,
     },
 }
 
-impl<'source_code> TypeSpecifier<'source_code> {
+impl TypeSpecifier {
     #[must_use]
-    pub const fn name(&self) -> &str {
+    pub fn name(&self) -> BabString {
         match self {
             Self::BuiltIn(ty) => ty.name(),
-            Self::Custom { name } => name.value(),
+            Self::Custom { name } => name.value().clone(),
         }
     }
 }

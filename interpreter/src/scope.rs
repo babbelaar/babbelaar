@@ -8,14 +8,14 @@ use babbelaar::Structure;
 use crate::{Builtin, FunctionId, Value};
 
 #[derive(Default, Debug)]
-pub struct Scope<'source_code> {
-    pub parent: Option<Box<Scope<'source_code>>>,
+pub struct Scope {
+    pub parent: Option<Box<Scope>>,
     pub variables: HashMap<String, Value>,
-    pub structures: HashMap<String, Rc<Structure<'source_code>>>,
+    pub structures: HashMap<String, Rc<Structure>>,
     pub this: Option<Value>,
 }
 
-impl<'source_code> Scope<'source_code> {
+impl Scope {
     pub fn new(this: Option<Value>) -> Self {
         Self {
             parent: None,

@@ -1,124 +1,82 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{fmt::Debug, path::PathBuf};
-
-use self_cell::self_cell;
+use std::fmt::Debug;
 
 use crate::{Lexer, ParseDiagnostic, ParseTree, Parser, SemanticAnalyzer, SourceCode, Token};
 
 pub struct BabbelaarContext {
-    inner: BabbelaarContextImpl,
+    source_code: SourceCode,
+
+    tokens: Option<Vec<Token>>,
+    tree: Option<BabbelaarParserContext>,
 }
 
 impl BabbelaarContext {
-    pub fn new(path: PathBuf, source_code: String) -> Self {
-        let source_code = SourceCode::new(path.clone(), source_code);
+    pub fn new(source_code: SourceCode) -> Self {
         Self {
-            inner: BabbelaarContextImpl::new(
-                BabbelaarContextData {
-                    path,
-                    source_code,
-                },
-                |_| {
-                    BabbelaarContextState::default()
-                }
-            )
+            source_code,
+            tokens: None,
+            tree: None,
         }
     }
 
-    pub fn with_tree<F: FnOnce(&ParseTree<'_>) -> R, R>(&mut self, f: F) -> R{
+    pub fn with_tree(&mut self) -> &ParseTree {
         self.ensure_parsed();
-
-        self.inner.with_dependent(|_, state| {
-            f(state.tree.as_ref().unwrap().borrow_owner().as_ref().unwrap())
-        })
+        self.tree.as_ref().unwrap().tree.as_ref().unwrap()
     }
 
     pub fn ensure_lexed(&mut self) {
-        self.inner.with_dependent_mut(|data, state| {
-            if state.tokens.is_some() {
-                return;
-            }
+        if self.tokens.is_some() {
+            return;
+        }
 
-            let lexer = Lexer::new(&data.source_code);
-            state.tokens = Some(lexer.collect());
-        });
+        let lexer = Lexer::new(&self.source_code);
+        self.tokens = Some(lexer.collect());
     }
 
     pub fn ensure_parsed(&mut self) {
         self.ensure_lexed();
 
-        self.inner.with_dependent_mut(|data, state| {
-            if state.tree.is_some() {
-                return;
-            }
+        if self.tree.is_some() {
+            return;
+        }
 
-            let tokens = state.tokens.as_ref().expect("ensure_lexed() should've prepared our tokens");
+        let tokens = self.tokens.as_ref().expect("ensure_lexed() should've prepared our tokens");
 
-            let tree = Parser::new(data.path.clone(), &tokens)
-                .attempt_to_ignore_errors()
-                .parse_tree();
+        let path = self.source_code.path().to_path_buf();
+        let tree = Parser::new(path, &tokens)
+            .attempt_to_ignore_errors()
+            .parse_tree();
 
-            state.tree = Some(BabbelaarParserContext::new(tree, |_| None));
+        self.tree = Some(BabbelaarParserContext {
+            tree,
+            analyzer: None,
         });
     }
 
     pub fn ensure_analyzed(&mut self) {
         self.ensure_parsed();
 
-        self.inner.with_dependent_mut(|ctx, state| {
-            let tree = state.tree.as_mut().unwrap();
+        let ctx = self.tree.as_mut().unwrap();
 
-            tree.with_dependent_mut(|tree, analyzer_value| {
-                if analyzer_value.is_some() {
-                    return;
-                }
+        if ctx.analyzer.is_some() {
+            return;
+        }
 
-                let mut analyzer = SemanticAnalyzer::new(&ctx.source_code);
-                analyzer.analyze_tree(tree.as_ref().unwrap());
+        let mut analyzer = SemanticAnalyzer::new(self.source_code.clone());
+        analyzer.analyze_tree(ctx.tree.as_ref().unwrap());
 
-                *analyzer_value = Some(analyzer);
-            });
-        });
+        ctx.analyzer = Some(analyzer);
     }
 }
 
-#[derive(Debug)]
-struct BabbelaarContextData {
-    path: PathBuf,
-    source_code: SourceCode,
+struct BabbelaarParserContext {
+    tree: Result<ParseTree, ParseDiagnostic>,
+    analyzer: Option<SemanticAnalyzer>,
 }
 
-#[derive(Debug, Default)]
-struct BabbelaarContextState<'owner> {
-    tokens: Option<Vec<Token<'owner>>>,
-    tree: Option<BabbelaarParserContext<'owner>>,
-}
-
-self_cell! {
-    struct BabbelaarContextImpl {
-        owner: BabbelaarContextData,
-
-        #[covariant]
-        dependent: BabbelaarContextState,
-    }
-
-    impl {Debug}
-}
-
-type SemanticAnalyzerOpt<'owner> = Option<SemanticAnalyzer<'owner>>;
-
-self_cell! {
-    struct BabbelaarParserContext<'a> {
-        owner: Result<ParseTree<'a>, ParseDiagnostic<'a>>,
-
-        #[covariant]
-        dependent: SemanticAnalyzerOpt,
-    }
-}
-
-impl<'a> Debug for BabbelaarParserContext<'a> {
+impl<'a> Debug for BabbelaarParserContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BabbelaarParserContext")
             .finish_non_exhaustive()

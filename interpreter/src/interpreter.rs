@@ -9,15 +9,15 @@ use babbelaar::*;
 
 use crate::*;
 
-pub struct Interpreter<'source_code, D>
+pub struct Interpreter<D>
         where D: Debugger {
-    functions: HashMap<FunctionId, Rc<FunctionStatement<'source_code>>>,
-    structures: HashMap<StructureId, Rc<Structure<'source_code>>>,
+    functions: HashMap<FunctionId, Rc<FunctionStatement>>,
+    structures: HashMap<StructureId, Rc<Structure>>,
     debugger: D,
-    scope: Scope<'source_code>,
+    scope: Scope,
 }
 
-impl<'source_code, D> Interpreter<'source_code, D>
+impl<D> Interpreter<D>
         where D: Debugger {
     pub fn new(debugger: D) -> Self {
         Self {
@@ -28,7 +28,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    pub fn execute_tree(&mut self, tree: &ParseTree<'source_code>) {
+    pub fn execute_tree(&mut self, tree: &ParseTree) {
         for statement in tree.structures() {
             _ = self.execute_statement(statement);
         }
@@ -45,12 +45,12 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    pub fn execute(&mut self, statement: &Statement<'source_code>) {
+    pub fn execute(&mut self, statement: &Statement) {
         self.debugger.initialize(&InterpreterAdapter);
         _ = self.execute_statement(statement);
     }
 
-    fn execute_statement(&mut self, statement: &Statement<'source_code>) -> StatementResult {
+    fn execute_statement(&mut self, statement: &Statement) -> StatementResult {
         self.debugger.on_statement(statement);
         match &statement.kind {
             StatementKind::Assignment(assignment) => {
@@ -102,7 +102,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    pub fn execute_assign(&mut self, expression: &Expression<'source_code>, new_value: Value) {
+    pub fn execute_assign(&mut self, expression: &Expression, new_value: Value) {
         match expression {
             Expression::Primary(PrimaryExpression::Reference(reference)) => {
                 if let Some(variable) = self.scope.find_mut(reference) {
@@ -134,7 +134,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         panic!("Invalid reference: {expression:#?}")
     }
 
-    pub fn execute_expression(&mut self, expression: &Ranged<Expression<'source_code>>) -> Value {
+    pub fn execute_expression(&mut self, expression: &Ranged<Expression>) -> Value {
         self.debugger.on_expression(expression);
 
         match expression.value() {
@@ -144,7 +144,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    fn execute_expression_primary(&mut self, expression: &PrimaryExpression<'source_code>) -> Value {
+    fn execute_expression_primary(&mut self, expression: &PrimaryExpression) -> Value {
         match expression {
             PrimaryExpression::Boolean(boolean) => {
                 Value::Bool(*boolean)
@@ -202,7 +202,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    fn execute_for_statement(&mut self, statement: &ForStatement<'source_code>) -> StatementResult {
+    fn execute_for_statement(&mut self, statement: &ForStatement) -> StatementResult {
         let Value::Integer(start) = self.execute_expression_primary(&statement.range.start) else {
             panic!("Invalid start");
         };
@@ -228,7 +228,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         StatementResult::Continue
     }
 
-    fn execute_if_statement(&mut self, statement: &IfStatement<'source_code>) -> StatementResult {
+    fn execute_if_statement(&mut self, statement: &IfStatement) -> StatementResult {
         self.scope = std::mem::take(&mut self.scope).push();
 
         if !self.execute_expression(&statement.condition).is_true() {
@@ -246,7 +246,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         StatementResult::Continue
     }
 
-    fn execute_bi_expression(&mut self, expression: &BiExpression<'source_code>) -> Value {
+    fn execute_bi_expression(&mut self, expression: &BiExpression) -> Value {
         let lhs = self.execute_expression(&expression.lhs);
         let rhs = self.execute_expression(&expression.rhs);
 
@@ -278,7 +278,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    fn execute_function_call(&mut self, lhs: Value, func: &FunctionCallExpression<'source_code>) -> Value {
+    fn execute_function_call(&mut self, lhs: Value, func: &FunctionCallExpression) -> Value {
         let mut arguments: Vec<Value> = Vec::with_capacity(func.arguments.len());
         for argument in &func.arguments {
             arguments.push(self.execute_expression(argument));
@@ -348,7 +348,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    fn execute_function(&mut self, func: Rc<FunctionStatement<'source_code>>, arguments: Vec<Value>, this: Option<Value>) -> Value {
+    fn execute_function(&mut self, func: Rc<FunctionStatement>, arguments: Vec<Value>, this: Option<Value>) -> Value {
         self.scope = std::mem::take(&mut self.scope).push_function(this);
 
         for idx in 0..func.parameters.len() {
@@ -370,7 +370,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         Value::Null
     }
 
-    fn execute_postfix_expression(&mut self, expression: &PostfixExpression<'source_code>) -> Value {
+    fn execute_postfix_expression(&mut self, expression: &PostfixExpression) -> Value {
         let lhs = self.execute_expression(&expression.lhs);
         match &expression.kind {
             PostfixExpressionKind::Call(call) => self.execute_function_call(lhs, call),
@@ -379,16 +379,16 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    fn execute_member_reference(&mut self, lhs: Value, member: &Ranged<&'source_code str>) -> Value {
+    fn execute_member_reference(&mut self, lhs: Value, member: &Ranged<BabString>) -> Value {
         let Value::Object { fields, .. } = lhs else {
             todo!("Invalid member reference: {member:?} for value {lhs:#?}");
         };
 
         let fields = fields.borrow();
-        fields.get(*member.value()).unwrap().clone()
+        fields.get(member.value().as_str()).unwrap().clone()
     }
 
-    fn execute_method_invocation(&mut self, lhs: Value, expression: &MethodCallExpression<'source_code>) -> Value {
+    fn execute_method_invocation(&mut self, lhs: Value, expression: &MethodCallExpression) -> Value {
         let method = self.get_method(&lhs, &expression.method_name).unwrap();
         self.execute_function_call(method, &expression.call)
     }
@@ -426,7 +426,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
     }
 }
 
-impl<'source_code, D> babbelaar::Interpreter for Interpreter<'source_code, D>
+impl<D> babbelaar::Interpreter for Interpreter<D>
         where D: Debugger {
 
 }

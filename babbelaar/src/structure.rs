@@ -3,27 +3,27 @@
 
 use std::rc::Rc;
 
-use crate::{Attribute, FileRange, FunctionStatement, Ranged, Type};
+use crate::{Attribute, BabString, FileRange, FunctionStatement, Ranged, Type};
 
 #[derive(Debug, Clone)]
-pub struct Field<'source_code> {
-    pub attributes: Vec<Attribute<'source_code>>,
-    pub name: Ranged<&'source_code str>,
-    pub ty: Ranged<Type<'source_code>>,
+pub struct Field {
+    pub attributes: Vec<Attribute>,
+    pub name: Ranged<BabString>,
+    pub ty: Ranged<Type>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Method<'source_code> {
+pub struct Method {
     pub range: FileRange,
 
     /// This is an [`Rc`] for the interpreter's convenience sake.
-    pub function: Rc<FunctionStatement<'source_code>>,
+    pub function: Rc<FunctionStatement>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Structure<'source_code> {
-    pub name: Ranged<&'source_code str>,
+pub struct Structure {
+    pub name: Ranged<BabString>,
     pub left_curly_range: FileRange,
-    pub fields: Vec<Field<'source_code>>,
-    pub methods: Vec<Method<'source_code>>,
+    pub fields: Vec<Field>,
+    pub methods: Vec<Method>,
 }

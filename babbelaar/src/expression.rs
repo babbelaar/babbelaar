@@ -1,26 +1,26 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{FileRange, Ranged};
+use crate::{BabString, FileRange, Ranged};
 
 #[derive(Clone, Debug)]
-pub enum PrimaryExpression<'source_code> {
+pub enum PrimaryExpression {
     Boolean(bool),
-    StringLiteral(&'source_code str),
+    StringLiteral(BabString),
     IntegerLiteral(i64),
-    Reference(Ranged<&'source_code str>),
+    Reference(Ranged<BabString>),
     ReferenceThis,
-    StructureInstantiation(StructureInstantiationExpression<'source_code>),
+    StructureInstantiation(StructureInstantiationExpression),
     TemplateString {
-        parts: Vec<TemplateStringExpressionPart<'source_code>>,
+        parts: Vec<TemplateStringExpressionPart>,
     },
-    Parenthesized(Box<Ranged<Expression<'source_code>>>),
+    Parenthesized(Box<Ranged<Expression>>),
 }
 
 #[derive(Debug, Clone)]
-pub struct StructureInstantiationExpression<'source_code> {
-    pub name: Ranged<&'source_code str>,
-    pub fields: Vec<FieldInstantiation<'source_code>>,
+pub struct StructureInstantiationExpression {
+    pub name: Ranged<BabString>,
+    pub fields: Vec<FieldInstantiation>,
     pub range: FileRange,
 
     pub left_curly_bracket: FileRange,
@@ -28,56 +28,56 @@ pub struct StructureInstantiationExpression<'source_code> {
 }
 
 #[derive(Debug, Clone)]
-pub struct FieldInstantiation<'source_code> {
-    pub name: Ranged<&'source_code str>,
-    pub value: Box<Ranged<Expression<'source_code>>>,
+pub struct FieldInstantiation {
+    pub name: Ranged<BabString>,
+    pub value: Box<Ranged<Expression>>,
 }
 
 #[derive(Debug, Clone)]
-pub enum TemplateStringExpressionPart<'source_code> {
-    String(&'source_code str),
-    Expression(Ranged<Expression<'source_code>>),
+pub enum TemplateStringExpressionPart {
+    String(BabString),
+    Expression(Ranged<Expression>),
 }
 
 #[derive(Clone, Debug)]
-pub enum Expression<'source_code> {
-    BiExpression(BiExpression<'source_code>),
-    Postfix(PostfixExpression<'source_code>),
-    Primary(PrimaryExpression<'source_code>),
+pub enum Expression {
+    BiExpression(BiExpression),
+    Postfix(PostfixExpression),
+    Primary(PrimaryExpression),
 }
 
 #[derive(Debug, Clone)]
-pub struct PostfixExpression<'source_code> {
-    pub lhs: Box<Ranged<Expression<'source_code>>>,
-    pub kind: PostfixExpressionKind<'source_code>,
+pub struct PostfixExpression {
+    pub lhs: Box<Ranged<Expression>>,
+    pub kind: PostfixExpressionKind,
 }
 
 #[derive(Debug, Clone)]
-pub enum PostfixExpressionKind<'source_code> {
-    Call(FunctionCallExpression<'source_code>),
-    Member(Ranged<&'source_code str>),
-    MethodCall(MethodCallExpression<'source_code>),
+pub enum PostfixExpressionKind {
+    Call(FunctionCallExpression),
+    Member(Ranged<BabString>),
+    MethodCall(MethodCallExpression),
 }
 
 #[derive(Clone, Debug)]
-pub struct FunctionCallExpression<'source_code> {
-    pub arguments: Vec<Ranged<Expression<'source_code>>>,
+pub struct FunctionCallExpression {
+    pub arguments: Vec<Ranged<Expression>>,
 
     pub token_left_paren: FileRange,
     pub token_right_paren: FileRange,
 }
 
 #[derive(Debug, Clone)]
-pub struct MethodCallExpression<'source_code> {
-    pub method_name: Ranged<&'source_code str>,
-    pub call: FunctionCallExpression<'source_code>,
+pub struct MethodCallExpression {
+    pub method_name: Ranged<BabString>,
+    pub call: FunctionCallExpression,
 }
 
 #[derive(Clone, Debug)]
-pub struct BiExpression<'source_code> {
+pub struct BiExpression {
     pub operator: Ranged<BiOperator>,
-    pub lhs: Box<Ranged<Expression<'source_code>>>,
-    pub rhs: Box<Ranged<Expression<'source_code>>>,
+    pub lhs: Box<Ranged<Expression>>,
+    pub rhs: Box<Ranged<Expression>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -129,10 +129,10 @@ impl Comparison {
 }
 
 #[derive(Clone, Debug)]
-pub struct RangeExpression<'source_code> {
+pub struct RangeExpression {
     /// Start, inclusive
-    pub start: Ranged<PrimaryExpression<'source_code>>,
+    pub start: Ranged<PrimaryExpression>,
 
     /// End, exclusive
-    pub end: Ranged<PrimaryExpression<'source_code>>,
+    pub end: Ranged<PrimaryExpression>,
 }

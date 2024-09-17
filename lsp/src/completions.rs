@@ -178,7 +178,7 @@ impl<'b> CompletionEngine<'b> {
                         kind: MarkupKind::Markdown,
                         value: x.to_string(),
                     })),
-                    insert_text: Some(func.lsp_completion().into_owned()),
+                    insert_text: Some(func.lsp_completion().to_string()),
                     insert_text_format: Some(InsertTextFormat::SNIPPET),
                     ..Default::default()
                 });
@@ -210,12 +210,13 @@ impl<'b> CompletionEngine<'b> {
         }).await
     }
 
-    async fn complete_field_instantiation(&mut self, range: FileRange, field_to_complete: String, structure: String, new_line: bool) -> Result<()> {
+    async fn complete_field_instantiation(&mut self, range: FileRange, field_to_complete: String, structure: impl Into<BabString>, new_line: bool) -> Result<()> {
+        let structure = structure.into();
         let document = &self.params.text_document_position.text_document;
 
         self.server.with_semantics(document, |analyzer| {
             analyzer.scopes_surrounding(range.start(), |scope| {
-                if let Some(structure) = scope.structures.get(structure.as_str()) {
+                if let Some(structure) = scope.structures.get(&structure) {
                     for field in &structure.fields {
                         if let Some(idx) = field.name.find(&field_to_complete) {
                             let value_hint = field.ty.value_or_field_name_hint();

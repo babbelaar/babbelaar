@@ -94,8 +94,8 @@ pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
     });
 }
 
-fn analyze(tree: &ParseTree<'_>, source_code: &SourceCode) {
-    let mut analyzer = SemanticAnalyzer::new(source_code);
+fn analyze(tree: &ParseTree, source_code: &SourceCode) {
+    let mut analyzer = SemanticAnalyzer::new(source_code.clone());
     analyzer.analyze_tree(&tree);
 
     let diags = analyzer.into_diagnostics();
@@ -124,7 +124,7 @@ fn analyze(tree: &ParseTree<'_>, source_code: &SourceCode) {
     }
 }
 
-fn parse(path: &Path, f: impl FnOnce(&SourceCode, ParseTree<'_>)) {
+fn parse(path: &Path, f: impl FnOnce(&SourceCode, ParseTree)) {
     let source_code = std::fs::read_to_string(path).unwrap();
     let source_code = SourceCode::new(path, source_code);
 

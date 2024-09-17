@@ -131,8 +131,8 @@ pub struct FunctionId {
     pub id: usize,
 }
 
-impl<'source_code> From<&FunctionStatement<'source_code>> for FunctionId {
-    fn from(value: &FunctionStatement<'source_code>) -> Self {
+impl From<&FunctionStatement> for FunctionId {
+    fn from(value: &FunctionStatement) -> Self {
         let mut hasher = DefaultHasher::new();
         "Function-".hash(&mut hasher);
         value.name.value().hash(&mut hasher);
@@ -149,8 +149,8 @@ pub struct StructureId {
     pub id: usize,
 }
 
-impl<'source_code> From<&Structure<'source_code>> for StructureId {
-    fn from(value: &Structure<'source_code>) -> Self {
+impl From<&Structure> for StructureId {
+    fn from(value: &Structure) -> Self {
         let mut hasher = DefaultHasher::new();
         "Structure-".hash(&mut hasher);
         value.name.value().hash(&mut hasher);
