@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::{Attribute, BabString, FileRange, FunctionStatement, Ranged, Type};
 
@@ -16,8 +16,8 @@ pub struct Field {
 pub struct Method {
     pub range: FileRange,
 
-    /// This is an [`Rc`] for the interpreter's convenience sake.
-    pub function: Rc<FunctionStatement>,
+    /// This is an [`Arc`] for the interpreter's convenience sake.
+    pub function: Arc<FunctionStatement>,
 }
 
 #[derive(Debug, Clone)]

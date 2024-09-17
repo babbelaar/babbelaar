@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{collections::{HashMap, HashSet}, fmt::Display, rc::Rc};
+use std::{collections::{HashMap, HashSet}, fmt::Display, sync::Arc};
 
 use log::warn;
 use strum::AsRefStr;
@@ -12,7 +12,7 @@ use crate::{statement::VariableStatement, Attribute, BabString, BabbelaarCodeAct
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
     pub context: SemanticContext,
-    pub source_code: SourceCode,
+    source_code: SourceCode,
     diagnostics: Vec<SemanticDiagnostic>,
 }
 
@@ -200,7 +200,7 @@ impl SemanticAnalyzer {
             }
         }).collect();
 
-        let semantic_structure = Rc::new(SemanticStructure {
+        let semantic_structure = Arc::new(SemanticStructure {
             attributes: statement.attributes.clone(),
             name: structure.name.clone(),
             left_curly_range: structure.left_curly_range,
@@ -208,7 +208,7 @@ impl SemanticAnalyzer {
             methods,
         });
 
-        self.context.push_structure(Rc::clone(&semantic_structure));
+        self.context.push_structure(Arc::clone(&semantic_structure));
 
         let mut names = HashSet::new();
         for field in &semantic_structure.fields {
@@ -222,7 +222,7 @@ impl SemanticAnalyzer {
             self.analyze_attributes_for_field(field);
         }
 
-        let this_type = Some(SemanticType::Custom(Rc::clone(&semantic_structure)));
+        let this_type = Some(SemanticType::Custom(Arc::clone(&semantic_structure)));
 
         let mut names = HashSet::new();
         for method in &structure.methods {
@@ -456,7 +456,7 @@ impl SemanticAnalyzer {
                 local_name: instantiation.name.value().clone(),
                 local_kind: SemanticLocalKind::StructureReference,
                 declaration_range: structure.name.range(),
-                typ: SemanticType::Custom(Rc::clone(&structure)),
+                typ: SemanticType::Custom(Arc::clone(&structure)),
             });
         }
 
@@ -656,7 +656,7 @@ impl SemanticAnalyzer {
     fn resolve_type_by_name(&mut self, name: &Ranged<BabString>) -> SemanticType {
         for scope in self.context.scope.iter().rev() {
             if let Some(structure) = scope.structures.get(name.value()) {
-                return SemanticType::Custom(Rc::clone(structure));
+                return SemanticType::Custom(Arc::clone(structure));
             }
         }
 
@@ -1210,13 +1210,13 @@ impl SemanticContext {
         );
     }
 
-    fn push_structure(&mut self, structure: Rc<SemanticStructure>) {
+    fn push_structure(&mut self, structure: Arc<SemanticStructure>) {
         if let Some(tracker) = &mut self.declaration_tracker {
             tracker.push(SemanticReference {
                 local_name: structure.name.value().clone(),
                 local_kind: SemanticLocalKind::StructureReference,
                 declaration_range: structure.name.range(),
-                typ: SemanticType::Custom(Rc::clone(&structure)),
+                typ: SemanticType::Custom(Arc::clone(&structure)),
             });
 
             for method in &structure.methods {
@@ -1268,7 +1268,7 @@ impl SemanticContext {
 pub struct SemanticScope {
     range: FileRange,
     pub locals: HashMap<BabString, SemanticLocal>,
-    pub structures: HashMap<BabString, Rc<SemanticStructure>>,
+    pub structures: HashMap<BabString, Arc<SemanticStructure>>,
     pub this: Option<SemanticType>,
 }
 
@@ -1453,7 +1453,7 @@ impl PartialEq for SemanticStructure {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SemanticType {
     Builtin(BuiltinType),
-    Custom(Rc<SemanticStructure>),
+    Custom(Arc<SemanticStructure>),
     Function(SemanticFunction),
     FunctionReference(FunctionReference),
 }

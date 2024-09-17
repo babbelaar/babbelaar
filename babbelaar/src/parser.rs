@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{fmt::Display, path::PathBuf, rc::Rc};
+use std::{fmt::Display, path::PathBuf, sync::Arc};
 
 use strum::AsRefStr;
 
@@ -307,7 +307,7 @@ impl<'tokens> Parser<'tokens> {
                 TokenKind::Keyword(Keyword::Werkwijze) => {
                     let start = self.consume_token()?.begin;
 
-                    let function = Rc::new(self.parse_function()?);
+                    let function = Arc::new(self.parse_function()?);
 
                     let range = FileRange::new(start, self.token_end);
 

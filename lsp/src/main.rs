@@ -3,6 +3,7 @@
 
 mod actions;
 mod backend;
+mod context;
 mod completions;
 mod conversion;
 mod error;
@@ -10,7 +11,6 @@ mod format;
 mod logger;
 mod symbolization;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use std::{fs::File, io::Write, pin::Pin};
@@ -26,6 +26,7 @@ use tower_lsp::{LanguageServer, LspService, Server};
 pub use self::{
     actions::CodeActionRepository,
     backend::Backend,
+    context::BabbelaarContext,
     conversion::{UrlExtension, convert_file_range, convert_position, convert_token_range},
     completions::CompletionEngine,
     error::{BabbelaarLspError, BabbelaarLspResult},
@@ -127,7 +128,7 @@ pub async fn run<I, O>(stdin: I, stdout: O)
         Backend {
             client,
             client_configuration: Arc::new(RwLock::new(None)),
-            file_store: Arc::new(RwLock::new(HashMap::new())),
+            context: Arc::new(BabbelaarContext::new()),
             code_actions: Arc::new(RwLock::new(CodeActionRepository::new()))
         }
     });

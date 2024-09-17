@@ -2,7 +2,7 @@
 // All Rights Reserved.
 
 use std::{
-    cell::RefCell, collections::HashMap, rc::Rc
+    cell::RefCell, collections::HashMap, rc::Rc, sync::Arc
 };
 
 use babbelaar::*;
@@ -11,7 +11,7 @@ use crate::*;
 
 pub struct Interpreter<D>
         where D: Debugger {
-    functions: HashMap<FunctionId, Rc<FunctionStatement>>,
+    functions: HashMap<FunctionId, Arc<FunctionStatement>>,
     structures: HashMap<StructureId, Rc<Structure>>,
     debugger: D,
     scope: Scope,
@@ -70,7 +70,7 @@ impl<D> Interpreter<D>
 
             StatementKind::Function(func) => {
                 let id = FunctionId::from(func);
-                self.functions.insert(id, Rc::new(func.clone()));
+                self.functions.insert(id, Arc::new(func.clone()));
                 self.scope.variables.insert(func.name.to_string(), Value::Function { name: func.name.to_string(), id });
                 StatementResult::Continue
             }
@@ -292,7 +292,7 @@ impl<D> Interpreter<D>
 
             Value::MethodIdReference { lhs, method } => {
                 let structure = self.structures.get(&method.structure).unwrap();
-                let method = Rc::clone(&structure.methods[method.index].function);
+                let method = Arc::clone(&structure.methods[method.index].function);
 
                 self.execute_function(method.clone(), arguments, Some(*lhs))
             }
@@ -336,7 +336,7 @@ impl<D> Interpreter<D>
                 callee_location: Some(func.name.range()),
             }, &arguments);
 
-            let value = self.execute_function(Rc::clone(&func), arguments, this);
+            let value = self.execute_function(Arc::clone(&func), arguments, this);
 
             self.debugger.leave_function(DebuggerFunction {
                 ty: DebuggerFunctionType::Normal,
@@ -349,7 +349,7 @@ impl<D> Interpreter<D>
         }
     }
 
-    fn execute_function(&mut self, func: Rc<FunctionStatement>, arguments: Vec<Value>, this: Option<Value>) -> Value {
+    fn execute_function(&mut self, func: Arc<FunctionStatement>, arguments: Vec<Value>, this: Option<Value>) -> Value {
         self.scope = std::mem::take(&mut self.scope).push_function(this);
 
         for idx in 0..func.parameters.len() {

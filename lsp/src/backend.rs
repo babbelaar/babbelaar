@@ -1,5 +1,6 @@
+// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// All Rights Reserved.
 
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,6 +19,7 @@ use crate::actions::CodeActionsAnalysisContext;
 use crate::actions::CodeActionsAnalyzable;
 use crate::conversion::convert_file_range_to_location;
 use crate::conversion::StrExtension;
+use crate::BabbelaarContext;
 use crate::CodeActionRepository;
 use crate::UrlExtension;
 use crate::{
@@ -32,7 +34,7 @@ use crate::{
 pub struct Backend {
     pub(super) client: Client,
     pub(super) client_configuration: Arc<RwLock<Option<InitializeParams>>>,
-    pub(super) file_store: Arc<RwLock<HashMap<Url, SourceCode>>>,
+    pub(super) context: Arc<BabbelaarContext>,
     pub(super) code_actions: Arc<RwLock<CodeActionRepository>>,
 }
 
@@ -119,35 +121,16 @@ impl Backend {
     where
         F: FnOnce(&SourceCode) -> Result<R>,
     {
-        let contents = self.file_store.read().await.get(&uri).cloned();
+        let path = uri.to_file_path().unwrap();
+
+        let contents = self.context.source_code_of(&path);
         if let Some(contents) = contents {
             return f(&contents);
         }
 
-        let path = uri.to_path()?;
-        let mut contents = match tokio::fs::read_to_string(&path).await {
-            Ok(contents) => contents,
-            Err(e) => {
-                self.client
-                    .log_message(MessageType::INFO, format!("Failed to read path \"{}\" {e}", path.display()))
-                    .await;
-                return Err(e.into());
-            }
-        };
+        let source_code = self.context.load_and_register_file(path).await?;
 
-        // Either `read_to_string` omits the trailing empty line, or the editor assumes
-        // there is one regardless of the disk contents, but we have to append one to be sure.
-        if !contents.ends_with("\n\n") {
-            contents += "\n";
-        }
-
-        let contents = SourceCode::new(path, contents);
-        {
-            let mut store = self.file_store.write().await;
-            store.insert(uri.clone(), contents.clone());
-        }
-
-        let result = f(&contents);
+        let result = f(&source_code);
         result
     }
 
@@ -165,13 +148,13 @@ impl Backend {
 
     pub async fn with_semantics<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
-        F: FnOnce(SemanticAnalyzer) -> Result<R>,
+        F: FnOnce(SemanticAnalyzer, &SourceCode) -> Result<R>,
     {
         self.with_syntax(text_document, |tree, source_code| {
             let mut analyzer = SemanticAnalyzer::new(source_code.clone());
             analyzer.analyze_tree(&tree);
 
-            f(analyzer)
+            f(analyzer, source_code)
         }).await
     }
 
@@ -511,9 +494,9 @@ impl Backend {
 
     pub async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
         {
-            let mut file_store = self.file_store.write().await;
             let path = params.text_document.uri.to_path().unwrap();
-            file_store.insert(params.text_document.uri.clone(), SourceCode::new(path, std::mem::take(&mut params.content_changes[0].text)));
+            let source_code = SourceCode::new(path, std::mem::take(&mut params.content_changes[0].text));
+            self.context.register_file(source_code);
         }
         let this = (*self).clone();
         spawn(async move {
@@ -557,10 +540,10 @@ impl Backend {
     }
 
     pub async fn document_highlight(&self, params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
-        let res = self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
+        let res = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
 
             let pos = params.text_document_position_params.position;
-            let location = FileLocation::new(analyzer.source_code.file_id(), 0, pos.line as _, pos.character as _);
+            let location = FileLocation::new(source_code.file_id(), 0, pos.line as _, pos.character as _);
 
             let Some((_, reference)) = analyzer.find_reference_at(location) else {
                 return Ok(Some(Vec::new()));
@@ -634,9 +617,9 @@ impl Backend {
         }).await?;
 
         if hover.is_none() {
-            hover = self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
+            hover = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
                 let pos = params.text_document_position_params.position;
-                let location = analyzer.source_code.canonicalize_position(analyzer.source_code.file_id(), pos);
+                let location = source_code.canonicalize_position(source_code.file_id(), pos);
                 let reference = analyzer.find_declaration_range_at(location)
                     .map(|(range, reference)| {
                         Hover {
@@ -692,9 +675,9 @@ impl Backend {
     }
 
     pub async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
-        self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
+        self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
             let pos = params.text_document_position_params.position;
-            let location = analyzer.source_code.canonicalize_position(analyzer.source_code.file_id(), pos);
+            let location = source_code.canonicalize_position(source_code.file_id(), pos);
             let reference = analyzer.find_declaration_range_at(location)
                 .map(|(range, reference)| {
                     let target_range = convert_file_range(reference.declaration_range);
@@ -869,8 +852,8 @@ impl Backend {
 
         let pos = params.text_document_position.position;
 
-        self.with_semantics(&params.text_document_position.text_document, |analyzer| {
-            let location = FileLocation::new(analyzer.source_code.file_id(), 0, pos.line as _, pos.character as _);
+        self.with_semantics(&params.text_document_position.text_document, |analyzer, source_code| {
+            let location = FileLocation::new(source_code.file_id(), 0, pos.line as _, pos.character as _);
 
             let Some((declaration_range, _)) = analyzer.find_declaration_range_at(location) else {
                 return Ok(None);

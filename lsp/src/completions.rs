@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use babbelaar::*;
 use log::warn;
@@ -168,7 +168,7 @@ impl<'b> CompletionEngine<'b> {
     async fn complete_global_function(&mut self, ident: &str) -> Result<()> {
         let document = &self.params.text_document_position.text_document;
 
-        self.server.with_semantics(document, |analyzer| {
+        self.server.with_semantics(document, |analyzer, _| {
             if let Some(func) = analyzer.find_function_by_name(|f| f.starts_with(&ident)) {
                 self.completions.push(CompletionItem {
                     label: func.function_name().to_string(),
@@ -191,7 +191,7 @@ impl<'b> CompletionEngine<'b> {
     async fn complete_structure_name(&mut self, range: FileRange, structure_to_complete: String) -> Result<()> {
         let document = &self.params.text_document_position.text_document;
 
-        self.server.with_semantics(document, |analyzer| {
+        self.server.with_semantics(document, |analyzer, _| {
             analyzer.scopes_surrounding(range.start(), |scope| {
                 for (name, _) in &scope.structures {
                     if let Some(idx) = name.find(&structure_to_complete) {
@@ -214,7 +214,7 @@ impl<'b> CompletionEngine<'b> {
         let structure = structure.into();
         let document = &self.params.text_document_position.text_document;
 
-        self.server.with_semantics(document, |analyzer| {
+        self.server.with_semantics(document, |analyzer, _| {
             analyzer.scopes_surrounding(range.start(), |scope| {
                 if let Some(structure) = scope.structures.get(&structure) {
                     for field in &structure.fields {
@@ -247,7 +247,7 @@ impl<'b> CompletionEngine<'b> {
     async fn complete_variable(&mut self, range: FileRange) -> Result<()> {
         let document = &self.params.text_document_position.text_document;
 
-        self.server.with_semantics(document, |analyzer| {
+        self.server.with_semantics(document, |analyzer, _| {
             analyzer.scopes_surrounding(range.start(), |scope| {
                 for (name, local) in &scope.locals {
                     self.completions.push(CompletionItem {
@@ -270,7 +270,7 @@ impl<'b> CompletionEngine<'b> {
     async fn complete_method(&mut self, last_identifier: FileRange) -> Result<()> {
         let document = &self.params.text_document_position.text_document;
 
-        let completions = self.server.with_semantics(document, |analyzer| {
+        let completions = self.server.with_semantics(document, |analyzer, _| {
             let completions = if let Some(typ) = analyzer.context.definition_tracker.as_ref().and_then(|tracker| Some(tracker.get(&last_identifier)?.typ.clone())) {
                 match typ {
                     SemanticType::Builtin(builtin) => {
@@ -315,7 +315,7 @@ impl<'b> CompletionEngine<'b> {
         completions
     }
 
-    fn complete_structure_method_or_field(&self, structure: Rc<SemanticStructure>, prefix: &str) -> Vec<CompletionItem> {
+    fn complete_structure_method_or_field(&self, structure: Arc<SemanticStructure>, prefix: &str) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
 
         for method in &structure.methods {
@@ -400,7 +400,7 @@ impl<'b> CompletionEngine<'b> {
 
         let document = &self.params.text_document_position.text_document;
 
-        let completions = self.server.with_semantics(document, |semantics| {
+        let completions = self.server.with_semantics(document, |semantics, _| {
             let mut completions = Vec::new();
 
             semantics.scopes_surrounding(range.start(), |scope| {

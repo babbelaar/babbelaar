@@ -5,7 +5,6 @@
 
 mod attribute;
 mod builtin;
-mod context;
 mod expression;
 mod interpreter;
 mod keyword;
@@ -24,7 +23,6 @@ mod value;
 pub use self::{
     attribute::{Attribute, AttributeArgument},
     builtin::{Builtin, BuiltinFunction, BuiltinType},
-    context::BabbelaarContext,
     expression::*,
     interpreter::Interpreter,
     keyword::Keyword,
