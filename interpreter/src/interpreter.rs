@@ -89,7 +89,8 @@ impl<D> Interpreter<D>
             StatementKind::Structure(structure) => {
                 let id = StructureId::from(structure);
                 let structure = Rc::new(structure.clone());
-                self.structures.insert(id, Rc::clone(&structure));
+                let prev = self.structures.insert(id, Rc::clone(&structure));
+                assert!(prev.is_none(), "Illegal double value: {prev:#?} and now: {structure:#?}");
                 self.scope.structures.insert(structure.name.to_string(), structure);
                 StatementResult::Continue
             }
@@ -165,7 +166,7 @@ impl<D> Interpreter<D>
             PrimaryExpression::StructureInstantiation(structure) => {
                 Value::Object {
                     structure: *self.structures.iter()
-                        .find(|(_, structure)| structure.name.value() == structure.name.value())
+                        .find(|(_, registered)| registered.name.value() == structure.name.value())
                         .unwrap_or_else(|| panic!("failed to find structure `{}`, structures: {:#?}", structure.name.value(), self.structures))
                         .0,
                     fields: Rc::new(RefCell::new(structure.fields.iter()
@@ -385,7 +386,13 @@ impl<D> Interpreter<D>
         };
 
         let fields = fields.borrow();
-        fields.get(member.value().as_str()).unwrap().clone()
+        let name = member.value().as_str();
+        match fields.get(name) {
+            Some(field) => field.clone(),
+            None => {
+                panic!("Kon veld `{name}` niet vinden binnen {fields:#?}");
+            }
+        }
     }
 
     fn execute_method_invocation(&mut self, lhs: Value, expression: &MethodCallExpression) -> Value {

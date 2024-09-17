@@ -1,9 +1,9 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{fmt::Display, hash::Hash, ops::{Deref, Index, Range}, sync::Arc};
+use std::{fmt::{Debug, Display}, hash::Hash, ops::{Deref, Index, Range}, sync::Arc};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BabString {
     inner: BabStringImpl,
 }
@@ -88,6 +88,11 @@ impl BabString {
     }
 }
 
+impl Debug for BabString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(self.as_str(), f)
+    }
+}
 
 #[derive(Debug, Clone)]
 enum BabStringImpl {
@@ -149,7 +154,7 @@ impl PartialEq<BabString> for str {
 
 impl Display for BabString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.as_str().fmt(f)
+        Display::fmt(self.as_str(), f)
     }
 }
 

@@ -4,6 +4,7 @@ structuur Persoon {
 
     werkwijze zegGedag() {
         stel a = dit.achternaam;
+        schrijf(€"Hallo, ik ben {dit.voornaam}");
     }
 }
 
