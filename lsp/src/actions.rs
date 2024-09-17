@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Expression, FileEdit, FileLocation, FileRange, FunctionCallExpression, ParseDiagnostic, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StrExt, StructureInstantiationExpression, TemplateStringExpressionPart};
+use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Expression, FileEdit, FileId, FileLocation, FileRange, FunctionCallExpression, ParseDiagnostic, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StrExt, StructureInstantiationExpression, TemplateStringExpressionPart};
 use tower_lsp::lsp_types::VersionedTextDocumentIdentifier;
 
 use crate::BabbelaarLspError;
@@ -57,7 +57,7 @@ pub struct CodeActionsAnalysisContext<'ctx> {
 }
 
 impl<'ctx> CodeActionsAnalysisContext<'ctx> {
-    pub fn create_location_by_offset(&self, offset: usize) -> Result<FileLocation, BabbelaarLspError> {
+    pub fn create_location_by_offset(&self, file_id: FileId, offset: usize) -> Result<FileLocation, BabbelaarLspError> {
         if offset == 0 {
             return Ok(FileLocation::default());
         }
@@ -69,7 +69,7 @@ impl<'ctx> CodeActionsAnalysisContext<'ctx> {
             })?
             .len();
 
-        Ok(FileLocation::new(offset, line, column))
+        Ok(FileLocation::new(file_id, offset, line, column))
     }
 
     pub fn create_range_and_calculate_byte_column(&self, start: FileLocation, end: FileLocation) -> Result<FileRange, BabbelaarLspError> {
@@ -91,7 +91,7 @@ pub fn map_column_from_char_to_byte_offset(line: &str, location: FileLocation) -
         .unwrap_or((line.len(), ' '))
         .0;
 
-    FileLocation::new(location.offset(), location.line(), column)
+    FileLocation::new(location.file_id(), location.offset(), location.line(), column)
 }
 
 pub trait CodeActionsAnalyzable {
@@ -340,7 +340,7 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
 
             Self::ExpectedColon { token, .. } => {
                 let whitespace_size = ctx.contents[..token.range().start().offset()].count_space_at_end();
-                let location = ctx.create_location_by_offset(token.begin.offset() - whitespace_size).unwrap_or_default();
+                let location = ctx.create_location_by_offset(token.begin.file_id(), token.begin.offset() - whitespace_size).unwrap_or_default();
                 let edit = FileEdit::new(location.as_zero_range(), ":");
 
                 ctx.items.push(

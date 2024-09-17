@@ -7,6 +7,9 @@
             "include": "#keywords"
         },
         {
+            "include": "#template-strings"
+        },
+        {
             "include": "#strings"
         },
         {
@@ -48,6 +51,12 @@
                 },
                 {
                     "match": "€\"[^\"]*\"",
+                    "patterns": [
+                        {
+                            "begin": "\\{",
+                            "end": "\\}"
+                        }
+                    ],
                     "name": "string.quoted.double.template.babbelaar"
                 }
             ]

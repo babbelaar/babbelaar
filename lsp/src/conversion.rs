@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use babbelaar::{FileLocation, FileRange, Token};
+use babbelaar::{FileId, FileLocation, FileRange, Token};
 use tower_lsp::lsp_types::{Location, Position, Range, Url};
 
 use crate::{BabbelaarLspError, BabbelaarLspResult};
@@ -45,11 +45,11 @@ impl UrlExtension for Url {
 
 pub trait StrExtension {
     #[must_use]
-    fn canonicalize_position(&self, position: Position) -> FileLocation;
+    fn canonicalize_position(&self, file_id: FileId, position: Position) -> FileLocation;
 }
 
 impl StrExtension for str {
-    fn canonicalize_position(&self, position: Position) -> FileLocation {
+    fn canonicalize_position(&self, file_id: FileId, position: Position) -> FileLocation {
         let line = (position.line as usize).saturating_sub(1);
         let column = position.character as usize;
 
@@ -59,6 +59,6 @@ impl StrExtension for str {
             .nth(line)
             .unwrap_or(usize::MAX);
 
-        FileLocation::new(line_offset.saturating_add(column), line, column)
+        FileLocation::new(file_id, line_offset.saturating_add(column), line, column)
     }
 }

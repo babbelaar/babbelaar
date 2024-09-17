@@ -20,7 +20,7 @@ impl SemanticAnalyzer {
     #[must_use]
     pub fn new(source_code: SourceCode) -> Self {
         Self {
-            context: SemanticContext::new(),
+            context: SemanticContext::new(&source_code),
             diagnostics: Vec::new(),
             source_code,
         }
@@ -890,7 +890,7 @@ impl SemanticAnalyzer {
     fn create_action_create_field(&self, structure: &SemanticStructure, name: &str, ty: SemanticType) -> BabbelaarCodeAction {
         let (add_location, add_text) = if let Some(last) = structure.fields.last() {
             let indent = self.source_code.indentation_at(last.name.range().start()).unwrap_or_default();
-            let location = FileLocation::new(0, last.name.range().start().line(), usize::MAX);
+            let location = FileLocation::new(structure.name.range().file_id(), 0, last.name.range().start().line(), usize::MAX);
 
             (location, format!("\n{indent}veld {name}: {ty},"))
         } else {
@@ -1158,10 +1158,10 @@ pub struct SemanticContext {
 }
 
 impl SemanticContext {
-    pub fn new() -> Self {
+    pub fn new(source_code: &SourceCode) -> Self {
         Self {
             scope: vec![
-                SemanticScope::new_top_level(),
+                SemanticScope::new_top_level(source_code),
             ],
             previous_scopes: Vec::new(),
             definition_tracker: Some(HashMap::new()),
@@ -1273,9 +1273,9 @@ pub struct SemanticScope {
 }
 
 impl SemanticScope {
-    fn new_top_level() -> Self {
+    fn new_top_level(source_code: &SourceCode) -> Self {
         let mut this = Self {
-            range: FileRange::new(FileLocation::default(), FileLocation::new(usize::MAX, usize::MAX, usize::MAX)),
+            range: source_code.calculate_range(),
             structures: HashMap::new(),
             locals: HashMap::default(),
             this: None,

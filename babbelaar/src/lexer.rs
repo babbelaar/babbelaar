@@ -61,7 +61,7 @@ impl<'source_code> Lexer<'source_code> {
                     .map(|(pos, _)| pos)
                     .unwrap_or_else(|| {
                         let length = char.len_utf8();
-                        FileLocation::new(begin.offset() + length, begin.line(), begin.column() + length)
+                        FileLocation::new(self.input.file_id(), begin.offset() + length, begin.line(), begin.column() + length)
                     });
                 Some(Token {
                     begin,
@@ -299,7 +299,7 @@ impl<'source_code> Lexer<'source_code> {
 
         self.current = self.chars.next()
             .map(|(offset, char)| {
-                let location = FileLocation::new(offset, self.line, self.column);
+                let location = FileLocation::new(self.input.file_id(), offset, self.line, self.column);
 
                 if char == '\n' {
                     self.line += 1;
@@ -328,7 +328,7 @@ impl<'source_code> Lexer<'source_code> {
         _ = self.peek_char();
         match self.current {
             Some((location, _)) => location,
-            None => FileLocation::new(self.input.len(), self.line, self.column),
+            None => FileLocation::new(self.input.file_id(), self.input.len(), self.line, self.column),
         }
     }
 
@@ -378,18 +378,18 @@ mod tests {
 
     use super::*;
     use rstest::rstest;
-    use crate::BabString;
+    use crate::{BabString, FileId};
 
     #[rstest]
     #[case("h", Token {
         kind: TokenKind::Identifier(BabString::new_static("h")),
-        begin: FileLocation::new(0, 0, 0),
-        end: FileLocation::new(1, 0, 1),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
     })]
     #[case("s ", Token {
         kind: TokenKind::Identifier(BabString::new_static("s")),
-        begin: FileLocation::new(0, 0, 0),
-        end: FileLocation::new(1, 0, 1),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
     })]
     fn next_text(#[case] input: &'static str, #[case] expected: Token) {
         let source_code = SourceCode::new(PathBuf::new(), input.to_string());

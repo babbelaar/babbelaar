@@ -560,7 +560,7 @@ impl Backend {
         let res = self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
 
             let pos = params.text_document_position_params.position;
-            let location = FileLocation::new(0, pos.line as _, pos.character as _);
+            let location = FileLocation::new(analyzer.source_code.file_id(), 0, pos.line as _, pos.character as _);
 
             let Some((_, reference)) = analyzer.find_reference_at(location) else {
                 return Ok(Some(Vec::new()));
@@ -636,7 +636,7 @@ impl Backend {
         if hover.is_none() {
             hover = self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
                 let pos = params.text_document_position_params.position;
-                let location = analyzer.source_code.canonicalize_position(pos);
+                let location = analyzer.source_code.canonicalize_position(analyzer.source_code.file_id(), pos);
                 let reference = analyzer.find_declaration_range_at(location)
                     .map(|(range, reference)| {
                         Hover {
@@ -694,7 +694,7 @@ impl Backend {
     pub async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
         self.with_semantics(&params.text_document_position_params.text_document, |analyzer| {
             let pos = params.text_document_position_params.position;
-            let location = analyzer.source_code.canonicalize_position(pos);
+            let location = analyzer.source_code.canonicalize_position(analyzer.source_code.file_id(), pos);
             let reference = analyzer.find_declaration_range_at(location)
                 .map(|(range, reference)| {
                     let target_range = convert_file_range(reference.declaration_range);
@@ -816,12 +816,14 @@ impl Backend {
 
         self.with_syntax(&params.text_document, |tree, source_code| {
             let start = FileLocation::new(
+                source_code.file_id(),
                 usize::MAX,
                 params.range.start.line as _,
                 params.range.start.character as _,
             );
 
             let end = FileLocation::new(
+                source_code.file_id(),
                 usize::MAX,
                 params.range.end.line as _,
                 params.range.end.character as _,
@@ -866,9 +868,10 @@ impl Backend {
         };
 
         let pos = params.text_document_position.position;
-        let location = FileLocation::new(0, pos.line as _, pos.character as _);
 
         self.with_semantics(&params.text_document_position.text_document, |analyzer| {
+            let location = FileLocation::new(analyzer.source_code.file_id(), 0, pos.line as _, pos.character as _);
+
             let Some((declaration_range, _)) = analyzer.find_declaration_range_at(location) else {
                 return Ok(None);
             };

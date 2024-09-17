@@ -9,15 +9,19 @@ use crate::BabString;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileLocation {
+    file_id: FileId,
     offset: usize,
     line: usize,
     column: usize,
 }
 
 impl FileLocation {
+    pub const BOGUS: Self = Self::new(FileId::INTERNAL, usize::MAX, usize::MAX, usize::MAX);
+
     #[must_use]
-    pub const fn new(offset: usize, line: usize, column: usize) -> Self {
+    pub const fn new(file_id: FileId, offset: usize, line: usize, column: usize) -> Self {
         Self {
+            file_id,
             offset,
             line,
             column,
@@ -46,11 +50,10 @@ impl FileLocation {
             end: *self,
         }
     }
-}
 
-impl From<(usize, usize, usize)> for FileLocation {
-    fn from(value: (usize, usize, usize)) -> Self {
-        Self::new(value.0, value.1, value.2)
+    #[must_use]
+    pub const fn file_id(&self) -> FileId {
+        self.file_id
     }
 }
 
@@ -75,6 +78,7 @@ pub struct FileRange {
 impl FileRange {
     #[must_use]
     pub const fn new(start: FileLocation, end: FileLocation) -> Self {
+        debug_assert!(start.file_id.0 == end.file_id.0);
         debug_assert!(end.offset >= start.offset);
         Self {
             start,
@@ -126,16 +130,23 @@ impl FileRange {
     pub fn as_full_line(&self) -> Self {
         Self {
             start: FileLocation {
+                file_id: self.start.file_id,
                 offset: self.start.offset - self.start.column,
                 line: self.start.line,
                 column: 0,
             },
             end: FileLocation {
+                file_id: self.start.file_id,
                 offset: self.end.offset + 1,
                 line: self.end.line + 1,
                 column: 0,
             }
         }
+    }
+
+    #[must_use]
+    pub const fn file_id(&self) -> FileId {
+        self.start.file_id()
     }
 }
 
@@ -396,7 +407,7 @@ impl SourceCode {
     }
 
     #[must_use]
-    pub const fn id(&self) -> FileId {
+    pub const fn file_id(&self) -> FileId {
         self.id
     }
 
@@ -409,6 +420,17 @@ impl SourceCode {
     pub fn contents(&self) -> &BabString {
         &self.contents
     }
+
+    #[must_use]
+    pub(crate) fn calculate_range(&self) -> FileRange {
+        let start = FileLocation::new(self.file_id(), 0, 0, 0);
+
+        let line = self.contents.lines().count();
+        let column = self.contents.lines().last().unwrap_or_default().len();
+        let end = FileLocation::new(self.file_id(), self.contents().len(), line, column);
+
+        FileRange::new(start, end)
+    }
 }
 
 impl Deref for SourceCode {
@@ -419,10 +441,12 @@ impl Deref for SourceCode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(usize);
 
 impl FileId {
+    pub const INTERNAL: Self = Self(usize::MAX);
+
     #[must_use]
     pub fn from_path(path: &Path) -> Self {
         let mut hasher = DefaultHasher::new();
