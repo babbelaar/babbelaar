@@ -36,7 +36,7 @@ impl Log for Logger {
         };
 
         let client = self.client.clone();
-        let message = format!("{}: {}", record.file().unwrap_or_default(), record.args());
+        let message = format!("[{}] {}: {}", std::thread::current().id().as_u64(), record.file().unwrap_or_default(), record.args());
 
         spawn(async move {
             client.log_message(typ, message).await;

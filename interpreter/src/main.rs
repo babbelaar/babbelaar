@@ -9,7 +9,7 @@ mod debug_adapter;
 mod interpreter;
 mod scope;
 
-use std::{path::{Path, PathBuf}, process::exit};
+use std::{fs::read_dir, path::{Path, PathBuf}, process::exit};
 
 pub use babbelaar::*;
 // use babbelaar_compiler::LlvmContext;
@@ -86,17 +86,36 @@ fn main() {
 // }
 
 pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
-    parse(path, |source_code, tree| {
-        analyze(&tree, source_code);
+    let files: Vec<(SourceCode, ParseTree)> = read_dir(&path.parent().unwrap())
+        .unwrap()
+        .flatten()
+        .filter(|x| x.file_name().to_string_lossy().ends_with(".bab"))
+        .map(|x| parse(&x.path()))
+        .collect();
 
-        let mut interpreter = Interpreter::new(debugger);
+    analyze(&files);
+
+    let mut interpreter = Interpreter::new(debugger);
+
+    for (_, tree) in files {
         interpreter.execute_tree(&tree);
-    });
+    }
 }
 
-fn analyze(tree: &ParseTree, source_code: &SourceCode) {
-    let mut analyzer = SemanticAnalyzer::new(source_code.clone());
-    analyzer.analyze_tree(&tree);
+fn analyze(files: &[(SourceCode, ParseTree)]) {
+    let file_ids = files.iter()
+        .map(|(source_code, _)| (source_code.file_id(), source_code.clone()))
+        .collect();
+
+    let mut analyzer = SemanticAnalyzer::new(file_ids);
+
+    for (_, tree) in files {
+        analyzer.analyze_tree_phase_1(tree);
+    }
+
+    for (_, tree) in files {
+        analyzer.analyze_tree_phase_2(tree);
+    }
 
     let diags = analyzer.into_diagnostics();
     let mut has_error = false;
@@ -124,7 +143,7 @@ fn analyze(tree: &ParseTree, source_code: &SourceCode) {
     }
 }
 
-fn parse(path: &Path, f: impl FnOnce(&SourceCode, ParseTree)) {
+fn parse(path: &Path) -> (SourceCode, ParseTree) {
     let source_code = std::fs::read_to_string(path).unwrap();
     let source_code = SourceCode::new(path, source_code);
 
@@ -133,7 +152,7 @@ fn parse(path: &Path, f: impl FnOnce(&SourceCode, ParseTree)) {
 
     let mut parser = Parser::new(path.to_path_buf(), &tokens);
     match parser.parse_tree() {
-        Ok(tree) => f(&source_code, tree),
+        Ok(tree) => return (source_code, tree),
         Err(e) => {
             eprintln!("{}: {}", "fout".red().bold(), e.to_string().bold());
 
@@ -167,8 +186,8 @@ fn parse(path: &Path, f: impl FnOnce(&SourceCode, ParseTree)) {
                 eprintln!();
 
                 eprintln!("In {}:{}:{}\n", path.display(), range.start().line() + 1, range.start().column() + 1);
-                exit(1);
             }
+            exit(1);
         }
     }
 }

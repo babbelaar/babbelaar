@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+#![feature(thread_id_value)]
+
 mod actions;
 mod backend;
 mod context;
@@ -26,7 +28,7 @@ use tower_lsp::{LanguageServer, LspService, Server};
 pub use self::{
     actions::CodeActionRepository,
     backend::Backend,
-    context::BabbelaarContext,
+    context::{BabbelaarContext, BabbelaarFile},
     conversion::{UrlExtension, convert_file_range, convert_position, convert_token_range},
     completions::CompletionEngine,
     error::{BabbelaarLspError, BabbelaarLspResult},

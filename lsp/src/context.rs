@@ -1,18 +1,20 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{path::{Path, PathBuf}, sync::RwLock};
+use std::{collections::HashMap, path::{Path, PathBuf}, sync::Arc};
 
 use dashmap::DashMap;
 
-use babbelaar::{Lexer, ParseDiagnostic, ParseTree, Parser, SemanticAnalyzer, SourceCode, Token};
+use babbelaar::{FileId, Lexer, ParseDiagnostic, ParseTree, Parser, SemanticAnalyzer, SourceCode, Token};
+use tokio::sync::{Mutex, RwLock};
+use tower_lsp::lsp_types::Url;
 
 use crate::BabbelaarLspError;
 
 #[derive(Debug)]
 pub struct BabbelaarContext {
-    files: DashMap<PathBuf, BabbelaarFile>,
-    semantic_analysis: RwLock<Option<SemanticAnalyzer>>,
+    files: DashMap<PathBuf, Arc<Mutex<BabbelaarFile>>>,
+    semantic_analysis: RwLock<Option<Arc<SemanticAnalyzer>>>,
 }
 
 impl BabbelaarContext {
@@ -23,10 +25,10 @@ impl BabbelaarContext {
         }
     }
 
-    pub fn register_file(&self, source_code: SourceCode) {
+    pub async fn register_file(&self, source_code: SourceCode) {
         let path = source_code.path().canonicalize().unwrap();
-        self.files.insert(path, BabbelaarFile::new(source_code));
-        *self.semantic_analysis.write().unwrap() = None;
+        self.files.insert(path, Arc::new(Mutex::new(BabbelaarFile::new(source_code))));
+        *self.semantic_analysis.write().await = None;
     }
 
     pub async fn load_and_register_file(&self, path: PathBuf) -> Result<SourceCode, BabbelaarLspError> {
@@ -45,29 +47,78 @@ impl BabbelaarContext {
         }
 
         let source_code = SourceCode::new(path, contents);
-        self.register_file(source_code.clone());
+        self.register_file(source_code.clone()).await;
 
         Ok(source_code)
     }
 
-    pub fn source_code_of(&self, path: impl AsRef<Path>) -> Option<SourceCode> {
-        Some(self.files.get(path.as_ref())?.source_code.clone())
+    pub async fn with_file<K, F, R>(&self, key: K, f: F) -> Result<R, BabbelaarLspError>
+            where K: ContextKey,
+                  F: FnOnce(&mut BabbelaarFile) -> Result<R, BabbelaarLspError> {
+        let path = key.to_context_key();
+
+        if !self.files.contains_key(&path) {
+            self.load_and_register_file(path.clone()).await?;
+        }
+
+        let mutex = self.files.get(&path).unwrap().value().clone();
+        let mut file = mutex.lock().await;
+        let result = f(&mut file);
+        result
     }
 
-    fn analyze(&self) {
-        // let mut analyzer = SemanticAnalyzer::new(self.source_code.clone());
-        // analyzer.analyze_tree(ctx.tree.as_ref().unwrap());
+    pub async fn semantic_analysis(&self) -> Arc<SemanticAnalyzer> {
+        if let Some(analyzer) = self.semantic_analysis.read().await.as_ref() {
+            return Arc::clone(&analyzer);
+        }
 
-        // ctx.analyzer = Some(analyzer);
+        let mut lock = self.semantic_analysis.write().await;
+        let mut files = HashMap::new();
+        for file in self.files.iter() {
+            let file = file.lock().await;
+            files.insert(file.source_code.file_id(), file.source_code.clone());
+        }
+
+        let mut analyzer = SemanticAnalyzer::new(files);
+
+        // Pre-phase
+        for file in self.files.iter() {
+            let mut file = file.lock().await;
+            let tree = file.ensure_parsed().0;
+            analyzer.analyze_tree_phase_1(tree);
+        }
+
+        for file in self.files.iter() {
+            let mut file = file.lock().await;
+            let tree = file.ensure_parsed().0;
+            analyzer.analyze_tree_phase_2(tree);
+        }
+
+        let analyzer = Arc::new(analyzer);
+        *lock = Some(Arc::clone(&analyzer));
+
+        analyzer
+    }
+
+    pub async fn path_of(&self, file_id: FileId) -> Option<PathBuf> {
+        for pair in self.files.iter() {
+            let file = pair.lock().await;
+            if file.source_code.file_id() == file_id {
+                return Some(file.source_code.path().to_path_buf());
+            }
+        }
+
+        None
     }
 }
 
 #[derive(Debug)]
-struct BabbelaarFile {
+pub struct BabbelaarFile {
     source_code: SourceCode,
 
     tokens: Option<Vec<Token>>,
     tree: Option<Result<ParseTree, ParseDiagnostic>>,
+    parse_errors: Vec<ParseDiagnostic>,
 }
 
 impl BabbelaarFile {
@@ -76,41 +127,77 @@ impl BabbelaarFile {
             source_code,
             tokens: None,
             tree: None,
+            parse_errors: Vec::new(),
         }
     }
 
-    pub fn with_tree(&mut self) -> &ParseTree {
-        self.ensure_parsed();
-        self.tree.as_ref().unwrap().as_ref().unwrap()
-    }
-
-    pub fn ensure_lexed(&mut self) {
+    pub fn ensure_lexed(&mut self) -> (&[Token], &SourceCode) {
         if self.tokens.is_some() {
-            return;
+            return (self.tokens.as_ref().unwrap(), self.source_code());
         }
 
         let lexer = Lexer::new(&self.source_code);
         self.tokens = Some(lexer.collect());
+
+        (self.tokens.as_ref().unwrap(), self.source_code())
     }
 
-    pub fn ensure_parsed(&mut self) {
+    pub fn ensure_parsed(&mut self) -> (&ParseTree, &SourceCode) {
         self.ensure_lexed();
 
         if self.tree.is_some() {
-            return;
+            return (self.tree.as_ref().unwrap().as_ref().unwrap(), &self.source_code);
         }
 
         let tokens = self.tokens.as_ref().expect("ensure_lexed() should've prepared our tokens");
 
         let path = self.source_code.path().to_path_buf();
-        let tree = Parser::new(path, &tokens)
-            .attempt_to_ignore_errors()
-            .parse_tree();
+        let mut parser = Parser::new(path, &tokens)
+            .attempt_to_ignore_errors();
+
+        let tree = parser.parse_tree();
 
         self.tree = Some(tree);
+        self.parse_errors = parser.errors;
+
+        (self.tree.as_ref().unwrap().as_ref().unwrap(), &self.source_code)
     }
 
-    pub fn ensure_analyzed(&mut self) {
-        self.ensure_parsed();
+    pub fn parse_diagnostics(&mut self) -> &[ParseDiagnostic] {
+        _ = self.ensure_parsed();
+        &self.parse_errors
+    }
+
+    #[must_use]
+    pub fn source_code(&self) -> &SourceCode {
+        &self.source_code
+    }
+}
+
+pub trait ContextKey {
+    fn to_context_key(self) -> PathBuf;
+}
+
+impl ContextKey for PathBuf {
+    fn to_context_key(self) -> PathBuf {
+        self.clone()
+    }
+}
+
+impl ContextKey for &Path {
+    fn to_context_key(self) -> PathBuf {
+        self.to_path_buf()
+    }
+}
+
+impl ContextKey for Url {
+    fn to_context_key(self) -> PathBuf {
+        self.to_file_path().unwrap().to_context_key()
+    }
+}
+
+impl ContextKey for &Url {
+    fn to_context_key(self) -> PathBuf {
+        self.to_file_path().unwrap().to_context_key()
     }
 }

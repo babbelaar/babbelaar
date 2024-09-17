@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{borrow::Cow, fmt::Display, hash::{DefaultHasher, Hash, Hasher}, ops::{Deref, DerefMut}, path::{Path, PathBuf}, sync::Arc};
+use std::{borrow::Cow, fmt::{Debug, Display}, hash::{DefaultHasher, Hash, Hasher}, ops::{Deref, DerefMut}, path::{Path, PathBuf}, sync::Arc};
 
 use thiserror::Error;
 
@@ -103,6 +103,10 @@ impl FileRange {
 
     #[must_use]
     pub fn contains(&self, location: FileLocation) -> bool {
+        if self.file_id() != location.file_id && location.file_id != FileId::INTERNAL && self.file_id() != FileId::INTERNAL {
+            return false;
+        }
+
         if location == FileLocation::default() {
             return self.start == location;
         }
@@ -420,17 +424,6 @@ impl SourceCode {
     pub fn contents(&self) -> &BabString {
         &self.contents
     }
-
-    #[must_use]
-    pub(crate) fn calculate_range(&self) -> FileRange {
-        let start = FileLocation::new(self.file_id(), 0, 0, 0);
-
-        let line = self.contents.lines().count();
-        let column = self.contents.lines().last().unwrap_or_default().len();
-        let end = FileLocation::new(self.file_id(), self.contents().len(), line, column);
-
-        FileRange::new(start, end)
-    }
 }
 
 impl Deref for SourceCode {
@@ -441,7 +434,7 @@ impl Deref for SourceCode {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(usize);
 
 impl FileId {
@@ -452,5 +445,15 @@ impl FileId {
         let mut hasher = DefaultHasher::new();
         path.hash(&mut hasher);
         Self(hasher.finish() as _)
+    }
+}
+
+impl Debug for FileId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if *self == Self::INTERNAL {
+            f.write_str("FileId::INTERNAL")
+        } else {
+            f.debug_tuple("FileId").field(&self.0).finish()
+        }
     }
 }

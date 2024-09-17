@@ -1,0 +1,13 @@
+structuur Persoon {
+    veld voornaam: Slinger,
+    veld achternaam: Slinger,
+
+    werkwijze zegGedag() {
+        schrijf(€"Hallo, ik ben {dit.voornaam} {dit.achternaam}!");
+    }
+}
+
+stel persoon = nieuw Persoon {
+    voornaam: "HOi",
+    achternaam: "Doei",
+};

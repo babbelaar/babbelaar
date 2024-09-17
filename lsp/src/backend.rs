@@ -1,8 +1,9 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::fs::read_dir;
 use std::sync::Arc;
 
 use babbelaar::*;
@@ -43,7 +44,7 @@ impl Backend {
             where F: FnMut(Token, Vec<Token>) -> Result<Option<R>> {
         self.lexed_document(&params.text_document, |tokens, _| {
             let mut previous = Vec::new();
-            let mut tokens = VecDeque::from(tokens);
+            let mut tokens = VecDeque::from(Vec::from(tokens));
             while let Some(token) = tokens.pop_front() {
                 if let TokenKind::TemplateString(str) = &token.kind {
                     for tok in str {
@@ -109,11 +110,11 @@ impl Backend {
 
     pub async fn lexed_document<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
-        F: FnOnce(Vec<Token>, &SourceCode) -> Result<R>,
+        F: FnOnce(&[Token], &SourceCode) -> Result<R>,
     {
-        self.with_contents(&text_document.uri, |contents| {
-            let tokens = babbelaar::Lexer::new(&contents).collect();
-            f(tokens, contents)
+        self.context.with_file(&text_document.uri, |file| {
+            let (tokens, source_code) = file.ensure_lexed();
+            f(tokens, source_code)
         }).await
     }
 
@@ -121,104 +122,46 @@ impl Backend {
     where
         F: FnOnce(&SourceCode) -> Result<R>,
     {
-        let path = uri.to_file_path().unwrap();
-
-        let contents = self.context.source_code_of(&path);
-        if let Some(contents) = contents {
-            return f(&contents);
-        }
-
-        let source_code = self.context.load_and_register_file(path).await?;
-
-        let result = f(&source_code);
-        result
+        self.context.with_file(uri, |file| {
+            f(file.source_code())
+        }).await
     }
 
     pub async fn with_syntax<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
-        F: FnOnce(ParseTree, &SourceCode) -> Result<R>,
+        F: FnOnce(&ParseTree, &SourceCode) -> Result<R>,
     {
-        self.lexed_document(text_document, |tokens, contents| {
-            let mut parser = Parser::new(text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
-            let tree = parser.parse_tree()?;
-
-            f(tree, contents)
+        self.context.with_file(&text_document.uri, |file| {
+            let (tree, source_code) = file.ensure_parsed();
+            f(tree, source_code)
         }).await
     }
 
     pub async fn with_semantics<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
-        F: FnOnce(SemanticAnalyzer, &SourceCode) -> Result<R>,
+        F: FnOnce(&SemanticAnalyzer, &SourceCode) -> Result<R>,
     {
-        self.with_syntax(text_document, |tree, source_code| {
-            let mut analyzer = SemanticAnalyzer::new(source_code.clone());
-            analyzer.analyze_tree(&tree);
+        let source_code = self.with_contents(&text_document.uri, |x| {
+            Ok(x.clone())
+        }).await?;
 
-            f(analyzer, source_code)
-        }).await
+        let analyzer = self.context.semantic_analysis().await;
+        f(&analyzer, &source_code)
     }
 
     pub async fn collect_diagnostics(&self, document: VersionedTextDocumentIdentifier) -> Result<()> {
-        let path = document.uri.to_path()?;
-
         let text_document = TextDocumentIdentifier {
             uri: document.uri.clone(),
         };
 
-        let diags = self.lexed_document(&text_document, |tokens, source_code| {
-            let mut parser = Parser::new(path, &tokens).attempt_to_ignore_errors();
+        let mut diags = Vec::new();
 
-            let tree = match parser.parse_tree() {
-                Ok(tree) => tree,
-                Err(e) => {
-                    parser.errors.push(e);
-                    ParseTree::new(PathBuf::default())
-                }
-            };
-
-            let mut diags = Vec::new();
-
-            let mut analyzer = SemanticAnalyzer::new(source_code.clone());
-            analyzer.analyze_tree(&tree);
-
-            for err in parser.errors {
-                let Some(range) = err.range() else { continue };
-
-                let mut ctx = CodeActionsAnalysisContext {
-                    semantics: &analyzer,
-                    items: Vec::new(),
-                    cursor_range: FileRange::default(),
-                    contents: source_code,
-                };
-
-                err.analyze(&mut ctx);
-
-                let actions: Vec<_> = ctx.items.iter()
-                    .map(|x| {
-                        block_in_place(|| {
-                            let mut actions = self.code_actions.blocking_write();
-                            let id = actions.add(x.clone(), document.clone());
-                            serde_json::Value::Number(id.into())
-                        })
-                    })
-                    .collect();
-
-                diags.push(Diagnostic {
-                    range: convert_file_range(range),
-                    severity: Some(DiagnosticSeverity::ERROR),
-                    code: Some(NumberOrString::String(err.name().to_string())),
-                    code_description: None,
-                    source: None,
-                    message: err.to_string(),
-                    related_information: None,
-                    tags: None,
-                    data: Some(serde_json::Value::Array(actions)),
-                });
-            }
-
+        self.with_semantics(&text_document, |analyzer, source_code| {
+            let file_id = source_code.file_id();
             diags.extend(
-                analyzer.into_diagnostics()
+                analyzer.diagnostics()
                 .into_iter()
+                .filter(|x| x.range().file_id() == file_id)
                 .map(|e| {
                     let related_information = Some(
                             e.related_info()
@@ -256,8 +199,50 @@ impl Backend {
                     }
                 })
             );
+            Ok(())
+        }).await?;
 
-            Ok(diags)
+        self.context.with_file(&text_document.uri, |file| {
+            let source_code = file.source_code().clone();
+            let errors = file.parse_diagnostics();
+            let analyzer = SemanticAnalyzer::new(HashMap::new());
+
+            for err in errors {
+                let Some(range) = err.range() else { continue };
+
+                let mut ctx = CodeActionsAnalysisContext {
+                    semantics: &analyzer,
+                    items: Vec::new(),
+                    cursor_range: FileRange::default(),
+                    contents: source_code.contents(),
+                };
+
+                err.analyze(&mut ctx);
+
+                let actions: Vec<_> = ctx.items.iter()
+                    .map(|x| {
+                        block_in_place(|| {
+                            let mut actions = self.code_actions.blocking_write();
+                            let id = actions.add(x.clone(), document.clone());
+                            serde_json::Value::Number(id.into())
+                        })
+                    })
+                    .collect();
+
+                diags.push(Diagnostic {
+                    range: convert_file_range(range),
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: Some(NumberOrString::String(err.name().to_string())),
+                    code_description: None,
+                    source: None,
+                    message: err.to_string(),
+                    related_information: None,
+                    tags: None,
+                    data: Some(serde_json::Value::Array(actions)),
+                });
+            }
+
+            Ok(())
         }).await?;
 
         self.client.publish_diagnostics(text_document.uri, diags, Some(document.version)).await;
@@ -400,7 +385,7 @@ impl Backend {
         self.lexed_document(&params.text_document, |tokens, source_code| {
             let mut symbolizer = Symbolizer::new(params.text_document.uri.clone(), source_code);
 
-            for token in &tokens {
+            for token in tokens {
                 symbolizer.add_token(token);
             }
 
@@ -446,7 +431,22 @@ impl Backend {
     }
 
     pub async fn initialize(&self, config: InitializeParams) -> Result<InitializeResult> {
+        let workspace_folder = config.workspace_folders
+                .as_ref()
+                .and_then(|folders| folders.get(0))
+                .map(|workspace_folder| workspace_folder.uri.clone());
+
         *self.client_configuration.write().await = Some(config);
+
+        if let Some(folder) = workspace_folder {
+            let path = folder.to_file_path().unwrap();
+
+            for file in read_dir(path)?.flatten() {
+                if file.file_name().to_string_lossy().ends_with(".bab") {
+                    self.context.load_and_register_file(file.path()).await?;
+                }
+            }
+        }
 
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
@@ -496,7 +496,7 @@ impl Backend {
         {
             let path = params.text_document.uri.to_path().unwrap();
             let source_code = SourceCode::new(path, std::mem::take(&mut params.content_changes[0].text));
-            self.context.register_file(source_code);
+            self.context.register_file(source_code).await;
         }
         let this = (*self).clone();
         spawn(async move {
@@ -519,7 +519,7 @@ impl Backend {
         self.lexed_document(&params.text_document, |tokens, source_code| {
             let mut symbolizer = Symbolizer::new(params.text_document.uri.clone(), source_code);
 
-            for token in &tokens {
+            for token in tokens {
                 symbolizer.add_token(token);
             }
 
@@ -675,24 +675,32 @@ impl Backend {
     }
 
     pub async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
-        self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
+        let reference = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
             let pos = params.text_document_position_params.position;
             let location = source_code.canonicalize_position(source_code.file_id(), pos);
-            let reference = analyzer.find_declaration_range_at(location)
-                .map(|(range, reference)| {
-                    let target_range = convert_file_range(reference.declaration_range);
-                    GotoDefinitionResponse::Link(vec![
-                        LocationLink {
-                            origin_selection_range: Some(convert_file_range(range)),
-                            // TODO: Base on FileLocation's file ID
-                            target_uri: params.text_document_position_params.text_document.uri.clone(),
-                            target_range,
-                            target_selection_range: target_range,
-                        }
-                    ])
-                });
-            Ok(reference)
-        }).await
+            Ok(analyzer.find_declaration_range_at(location))
+        }).await?;
+
+        Ok(match reference {
+            Some((origin_range, reference)) => {
+                let target_range = convert_file_range(reference.declaration_range);
+
+                let file_id = reference.declaration_range.file_id();
+                let path = self.context.path_of(file_id).await.unwrap();
+                let target_uri = Url::from_file_path(path).unwrap();
+
+                Some(GotoDefinitionResponse::Link(vec![
+                    LocationLink {
+                        origin_selection_range: Some(convert_file_range(origin_range)),
+                        target_uri,
+                        target_range,
+                        target_selection_range: target_range,
+                    }
+                ]))
+            }
+
+            None => None,
+        })
     }
 
     pub async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
@@ -797,6 +805,8 @@ impl Backend {
             version: None,
         };
 
+        let analyzer = self.context.semantic_analysis().await;
+
         self.with_syntax(&params.text_document, |tree, source_code| {
             let start = FileLocation::new(
                 source_code.file_id(),
@@ -811,9 +821,6 @@ impl Backend {
                 params.range.end.line as _,
                 params.range.end.character as _,
             );
-
-            let mut analyzer = SemanticAnalyzer::new(source_code.clone());
-            analyzer.analyze_tree(&tree);
 
             let mut ctx = CodeActionsAnalysisContext {
                 semantics: &analyzer,

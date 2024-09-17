@@ -21,7 +21,7 @@ impl Symbolizer {
         Self {
             uri,
             symbols: SymbolMap::default(),
-            semantic_analyzer: SemanticAnalyzer::new(source_code.clone()),
+            semantic_analyzer: SemanticAnalyzer::new_single(source_code),
         }
     }
 

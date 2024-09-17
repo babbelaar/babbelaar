@@ -7,29 +7,38 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
     pub context: SemanticContext,
-    source_code: SourceCode,
+    files: HashMap<FileId, SourceCode>,
     diagnostics: Vec<SemanticDiagnostic>,
 }
 
 impl SemanticAnalyzer {
     #[must_use]
-    pub fn new(source_code: SourceCode) -> Self {
+    pub fn new(files: HashMap<FileId, SourceCode>) -> Self {
         Self {
-            context: SemanticContext::new(&source_code),
+            context: SemanticContext::new(),
             diagnostics: Vec::new(),
-            source_code,
+            files,
         }
     }
 
-    pub fn analyze_tree(&mut self, tree: &ParseTree) {
-        // TODO: fix this.
+    #[must_use]
+    pub fn new_single(source_code: &SourceCode) -> Self {
+        let mut files = HashMap::new();
+        files.insert(source_code.file_id(), source_code.clone());
+        Self::new(files)
+    }
+
+    pub fn analyze_tree_phase_1(&mut self, tree: &ParseTree) {
         self.analyze_statements(tree.structures());
         self.analyze_statements(tree.functions());
+    }
+
+    pub fn analyze_tree_phase_2(&mut self, tree: &ParseTree) {
         self.analyze_statements(tree.statements());
     }
 
@@ -645,6 +654,11 @@ impl SemanticAnalyzer {
     }
 
     #[must_use]
+    pub fn diagnostics(&self) -> &[SemanticDiagnostic] {
+        &self.diagnostics
+    }
+
+    #[must_use]
     pub fn resolve_type(&mut self, ty: &Ranged<Type>) -> SemanticType {
         match ty.specifier.value() {
             TypeSpecifier::BuiltIn(ty) => SemanticType::Builtin(*ty),
@@ -889,12 +903,12 @@ impl SemanticAnalyzer {
     #[must_use]
     fn create_action_create_field(&self, structure: &SemanticStructure, name: &str, ty: SemanticType) -> BabbelaarCodeAction {
         let (add_location, add_text) = if let Some(last) = structure.fields.last() {
-            let indent = self.source_code.indentation_at(last.name.range().start()).unwrap_or_default();
+            let indent = self.indentation_at(last.name.range().start()).unwrap_or_default();
             let location = FileLocation::new(structure.name.range().file_id(), 0, last.name.range().start().line(), usize::MAX);
 
             (location, format!("\n{indent}veld {name}: {ty},"))
         } else {
-            let indent = self.source_code.indentation_at(structure.name.range().start()).unwrap_or_default();
+            let indent = self.indentation_at(structure.name.range().start()).unwrap_or_default();
 
             (structure.left_curly_range.end(), format!("\n{indent}    veld {name}: {ty},"))
         };
@@ -903,6 +917,10 @@ impl SemanticAnalyzer {
             BabbelaarCodeActionType::CreateField { name: name.to_string() },
             vec![FileEdit::new(add_location.as_zero_range(), add_text)]
         )
+    }
+
+    fn indentation_at(&self, start: FileLocation) -> Option<&str> {
+        self.files.get(&start.file_id())?.indentation_at(start)
     }
 }
 
@@ -1158,10 +1176,10 @@ pub struct SemanticContext {
 }
 
 impl SemanticContext {
-    pub fn new(source_code: &SourceCode) -> Self {
+    pub fn new() -> Self {
         Self {
             scope: vec![
-                SemanticScope::new_top_level(source_code),
+                SemanticScope::new_top_level(),
             ],
             previous_scopes: Vec::new(),
             definition_tracker: Some(HashMap::new()),
@@ -1273,9 +1291,12 @@ pub struct SemanticScope {
 }
 
 impl SemanticScope {
-    fn new_top_level(source_code: &SourceCode) -> Self {
+    fn new_top_level() -> Self {
         let mut this = Self {
-            range: source_code.calculate_range(),
+            range: FileRange::new(
+                FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+                FileLocation::new(FileId::INTERNAL, usize::MAX, usize::MAX, usize::MAX),
+            ),
             structures: HashMap::new(),
             locals: HashMap::default(),
             this: None,

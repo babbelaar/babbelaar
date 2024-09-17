@@ -1,13 +1,3 @@
-structuur Persoon {
-    veld voornaam: Slinger,
-    veld achternaam: Slinger,
-
-    werkwijze zegGedag() {
-        stel a = dit.achternaam;
-        schrijf(€"Hallo, ik ben {dit.voornaam}");
-    }
-}
-
 structuur Dier {
     veld naam: Slinger,
 
@@ -20,4 +10,5 @@ stel anoniem = nieuw Persoon {
     voornaam: "Pietje",
     achternaam: "Bel",
 };
+
 anoniem.zegGedag();
