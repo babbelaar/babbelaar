@@ -85,10 +85,12 @@
         "commands": [
             {
                 "command": "babbelaar.uitvoeren",
+                "icon": "$(run)",
                 "title": "Babbelaar: Bestand uitvoeren"
             },
             {
                 "command": "babbelaar.herstarten",
+                "icon": "$(refresh)",
                 "title": "Babbelaar: Taalserveerder herstarten"
             }
         ],
@@ -130,6 +132,15 @@
                 "path": "./syntaxes/babbelaar.tmGrammar.json"
             }
         ],
+        "menus": {
+            "editor/title": [
+                {
+                    "when": "resourceLangId == babbelaar",
+                    "command": "babbelaar.uitvoeren",
+                    "group": "navigation"
+                }
+            ]
+        },
         "snippets": [
             {
                 "language": "babbelaar",
