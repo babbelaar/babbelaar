@@ -53,6 +53,7 @@ pub struct FunctionStatement {
     pub name: Ranged<BabString>,
     pub parameters: Vec<Parameter>,
     pub body: Option<Vec<Statement>>,
+    pub parameters_right_paren_range: FileRange,
 }
 
 #[derive(Clone, Debug)]

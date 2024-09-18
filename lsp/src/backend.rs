@@ -748,15 +748,10 @@ impl Backend {
             return None;
         };
 
-        let document = OptionalVersionedTextDocumentIdentifier {
-            uri: item.document.uri.clone(),
-            version: Some(item.document.version),
-        };
-
         // If this Code Action is created by a diagnostic, it is preferred.
         let is_preferred = Some(diagnostic.is_some());
         let diagnostics = diagnostic.map(|diagnostic| vec![diagnostic.clone()]);
-        let edit = Some(self.create_workspace_edit_by_code_action_item(&item.action, document));
+        let edit = Some(self.create_workspace_edit_by_code_action_item(&item.action).await);
 
         Some(CodeActionOrCommand::CodeAction(CodeAction {
             title: item.action.type_().to_string(),
@@ -770,8 +765,8 @@ impl Backend {
         }))
     }
 
-    fn create_workspace_edit_by_code_action_item(&self, action: &BabbelaarCodeAction, document: OptionalVersionedTextDocumentIdentifier) -> WorkspaceEdit {
-        let edit = self.create_text_document_edit(action, document);
+    async fn create_workspace_edit_by_code_action_item(&self, action: &BabbelaarCodeAction) -> WorkspaceEdit {
+        let edit = self.create_text_document_edit(action).await;
         let edits = DocumentChanges::Edits(vec![edit]);
 
         WorkspaceEdit {
@@ -781,7 +776,7 @@ impl Backend {
         }
     }
 
-    fn create_text_document_edit(&self, action: &BabbelaarCodeAction, text_document: OptionalVersionedTextDocumentIdentifier) -> TextDocumentEdit {
+    async fn create_text_document_edit(&self, action: &BabbelaarCodeAction) -> TextDocumentEdit {
         let mut edits = Vec::new();
 
         for edit in action.edits() {
@@ -794,20 +789,18 @@ impl Backend {
         }
 
         TextDocumentEdit {
-            text_document,
+            text_document: OptionalVersionedTextDocumentIdentifier {
+                uri: Url::from_file_path(self.context.path_of(action.edits()[0].replacement_range().file_id()).await.unwrap()).unwrap(),
+                version: None,
+            },
             edits,
         }
     }
 
     async fn create_code_actions_based_on_semantics(&self, actions: &mut Vec<CodeActionOrCommand>, params: &CodeActionParams) -> Result<()> {
-        let document = OptionalVersionedTextDocumentIdentifier {
-            uri: params.text_document.uri.clone(),
-            version: None,
-        };
-
         let analyzer = self.context.semantic_analysis().await;
 
-        self.with_syntax(&params.text_document, |tree, source_code| {
+        let items = self.with_syntax(&params.text_document, |tree, source_code| {
             let start = FileLocation::new(
                 source_code.file_id(),
                 usize::MAX,
@@ -833,22 +826,24 @@ impl Backend {
 
             tree.analyze(&mut ctx);
 
-            for action in ctx.items {
-                let edit = self.create_workspace_edit_by_code_action_item(&action, document.clone());
-                actions.push(CodeActionOrCommand::CodeAction(CodeAction {
-                    title: action.type_().to_string(),
-                    kind: Some(CodeActionKind::QUICKFIX),
-                    diagnostics: None,
-                    edit: Some(edit),
-                    command: None,
-                    is_preferred: Some(false),
-                    disabled: None,
-                    data: None,
-                }));
-            }
+            Ok(ctx.items)
+        }).await?;
 
-            Ok(())
-        }).await
+        for action in items {
+            let edit = self.create_workspace_edit_by_code_action_item(&action).await;
+            actions.push(CodeActionOrCommand::CodeAction(CodeAction {
+                title: action.type_().to_string(),
+                kind: Some(CodeActionKind::QUICKFIX),
+                diagnostics: None,
+                edit: Some(edit),
+                command: None,
+                is_preferred: Some(false),
+                disabled: None,
+                data: None,
+            }));
+        }
+
+        Ok(())
     }
 
     pub async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {

@@ -289,6 +289,11 @@ pub enum BabbelaarCodeActionType {
     #[error("Sleutelwoord `{keyword}` toevoegen")]
     AddKeyword { keyword: &'static str, },
 
+    #[error("Voeg parameter{} toe",  if *residual_args == 1 { "" } else { "s" })]
+    AddParameter {
+        residual_args: usize,
+    },
+
     #[error("Zet Slinger `\"{number}\"` om naar getal `{number}`")]
     ChangeStringToNumber { number: isize },
 
@@ -300,6 +305,11 @@ pub enum BabbelaarCodeActionType {
 
     #[error("`{text}` invoegen")]
     Insert { text: &'static str, },
+
+    #[error("Extra {} verwijderen", if *residual_args == 1 { "argument" } else { "argumenten" })]
+    RemoveArgument {
+        residual_args: usize,
+    },
 
     #[error("Verwijder puur statement")]
     RemovePureStatement,

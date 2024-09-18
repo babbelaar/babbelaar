@@ -2,7 +2,7 @@ structuur Dier {
     veld naam: Slinger,
 
     werkwijze zegGedag() {
-        schrijf(€"Hallo, ik ben een {dit.naam}");
+        schrijf(€"ik ben een {dit.naam}");
     }
 }
 
@@ -11,4 +11,4 @@ stel anoniem = nieuw Persoon {
     achternaam: "Bel",
 };
 
-anoniem.zegGedag();
+anoniem.zegGedag("Hallo");

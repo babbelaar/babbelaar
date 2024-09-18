@@ -56,6 +56,7 @@ impl SemanticAnalyzer {
                 self.context.push_function(SemanticFunction {
                     name: function.name.clone(),
                     parameters: function.parameters.clone(),
+                    parameters_right_paren_range: function.parameters_right_paren_range,
                 });
             }
         }
@@ -206,6 +207,7 @@ impl SemanticAnalyzer {
             function: SemanticFunction {
                 name: x.function.name.clone(),
                 parameters: x.function.parameters.clone(),
+                parameters_right_paren_range: x.function.parameters_right_paren_range,
             }
         }).collect();
 
@@ -320,10 +322,50 @@ impl SemanticAnalyzer {
         }
 
         if param_count < arg_count {
-            self.diagnostics.push(SemanticDiagnostic::new(
-                expression.token_right_paren,
-                SemanticDiagnosticKind::TooManyArguments { function_name: function_name.clone(), param_count, arg_count },
-            ).with_related(function_hint.clone()));
+            let mut add_parameter_action = None;
+            let mut remove_parameter_action = None;
+
+            if let SemanticType::FunctionReference(FunctionReference::Custom(func)) = &function.typ {
+                let residual_args = arg_count - param_count;
+                let mut params = String::new();
+
+                for (idx, arg) in expression.arguments.iter().enumerate().skip(param_count) {
+                    if idx != 0 {
+                        params += ", ";
+                    }
+
+                    let argument_type = self.analyze_expression(arg).ty;
+                    params += &format!("param{idx}: {argument_type}");
+                }
+
+                let end = expression.arguments.last().unwrap().range().end();
+                let range = if param_count == 0 {
+                    FileRange::new(expression.arguments[0].range().start(), end)
+                } else {
+                    FileRange::new(expression.arguments[param_count - 1].range().end(), end)
+                };
+
+                let edit = FileEdit::new(range, "");
+                remove_parameter_action = Some(BabbelaarCodeAction::new(BabbelaarCodeActionType::RemoveArgument { residual_args }, vec![ edit ]));
+
+                let insert_range = func.parameters.last()
+                    .map(|x| x.ty.range().end())
+                    .unwrap_or_else(|| func.parameters_right_paren_range.start());
+
+                let edit = FileEdit::new(insert_range.as_zero_range(), params);
+                add_parameter_action = Some(BabbelaarCodeAction::new(BabbelaarCodeActionType::AddParameter { residual_args }, vec![ edit ]));
+            }
+
+
+            self.diagnostics.push(
+                SemanticDiagnostic::new(
+                    expression.arguments[param_count].range(),
+                    SemanticDiagnosticKind::TooManyArguments { function_name: BabString::new(format!("{function:#?}")), param_count, arg_count },
+                )
+                .with_related(function_hint.clone())
+                .with_action(remove_parameter_action)
+                .with_action(add_parameter_action)
+            );
             return;
         }
 
@@ -1318,6 +1360,7 @@ impl SemanticScope {
 pub struct SemanticFunction {
     pub name: Ranged<BabString>,
     pub parameters: Vec<Parameter>,
+    pub parameters_right_paren_range: FileRange,
     // type ...
 }
 
@@ -1392,6 +1435,29 @@ impl SemanticReference {
         match self.local_kind {
             SemanticLocalKind::Function | SemanticLocalKind::FunctionReference => {
                 format!("```babbelaar\nwerkwijze {}(..)\n```", self.local_name)
+            }
+
+            SemanticLocalKind::Method => {
+                let mut str = format!("```babbelaar\nwerkwijze {}(", self.local_name);
+
+                if let SemanticType::FunctionReference(func) = &self.typ {
+                    match func {
+                        FunctionReference::Custom(custom) => {
+                            for (idx, param) in custom.parameters.iter().enumerate() {
+                                if idx != 0 {
+                                    str += ", ";
+                                }
+                                str += &param.name;
+                                str += ": ";
+                                str += &param.ty.value().specifier.name();
+                            }
+                        }
+                        FunctionReference::Builtin(..) => str += "..",
+                    }
+                }
+
+                str += ")\n```";
+                str
             }
 
             SemanticLocalKind::FieldReference => {

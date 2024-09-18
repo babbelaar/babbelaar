@@ -188,7 +188,7 @@ impl<'tokens> Parser<'tokens> {
             }
         }
 
-        self.expect_right_paren("werkwijzenaam")?;
+        let parameters_right_paren_range = self.expect_right_paren("werkwijzenaam")?;
         self.expect_left_curly_bracket("werkwijzeargumentenlijst")?;
 
         let mut body = Vec::new();
@@ -211,7 +211,7 @@ impl<'tokens> Parser<'tokens> {
         let range = FileRange::new(name_range.start(), self.previous_end());
         let body = Some(body);
 
-        Ok(FunctionStatement { name, body, parameters, range })
+        Ok(FunctionStatement { name, body, parameters, parameters_right_paren_range, range })
     }
 
     fn consume_identifier(&mut self, ident_purpose: &'static str, previous: BabString) -> Result<Ranged<BabString>, ParseDiagnostic> {
