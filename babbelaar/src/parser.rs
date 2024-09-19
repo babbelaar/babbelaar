@@ -84,7 +84,7 @@ impl<'tokens> Parser<'tokens> {
 
             TokenKind::Keyword(Keyword::Werkwijze) => {
                 _ = self.consume_token().ok();
-                StatementKind::Function(self.parse_function()?)
+                StatementKind::Function(self.parse_function(FunctionParsingContext::Function)?)
             }
 
             TokenKind::Keyword(Keyword::Stel) => {
@@ -150,7 +150,7 @@ impl<'tokens> Parser<'tokens> {
         }))
     }
 
-    pub fn parse_function(&mut self) -> Result<FunctionStatement, ParseDiagnostic> {
+    pub fn parse_function(&mut self, ctx: FunctionParsingContext) -> Result<FunctionStatement, ParseDiagnostic> {
         let name = self.consume_token()?;
         let name_range = name.range();
         let name = match name.kind {
@@ -189,27 +189,36 @@ impl<'tokens> Parser<'tokens> {
         }
 
         let parameters_right_paren_range = self.expect_right_paren("werkwijzenaam")?;
-        self.expect_left_curly_bracket("werkwijzeargumentenlijst")?;
 
-        let mut body = Vec::new();
-        loop {
-            if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
-                _ = self.consume_token()?;
-                break;
-            }
-
-            match self.parse_statement() {
-                Ok(statement) => body.push(statement),
-                Err(ParseDiagnostic::EndOfFile) => break,
-                Err(error) => {
-                    self.handle_error(error)?;
-                    break;
-                }
-            }
+        let has_body = self.peek_punctuator() == Some(Punctuator::LeftCurlyBracket);
+        if has_body || ctx.require_body() {
+            self.expect_left_curly_bracket("werkwijzeargumentenlijst")?;
         }
 
+        let body = if has_body {
+            let mut body = Vec::new();
+            loop {
+                if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
+                    _ = self.consume_token()?;
+                    break;
+                }
+
+                match self.parse_statement() {
+                    Ok(statement) => body.push(statement),
+                    Err(ParseDiagnostic::EndOfFile) => break,
+                    Err(error) => {
+                        self.handle_error(error)?;
+                        break;
+                    }
+                }
+            }
+
+            Some(body)
+        } else {
+            None
+        };
+
         let range = FileRange::new(name_range.start(), self.previous_end());
-        let body = Some(body);
 
         Ok(FunctionStatement { name, body, parameters, parameters_right_paren_range, range })
     }
@@ -307,7 +316,7 @@ impl<'tokens> Parser<'tokens> {
                 TokenKind::Keyword(Keyword::Werkwijze) => {
                     let start = self.consume_token()?.begin;
 
-                    let function = Arc::new(self.parse_function()?);
+                    let function = Arc::new(self.parse_function(FunctionParsingContext::Method)?);
 
                     let range = FileRange::new(start, self.token_end);
 
@@ -1189,6 +1198,19 @@ impl ParseDiagnostic {
 pub enum ParserErrorBehavior {
     Propagate,
     AttemptToIgnore,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionParsingContext {
+    Function,
+    Method,
+}
+
+impl FunctionParsingContext {
+    #[must_use]
+    pub const fn require_body(&self) -> bool {
+        matches!(self, Self::Method)
+    }
 }
 
 #[cfg(test)]

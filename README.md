@@ -35,3 +35,10 @@ volg i in reeks (0, 11) {
     schrijf(€"Het getal is nu {i}");
 }
 ```
+
+## Ontwikkeling
+Als je mee wilt helpen met het ontwikkelen van Babbelaar, zorg er dan voor dat je de onderstaande pakketten hebt geïnstalleerd:
+```sh
+sudo npm install -g @vscode/vsce yo typescript
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
