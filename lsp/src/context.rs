@@ -46,7 +46,7 @@ impl BabbelaarContext {
             contents += "\n";
         }
 
-        let source_code = SourceCode::new(path, contents);
+        let source_code = SourceCode::new(path, 0, contents);
         self.register_file(source_code.clone()).await;
 
         Ok(source_code)
@@ -65,6 +65,15 @@ impl BabbelaarContext {
         let mut file = mutex.lock().await;
         let result = f(&mut file);
         result
+    }
+
+    pub async fn with_all_files<F>(&self, mut f: F) -> Result<(), BabbelaarLspError>
+            where F: FnMut(&mut BabbelaarFile) -> Result<(), BabbelaarLspError> {
+        for file in self.files.iter() {
+            let mut file = file.lock().await;
+            f(&mut file)?;
+        }
+        Ok(())
     }
 
     pub async fn semantic_analysis(&self) -> Arc<SemanticAnalyzer> {
@@ -108,6 +117,7 @@ impl BabbelaarContext {
             }
         }
 
+        log::warn!("Kan bestand niet vinden met het nummer {file_id:?}");
         None
     }
 }

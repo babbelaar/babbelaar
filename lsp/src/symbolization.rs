@@ -446,7 +446,7 @@ mod tests {
         "€\"Hallo {naam}\""
     )]
     fn test_add_token(#[case] input: &'static str) {
-        let input = SourceCode::new(PathBuf::new(), BabString::new_static(input));
+        let input = SourceCode::new(PathBuf::new(), 0, BabString::new_static(input));
         let tokens: Vec<Token> = Lexer::new(&input).collect();
 
         let mut symbolizer = Symbolizer::new(Url::parse("file:///test.h").unwrap(), &input);

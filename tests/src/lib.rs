@@ -38,13 +38,13 @@ pub fn interpret_statements(input: &SourceCode) {
 }
 
 pub fn interpret_expression(input: &str) -> Value {
-    let input = SourceCode::new(PathBuf::new(), BabString::new(input));
+    let input = SourceCode::new(PathBuf::new(), 0, BabString::new(input));
     let expression = parse_expression(&input);
     Interpreter::new(()).execute_expression(&expression)
 }
 
 pub fn interpret_and_return_stdout(input: &str) -> Vec<String> {
-    let input = SourceCode::new(PathBuf::new(), BabString::new(input));
+    let input = SourceCode::new(PathBuf::new(), 0, BabString::new(input));
     let buffer = Arc::new(Mutex::new(Vec::new()));
 
     {

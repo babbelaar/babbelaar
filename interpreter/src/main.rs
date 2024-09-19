@@ -145,7 +145,7 @@ fn analyze(files: &[(SourceCode, ParseTree)]) {
 
 fn parse(path: &Path) -> (SourceCode, ParseTree) {
     let source_code = std::fs::read_to_string(path).unwrap();
-    let source_code = SourceCode::new(path, source_code);
+    let source_code = SourceCode::new(path, 0, source_code);
 
     let lexer = Lexer::new(&source_code);
     let tokens: Vec<_> = lexer.collect();

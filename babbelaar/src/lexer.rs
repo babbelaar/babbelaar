@@ -392,7 +392,7 @@ mod tests {
         end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
     })]
     fn next_text(#[case] input: &'static str, #[case] expected: Token) {
-        let source_code = SourceCode::new(PathBuf::new(), input.to_string());
+        let source_code = SourceCode::new(PathBuf::new(), 0, input.to_string());
         let actual = Lexer::new(&source_code).next();
 
         assert_eq!(actual, Some(expected));

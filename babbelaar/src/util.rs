@@ -396,6 +396,7 @@ impl StrExt for str {
 #[derive(Debug, Clone)]
 pub struct SourceCode {
     id: FileId,
+    version: i32,
     path: Arc<PathBuf>,
     contents: BabString,
 }
@@ -404,17 +405,18 @@ impl SourceCode {
     #[must_use]
     #[cfg(test)]
     pub fn new_test(contents: impl Into<BabString>) -> Self {
-        Self::new(PathBuf::new(), contents.into())
+        Self::new(PathBuf::new(), 0, contents.into())
     }
 
     #[must_use]
-    pub fn new(path: impl Into<PathBuf>, contents: impl Into<BabString>) -> Self {
+    pub fn new(path: impl Into<PathBuf>, version: i32, contents: impl Into<BabString>) -> Self {
         let path = Arc::new(path.into());
         let id = FileId::from_path(&path);
         let contents = contents.into();
 
         Self {
             id,
+            version,
             path,
             contents,
         }
@@ -434,6 +436,11 @@ impl SourceCode {
     pub fn contents(&self) -> &BabString {
         &self.contents
     }
+
+    #[must_use]
+    pub const fn version(&self) -> i32 {
+        self.version
+    }
 }
 
 impl Deref for SourceCode {
@@ -451,7 +458,7 @@ impl FileId {
     pub const INTERNAL: Self = Self(usize::MAX);
 
     #[must_use]
-    pub fn from_path(path: &Path) -> Self {
+    fn from_path(path: &Path) -> Self {
         let mut hasher = DefaultHasher::new();
         path.hash(&mut hasher);
         Self(hasher.finish() as _)

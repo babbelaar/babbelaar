@@ -149,60 +149,18 @@ impl Backend {
         f(&analyzer, &source_code)
     }
 
-    pub async fn collect_diagnostics(&self, document: VersionedTextDocumentIdentifier) -> Result<()> {
-        let text_document = TextDocumentIdentifier {
-            uri: document.uri.clone(),
-        };
+    pub async fn collect_diagnostics(&self, _: VersionedTextDocumentIdentifier) -> Result<()> {
+        let mut urls: HashMap<FileId, VersionedTextDocumentIdentifier> = HashMap::new();
+        let mut diags: HashMap<FileId, Vec<Diagnostic>> = HashMap::new();
 
-        let mut diags = Vec::new();
+        self.context.with_all_files(|file| {
+            let document = VersionedTextDocumentIdentifier {
+                uri: Url::from_file_path(file.source_code().path()).unwrap(),
+                version: file.source_code().version(),
+            };
+            urls.insert(file.source_code().file_id(), document.clone());
+            diags.insert(file.source_code().file_id(), Vec::new());
 
-        self.with_semantics(&text_document, |analyzer, source_code| {
-            let file_id = source_code.file_id();
-            diags.extend(
-                analyzer.diagnostics()
-                .into_iter()
-                .filter(|x| x.range().file_id() == file_id)
-                .map(|e| {
-                    let related_information = Some(
-                            e.related_info()
-                                .iter()
-                                .map(|x| DiagnosticRelatedInformation {
-                                    location: convert_file_range_to_location(text_document.uri.clone(), x.range()),
-                                    message: x.message().to_string(),
-                                })
-                                .collect()
-                    );
-
-                    let actions: Vec<_> = e.actions().iter()
-                        .map(|x| {
-                            block_in_place(|| {
-                                let mut actions = self.code_actions.blocking_write();
-                                let id = actions.add(x.clone(), document.clone());
-                                serde_json::Value::Number(id.into())
-                            })
-                        })
-                        .collect();
-
-                    Diagnostic {
-                        range: convert_file_range(e.range()),
-                        severity: Some(match e.severity() {
-                            SemanticDiagnosticSeverity::Error => DiagnosticSeverity::ERROR,
-                            SemanticDiagnosticSeverity::Warning => DiagnosticSeverity::WARNING,
-                        }),
-                        code: Some(NumberOrString::String(e.kind().name().to_string())),
-                        code_description: None,
-                        source: None,
-                        message: e.kind().to_string(),
-                        related_information,
-                        tags: None,
-                        data: Some(serde_json::Value::Array(actions)),
-                    }
-                })
-            );
-            Ok(())
-        }).await?;
-
-        self.context.with_file(&text_document.uri, |file| {
             let source_code = file.source_code().clone();
             let errors = file.parse_diagnostics();
             let analyzer = SemanticAnalyzer::new(HashMap::new());
@@ -229,7 +187,7 @@ impl Backend {
                     })
                     .collect();
 
-                diags.push(Diagnostic {
+                diags.entry(range.file_id()).or_default().push(Diagnostic {
                     range: convert_file_range(range),
                     severity: Some(DiagnosticSeverity::ERROR),
                     code: Some(NumberOrString::String(err.name().to_string())),
@@ -245,7 +203,54 @@ impl Backend {
             Ok(())
         }).await?;
 
-        self.client.publish_diagnostics(text_document.uri, diags, Some(document.version)).await;
+        let analyzer = self.context.semantic_analysis().await;
+
+        for e in analyzer.diagnostics() {
+            let related_information = Some(
+                    e.related_info()
+                        .iter()
+                        .map(|x| {
+                            let uri = urls.get(&x.range().file_id()).unwrap().uri.clone();
+                            DiagnosticRelatedInformation {
+                                location: convert_file_range_to_location(uri, x.range()),
+                                message: x.message().to_string(),
+                            }
+                        })
+                        .collect()
+            );
+
+            let url = urls.get(&e.range().file_id()).cloned().unwrap();
+
+            let actions: Vec<_> = e.actions().iter()
+                .map(|x| {
+                    block_in_place(|| {
+                        let mut actions = self.code_actions.blocking_write();
+                        let id = actions.add(x.clone(), url.clone());
+                        serde_json::Value::Number(id.into())
+                    })
+                })
+                .collect();
+
+            diags.entry(e.range().file_id()).or_default().push(Diagnostic {
+                range: convert_file_range(e.range()),
+                severity: Some(match e.severity() {
+                    SemanticDiagnosticSeverity::Error => DiagnosticSeverity::ERROR,
+                    SemanticDiagnosticSeverity::Warning => DiagnosticSeverity::WARNING,
+                }),
+                code: Some(NumberOrString::String(e.kind().name().to_string())),
+                code_description: None,
+                source: None,
+                message: e.kind().to_string(),
+                related_information,
+                tags: None,
+                data: Some(serde_json::Value::Array(actions)),
+            });
+        }
+
+        for (file_id, diags) in diags.into_iter() {
+            let document = urls.get(&file_id).cloned().unwrap();
+            self.client.publish_diagnostics(document.uri, diags, Some(document.version)).await;
+        }
         Ok(())
     }
 
@@ -495,7 +500,7 @@ impl Backend {
     pub async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
         {
             let path = params.text_document.uri.to_path().unwrap();
-            let source_code = SourceCode::new(path, std::mem::take(&mut params.content_changes[0].text));
+            let source_code = SourceCode::new(path, params.text_document.version, std::mem::take(&mut params.content_changes[0].text));
             self.context.register_file(source_code).await;
         }
         let this = (*self).clone();
