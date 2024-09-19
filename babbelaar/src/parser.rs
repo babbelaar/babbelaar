@@ -66,7 +66,7 @@ impl<'tokens> Parser<'tokens> {
 
             match self.parse_attribute() {
                 Ok(attr) => attributes.push(attr),
-                Err(e) => self.handle_error(e)?,
+                Err(e) => self.handle_error(e),
             }
         }
 
@@ -156,7 +156,7 @@ impl<'tokens> Parser<'tokens> {
         let name = match name.kind {
             TokenKind::Identifier(name) => name,
             _ => {
-                self.handle_error(ParseDiagnostic::FunctionStatementExpectedName { token: name.clone() })?;
+                self.handle_error(ParseDiagnostic::FunctionStatementExpectedName { token: name.clone() });
                 BabString::empty()
             }
         };
@@ -168,7 +168,7 @@ impl<'tokens> Parser<'tokens> {
         while self.peek_punctuator() != Some(Punctuator::RightParenthesis) {
             match self.parse_parameter() {
                 Ok(parameter) => parameters.push(parameter),
-                Err(error) => self.handle_error(error)?,
+                Err(error) => self.handle_error(error),
             }
 
             match self.peek_punctuator() {
@@ -199,7 +199,7 @@ impl<'tokens> Parser<'tokens> {
             TokenKind::Punctuator(Punctuator::Semicolon) | TokenKind::Punctuator(Punctuator::Comma) => {
                 if ctx.require_body() {
                     let range = parameters_right_paren_range.end().as_zero_range();
-                    self.handle_error(ParseDiagnostic::FunctionMustHaveDefinition { semicolon: token, range })?;
+                    self.handle_error(ParseDiagnostic::FunctionMustHaveDefinition { semicolon: token, range });
                     false
                 } else {
                     true
@@ -208,7 +208,7 @@ impl<'tokens> Parser<'tokens> {
 
             _ => {
                 let range = parameters_right_paren_range.end().as_zero_range();
-                self.handle_error(ParseDiagnostic::ExpectedSemicolonOrCurlyBracketForFunction { token, range })?;
+                self.handle_error(ParseDiagnostic::ExpectedSemicolonOrCurlyBracketForFunction { token, range });
                 false
             }
         };
@@ -225,7 +225,7 @@ impl<'tokens> Parser<'tokens> {
                     Ok(statement) => body.push(statement),
                     Err(ParseDiagnostic::EndOfFile) => break,
                     Err(error) => {
-                        self.handle_error(error)?;
+                        self.handle_error(error);
                         break;
                     }
                 }
@@ -247,19 +247,13 @@ impl<'tokens> Parser<'tokens> {
         if let TokenKind::Identifier(name) = token.kind {
             Ok(Ranged::new(range, name))
         } else {
-            self.handle_error(ParseDiagnostic::ExpectedIdentifier { token, previous, ident_purpose })?;
+            self.handle_error(ParseDiagnostic::ExpectedIdentifier { token, previous, ident_purpose });
             Ok(Ranged::new(FileRange::new(range.start(), range.start()), BabString::empty()))
         }
     }
 
-    fn handle_error(&mut self, error: ParseDiagnostic) -> Result<(), ParseDiagnostic> {
-        match self.error_behavior {
-            ParserErrorBehavior::AttemptToIgnore => {
-                self.errors.push(error);
-                Ok(())
-            }
-            ParserErrorBehavior::Propagate => return Err(error),
-        }
+    fn handle_error(&mut self, error: ParseDiagnostic){
+        self.errors.push(error);
     }
 
     #[must_use]
@@ -287,12 +281,12 @@ impl<'tokens> Parser<'tokens> {
                 })
             }
 
-            Err(error) => self.handle_error(error)
-                .map(|()| {
-                    ReturnStatement {
-                        expression: None,
-                    }
-                }),
+            Err(error) => {
+                self.handle_error(error);
+                Ok(ReturnStatement {
+                    expression: None,
+                })
+            }
         }
     }
 
@@ -302,7 +296,7 @@ impl<'tokens> Parser<'tokens> {
         let name = Ranged::new(name_token.range(), match name_token.kind {
             TokenKind::Identifier(ident) => ident,
             _ => {
-                self.handle_error(ParseDiagnostic::ExpectedNameOfStructuur { token: name_token })?;
+                self.handle_error(ParseDiagnostic::ExpectedNameOfStructuur { token: name_token });
                 BabString::empty()
             }
         });
@@ -351,13 +345,13 @@ impl<'tokens> Parser<'tokens> {
                     let next_token = self.peek_token();
                     match next_token.map(|x| &x.kind) {
                         Ok(TokenKind::Punctuator(Punctuator::Colon)) => {
-                            self.handle_error(ParseDiagnostic::ExpectedStructureMemberPrefixVeld { token })?;
+                            self.handle_error(ParseDiagnostic::ExpectedStructureMemberPrefixVeld { token });
                         }
                         Ok(TokenKind::Punctuator(Punctuator::LeftParenthesis)) => {
-                            self.handle_error(ParseDiagnostic::ExpectedStructureMethodPrefixWerkwijze { token })?;
+                            self.handle_error(ParseDiagnostic::ExpectedStructureMethodPrefixWerkwijze { token });
                         }
                         _ => {
-                            self.handle_error(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token })?;
+                            self.handle_error(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token });
                             break;
                         }
                     }
@@ -366,7 +360,7 @@ impl<'tokens> Parser<'tokens> {
 
                 _ => {
                     let token = self.consume_token()?;
-                    self.handle_error(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token })?;
+                    self.handle_error(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token });
                     break;
                 }
             }
@@ -377,7 +371,7 @@ impl<'tokens> Parser<'tokens> {
             }
 
             if require_comma && self.peek_punctuator() != Some(Punctuator::RightCurlyBracket) {
-                self.handle_error(ParseDiagnostic::ExpectedCommaAfterStructureMember { token: self.peek_token()?.clone(), location: self.token_end })?;
+                self.handle_error(ParseDiagnostic::ExpectedCommaAfterStructureMember { token: self.peek_token()?.clone(), location: self.token_end });
                 break;
             }
         }
@@ -391,7 +385,7 @@ impl<'tokens> Parser<'tokens> {
         let name = Ranged::new(name_token.range(), match name_token.kind {
             TokenKind::Identifier(ident) => ident,
             _ => {
-                self.handle_error(ParseDiagnostic::ExpectedNameOfField { token: name_token })?;
+                self.handle_error(ParseDiagnostic::ExpectedNameOfField { token: name_token });
                 BabString::empty()
             }
         });
@@ -412,7 +406,7 @@ impl<'tokens> Parser<'tokens> {
         let name = match name_token.kind {
             TokenKind::Identifier(ident) => ident,
             _ => {
-                self.handle_error(ParseDiagnostic::ExpectedNameOfVariable { token: name_token })?;
+                self.handle_error(ParseDiagnostic::ExpectedNameOfVariable { token: name_token });
                 BabString::empty()
             }
         };
@@ -421,7 +415,7 @@ impl<'tokens> Parser<'tokens> {
 
         let equals = self.consume_token()?;
         if equals.kind != TokenKind::Punctuator(Punctuator::Assignment) {
-            self.handle_error(ParseDiagnostic::ExpectedEqualsInsideVariable { token: equals })?;
+            self.handle_error(ParseDiagnostic::ExpectedEqualsInsideVariable { token: equals });
         }
 
         let expression = self.parse_expression()?;
@@ -461,7 +455,7 @@ impl<'tokens> Parser<'tokens> {
         let name_token = self.consume_token()?;
         let name_range = name_token.range();
         let TokenKind::Identifier(ref name) = name_token.kind else {
-            self.handle_error(ParseDiagnostic::TypeExpectedSpecifierName { token: name_token })?;
+            self.handle_error(ParseDiagnostic::TypeExpectedSpecifierName { token: name_token });
             return Ok(Ranged::new(name_range, Type {
                 specifier: Ranged::new(name_range, TypeSpecifier::BuiltIn(BuiltinType::Null)),
             }))
@@ -485,7 +479,7 @@ impl<'tokens> Parser<'tokens> {
         let iterator_name = match &iterator.kind {
             TokenKind::Identifier(iterator_name) => iterator_name.clone(),
             _ => {
-                self.handle_error(ParseDiagnostic::ForStatementExpectedIteratorName { token: iterator.clone() })?;
+                self.handle_error(ParseDiagnostic::ForStatementExpectedIteratorName { token: iterator.clone() });
                 BabString::empty()
             }
         };
@@ -494,7 +488,7 @@ impl<'tokens> Parser<'tokens> {
 
         let in_keyword = self.consume_token()?;
         if in_keyword.kind != TokenKind::Keyword(Keyword::In) {
-            self.handle_error(ParseDiagnostic::ForStatementExpectedInKeyword { token: in_keyword, iterator_name: iterator_name.clone() })?;
+            self.handle_error(ParseDiagnostic::ForStatementExpectedInKeyword { token: in_keyword, iterator_name: iterator_name.clone() });
         }
 
         let range = self.parse_range()?;
@@ -510,7 +504,7 @@ impl<'tokens> Parser<'tokens> {
 
             match self.parse_statement() {
                 Ok(statement) => body.push(statement),
-                Err(error) => self.handle_error(error)?,
+                Err(error) => self.handle_error(error),
             }
         }
 
@@ -524,7 +518,7 @@ impl<'tokens> Parser<'tokens> {
         let condition = match self.parse_expression() {
             Ok(expression) => expression,
             Err(error) => {
-                self.handle_error(error)?;
+                self.handle_error(error);
 
                 Ranged::new(
                     FileRange::new(self.token_end, self.token_end),
@@ -547,7 +541,7 @@ impl<'tokens> Parser<'tokens> {
             match self.parse_statement() {
                 Ok(statement) => body.push(statement),
                 Err(error) => {
-                    self.handle_error(error)?;
+                    self.handle_error(error);
                     break;
                 }
             }
@@ -561,7 +555,7 @@ impl<'tokens> Parser<'tokens> {
     fn parse_range(&mut self) -> Result<RangeExpression, ParseDiagnostic> {
         let range_keyword = self.consume_token()?;
         if range_keyword.kind != TokenKind::Keyword(Keyword::Reeks) {
-            self.handle_error(ParseDiagnostic::RangeExpectedKeyword { token: range_keyword })?;
+            self.handle_error(ParseDiagnostic::RangeExpectedKeyword { token: range_keyword });
         }
 
         self.expect_left_paren("reeks")?;
@@ -601,7 +595,7 @@ impl<'tokens> Parser<'tokens> {
             _ => {
                 (self.cursor, self.token_begin, self.token_end) = reset;
                 let replacement_token = PrimaryExpression::Reference(Ranged::new(token.range(), BabString::empty()));
-                self.handle_error(ParseDiagnostic::UnknownStartOfExpression { token })?;
+                self.handle_error(ParseDiagnostic::UnknownStartOfExpression { token });
                 return Ok(Ranged::new(FileRange::new(self.token_begin, self.token_end), replacement_token));
             }
         }?;
@@ -704,7 +698,7 @@ impl<'tokens> Parser<'tokens> {
                     };
 
                     let TokenKind::Identifier(name) = &ident_token.kind else {
-                        self.handle_error(ParseDiagnostic::PostfixMemberOrReferenceExpectedIdentifier { token: ident_token, period })?;
+                        self.handle_error(ParseDiagnostic::PostfixMemberOrReferenceExpectedIdentifier { token: ident_token, period });
                         (self.token_begin, self.token_end, self.cursor) = reset;
                         break;
                     };
@@ -748,7 +742,7 @@ impl<'tokens> Parser<'tokens> {
 
             if !arguments.is_empty() {
                 if let Err(error) = self.expect_comma("argument in werkwijzeaanroeping") {
-                    self.handle_error(error)?;
+                    self.handle_error(error);
                     break;
                 }
             }
@@ -756,7 +750,7 @@ impl<'tokens> Parser<'tokens> {
             match self.parse_expression() {
                 Ok(expr) => arguments.push(expr),
                 Err(error) => {
-                    self.handle_error(error)?;
+                    self.handle_error(error);
                 }
             }
         }
@@ -784,13 +778,13 @@ impl<'tokens> Parser<'tokens> {
                                 self.handle_error(ParseDiagnostic::ResidualTokensInTemplateString {
                                     token: tokens[parser.cursor].clone(),
                                     range: FileRange::new(tokens[parser.cursor].begin, tokens.last().unwrap().end),
-                                })?;
+                                });
                             }
 
                             TemplateStringExpressionPart::Expression(expr)
                         }
                         Err(e) => {
-                            self.handle_error(e)?;
+                            self.handle_error(e);
                             TemplateStringExpressionPart::String(BabString::empty())
                         }
                     }
@@ -830,7 +824,7 @@ impl<'tokens> Parser<'tokens> {
         let token = self.consume_token()?;
 
         if token.kind != TokenKind::Punctuator(Punctuator::LeftParenthesis) {
-            self.handle_error(ParseDiagnostic::ExpectedLeftParen { token: token.clone(), context })?;
+            self.handle_error(ParseDiagnostic::ExpectedLeftParen { token: token.clone(), context });
         }
 
         Ok(token.range())
@@ -841,7 +835,7 @@ impl<'tokens> Parser<'tokens> {
         let range = token.range();
 
         if token.kind != TokenKind::Punctuator(Punctuator::RightParenthesis) {
-            self.handle_error(ParseDiagnostic::ExpectedRightParen { token, context })?;
+            self.handle_error(ParseDiagnostic::ExpectedRightParen { token, context });
         }
 
         Ok(range)
@@ -852,7 +846,7 @@ impl<'tokens> Parser<'tokens> {
         let range = token.range();
 
         if token.kind != TokenKind::Punctuator(Punctuator::LeftCurlyBracket) {
-            self.handle_error(ParseDiagnostic::ExpectedLeftCurlyBracket { token, context })?;
+            self.handle_error(ParseDiagnostic::ExpectedLeftCurlyBracket { token, context });
         }
 
         Ok(range)
@@ -862,7 +856,7 @@ impl<'tokens> Parser<'tokens> {
         let token = self.consume_token()?;
 
         if token.kind != TokenKind::Punctuator(Punctuator::Comma) {
-            self.handle_error(ParseDiagnostic::ExpectedComma { token, context })?;
+            self.handle_error(ParseDiagnostic::ExpectedComma { token, context });
         }
 
         Ok(())
@@ -873,7 +867,7 @@ impl<'tokens> Parser<'tokens> {
 
         if token.kind != TokenKind::Punctuator(Punctuator::Colon) {
             let range = FileRange::new(self.tokens[self.cursor.saturating_sub(2)].end, token.begin);
-            self.handle_error(ParseDiagnostic::ExpectedColon { token, range, context })?;
+            self.handle_error(ParseDiagnostic::ExpectedColon { token, range, context });
         }
 
         Ok(())
@@ -882,12 +876,15 @@ impl<'tokens> Parser<'tokens> {
     fn expect_semicolon_after_statement(&mut self) -> Result<(), ParseDiagnostic> {
         let token = match self.consume_token() {
             Ok(token) => token,
-            Err(ParseDiagnostic::EndOfFile) => return self.handle_error(ParseDiagnostic::ExpectedSemicolonAfterStatement { token: self.tokens[self.cursor - 1].clone() }),
+            Err(ParseDiagnostic::EndOfFile) => {
+                self.handle_error(ParseDiagnostic::ExpectedSemicolonAfterStatement { token: self.tokens[self.cursor - 1].clone() });
+                return Ok(())
+            },
             Err(e) => return Err(e),
         };
 
         if token.kind != TokenKind::Punctuator(Punctuator::Semicolon) {
-            self.handle_error(ParseDiagnostic::ExpectedSemicolonAfterStatement { token })?;
+            self.handle_error(ParseDiagnostic::ExpectedSemicolonAfterStatement { token });
         }
 
         Ok(())
@@ -904,7 +901,7 @@ impl<'tokens> Parser<'tokens> {
         let name = match self.consume_identifier("Attribuutnaam", BabString::new_static("@")) {
             Ok(name) => name,
             Err(e) => {
-                self.handle_error(e)?;
+                self.handle_error(e);
                 Ranged::new(FileRange::default(), BabString::empty())
             }
         };
@@ -914,7 +911,7 @@ impl<'tokens> Parser<'tokens> {
             match self.parse_attribute_argument_list() {
                 Ok(arguments) => arguments,
                 Err(e) => {
-                    self.handle_error(e)?;
+                    self.handle_error(e);
                     Vec::new()
                 }
             }
@@ -940,7 +937,7 @@ impl<'tokens> Parser<'tokens> {
             match self.parse_attribute_argument() {
                 Ok(argument) => arguments.push(argument),
                 Err(e) => {
-                    self.handle_error(e)?;
+                    self.handle_error(e);
                     break;
                 }
             }
@@ -958,7 +955,7 @@ impl<'tokens> Parser<'tokens> {
                 }
 
                 _ => {
-                    self.handle_error(ParseDiagnostic::AttributeArgumentExpectedComma { token })?;
+                    self.handle_error(ParseDiagnostic::AttributeArgumentExpectedComma { token });
                     break;
                 }
             }
@@ -971,7 +968,7 @@ impl<'tokens> Parser<'tokens> {
         let name = match self.consume_identifier("Argumentnaam", BabString::new_static("(")) {
             Ok(name) => name,
             Err(e) => {
-                self.handle_error(e)?;
+                self.handle_error(e);
                 Ranged::new(FileRange::default(), BabString::empty())
             }
         };
@@ -991,7 +988,7 @@ impl<'tokens> Parser<'tokens> {
             TokenKind::Identifier(name) => Ranged::new(name_token.range(), name.clone()),
 
             _ => {
-                self.handle_error(ParseDiagnostic::ExpectedNameAfterNieuw { token: name_token.clone() })?;
+                self.handle_error(ParseDiagnostic::ExpectedNameAfterNieuw { token: name_token.clone() });
                 Ranged::new(FileRange::new(self.token_begin, self.token_begin), BabString::empty())
             }
         };
@@ -1024,7 +1021,7 @@ impl<'tokens> Parser<'tokens> {
                     let expression = match self.parse_expression() {
                         Ok(expr) => expr,
                         Err(e) => {
-                            self.handle_error(e)?;
+                            self.handle_error(e);
                             break;
                         }
                     };
@@ -1037,7 +1034,7 @@ impl<'tokens> Parser<'tokens> {
 
                 _ => {
                     let token = self.consume_token()?;
-                    self.handle_error(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token })?;
+                    self.handle_error(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token });
                     break;
                 }
             }
@@ -1048,7 +1045,7 @@ impl<'tokens> Parser<'tokens> {
             }
 
             if self.peek_punctuator() != Some(Punctuator::RightCurlyBracket) {
-                self.handle_error(ParseDiagnostic::UnexpectedTokenInsideStructureInstantiation { token: self.peek_token()?.clone() })?;
+                self.handle_error(ParseDiagnostic::UnexpectedTokenInsideStructureInstantiation { token: self.peek_token()?.clone() });
                 break;
             }
         }
