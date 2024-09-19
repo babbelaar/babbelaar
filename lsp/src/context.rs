@@ -7,9 +7,9 @@ use dashmap::DashMap;
 
 use babbelaar::{FileId, Lexer, ParseDiagnostic, ParseTree, Parser, SemanticAnalyzer, SourceCode, Token};
 use tokio::sync::{Mutex, RwLock};
-use tower_lsp::lsp_types::Url;
+use tower_lsp::lsp_types::Uri as Url;
 
-use crate::BabbelaarLspError;
+use crate::{BabbelaarLspError, UrlExtension};
 
 #[derive(Debug)]
 pub struct BabbelaarContext {
@@ -202,12 +202,12 @@ impl ContextKey for &Path {
 
 impl ContextKey for Url {
     fn to_context_key(self) -> PathBuf {
-        self.to_file_path().unwrap().to_context_key()
+        self.to_path().unwrap().to_context_key()
     }
 }
 
 impl ContextKey for &Url {
     fn to_context_key(self) -> PathBuf {
-        self.to_file_path().unwrap().to_context_key()
+        self.to_path().unwrap().to_context_key()
     }
 }

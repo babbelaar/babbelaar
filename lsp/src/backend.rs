@@ -16,12 +16,15 @@ use tokio::task::block_in_place;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 
+use tower_lsp::lsp_types::Uri as Url;
+
 use crate::actions::CodeActionsAnalysisContext;
 use crate::actions::CodeActionsAnalyzable;
 use crate::conversion::convert_file_range_to_location;
 use crate::conversion::StrExtension;
 use crate::BabbelaarContext;
 use crate::CodeActionRepository;
+use crate::PathBufExt;
 use crate::UrlExtension;
 use crate::{
     BabbelaarLspResult as Result,
@@ -155,7 +158,7 @@ impl Backend {
 
         self.context.with_all_files(|file| {
             let document = VersionedTextDocumentIdentifier {
-                uri: Url::from_file_path(file.source_code().path()).unwrap(),
+                uri: file.source_code().path().to_uri(),
                 version: file.source_code().version(),
             };
             urls.insert(file.source_code().file_id(), document.clone());
@@ -444,7 +447,7 @@ impl Backend {
         *self.client_configuration.write().await = Some(config);
 
         if let Some(folder) = workspace_folder {
-            let path = folder.to_file_path().unwrap();
+            let path = folder.to_path().unwrap();
 
             for file in read_dir(path)?.flatten() {
                 if file.file_name().to_string_lossy().ends_with(".bab") {
@@ -695,7 +698,7 @@ impl Backend {
 
                 let file_id = reference.declaration_range.file_id();
                 let path = self.context.path_of(file_id).await.unwrap();
-                let target_uri = Url::from_file_path(path).unwrap();
+                let target_uri = path.to_uri();
 
                 Some(GotoDefinitionResponse::Link(vec![
                     LocationLink {
@@ -798,7 +801,7 @@ impl Backend {
 
         TextDocumentEdit {
             text_document: OptionalVersionedTextDocumentIdentifier {
-                uri: Url::from_file_path(self.context.path_of(action.edits()[0].replacement_range().file_id()).await.unwrap()).unwrap(),
+                uri: self.context.path_of(action.edits()[0].replacement_range().file_id()).await.unwrap().to_uri(),
                 version: None,
             },
             edits,
@@ -906,7 +909,7 @@ impl Backend {
         };
 
         for folder in folders {
-            let Some(folder) = folder.uri.to_file_path().ok() else {
+            let Some(folder) = folder.uri.to_path().ok() else {
                 continue;
             };
 

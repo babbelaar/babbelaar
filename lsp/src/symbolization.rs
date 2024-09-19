@@ -6,18 +6,18 @@ use std::collections::HashMap;
 use babbelaar::{AssignStatement, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
 use log::error;
 use strum::EnumIter;
-use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Url};
+use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
 
 use crate::conversion::convert_file_range_to_location;
 
 pub struct Symbolizer {
-    uri: Url,
+    uri: Uri,
     symbols: SymbolMap,
     semantic_analyzer: SemanticAnalyzer,
 }
 
 impl Symbolizer {
-    pub fn new(uri: Url, source_code: &SourceCode) -> Self {
+    pub fn new(uri: Uri, source_code: &SourceCode) -> Self {
         Self {
             uri,
             symbols: SymbolMap::default(),
@@ -343,7 +343,7 @@ impl LspSymbol {
     }
 
     #[must_use]
-    fn to_symbol(self, uri: Url) -> SymbolInformation {
+    fn to_symbol(self, uri: Uri) -> SymbolInformation {
         #[allow(deprecated)]
         SymbolInformation {
             name: self.name,
@@ -449,7 +449,7 @@ mod tests {
         let input = SourceCode::new(PathBuf::new(), 0, BabString::new_static(input));
         let tokens: Vec<Token> = Lexer::new(&input).collect();
 
-        let mut symbolizer = Symbolizer::new(Url::parse("file:///test.h").unwrap(), &input);
+        let mut symbolizer = Symbolizer::new("file:///test.h".parse().unwrap(), &input);
         for token in &tokens {
             symbolizer.add_token(token);
         }

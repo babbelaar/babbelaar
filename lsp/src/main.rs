@@ -13,6 +13,7 @@ mod format;
 mod logger;
 mod symbolization;
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use std::{fs::File, io::Write, pin::Pin};
@@ -170,5 +171,21 @@ impl AsyncRead for Reader {
         this.file.write_all(temp_buf.filled()).unwrap();
 
         result
+    }
+}
+
+trait PathBufExt {
+    fn to_uri(&self) -> Uri;
+}
+
+impl PathBufExt for &Path {
+    fn to_uri(&self) -> Uri {
+        self.to_string_lossy().parse().unwrap()
+    }
+}
+
+impl PathBufExt for PathBuf {
+    fn to_uri(&self) -> Uri {
+        self.to_string_lossy().parse().unwrap()
     }
 }
