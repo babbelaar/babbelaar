@@ -697,7 +697,14 @@ impl Backend {
                 let target_range = convert_file_range(reference.declaration_range);
 
                 let file_id = reference.declaration_range.file_id();
-                let path = self.context.path_of(file_id).await.unwrap();
+                if file_id == FileId::INTERNAL {
+                    return Ok(None);
+                }
+
+                let Some(path) = self.context.path_of(file_id).await else {
+                    return Ok(None);
+                };
+
                 let target_uri = path.to_uri();
 
                 Some(GotoDefinitionResponse::Link(vec![
