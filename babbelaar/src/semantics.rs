@@ -1434,11 +1434,11 @@ impl SemanticReference {
     pub fn hover(&self) -> String {
         match self.local_kind {
             SemanticLocalKind::Function | SemanticLocalKind::FunctionReference => {
-                format!("```babbelaar\nwerkwijze {}(..)\n```", self.local_name)
+                format!("werkwijze {}(..)\n```", self.local_name)
             }
 
             SemanticLocalKind::Method => {
-                let mut str = format!("```babbelaar\nwerkwijze {}(", self.local_name);
+                let mut str = format!("werkwijze {}(", self.local_name);
 
                 if let SemanticType::FunctionReference(func) = &self.typ {
                     match func {
@@ -1456,12 +1456,12 @@ impl SemanticReference {
                     }
                 }
 
-                str += ")\n```";
+                str += ")";
                 str
             }
 
             SemanticLocalKind::FieldReference => {
-                format!("```babbelaar\nveld {}: {}\n```", self.local_name, self.typ)
+                format!("veld {}: {}", self.local_name, self.typ)
             }
 
             SemanticLocalKind::StructureReference => {
@@ -1471,17 +1471,21 @@ impl SemanticReference {
                     for field in &typ.fields {
                         fields += &format!("\n    veld {}: {}", field.name.value(), field.ty);
                     }
+
+                    for method in &typ.methods {
+                        fields += &format!("\n    werkwijze {}(..) {{ /* ... */ }}", method.function.name.value());
+                    }
                 }
 
-                format!("```babbelaar\nstructuur {} {{{fields}\n}}\n```", self.local_name)
+                format!("structuur {} {{{fields}\n}}", self.local_name)
             }
 
             SemanticLocalKind::Variable => {
-                format!("```babbelaar\nstel {}: {}\n```", self.local_name, self.typ)
+                format!("stel {}: {}", self.local_name, self.typ)
             }
 
             _ => {
-                format!("```babbelaar\n{}: {}\n```", self.local_name, self.typ)
+                format!("{}: {}", self.local_name, self.typ)
             }
         }
     }

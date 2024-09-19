@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use std::{fs::File, io::Write, pin::Pin};
 
-use log::{info, LevelFilter};
+use log::LevelFilter;
 use logger::Logger;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::RwLock;
@@ -54,8 +54,8 @@ impl LanguageServer for Backend {
         Ok(params)
     }
 
-    async fn initialized(&self, _: InitializedParams) {
-        info!("Initialized");
+    async fn initialized(&self, params: InitializedParams) {
+        self.initialized(params).await
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {

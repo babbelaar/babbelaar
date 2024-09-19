@@ -139,7 +139,7 @@ impl Backend {
 
     pub async fn with_semantics<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
     where
-        F: FnOnce(&SemanticAnalyzer, &SourceCode) -> Result<R>,
+        F: FnOnce(&Arc<SemanticAnalyzer>, &SourceCode) -> Result<R>,
     {
         let source_code = self.with_contents(&text_document.uri, |x| {
             Ok(x.clone())
@@ -622,21 +622,24 @@ impl Backend {
         }).await?;
 
         if hover.is_none() {
-            hover = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
+            let reference = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
                 let pos = params.text_document_position_params.position;
                 let location = source_code.canonicalize_position(source_code.file_id(), pos);
-                let reference = analyzer.find_declaration_range_at(location)
-                    .map(|(range, reference)| {
-                        Hover {
-                            contents: HoverContents::Markup(MarkupContent {
-                                kind: MarkupKind::Markdown,
-                                value: reference.hover(),
-                            }),
-                            range: Some(convert_file_range(range)),
-                        }
-                    });
-                Ok(reference)
+                Ok(analyzer.find_declaration_range_at(location))
             }).await?;
+
+            if let Some((range, reference)) = reference {
+                let text = reference.hover();
+                let file_name = self.file_humanized_name(range.file_id()).await.unwrap_or_else(|| "(onbekend)".to_string());
+
+                hover = Some(Hover {
+                    contents: HoverContents::Markup(MarkupContent {
+                        kind: MarkupKind::Markdown,
+                        value: format!("```babbelaar\n// In bestand {file_name}\n{text}\n```"),
+                    }),
+                    range: Some(convert_file_range(range)),
+                });
+            }
         }
 
         Ok(hover)
@@ -889,5 +892,30 @@ impl Backend {
                 change_annotations: None,
             }))
         }).await
+    }
+
+    pub async fn file_humanized_name(&self, id: FileId) -> Option<String> {
+        let path = self.context.path_of(id).await;
+        let path = path.as_ref()?.to_string_lossy();
+
+        let config = self.client_configuration.read().await;
+        let config = config.as_ref()?;
+
+        let Some(folders) = &config.workspace_folders else {
+            return Some(path.to_string());
+        };
+
+        for folder in folders {
+            let Some(folder) = folder.uri.to_file_path().ok() else {
+                continue;
+            };
+
+            let folder = folder.to_string_lossy();
+            if path.starts_with(folder.as_ref()) {
+                return Some(path[folder.len()..].trim_start_matches(|c| c == '/' || c == '\\').to_string());
+            }
+        }
+
+        Some(path.to_string())
     }
 }
