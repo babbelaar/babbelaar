@@ -403,6 +403,27 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
                 );
             }
 
+            Self::ExpectedSemicolonOrCurlyBracketForFunction { token, range, .. } => {
+                let indent = ctx.semantics.indentation_at(token.range().start()).unwrap_or_default();
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::StartFunctionBody,
+                        vec![
+                            FileEdit::new(*range, format!(" {{\n{indent}    // ...\n{indent}}}\n"))
+                        ]
+                    ),
+                );
+
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: ";" },
+                        vec![
+                            FileEdit::new(*range, ";")
+                        ]
+                    ),
+                );
+            }
+
             Self::ExpectedStructureMemberPrefixVeld { token } => {
                 ctx.items.push(
                     BabbelaarCodeAction::new(
@@ -437,6 +458,18 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
                         BabbelaarCodeActionType::AddKeyword { keyword: "in" },
                         vec![
                             FileEdit::new(token.range().start().as_zero_range(), "in ")
+                        ]
+                    ),
+                );
+            }
+
+            Self::FunctionMustHaveDefinition { semicolon, .. } => {
+                let indent = ctx.semantics.indentation_at(semicolon.range().start()).unwrap_or_default();
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::StartFunctionBody,
+                        vec![
+                            FileEdit::new(semicolon.range(), format!(" {{\n{indent}    // ...\n{indent}}}\n"))
                         ]
                     ),
                 );

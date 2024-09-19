@@ -11,9 +11,9 @@ structuur Persoon {
     }
 }
 
+werkwijze hallo();
+
 stel persoon = nieuw Persoon {
     voornaam: "HOi",
     achternaam: "Doei",
 };
-
-werkwijze hallo();

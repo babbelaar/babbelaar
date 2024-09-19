@@ -306,6 +306,9 @@ pub enum BabbelaarCodeActionType {
     #[error("Vul structuurvelden van `{structure}`")]
     FillStructureFields { structure: String },
 
+    #[error("Functielichaam aanmaken met `{{` en `}}`")]
+    StartFunctionBody,
+
     #[error("`{text}` invoegen")]
     Insert { text: &'static str, },
 

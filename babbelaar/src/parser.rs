@@ -190,10 +190,28 @@ impl<'tokens> Parser<'tokens> {
 
         let parameters_right_paren_range = self.expect_right_paren("werkwijzenaam")?;
 
-        let has_body = self.peek_punctuator() == Some(Punctuator::LeftCurlyBracket);
-        if has_body || ctx.require_body() {
-            self.expect_left_curly_bracket("werkwijzeargumentenlijst")?;
-        }
+        let token = self.consume_token()?;
+        let has_body = match &token.kind {
+            TokenKind::Punctuator(Punctuator::LeftCurlyBracket) => {
+                true
+            }
+
+            TokenKind::Punctuator(Punctuator::Semicolon) | TokenKind::Punctuator(Punctuator::Comma) => {
+                if ctx.require_body() {
+                    let range = parameters_right_paren_range.end().as_zero_range();
+                    self.handle_error(ParseDiagnostic::FunctionMustHaveDefinition { semicolon: token, range })?;
+                    false
+                } else {
+                    true
+                }
+            }
+
+            _ => {
+                let range = parameters_right_paren_range.end().as_zero_range();
+                self.handle_error(ParseDiagnostic::ExpectedSemicolonOrCurlyBracketForFunction { token, range })?;
+                false
+            }
+        };
 
         let body = if has_body {
             let mut body = Vec::new();
@@ -1092,6 +1110,9 @@ pub enum ParseDiagnostic {
     #[error("Puntkomma verwacht ';' na statement, maar kreeg: {token}")]
     ExpectedSemicolonAfterStatement { token: Token },
 
+    #[error("Accolade `{{` of puntkomma `;` verwacht, maar kreeg: {token}")]
+    ExpectedSemicolonOrCurlyBracketForFunction { token: Token, range: FileRange },
+
     #[error("Onjuiste velddeclaratie, velden moeten starten met `veld`")]
     ExpectedStructureMemberPrefixVeld { token: Token },
 
@@ -1139,6 +1160,9 @@ pub enum ParseDiagnostic {
 
     #[error("Onverwachte token binnen structuur: `{token}`")]
     UnexpectedTokenInsideStructureInstantiation { token: Token },
+
+    #[error("Functie moet een definitie bevatten")]
+    FunctionMustHaveDefinition { semicolon: Token, range: FileRange },
 }
 
 impl ParseDiagnostic {
@@ -1155,6 +1179,7 @@ impl ParseDiagnostic {
             Self::ExpectedCommaAfterStructureMember { token, .. } => Some(token),
             Self::ExpectedStructureMethodPrefixWerkwijze { token } => Some(token),
             Self::ExpectedSemicolonAfterStatement { token, .. } => Some(token),
+            Self::ExpectedSemicolonOrCurlyBracketForFunction { token, .. } => Some(token),
             Self::ExpectedNameAfterNieuw { token } => Some(token),
             Self::ExpectedNameOfField { token } => Some(token),
             Self::ExpectedNameOfStructuur { token } => Some(token),
@@ -1165,6 +1190,7 @@ impl ParseDiagnostic {
             Self::FunctionStatementExpectedName { token } => Some(token),
             Self::ForStatementExpectedIteratorName { token } => Some(token),
             Self::ForStatementExpectedInKeyword { token, .. } => Some(token),
+            Self::FunctionMustHaveDefinition { semicolon, .. } => Some(semicolon),
             Self::ParameterExpectedName { token } => Some(token),
             Self::ParameterExpectedComma { token } => token.as_ref(),
             Self::PostfixMemberOrReferenceExpectedIdentifier { token, .. } => Some(token),
@@ -1182,6 +1208,8 @@ impl ParseDiagnostic {
         match self {
             Self::ExpectedColon { range, .. } => Some(*range),
             Self::ExpectedCommaAfterStructureMember { location, .. } => Some(location.as_zero_range()),
+            Self::ExpectedSemicolonOrCurlyBracketForFunction { range, .. } => Some(*range),
+            Self::FunctionMustHaveDefinition { range, .. } => Some(*range),
             Self::PostfixMemberOrReferenceExpectedIdentifier { period, .. } => Some(period.range()),
             Self::ResidualTokensInTemplateString { range, .. } => Some(*range),
             _ => Some(self.token()?.range()),

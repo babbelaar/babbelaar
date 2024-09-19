@@ -983,7 +983,7 @@ impl SemanticAnalyzer {
         )
     }
 
-    fn indentation_at(&self, start: FileLocation) -> Option<&str> {
+    pub fn indentation_at(&self, start: FileLocation) -> Option<&str> {
         self.files.get(&start.file_id())?.indentation_at(start)
     }
 
