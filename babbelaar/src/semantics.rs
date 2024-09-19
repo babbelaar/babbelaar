@@ -874,10 +874,11 @@ impl SemanticAnalyzer {
                     SemanticRelatedMessage::StructureDefinedHere { name: custom.name.value().clone() }
                 );
 
+                let create_method_action = self.create_action_create_method(&custom, expression);
                 let diag = SemanticDiagnostic::new(
                     expression.method_name.range(),
                     SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value().clone() }
-                );
+                ).with_action(create_method_action);
 
                 self.diagnostics.push(diag.with_related(struct_hint));
 
@@ -944,16 +945,8 @@ impl SemanticAnalyzer {
 
     #[must_use]
     fn create_action_create_field(&self, structure: &SemanticStructure, name: &str, ty: SemanticType) -> BabbelaarCodeAction {
-        let (add_location, add_text) = if let Some(last) = structure.fields.last() {
-            let indent = self.indentation_at(last.name.range().start()).unwrap_or_default();
-            let location = FileLocation::new(structure.name.range().file_id(), 0, last.name.range().start().line(), usize::MAX);
-
-            (location, format!("\n{indent}veld {name}: {ty},"))
-        } else {
-            let indent = self.indentation_at(structure.name.range().start()).unwrap_or_default();
-
-            (structure.left_curly_range.end(), format!("\n{indent}    veld {name}: {ty},"))
-        };
+        let (add_location, indent) = self.calculate_new_field_or_method_location(structure);
+        let add_text = format!("\n{indent}veld {name}: {ty},");
 
         BabbelaarCodeAction::new(
             BabbelaarCodeActionType::CreateField { name: name.to_string() },
@@ -961,8 +954,50 @@ impl SemanticAnalyzer {
         )
     }
 
+    #[must_use]
+    fn create_action_create_method(&mut self, structure: &SemanticStructure, method: &MethodCallExpression) -> BabbelaarCodeAction {
+        let name = method.method_name.value().clone();
+        let (add_location, indent) = self.calculate_new_field_or_method_location(structure);
+
+        let mut add_text = format!("\n\n{indent}werkwijze {name}(");
+
+        for (idx, arg) in method.call.arguments.iter().enumerate() {
+            if idx != 0 {
+                add_text += ", ";
+            }
+
+            let typ = self.analyze_expression(arg).ty;
+            add_text += &format!("param{idx}: {typ}");
+        }
+
+        add_text += ") {\n\n";
+        add_text += &indent;
+        add_text += "}";
+
+        BabbelaarCodeAction::new(
+            BabbelaarCodeActionType::CreateMethod {
+                name,
+                structure: structure.name.value().clone(),
+            },
+            vec![FileEdit::new(add_location.as_zero_range(), add_text)]
+        )
+    }
+
     fn indentation_at(&self, start: FileLocation) -> Option<&str> {
         self.files.get(&start.file_id())?.indentation_at(start)
+    }
+
+    fn calculate_new_field_or_method_location(&self, structure: &SemanticStructure) -> (FileLocation, String) {
+        if let Some(last) = structure.fields.last() {
+            let indent = self.indentation_at(last.name.range().start()).unwrap_or_default();
+            let location = FileLocation::new(structure.name.range().file_id(), 0, last.name.range().start().line(), usize::MAX);
+
+            (location, format!("{indent}"))
+        } else {
+            let indent = self.indentation_at(structure.name.range().start()).unwrap_or_default();
+
+            (structure.left_curly_range.end(), format!("{indent}    "))
+        }
     }
 }
 

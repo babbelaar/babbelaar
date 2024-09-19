@@ -11,4 +11,4 @@ stel anoniem = nieuw Persoon {
     achternaam: "Bel",
 };
 
-anoniem.zegGedag();
+anoniem.zegDoei();

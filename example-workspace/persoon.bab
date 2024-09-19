@@ -2,8 +2,12 @@ structuur Persoon {
     veld voornaam: Slinger,
     veld achternaam: Slinger,
 
-    werkwijze zegGedag() {
-        schrijf(€"Hallo, ik ben {dit.voornaam} {dit.achternaam}!");
+    werkwijze zegDoei() {
+
+    }
+
+    werkwijze zegGedag(param0: Slinger) {
+        schrijf(€"{param0}, ik ben {dit.voornaam} {dit.achternaam}!");
     }
 }
 
@@ -11,3 +15,5 @@ stel persoon = nieuw Persoon {
     voornaam: "HOi",
     achternaam: "Doei",
 };
+
+werkwijze hallo();
