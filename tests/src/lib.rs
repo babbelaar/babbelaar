@@ -10,6 +10,7 @@ fn parse<'a>(input: &'a SourceCode) -> ParseTree {
     let tokens: Vec<Token> = Lexer::new(input).collect();
     let mut parser = Parser::new(PathBuf::new(), &tokens);
     let tree = parser.parse_tree();
+    assert!(parser.diagnostics().is_empty(), "Parse errors: {:#?}", parser.diagnostics());
 
     let mut semantics = SemanticAnalyzer::new_single(input);
     semantics.analyze_tree_phase_1(&tree);

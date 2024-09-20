@@ -155,11 +155,11 @@ fn parse(path: &Path) -> (SourceCode, ParseTree) {
 
     let mut parser = Parser::new(path.to_path_buf(), &tokens);
     let tree = parser.parse_tree();
-    if parser.errors.is_empty() {
+    if parser.diagnostics().is_empty() {
         return (source_code, tree);
     }
 
-    for e in parser.errors {
+    for e in parser.diagnostics() {
         eprintln!("{}: {}", "fout".red().bold(), e.to_string().bold());
 
         if let Some(range) = e.range() {

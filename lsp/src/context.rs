@@ -167,7 +167,7 @@ impl BabbelaarFile {
         let tree = parser.parse_tree();
 
         self.tree = Some(tree);
-        self.parse_errors = parser.errors;
+        self.parse_errors = parser.into_diagnostics();
 
         (self.tree.as_ref().unwrap(), &self.source_code)
     }

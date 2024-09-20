@@ -18,7 +18,7 @@ pub struct Parser<'tokens> {
     pub cursor: usize,
     pub token_begin: FileLocation,
     pub token_end: FileLocation,
-    pub errors: Vec<ParseDiagnostic>,
+    diagnostics: Vec<ParseDiagnostic>,
 }
 
 impl<'tokens> Parser<'tokens> {
@@ -27,7 +27,7 @@ impl<'tokens> Parser<'tokens> {
             path,
             token_begin: Default::default(),
             token_end: Default::default(),
-            errors: Vec::new(),
+            diagnostics: Vec::new(),
             tokens,
             cursor: 0,
         }
@@ -44,6 +44,16 @@ impl<'tokens> Parser<'tokens> {
         }
 
         tree
+    }
+
+    #[must_use]
+    pub fn diagnostics(&self) -> &[ParseDiagnostic] {
+        &self.diagnostics
+    }
+
+    #[must_use]
+    pub fn into_diagnostics(self) -> Vec<ParseDiagnostic> {
+        self.diagnostics
     }
 
     pub fn parse_statement(&mut self) -> Result<Statement, ParseError> {
@@ -238,7 +248,7 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn emit_diagnostic(&mut self, error: ParseDiagnostic){
-        self.errors.push(error);
+        self.diagnostics.push(error);
     }
 
     fn handle_error(&mut self, _: ParseError) {}

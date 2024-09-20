@@ -23,5 +23,5 @@ fn test(#[case] input: &str) {
         }
     }
 
-    assert!(parser.errors.is_empty());
+    assert!(parser.diagnostics().is_empty());
 }
