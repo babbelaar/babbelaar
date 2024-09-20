@@ -169,8 +169,7 @@ impl Backend {
             let analyzer = SemanticAnalyzer::new(HashMap::new());
 
             for err in errors {
-                let Some(range) = err.range() else { continue };
-
+                let range = err.range();
                 let mut ctx = CodeActionsAnalysisContext {
                     semantics: &analyzer,
                     items: Vec::new(),

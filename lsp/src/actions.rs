@@ -290,8 +290,6 @@ impl CodeActionsAnalyzable for StructureInstantiationExpression {
 impl CodeActionsAnalyzable for ParseDiagnostic {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         match self {
-            Self::EndOfFile => (),
-
             Self::AttributeArgumentExpectedComma { token } => {
                 ctx.items.push(
                     BabbelaarCodeAction::new(
@@ -478,16 +476,14 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
             Self::ParameterExpectedName { .. } => (),
 
             Self::ParameterExpectedComma { token } => {
-                if let Some(token) = token {
-                   ctx.items.push(
-                        BabbelaarCodeAction::new(
-                            BabbelaarCodeActionType::Insert{ text: ", " },
-                            vec![
-                                FileEdit::new(token.begin.as_zero_range(), ", ")
-                            ]
-                        ),
-                    );
-                }
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: ", " },
+                        vec![
+                            FileEdit::new(token.begin.as_zero_range(), ", ")
+                        ]
+                    ),
+                );
             }
 
             Self::PostfixMemberOrReferenceExpectedIdentifier { .. } => (),

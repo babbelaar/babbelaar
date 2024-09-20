@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{fmt::Display, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use strum::AsRefStr;
 
@@ -180,7 +180,7 @@ impl<'tokens> Parser<'tokens> {
 
                 _ => {
                     self.emit_diagnostic(ParseDiagnostic::ParameterExpectedComma{
-                        token: self.peek_token().ok().cloned(),
+                        token: self.peek_token().ok().cloned().unwrap_or_else(|| self.tokens[self.tokens.len() - 1].clone()),
                     });
                     continue;
                 }
@@ -1059,9 +1059,6 @@ impl<'tokens> Parser<'tokens> {
 
 #[derive(Clone, Debug, thiserror::Error, AsRefStr)]
 pub enum ParseDiagnostic {
-    #[error("Onverwacht einde van het bestand")]
-    EndOfFile,
-
     #[error("Komma `,` of gesloten rond haakje `)` verwacht binnen attribuutargumentlijst, maar kreeg: {token}")]
     AttributeArgumentExpectedComma { token: Token },
 
@@ -1128,8 +1125,8 @@ pub enum ParseDiagnostic {
     #[error("Parameternaam verwacht, maar kreeg: {token}")]
     ParameterExpectedName { token: Token },
 
-    #[error("Komma `,` of gesloten rond haakje `)` verwacht binnen parameterlijst, maar kreeg: {}", token.as_ref().map(|x| x as &dyn Display).unwrap_or_else(|| &"(niets)" as &'static dyn Display))]
-    ParameterExpectedComma { token: Option<Token> },
+    #[error("Komma `,` of gesloten rond haakje `)` verwacht binnen parameterlijst, maar kreeg: {token}")]
+    ParameterExpectedComma { token: Token },
 
     #[error("Methode of structuurlid verwacht na punt `.`, maar kreeg: {token}")]
     PostfixMemberOrReferenceExpectedIdentifier { token: Token, period: Token },
@@ -1160,53 +1157,52 @@ pub enum ParseDiagnostic {
 }
 
 impl ParseDiagnostic {
-    pub fn token(&self) -> Option<&Token> {
+    pub fn token(&self) -> &Token {
         match self {
-            Self::EndOfFile => None,
-            Self::AttributeArgumentExpectedComma { token } => Some(token),
-            Self::StatementInvalidStart { token } => Some(token),
-            Self::ExpectedLeftCurlyBracket { token, .. } => Some(token),
-            Self::ExpectedLeftParen { token, .. } => Some(token),
-            Self::ExpectedRightParen { token, .. } => Some(token),
-            Self::ExpectedColon { token, .. } => Some(token),
-            Self::ExpectedComma { token, .. } => Some(token),
-            Self::ExpectedCommaAfterStructureMember { token, .. } => Some(token),
-            Self::ExpectedStructureMethodPrefixWerkwijze { token } => Some(token),
-            Self::ExpectedSemicolonAfterStatement { token, .. } => Some(token),
-            Self::ExpectedSemicolonOrCurlyBracketForFunction { token, .. } => Some(token),
-            Self::ExpectedNameAfterNieuw { token } => Some(token),
-            Self::ExpectedNameOfField { token } => Some(token),
-            Self::ExpectedNameOfStructuur { token } => Some(token),
-            Self::ExpectedNameOfVariable { token } => Some(token),
-            Self::ExpectedIdentifier { token, .. } => Some(token),
-            Self::ExpectedEqualsInsideVariable { token } => Some(token),
-            Self::ExpectedStructureMemberPrefixVeld { token } => Some(token),
-            Self::FunctionStatementExpectedName { token } => Some(token),
-            Self::ForStatementExpectedIteratorName { token } => Some(token),
-            Self::ForStatementExpectedInKeyword { token, .. } => Some(token),
-            Self::FunctionMustHaveDefinition { semicolon, .. } => Some(semicolon),
-            Self::ParameterExpectedName { token } => Some(token),
-            Self::ParameterExpectedComma { token } => token.as_ref(),
-            Self::PostfixMemberOrReferenceExpectedIdentifier { token, .. } => Some(token),
-            Self::RangeExpectedKeyword { token } => Some(token),
-            Self::ResidualTokensInTemplateString { token, .. } => Some(token),
-            Self::TypeExpectedSpecifierName { token } => Some(token),
-            Self::UnknownStartOfExpression { token } => Some(token),
-            Self::UnexpectedTokenAtStartOfStructureMember { token } => Some(token),
-            Self::UnexpectedTokenAtStartOfStructureInstantiation { token } => Some(token),
-            Self::UnexpectedTokenInsideStructureInstantiation { token } => Some(token),
+            Self::AttributeArgumentExpectedComma { token } => token,
+            Self::StatementInvalidStart { token } => token,
+            Self::ExpectedLeftCurlyBracket { token, .. } => token,
+            Self::ExpectedLeftParen { token, .. } => token,
+            Self::ExpectedRightParen { token, .. } => token,
+            Self::ExpectedColon { token, .. } => token,
+            Self::ExpectedComma { token, .. } => token,
+            Self::ExpectedCommaAfterStructureMember { token, .. } => token,
+            Self::ExpectedStructureMethodPrefixWerkwijze { token } => token,
+            Self::ExpectedSemicolonAfterStatement { token, .. } => token,
+            Self::ExpectedSemicolonOrCurlyBracketForFunction { token, .. } => token,
+            Self::ExpectedNameAfterNieuw { token } => token,
+            Self::ExpectedNameOfField { token } => token,
+            Self::ExpectedNameOfStructuur { token } => token,
+            Self::ExpectedNameOfVariable { token } => token,
+            Self::ExpectedIdentifier { token, .. } => token,
+            Self::ExpectedEqualsInsideVariable { token } => token,
+            Self::ExpectedStructureMemberPrefixVeld { token } => token,
+            Self::FunctionStatementExpectedName { token } => token,
+            Self::ForStatementExpectedIteratorName { token } => token,
+            Self::ForStatementExpectedInKeyword { token, .. } => token,
+            Self::FunctionMustHaveDefinition { semicolon, .. } => semicolon,
+            Self::ParameterExpectedName { token } => token,
+            Self::ParameterExpectedComma { token } => token,
+            Self::PostfixMemberOrReferenceExpectedIdentifier { token, .. } => token,
+            Self::RangeExpectedKeyword { token } => token,
+            Self::ResidualTokensInTemplateString { token, .. } => token,
+            Self::TypeExpectedSpecifierName { token } => token,
+            Self::UnknownStartOfExpression { token } => token,
+            Self::UnexpectedTokenAtStartOfStructureMember { token } => token,
+            Self::UnexpectedTokenAtStartOfStructureInstantiation { token } => token,
+            Self::UnexpectedTokenInsideStructureInstantiation { token } => token,
         }
     }
 
-    pub fn range(&self) -> Option<FileRange> {
+    pub fn range(&self) -> FileRange {
         match self {
-            Self::ExpectedColon { range, .. } => Some(*range),
-            Self::ExpectedCommaAfterStructureMember { location, .. } => Some(location.as_zero_range()),
-            Self::ExpectedSemicolonOrCurlyBracketForFunction { range, .. } => Some(*range),
-            Self::FunctionMustHaveDefinition { range, .. } => Some(*range),
-            Self::PostfixMemberOrReferenceExpectedIdentifier { period, .. } => Some(period.range()),
-            Self::ResidualTokensInTemplateString { range, .. } => Some(*range),
-            _ => Some(self.token()?.range()),
+            Self::ExpectedColon { range, .. } => *range,
+            Self::ExpectedCommaAfterStructureMember { location, .. } => location.as_zero_range(),
+            Self::ExpectedSemicolonOrCurlyBracketForFunction { range, .. } => *range,
+            Self::FunctionMustHaveDefinition { range, .. } => *range,
+            Self::PostfixMemberOrReferenceExpectedIdentifier { period, .. } => period.range(),
+            Self::ResidualTokensInTemplateString { range, .. } => *range,
+            _ => self.token().range(),
         }
     }
 
