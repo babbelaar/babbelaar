@@ -162,8 +162,7 @@ impl BabbelaarFile {
         let tokens = self.tokens.as_ref().expect("ensure_lexed() should've prepared our tokens");
 
         let path = self.source_code.path().to_path_buf();
-        let mut parser = Parser::new(path, &tokens)
-            .attempt_to_ignore_errors();
+        let mut parser = Parser::new(path, &tokens);
 
         let tree = parser.parse_tree();
 

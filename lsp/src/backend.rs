@@ -262,7 +262,7 @@ impl Backend {
         let caret_column = params.text_document_position_params.position.character as usize;
 
         self.lexed_document(&params.text_document_position_params.text_document, |tokens, _| {
-            let mut parser = Parser::new(params.text_document_position_params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(params.text_document_position_params.text_document.uri.to_path()?, &tokens);
             info!("Caret is @ {caret_line}:{caret_column}");
             loop {
                 let res = parser.parse_statement();
@@ -397,7 +397,7 @@ impl Backend {
                 symbolizer.add_token(token);
             }
 
-            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens);
             let tree = parser.parse_tree();
 
             for statement in tree.all() {
@@ -531,7 +531,7 @@ impl Backend {
                 symbolizer.add_token(token);
             }
 
-            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens);
             let tree = parser.parse_tree();
 
             for statement in tree.all() {
@@ -656,7 +656,7 @@ impl Backend {
         let mut hints = Vec::new();
 
         self.lexed_document(&params.text_document, |tokens, _| {
-            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
+            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens);
             let tree = parser.parse_tree();
 
             for statement in tree.all() {

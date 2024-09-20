@@ -19,27 +19,17 @@ pub struct Parser<'tokens> {
     pub token_begin: FileLocation,
     pub token_end: FileLocation,
     pub errors: Vec<ParseDiagnostic>,
-    error_behavior: ParserErrorBehavior,
 }
 
 impl<'tokens> Parser<'tokens> {
     pub fn new(path: PathBuf, tokens: &'tokens [Token]) -> Self {
         Self {
             path,
-            error_behavior: ParserErrorBehavior::Propagate,
             token_begin: Default::default(),
             token_end: Default::default(),
             errors: Vec::new(),
             tokens,
             cursor: 0,
-        }
-    }
-
-    #[must_use]
-    pub fn attempt_to_ignore_errors(self) -> Self {
-        Self {
-            error_behavior: ParserErrorBehavior::AttemptToIgnore,
-            ..self
         }
     }
 
@@ -1220,12 +1210,6 @@ impl ParseDiagnostic {
 pub enum ParseError {
     #[error("Onverwacht einde van het bestand")]
     EndOfFile,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ParserErrorBehavior {
-    Propagate,
-    AttemptToIgnore,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
