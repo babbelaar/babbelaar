@@ -7,6 +7,7 @@ edition.workspace = true
 dap = "0.4.1-alpha1"
 thiserror = "1"
 strum = { version = "0.26", features = ["derive"] }
+log = "0.4"
 
 babbelaar = { path = "../babbelaar" }
 # babbelaar-compiler = { path = "../compiler" }

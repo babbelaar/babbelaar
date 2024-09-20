@@ -7,6 +7,7 @@
 mod debugger;
 mod debug_adapter;
 mod interpreter;
+mod logger;
 mod scope;
 
 use std::{fs::read_dir, path::{Path, PathBuf}, process::exit};
@@ -15,6 +16,7 @@ pub use babbelaar::*;
 // use babbelaar_compiler::LlvmContext;
 use clap::Subcommand;
 use colored::Colorize;
+use logger::Logger;
 
 pub use self::{
     debugger::{
@@ -58,6 +60,7 @@ enum Commands {
 }
 
 fn main() {
+    Logger::initialize();
     let args = Args::parse_args();
 
     match args.command {
