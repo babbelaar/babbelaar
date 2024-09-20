@@ -398,7 +398,7 @@ impl Backend {
             }
 
             let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
-            let tree = parser.parse_tree()?;
+            let tree = parser.parse_tree();
 
             for statement in tree.all() {
                 symbolizer.add_statement(statement);
@@ -425,7 +425,7 @@ impl Backend {
                 end.character = last.end.column() as _;
             }
 
-            for statement in parser.parse_tree().unwrap_or_default().all() {
+            for statement in parser.parse_tree().all() {
                 result += &statement.format_to_string();
                 result += "\n";
             }
@@ -532,7 +532,7 @@ impl Backend {
             }
 
             let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
-            let tree = parser.parse_tree()?;
+            let tree = parser.parse_tree();
 
             for statement in tree.all() {
                 symbolizer.add_statement(statement);
@@ -657,7 +657,7 @@ impl Backend {
 
         self.lexed_document(&params.text_document, |tokens, _| {
             let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens).attempt_to_ignore_errors();
-            let tree = parser.parse_tree()?;
+            let tree = parser.parse_tree();
 
             for statement in tree.all() {
                 match &statement.kind {

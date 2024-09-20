@@ -127,7 +127,7 @@ pub struct BabbelaarFile {
     source_code: SourceCode,
 
     tokens: Option<Vec<Token>>,
-    tree: Option<Result<ParseTree, ParseDiagnostic>>,
+    tree: Option<ParseTree>,
     parse_errors: Vec<ParseDiagnostic>,
 }
 
@@ -156,7 +156,7 @@ impl BabbelaarFile {
         self.ensure_lexed();
 
         if self.tree.is_some() {
-            return (self.tree.as_ref().unwrap().as_ref().unwrap(), &self.source_code);
+            return (self.tree.as_ref().unwrap(), &self.source_code);
         }
 
         let tokens = self.tokens.as_ref().expect("ensure_lexed() should've prepared our tokens");
@@ -170,7 +170,7 @@ impl BabbelaarFile {
         self.tree = Some(tree);
         self.parse_errors = parser.errors;
 
-        (self.tree.as_ref().unwrap().as_ref().unwrap(), &self.source_code)
+        (self.tree.as_ref().unwrap(), &self.source_code)
     }
 
     pub fn parse_diagnostics(&mut self) -> &[ParseDiagnostic] {

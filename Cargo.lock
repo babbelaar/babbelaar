@@ -125,6 +125,7 @@ dependencies = [
  "clap",
  "colored",
  "dap",
+ "log",
  "rstest",
  "strum",
  "thiserror",

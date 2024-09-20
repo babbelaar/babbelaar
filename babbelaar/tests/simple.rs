@@ -19,8 +19,7 @@ fn test(#[case] input: &str) {
     loop {
         match parser.parse_statement() {
             Ok(stmt) => println!("Stmt: {stmt:#?}"),
-            Err(ParseDiagnostic::EndOfFile) => break,
-            Err(e) => panic!("Unexpected error: {e}"),
+            Err(ParseError::EndOfFile) => break,
         }
     }
 
