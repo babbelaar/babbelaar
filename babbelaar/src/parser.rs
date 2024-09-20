@@ -19,6 +19,7 @@ pub struct Parser<'tokens> {
     pub token_begin: FileLocation,
     pub token_end: FileLocation,
     diagnostics: Vec<ParseDiagnostic>,
+    end_of_file_token: Token,
 }
 
 impl<'tokens> Parser<'tokens> {
@@ -30,6 +31,11 @@ impl<'tokens> Parser<'tokens> {
             diagnostics: Vec::new(),
             tokens,
             cursor: 0,
+            end_of_file_token: Token {
+                kind: TokenKind::Identifier(BabString::empty()),
+                begin: tokens.last().unwrap().end,
+                end: tokens.last().unwrap().end,
+            }
         }
     }
 
@@ -189,16 +195,16 @@ impl<'tokens> Parser<'tokens> {
 
         let parameters_right_paren_range = self.expect_right_paren("werkwijzenaam")?;
 
-        let token = self.consume_token()?;
-        let has_body = match &token.kind {
-            TokenKind::Punctuator(Punctuator::LeftCurlyBracket) => {
+        let token = self.consume_token();
+        let has_body = match token.as_ref().map(|x| &x.kind) {
+            Ok(TokenKind::Punctuator(Punctuator::LeftCurlyBracket)) => {
                 true
             }
 
-            TokenKind::Punctuator(Punctuator::Semicolon) | TokenKind::Punctuator(Punctuator::Comma) => {
+            Ok(TokenKind::Punctuator(Punctuator::Semicolon)) | Ok(TokenKind::Punctuator(Punctuator::Comma)) => {
                 if ctx.require_body() {
                     let range = parameters_right_paren_range.end().as_zero_range();
-                    self.emit_diagnostic(ParseDiagnostic::FunctionMustHaveDefinition { semicolon: token, range });
+                    self.emit_diagnostic(ParseDiagnostic::FunctionMustHaveDefinition { semicolon: token.unwrap(), range });
                     false
                 } else {
                     true
@@ -207,6 +213,7 @@ impl<'tokens> Parser<'tokens> {
 
             _ => {
                 let range = parameters_right_paren_range.end().as_zero_range();
+                let token = token.unwrap_or_else(|_| self.end_of_file_token.clone());
                 self.emit_diagnostic(ParseDiagnostic::ExpectedSemicolonOrCurlyBracketForFunction { token, range });
                 false
             }
