@@ -413,9 +413,7 @@ impl Backend {
             let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens);
             let tree = parser.parse_tree();
 
-            for statement in tree.all() {
-                symbolizer.add_statement(statement);
-            }
+            symbolizer.add_tree(&tree);
 
             let tokens = symbolizer.to_tokens();
 
@@ -547,9 +545,7 @@ impl Backend {
             let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens);
             let tree = parser.parse_tree();
 
-            for statement in tree.all() {
-                symbolizer.add_statement(statement);
-            }
+            symbolizer.add_tree(&tree);
 
             let response = symbolizer.to_response();
             Ok(Some(response))

@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -25,7 +25,16 @@ impl Symbolizer {
         }
     }
 
-    pub fn add_statement(&mut self, statement: &Statement) {
+    pub fn add_tree(&mut self, tree: &ParseTree) {
+        self.semantic_analyzer.analyze_tree_phase_1(tree);
+        self.semantic_analyzer.analyze_tree_phase_2(tree);
+
+        for statement in tree.all() {
+            self.add_statement(statement);
+        }
+    }
+
+    fn add_statement(&mut self, statement: &Statement) {
         self.add_attributes(&statement.attributes);
 
         match &statement.kind {
@@ -38,8 +47,6 @@ impl Symbolizer {
             StatementKind::Structure(statement) => self.add_statement_structure(statement),
             StatementKind::Variable(statement) => self.add_statement_variable(statement),
         }
-
-        self.semantic_analyzer.analyze_statement(statement);
     }
 
     pub fn add_token(&mut self, token: &Token) {
