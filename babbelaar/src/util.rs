@@ -260,15 +260,19 @@ pub struct LspCompletion<'a> {
 
 #[derive(Debug, Clone, Copy, Error)]
 pub enum BabbelaarCommand {
-    #[error("Symbool hernoemen")]
-    RenameSymbol,
+    #[error("Veld hernoemen")]
+    RenameField,
+
+    #[error("Werkwijze hernoemen")]
+    RenameFunction,
 }
 
 impl BabbelaarCommand {
     #[must_use]
     pub const fn fix_kind(&self) -> BabbelaarFixKind {
         match self {
-            Self::RenameSymbol => BabbelaarFixKind::Refactor,
+            Self::RenameField => BabbelaarFixKind::Refactor,
+            Self::RenameFunction => BabbelaarFixKind::Refactor,
         }
     }
 }

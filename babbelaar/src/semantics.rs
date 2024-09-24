@@ -66,7 +66,7 @@ impl SemanticAnalyzer {
                                     name: BabString::clone(&function.name)
                                 }
                             ))
-                            .with_action(BabbelaarCodeAction::new_command(function.name.range(), BabbelaarCommand::RenameSymbol))
+                            .with_action(BabbelaarCodeAction::new_command(function.name.range(), BabbelaarCommand::RenameFunction))
                     );
                     continue;
                 }
@@ -246,10 +246,13 @@ impl SemanticAnalyzer {
         let mut names = HashSet::new();
         for field in &semantic_structure.fields {
             if !names.insert(field.name.value()) {
-                self.diagnostics.push(SemanticDiagnostic::new(
-                    field.name.range(),
-                    SemanticDiagnosticKind::DuplicateFieldName { name: field.name.value().clone() },
-                ));
+                self.diagnostics.push(
+                    SemanticDiagnostic::new(
+                        field.name.range(),
+                        SemanticDiagnosticKind::DuplicateFieldName { name: field.name.value().clone() },
+                    )
+                    .with_action(BabbelaarCodeAction::new_command(field.name.range(), BabbelaarCommand::RenameField))
+                );
             }
 
             self.analyze_attributes_for_field(field);
@@ -260,10 +263,13 @@ impl SemanticAnalyzer {
         let mut names = HashSet::new();
         for method in &structure.methods {
             if !names.insert(method.function.name.value()) {
-                self.diagnostics.push(SemanticDiagnostic::new(
-                    method.function.name.range(),
-                    SemanticDiagnosticKind::DuplicateMethodName { name: method.function.name.value().clone(), structure: structure.name.value().clone() },
-                ));
+                self.diagnostics.push(
+                    SemanticDiagnostic::new(
+                        method.function.name.range(),
+                        SemanticDiagnosticKind::DuplicateMethodName { name: method.function.name.value().clone(), structure: structure.name.value().clone() },
+                    )
+                    .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
+                );
             }
 
             self.analyze_function(&method.function, this_type.clone());

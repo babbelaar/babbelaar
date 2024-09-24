@@ -36,11 +36,17 @@ pub fn convert_position(location: FileLocation) -> Position {
 #[must_use]
 pub fn convert_command(command: &BabbelaarCommand) -> Command {
     match command {
-        BabbelaarCommand::RenameSymbol => Command {
-            title: "Symbool hernoemen".into(),
+        BabbelaarCommand::RenameField => Command {
+            title: command.to_string(),
             command: "editor.action.rename".into(),
             arguments: None,
-        }
+        },
+
+        BabbelaarCommand::RenameFunction => Command {
+            title: command.to_string(),
+            command: "editor.action.rename".into(),
+            arguments: None,
+        },
     }
 }
 
