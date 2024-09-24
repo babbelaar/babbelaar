@@ -258,10 +258,27 @@ pub struct LspCompletion<'a> {
     pub inline_detail: &'a str,
 }
 
+#[derive(Debug, Clone, Copy, Error)]
+pub enum BabbelaarCommand {
+    #[error("Symbool hernoemen")]
+    RenameSymbol,
+}
+
+impl BabbelaarCommand {
+    #[must_use]
+    pub const fn fix_kind(&self) -> BabbelaarFixKind {
+        match self {
+            Self::RenameSymbol => BabbelaarFixKind::Refactor,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BabbelaarCodeAction {
     ty: BabbelaarCodeActionType,
     edits: Vec<FileEdit>,
+    command: Option<BabbelaarCommand>,
+    fix_kind: BabbelaarFixKind,
 }
 
 impl BabbelaarCodeAction {
@@ -270,6 +287,21 @@ impl BabbelaarCodeAction {
         Self {
             ty,
             edits,
+            command: None,
+            fix_kind: BabbelaarFixKind::QuickFix,
+        }
+    }
+
+    #[must_use]
+    pub fn new_command(range: FileRange, command: BabbelaarCommand) -> Self {
+        Self {
+            ty: BabbelaarCodeActionType::Command(command),
+            edits: vec![FileEdit {
+                replacement_range: range.start().as_zero_range(),
+                new_text: String::new(),
+            }],
+            command: Some(command),
+            fix_kind: command.fix_kind(),
         }
     }
 
@@ -282,6 +314,38 @@ impl BabbelaarCodeAction {
     pub fn edits(&self) -> &[FileEdit] {
         &self.edits
     }
+
+    #[must_use]
+    pub fn command(&self) -> Option<&BabbelaarCommand> {
+        self.command.as_ref()
+    }
+
+    #[must_use]
+    pub fn with_command(self, command: impl Into<Option<BabbelaarCommand>>) -> Self {
+        Self {
+            command: command.into(),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn with_fix_kind(self, fix_kind: impl Into<BabbelaarFixKind>) -> Self {
+        Self {
+            fix_kind: fix_kind.into(),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub const fn fix_kind(&self) -> BabbelaarFixKind {
+        self.fix_kind
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BabbelaarFixKind {
+    QuickFix,
+    Refactor,
 }
 
 #[derive(Debug, Clone, Error)]
@@ -325,6 +389,9 @@ pub enum BabbelaarCodeActionType {
 
     #[error("Verwijder attribute `@{name}`")]
     RemoveAttribute { name: BabString },
+
+    #[error("{0}")]
+    Command(BabbelaarCommand),
 }
 
 #[derive(Debug, Clone)]

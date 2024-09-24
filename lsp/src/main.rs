@@ -30,7 +30,7 @@ pub use self::{
     actions::CodeActionRepository,
     backend::Backend,
     context::{BabbelaarContext, BabbelaarFile},
-    conversion::{UrlExtension, convert_file_range, convert_position, convert_token_range},
+    conversion::{UrlExtension, convert_file_range, convert_command, convert_position, convert_token_range},
     completions::CompletionEngine,
     error::{BabbelaarLspError, BabbelaarLspResult},
     format::Format,

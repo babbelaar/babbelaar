@@ -7,7 +7,7 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
@@ -53,6 +53,24 @@ impl SemanticAnalyzer {
 
         for statement in statements {
             if let StatementKind::Function(function) = &statement.kind {
+                if let Some(other) = self.context.current().get_function_mut(&function.name) {
+                    self.diagnostics.push(
+                        SemanticDiagnostic::new(
+                            function.name.range(),
+                            SemanticDiagnosticKind::DuplicateFunction {
+                                name: BabString::clone(&function.name),
+                            })
+                            .with_related(SemanticRelatedInformation::new(
+                                other.name.range(),
+                                SemanticRelatedMessage::FunctionDefinedHere {
+                                    name: BabString::clone(&function.name)
+                                }
+                            ))
+                            .with_action(BabbelaarCodeAction::new_command(function.name.range(), BabbelaarCommand::RenameSymbol))
+                    );
+                    continue;
+                }
+
                 self.context.push_function(SemanticFunction {
                     name: function.name.clone(),
                     parameters: function.parameters.clone(),
@@ -1171,6 +1189,7 @@ impl SemanticDiagnostic {
         &self.actions
     }
 
+    #[must_use]
     fn with_action(mut self, action: impl Into<Option<BabbelaarCodeAction>>) -> Self {
         if let Some(action) = action.into() {
             self.actions.push(action);
@@ -1379,6 +1398,9 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Attribuut `@uitheems` kan maar één keer gebruikt worden per functie.")]
     AttributeExternOnlyOnce,
+
+    #[error("De werkwijze genaamd `{name}` is meerdere keren gedefinieerd.")]
+    DuplicateFunction { name: BabString },
 }
 
 impl SemanticDiagnosticKind {

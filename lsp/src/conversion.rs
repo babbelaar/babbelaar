@@ -3,8 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use babbelaar::{FileId, FileLocation, FileRange, Token};
-use tower_lsp::lsp_types::{Location, Position, Range, Uri as Url};
+use babbelaar::{BabbelaarCommand, FileId, FileLocation, FileRange, Token};
+use tower_lsp::lsp_types::{Command, Location, Position, Range, Uri as Url};
 
 use crate::{BabbelaarLspError, BabbelaarLspResult};
 
@@ -30,6 +30,17 @@ pub fn convert_position(location: FileLocation) -> Position {
     Position {
         line: location.line() as _,
         character: location.column() as _,
+    }
+}
+
+#[must_use]
+pub fn convert_command(command: &BabbelaarCommand) -> Command {
+    match command {
+        BabbelaarCommand::RenameSymbol => Command {
+            title: "Symbool hernoemen".into(),
+            command: "editor.action.rename".into(),
+            arguments: None,
+        }
     }
 }
 

@@ -22,6 +22,7 @@ use crate::actions::CodeActionsAnalysisContext;
 use crate::actions::CodeActionsAnalyzable;
 use crate::conversion::convert_file_range_to_location;
 use crate::conversion::StrExtension;
+use crate::convert_command;
 use crate::BabbelaarContext;
 use crate::CodeActionRepository;
 use crate::PathBufExt;
@@ -782,10 +783,13 @@ impl Backend {
 
         Some(CodeActionOrCommand::CodeAction(CodeAction {
             title: item.action.type_().to_string(),
-            kind: Some(CodeActionKind::QUICKFIX),
+            kind: Some(match item.action.fix_kind() {
+                BabbelaarFixKind::QuickFix => CodeActionKind::QUICKFIX,
+                BabbelaarFixKind::Refactor => CodeActionKind::REFACTOR,
+            }),
             diagnostics,
             edit,
-            command: None,
+            command: item.action.command().map(convert_command),
             is_preferred,
             disabled: None,
             data: None,
@@ -793,12 +797,17 @@ impl Backend {
     }
 
     async fn create_workspace_edit_by_code_action_item(&self, action: &BabbelaarCodeAction) -> WorkspaceEdit {
-        let edit = self.create_text_document_edit(action).await;
-        let edits = DocumentChanges::Edits(vec![edit]);
+        let document_changes = if action.edits().is_empty() {
+            None
+        } else {
+            let edit = self.create_text_document_edit(action).await;
+            let edits = DocumentChanges::Edits(vec![edit]);
+            Some(edits)
+        };
 
         WorkspaceEdit {
             changes: None,
-            document_changes: Some(edits),
+            document_changes,
             change_annotations: None
         }
     }
@@ -863,7 +872,7 @@ impl Backend {
                 kind: Some(CodeActionKind::QUICKFIX),
                 diagnostics: None,
                 edit: Some(edit),
-                command: None,
+                command: action.command().map(convert_command),
                 is_preferred: Some(false),
                 disabled: None,
                 data: None,
