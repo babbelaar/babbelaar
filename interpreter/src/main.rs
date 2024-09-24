@@ -4,8 +4,10 @@
 #![feature(thread_id_value)]
 #![deny(elided_lifetimes_in_paths)]
 
+mod data;
 mod debugger;
 mod debug_adapter;
+mod ffi;
 mod interpreter;
 mod logger;
 mod scope;
@@ -19,12 +21,17 @@ use colored::Colorize;
 use logger::Logger;
 
 pub use self::{
+    data::{
+        InterpreterFunction,
+        InterpreterStructure,
+    },
     debugger::{
         Debugger,
         DebuggerFunction,
         DebuggerFunctionType,
     },
     debug_adapter::DebugAdapter,
+    ffi::FFIManager,
     interpreter::Interpreter,
     scope::Scope,
 };

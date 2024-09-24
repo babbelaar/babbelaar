@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -26,6 +26,8 @@ impl Symbolizer {
     }
 
     pub fn add_statement(&mut self, statement: &Statement) {
+        self.add_attributes(&statement.attributes);
+
         match &statement.kind {
             StatementKind::Assignment(statement) => self.add_statement_assign(statement),
             StatementKind::Expression(expression) => self.add_expression(expression),
@@ -146,6 +148,8 @@ impl Symbolizer {
     }
 
     fn add_structure_field(&mut self, field: &Field) {
+        self.add_attributes(&field.attributes);
+
         self.symbols.insert(LspSymbol {
             name: field.name.value().to_string(),
             kind: LspTokenType::Property,
@@ -179,6 +183,17 @@ impl Symbolizer {
             kind: LspTokenType::Class,
             range: parameter.ty.range(),
         });
+    }
+
+    fn add_attribute(&mut self, attribute: &Attribute) {
+        self.symbols.remove(attribute.at_range);
+        self.symbols.remove(attribute.name.range());
+    }
+
+    fn add_attributes(&mut self, attributes: &[Attribute]) {
+        for attribute in attributes {
+            self.add_attribute(attribute);
+        }
     }
 
     fn add_expression(&mut self, expression: &Expression) {
@@ -271,6 +286,10 @@ struct SymbolMap {
 }
 
 impl SymbolMap {
+    pub fn remove(&mut self, range: FileRange) {
+        self.map.remove(&range);
+    }
+
     pub fn insert(&mut self, sym: LspSymbol) {
         let range = sym.range;
         self.map.insert(sym.range, sym);
@@ -295,8 +314,17 @@ impl SymbolMap {
 
         // eprintln!("sym_begin={:?} range={range:?}", sym_begin.range);
 
-        sym_begin.range = FileRange::new(sym_begin.range.start(), range.start());
-        sym_end.range = FileRange::new(range.end(), sym_end.range.end());
+        if sym_begin.range.start() < range.start() {
+            sym_begin.range = FileRange::new(sym_begin.range.start(), range.start());
+        } else {
+            sym_begin.range = FileRange::new(range.start(), sym_begin.range.start());
+        }
+
+        if sym_end.range.end() < range.end() {
+            sym_end.range = FileRange::new(sym_end.range.end(), range.end());
+        } else {
+            sym_end.range = FileRange::new(range.end(), sym_end.range.end());
+        }
 
         let is_begin_empty = sym_begin.range.start() == sym_begin.range.end();
         if !is_begin_empty {
@@ -359,6 +387,7 @@ impl LspSymbol {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
 #[allow(unused)]
 pub enum LspTokenType {
+    Attribute,
     Function,
     Keyword,
     Number,
@@ -396,6 +425,7 @@ impl From<&TokenKind> for LspTokenType {
 impl From<LspTokenType> for SemanticTokenType {
     fn from(value: LspTokenType) -> Self {
         match value {
+            LspTokenType::Attribute => SemanticTokenType::MACRO,
             LspTokenType::Function => SemanticTokenType::FUNCTION,
             LspTokenType::Keyword => SemanticTokenType::KEYWORD,
             LspTokenType::Method => SemanticTokenType::METHOD,
@@ -419,6 +449,7 @@ impl From<LspTokenType> for u32 {
 impl From<LspTokenType> for SymbolKind {
     fn from(value: LspTokenType) -> Self {
         match value {
+            LspTokenType::Attribute => SymbolKind::KEY,
             LspTokenType::Function => SymbolKind::FUNCTION,
             LspTokenType::Keyword => SymbolKind::KEY,
             LspTokenType::Method => SymbolKind::METHOD,

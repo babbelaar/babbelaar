@@ -322,6 +322,9 @@ pub enum BabbelaarCodeActionType {
 
     #[error("Verwijder extra tekens")]
     RemoveResidualTokens,
+
+    #[error("Verwijder attribute `@{name}`")]
+    RemoveAttribute { name: BabString },
 }
 
 #[derive(Debug, Clone)]

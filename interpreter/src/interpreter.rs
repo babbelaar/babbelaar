@@ -11,10 +11,11 @@ use crate::*;
 
 pub struct Interpreter<D>
         where D: Debugger {
-    functions: HashMap<FunctionId, Arc<FunctionStatement>>,
-    structures: HashMap<StructureId, Rc<Structure>>,
+    functions: HashMap<FunctionId, Arc<InterpreterFunction>>,
+    structures: HashMap<StructureId, Rc<InterpreterStructure>>,
     debugger: D,
     scope: Scope,
+    ffi: FFIManager,
 }
 
 impl<D> Interpreter<D>
@@ -25,6 +26,7 @@ impl<D> Interpreter<D>
             structures: HashMap::new(),
             scope: Scope::new_top_level(),
             debugger,
+            ffi: FFIManager::new(),
         }
     }
 
@@ -70,8 +72,11 @@ impl<D> Interpreter<D>
 
             StatementKind::Function(func) => {
                 let id = FunctionId::from(func);
-                self.functions.insert(id, Arc::new(func.clone()));
-                self.scope.variables.insert(func.name.to_string(), Value::Function { name: func.name.to_string(), id });
+                self.functions.insert(id, Arc::new(InterpreterFunction {
+                    attributes: statement.attributes.clone(),
+                    function: func.clone(),
+                }));
+                self.scope.variables.insert(BabString::clone(&func.name), Value::Function { name: func.name.to_string(), id });
                 StatementResult::Continue
             }
 
@@ -88,16 +93,28 @@ impl<D> Interpreter<D>
 
             StatementKind::Structure(structure) => {
                 let id = StructureId::from(structure);
-                let structure = Rc::new(structure.clone());
+
+                let structure = Rc::new(InterpreterStructure {
+                    structure: structure.clone(),
+                    methods: structure.methods.iter()
+                        .map(|x| Arc::new(
+                            InterpreterFunction {
+                                attributes: Vec::new(),
+                                function: x.function.clone()
+                            }
+                        ))
+                        .collect()
+                });
+
                 let prev = self.structures.insert(id, Rc::clone(&structure));
                 assert!(prev.is_none(), "Illegal double value: {prev:#?} and now: {structure:#?}");
-                self.scope.structures.insert(structure.name.to_string(), structure);
+                self.scope.structures.insert(BabString::clone(structure.name()), structure);
                 StatementResult::Continue
             }
 
             StatementKind::Variable(variable) => {
                 let value = self.execute_expression(&variable.expression);
-                self.scope.variables.insert(variable.name.to_string(), value);
+                self.scope.variables.insert(BabString::clone(&variable.name), value);
                 StatementResult::Continue
             }
         }
@@ -166,7 +183,7 @@ impl<D> Interpreter<D>
             PrimaryExpression::StructureInstantiation(structure) => {
                 Value::Object {
                     structure: *self.structures.iter()
-                        .find(|(_, registered)| registered.name.value() == structure.name.value())
+                        .find(|(_, registered)| registered.name() == structure.name.value())
                         .unwrap_or_else(|| panic!("failed to find structure `{}`, structures: {:#?}", structure.name.value(), self.structures))
                         .0,
                     fields: Rc::new(RefCell::new(structure.fields.iter()
@@ -215,7 +232,7 @@ impl<D> Interpreter<D>
         self.scope = std::mem::take(&mut self.scope).push();
 
         for x in start..end {
-            self.scope.variables.insert(statement.iterator_name.to_string(), Value::Integer(x));
+            self.scope.variables.insert(BabString::clone(&statement.iterator_name), Value::Integer(x));
 
             for statement in &statement.body {
                 if let StatementResult::Return(value) = self.execute_statement(statement) {
@@ -292,7 +309,7 @@ impl<D> Interpreter<D>
 
             Value::MethodIdReference { lhs, method } => {
                 let structure = self.structures.get(&method.structure).unwrap();
-                let method = Arc::clone(&structure.methods[method.index].function);
+                let method = Arc::clone(&structure.methods[method.index]);
 
                 self.execute_function(method.clone(), arguments, Some(*lhs))
             }
@@ -327,7 +344,8 @@ impl<D> Interpreter<D>
 
             Some(value)
         } else {
-            let func = self.functions.get(&id).cloned().expect("Invalid FunctionId");
+            let function = self.functions.get(&id).cloned().expect("Invalid FunctionId");
+            let func = &function.function;
 
             self.debugger.enter_function(DebuggerFunction {
                 ty: DebuggerFunctionType::Normal,
@@ -336,7 +354,7 @@ impl<D> Interpreter<D>
                 callee_location: Some(func.name.range()),
             }, &arguments);
 
-            let value = self.execute_function(Arc::clone(&func), arguments, this);
+            let value = self.execute_function(Arc::clone(&function), arguments, this);
 
             self.debugger.leave_function(DebuggerFunction {
                 ty: DebuggerFunctionType::Normal,
@@ -349,15 +367,22 @@ impl<D> Interpreter<D>
         }
     }
 
-    fn execute_function(&mut self, func: Arc<FunctionStatement>, arguments: Vec<Value>, this: Option<Value>) -> Value {
+    fn execute_function(&mut self, func: Arc<InterpreterFunction>, arguments: Vec<Value>, this: Option<Value>) -> Value {
+        for attrib in &func.attributes {
+            if attrib.name.value() == "uitheems" {
+                debug_assert!(this.is_none());
+                return self.ffi.execute(attrib, arguments);
+            }
+        }
+
         self.scope = std::mem::take(&mut self.scope).push_function(this);
 
-        for idx in 0..func.parameters.len() {
-            let name = func.parameters[idx].name.to_string();
+        for idx in 0..func.function.parameters.len() {
+            let name = BabString::clone(&func.function.parameters[idx].name);
             self.scope.variables.insert(name, arguments[idx].clone());
         }
 
-        for statement in func.body.as_ref().unwrap() {
+        for statement in func.function.body.as_ref().unwrap() {
             match self.execute_statement(statement) {
                 StatementResult::Continue => (),
                 StatementResult::Return(value) => {

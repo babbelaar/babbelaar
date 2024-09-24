@@ -11,7 +11,7 @@ impl Logger {
 
         log::set_max_level(LevelFilter::Trace);
         log::set_logger(logger).expect("Kon logger niet instellen");
-        println!("Logger is ingesteld");
+        log::info!("Logger is ingesteld");
     }
 }
 

@@ -19,6 +19,9 @@
             "include": "#constant.numeric"
         },
         {
+            "include": "#attributes"
+        },
+        {
             "include": "#comments"
         }
     ],
@@ -58,6 +61,14 @@
                         }
                     ],
                     "name": "string.quoted.double.template.babbelaar"
+                }
+            ]
+        },
+        "attributes": {
+            "patterns": [
+                {
+                    "name": "keyword.other",
+                    "match": "@[a-zA-Z0-9]+"
                 }
             ]
         },

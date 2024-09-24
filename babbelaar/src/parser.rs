@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 use strum::AsRefStr;
 
@@ -24,6 +24,8 @@ pub struct Parser<'tokens> {
 
 impl<'tokens> Parser<'tokens> {
     pub fn new(path: PathBuf, tokens: &'tokens [Token]) -> Self {
+        let end = tokens.last().map(|x| x.end).unwrap_or_default();
+
         Self {
             path,
             token_begin: Default::default(),
@@ -33,8 +35,8 @@ impl<'tokens> Parser<'tokens> {
             cursor: 0,
             end_of_file_token: Token {
                 kind: TokenKind::Identifier(BabString::empty()),
-                begin: tokens.last().unwrap().end,
-                end: tokens.last().unwrap().end,
+                begin: end,
+                end,
             }
         }
     }
@@ -67,8 +69,6 @@ impl<'tokens> Parser<'tokens> {
         let mut attributes = Vec::new();
 
         while let Some(Punctuator::AtSign) = self.peek_punctuator() {
-            _ = self.consume_token()?;
-
             match self.parse_attribute() {
                 Ok(attr) => attributes.push(attr),
                 Err(e) => self.handle_error(e),
@@ -205,10 +205,9 @@ impl<'tokens> Parser<'tokens> {
                 if ctx.require_body() {
                     let range = parameters_right_paren_range.end().as_zero_range();
                     self.emit_diagnostic(ParseDiagnostic::FunctionMustHaveDefinition { semicolon: token.unwrap(), range });
-                    false
-                } else {
-                    true
                 }
+
+                false
             }
 
             _ => {
@@ -332,7 +331,7 @@ impl<'tokens> Parser<'tokens> {
                 TokenKind::Keyword(Keyword::Werkwijze) => {
                     let start = self.consume_token()?.begin;
 
-                    let function = Arc::new(self.parse_function(FunctionParsingContext::Method)?);
+                    let function = self.parse_function(FunctionParsingContext::Method)?;
 
                     let range = FileRange::new(start, self.token_end);
 
@@ -902,6 +901,8 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_attribute(&mut self) -> Result<Attribute, ParseError> {
+        let at_sign = self.consume_token()?;
+
         let name = match self.consume_identifier("Attribuutnaam", BabString::new_static("@")) {
             Ok(name) => name,
             Err(e) => {
@@ -924,6 +925,7 @@ impl<'tokens> Parser<'tokens> {
         };
 
         Ok(Attribute {
+            at_range: at_sign.range(),
             name,
             arguments,
         })
@@ -948,15 +950,9 @@ impl<'tokens> Parser<'tokens> {
 
             let token = self.consume_token()?;
             match &token.kind {
-                TokenKind::Punctuator(Punctuator::RightParenthesis) => {
-                    _ = self.consume_token();
-                    break;
-                }
+                TokenKind::Punctuator(Punctuator::RightParenthesis) => break,
 
-                TokenKind::Punctuator(Punctuator::Comma) => {
-                    _ = self.consume_token();
-                    continue;
-                }
+                TokenKind::Punctuator(Punctuator::Comma) => continue,
 
                 _ => {
                     self.emit_diagnostic(ParseDiagnostic::AttributeArgumentExpectedComma { token });

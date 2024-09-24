@@ -5,18 +5,25 @@
 
 pub use babbelaar::*;
 
+mod data;
 mod debug_adapter;
 mod debugger;
+mod ffi;
 mod interpreter;
 mod scope;
 
 pub use self::{
+    data::{
+        InterpreterFunction,
+        InterpreterStructure,
+    },
     debug_adapter::DebugAdapter,
     debugger::{
         Debugger,
         DebuggerFunction,
         DebuggerFunctionType,
     },
+    ffi::FFIManager,
     interpreter::Interpreter,
     scope::Scope,
 };

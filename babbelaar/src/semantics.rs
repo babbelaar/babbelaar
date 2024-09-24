@@ -57,6 +57,8 @@ impl SemanticAnalyzer {
                     name: function.name.clone(),
                     parameters: function.parameters.clone(),
                     parameters_right_paren_range: function.parameters_right_paren_range,
+                    extern_function: None,
+                    return_type: Box::new(SemanticType::null()),
                 });
             }
         }
@@ -208,6 +210,8 @@ impl SemanticAnalyzer {
                 name: x.function.name.clone(),
                 parameters: x.function.parameters.clone(),
                 parameters_right_paren_range: x.function.parameters_right_paren_range,
+                extern_function: None,
+                return_type: Box::new(SemanticType::null()),
             }
         }).collect();
 
@@ -295,9 +299,19 @@ impl SemanticAnalyzer {
             return SemanticValue::null();
         };
 
+        let ret_typ = function.return_value();
+
         self.analyze_function_parameters(function_name, function, expression);
 
-        SemanticValue::null()
+        SemanticValue {
+            usage: if ret_typ == SemanticType::Builtin(BuiltinType::Null) {
+                SemanticUsage::Indifferent
+            } else {
+                SemanticUsage::Pure(PureValue::ReturnValue)
+            },
+
+            ty: ret_typ,
+        }
     }
 
     fn analyze_function_parameters(
@@ -899,11 +913,117 @@ impl SemanticAnalyzer {
 
     fn analyze_attributes_for_statement(&mut self, statement: &Statement) {
         for attribute in &statement.attributes {
+            if attribute.name.value() == "uitheems" {
+                self.analyze_attribute_extern(statement, attribute);
+                continue;
+            }
+
             self.diagnostics.push(SemanticDiagnostic::new(
                 attribute.name.range(),
                 SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone() },
             ));
         }
+    }
+
+    fn analyze_attribute_extern(&mut self, statement: &Statement, attr: &Attribute) {
+        let StatementKind::Function(function) = &statement.kind else {
+            let diag = SemanticDiagnostic::new(
+                attr.name.range().as_full_line(),
+                SemanticDiagnosticKind::AttributeExternOnlyOnFunctions,
+            );
+            let diag = diag.with_action(BabbelaarCodeAction::new(
+                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.value().clone() },
+                vec![FileEdit::new(attr.name.range().as_full_line(), "")],
+            ));
+            self.diagnostics.push(diag);
+            return;
+        };
+
+        if function.body.is_some() {
+            let diag = SemanticDiagnostic::new(
+                attr.name.range().as_full_line(),
+                SemanticDiagnosticKind::AttributeExternOnlyOnFunctionsWithoutBody,
+            );
+            self.diagnostics.push(diag);
+        }
+
+        let Some(extern_func) = self.attribute_extern_evaluate(attr) else {
+            return;
+        };
+
+        let Some(func) = self.context.current().get_function_mut(&function.name) else {
+            log::warn!("Expected function '{}' to be defined earlier", function.name.value());
+            return;
+        };
+
+        if func.extern_function.is_some() {
+            let diag = SemanticDiagnostic::new(
+                attr.name.range().as_full_line(),
+                SemanticDiagnosticKind::AttributeExternOnlyOnce,
+            );
+            let diag = diag.with_action(BabbelaarCodeAction::new(
+                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.value().clone() },
+                vec![FileEdit::new(attr.name.range().as_full_line(), "")],
+            ));
+            self.diagnostics.push(diag);
+            return;
+        }
+
+        func.extern_function = Some(extern_func);
+        func.return_type = Box::new(SemanticType::Builtin(BuiltinType::G32));
+    }
+
+    fn attribute_extern_evaluate(&mut self, attr: &Attribute) -> Option<SemanticExternFunction> {
+        let mut name = None;
+
+        for arg in &attr.arguments {
+            if arg.name.value() == "naam" {
+                if name.is_none() {
+                    name = Some(&arg.value);
+                } else {
+                    self.diagnostics.push(SemanticDiagnostic::new(
+                        arg.name.range(),
+                        SemanticDiagnosticKind::AttributeExternDuplicateName,
+                    ));
+                }
+            } else {
+                self.diagnostics.push(SemanticDiagnostic::new(
+                    arg.name.range(),
+                    SemanticDiagnosticKind::AttributeExternDuplicateName,
+                ));
+            }
+        }
+
+        let Some(name) = name else {
+            let diag = SemanticDiagnostic::new(
+                attr.name.range(),
+                SemanticDiagnosticKind::AttributeExternRequiresName,
+            );
+            // TODO add action
+            self.diagnostics.push(diag);
+            return None;
+        };
+
+        let PrimaryExpression::StringLiteral(name_literal) = name.value() else {
+            let diag = SemanticDiagnostic::new(
+                attr.name.range(),
+                SemanticDiagnosticKind::AttributeExternNameMustBeString,
+            );
+            self.diagnostics.push(diag);
+            return None;
+        };
+
+        if name_literal.is_empty() {
+            self.diagnostics.push(SemanticDiagnostic::new(
+                attr.name.range(),
+                SemanticDiagnosticKind::AttributeExternNameMustBeNonEmpty,
+            ));
+            return None;
+        }
+
+        Some(SemanticExternFunction {
+            name: name_literal.clone(),
+        })
     }
 
     fn analyze_attributes_for_field(&mut self, field: &SemanticField) {
@@ -1235,6 +1355,30 @@ pub enum SemanticDiagnosticKind {
         names: String,
         field_word: &'static str,
     },
+
+    #[error("De naam van de uitheemse werkwijze is meerdere keren geven.")]
+    AttributeExternDuplicateName,
+
+    #[error("Een uitheemse werkwijze vereist een `naam` argument.")]
+    AttributeExternRequiresName,
+
+    #[error("Het attribuut `@uitheems` kan alleen gebruikt worden op functies.")]
+    AttributeExternOnlyOnFunctions,
+
+    #[error("Het attribuut `@uitheems` kan alleen gebruikt worden op functies zonder lichaam {{ .. }}")]
+    AttributeExternOnlyOnFunctionsWithoutBody,
+
+    #[error("De naam van werkwijzeattribuut `@uitheems` moet een slinger zijn.")]
+    AttributeExternNameMustBeString,
+
+    #[error("De naam van werkwijzeattribuut `@uitheems` moet een niet-lege slinger zijn.")]
+    AttributeExternNameMustBeNonEmpty,
+
+    #[error("Onbekend argument `{name}` is niet toegestaan binnen attribuut `@uitheems`")]
+    AttributeExternUnexpectedArgument { name: BabString },
+
+    #[error("Attribuut `@uitheems` kan maar één keer gebruikt worden per functie.")]
+    AttributeExternOnlyOnce,
 }
 
 impl SemanticDiagnosticKind {
@@ -1262,6 +1406,11 @@ impl SemanticContext {
             definition_tracker: Some(HashMap::new()),
             declaration_tracker: Some(Vec::new()),
         }
+    }
+
+    #[must_use]
+    pub fn current(&mut self) -> &mut SemanticScope {
+        self.scope.last_mut().unwrap()
     }
 
     pub fn push_function_scope(&mut self, start: FileLocation, this: Option<SemanticType>) -> &mut SemanticScope {
@@ -1389,6 +1538,15 @@ impl SemanticScope {
 
         this
     }
+
+    #[must_use]
+    pub fn get_function_mut(&mut self, name: &BabString) -> Option<&mut SemanticFunction> {
+        let local = self.locals.get_mut(name)?;
+        match &mut local.typ {
+            SemanticType::Function(semantic_function) => Some(semantic_function),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1396,7 +1554,8 @@ pub struct SemanticFunction {
     pub name: Ranged<BabString>,
     pub parameters: Vec<Parameter>,
     pub parameters_right_paren_range: FileRange,
-    // type ...
+    pub extern_function: Option<SemanticExternFunction>,
+    pub return_type: Box<SemanticType>,
 }
 
 impl Display for SemanticFunction {
@@ -1522,6 +1681,25 @@ impl SemanticReference {
             _ => {
                 format!("{}: {}", self.local_name, self.typ)
             }
+        }
+    }
+
+    #[must_use]
+    fn return_value(&self) -> SemanticType {
+        match &self.typ {
+            SemanticType::Function(f) => {
+                SemanticType::clone(&f.return_type)
+            }
+
+            SemanticType::FunctionReference(FunctionReference::Builtin(builtin)) => {
+                SemanticType::Builtin(builtin.return_type)
+            }
+
+            SemanticType::FunctionReference(FunctionReference::Custom(f)) => {
+                SemanticType::clone(&f.return_type)
+            }
+
+            _ => SemanticType::null()
         }
     }
 }
@@ -1766,6 +1944,12 @@ impl FunctionReference {
             Self::Custom(..) => None,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct SemanticExternFunction {
+    #[allow(unused)]
+    name: BabString,
 }
 
 #[derive(Debug)]

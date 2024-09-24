@@ -3,15 +3,15 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use babbelaar::Structure;
+use babbelaar::BabString;
 
-use crate::{Builtin, FunctionId, Value};
+use crate::{Builtin, FunctionId, InterpreterStructure, Value};
 
 #[derive(Default, Debug)]
 pub struct Scope {
     pub parent: Option<Box<Scope>>,
-    pub variables: HashMap<String, Value>,
-    pub structures: HashMap<String, Rc<Structure>>,
+    pub variables: HashMap<BabString, Value>,
+    pub structures: HashMap<BabString, Rc<InterpreterStructure>>,
     pub this: Option<Value>,
 }
 
@@ -33,7 +33,7 @@ impl Scope {
                 namespace: usize::MAX,
                 id: func_idx,
             };
-            this.variables.insert(func.name.to_string(), Value::Function { name: func.name.to_string(), id });
+            this.variables.insert(BabString::new_static(func.name), Value::Function { name: func.name.to_string(), id });
         }
 
         this
@@ -62,7 +62,7 @@ impl Scope {
         *self.parent.expect("Top-level scope popped!")
     }
 
-    pub fn find(&self, reference: &str) -> Value {
+    pub fn find(&self, reference: &BabString) -> Value {
         if let Some(value) = self.variables.get(reference) {
             return value.clone();
         }
@@ -74,7 +74,7 @@ impl Scope {
         Value::Null
     }
 
-    pub fn find_mut(&mut self, reference: &str) -> Option<&mut Value> {
+    pub fn find_mut(&mut self, reference: &BabString) -> Option<&mut Value> {
         if let Some(value) = self.variables.get_mut(reference) {
             return Some(value);
         }
@@ -86,7 +86,7 @@ impl Scope {
         None
     }
 
-    pub fn overwrite(&mut self, reference: &str, new: Value) -> bool {
+    pub fn overwrite(&mut self, reference: &BabString, new: Value) -> bool {
         if let Some(value) = self.variables.get_mut(reference) {
             *value = new;
             return true;

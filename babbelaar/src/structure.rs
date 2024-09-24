@@ -1,8 +1,6 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::sync::Arc;
-
 use crate::{Attribute, BabString, FileRange, FunctionStatement, Ranged, Type};
 
 #[derive(Debug, Clone)]
@@ -15,9 +13,7 @@ pub struct Field {
 #[derive(Debug, Clone)]
 pub struct Method {
     pub range: FileRange,
-
-    /// This is an [`Arc`] for the interpreter's convenience sake.
-    pub function: Arc<FunctionStatement>,
+    pub function: FunctionStatement,
 }
 
 #[derive(Debug, Clone)]
