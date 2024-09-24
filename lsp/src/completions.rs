@@ -63,6 +63,11 @@ impl<'b> CompletionEngine<'b> {
                 Ok(true)
             }
 
+            Some(CompletionMode::Attribute { name }) => {
+                self.complete_attribute(name).await?;
+                Ok(true)
+            }
+
             None => Ok(false),
         }
     }
@@ -94,6 +99,12 @@ impl<'b> CompletionEngine<'b> {
 
             // TODO: this should be replaced by looking at the syntactic tree structure.
             if let TokenKind::Identifier(ident) = &token.kind {
+                if previous.last().is_some_and(|last| last.kind == TokenKind::Punctuator(Punctuator::AtSign)) {
+                    return Ok(Some(CompletionMode::Attribute {
+                        name: ident.clone(),
+                    }));
+                }
+
                 if previous.last().is_some_and(|last| last.kind == TokenKind::Keyword(Keyword::Nieuw)) {
                     return Ok(Some(CompletionMode::Structure {
                         range: token.range(),
@@ -130,6 +141,12 @@ impl<'b> CompletionEngine<'b> {
                         }
                     }
                 }
+            }
+
+            if let TokenKind::Punctuator(Punctuator::AtSign) = &token.kind {
+                return Ok(Some(CompletionMode::Attribute {
+                    name: BabString::empty(),
+                }));
             }
 
             was_new_func = previous.last().is_some_and(|tok| matches!(tok.kind, TokenKind::Keyword(Keyword::Werkwijze)));
@@ -265,6 +282,21 @@ impl<'b> CompletionEngine<'b> {
 
             Ok(())
         }).await
+    }
+
+    async fn complete_attribute(&mut self, name: BabString) -> Result<()> {
+        _ = name;
+
+        self.completions.push(CompletionItem {
+            label: "@uitheems".to_string(),
+            kind: Some(CompletionItemKind::FUNCTION),
+            insert_text: Some("uitheems(naam: \"${1:werkwijzenaam}\")\nwerkwijze ${1:werkwijzenaam}(${3:argumenten});$0".to_string()),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            documentation: None,
+            ..Default::default()
+        });
+
+        Ok(())
     }
 
     async fn complete_method(&mut self, last_identifier: FileRange) -> Result<()> {
@@ -485,4 +517,7 @@ enum CompletionMode {
         new_line: bool,
     },
     Structure { range: FileRange, name: String },
+    Attribute {
+        name: BabString,
+    },
 }
