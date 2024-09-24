@@ -165,6 +165,20 @@ impl Backend {
             diags.insert(file.source_code().file_id(), Vec::new());
 
             let source_code = file.source_code().clone();
+            for err in file.lexer_diagnostics() {
+                diags.entry(err.location.file_id()).or_default().push(Diagnostic {
+                    range: convert_file_range(err.location.as_zero_range()),
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: Some(NumberOrString::String(err.kind.name().to_string())),
+                    code_description: None,
+                    source: None,
+                    message: err.kind.to_string(),
+                    related_information: None,
+                    tags: None,
+                    data: None,
+                });
+            }
+
             let errors = file.parse_diagnostics();
             let analyzer = SemanticAnalyzer::new(HashMap::new());
 

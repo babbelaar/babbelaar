@@ -5,7 +5,7 @@ use std::{collections::HashMap, path::{Path, PathBuf}, sync::Arc};
 
 use dashmap::DashMap;
 
-use babbelaar::{FileId, Lexer, ParseDiagnostic, ParseTree, Parser, SemanticAnalyzer, SourceCode, Token};
+use babbelaar::{FileId, Lexer, LexerError, ParseDiagnostic, ParseTree, Parser, SemanticAnalyzer, SourceCode, Token};
 use tokio::sync::{Mutex, RwLock};
 use tower_lsp::lsp_types::Uri as Url;
 
@@ -129,6 +129,7 @@ pub struct BabbelaarFile {
     tokens: Option<Vec<Token>>,
     tree: Option<ParseTree>,
     parse_errors: Vec<ParseDiagnostic>,
+    lexer_errors: Vec<LexerError>,
 }
 
 impl BabbelaarFile {
@@ -138,6 +139,7 @@ impl BabbelaarFile {
             tokens: None,
             tree: None,
             parse_errors: Vec::new(),
+            lexer_errors: Vec::new(),
         }
     }
 
@@ -147,7 +149,9 @@ impl BabbelaarFile {
         }
 
         let lexer = Lexer::new(&self.source_code);
-        self.tokens = Some(lexer.collect());
+        let (tokens, errors) = lexer.collect_all();
+        self.tokens = Some(tokens);
+        self.lexer_errors = errors;
 
         (self.tokens.as_ref().unwrap(), self.source_code())
     }
@@ -170,6 +174,11 @@ impl BabbelaarFile {
         self.parse_errors = parser.into_diagnostics();
 
         (self.tree.as_ref().unwrap(), &self.source_code)
+    }
+
+    pub fn lexer_diagnostics(&mut self) -> &[LexerError] {
+        _ = self.ensure_lexed();
+        &self.lexer_errors
     }
 
     pub fn parse_diagnostics(&mut self) -> &[ParseDiagnostic] {

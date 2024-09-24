@@ -3,6 +3,9 @@
 
 use std::str::CharIndices;
 
+use strum::AsRefStr;
+use thiserror::Error;
+
 use crate::{FileLocation, Keyword, Punctuator, Slice, SourceCode, TemplateStringToken, Token, TokenKind};
 
 pub struct Lexer<'source_code> {
@@ -12,6 +15,7 @@ pub struct Lexer<'source_code> {
     current: Option<(FileLocation, char)>,
     line: usize,
     column: usize,
+    errors: Vec<LexerError>,
 }
 
 impl<'source_code> Lexer<'source_code> {
@@ -22,6 +26,7 @@ impl<'source_code> Lexer<'source_code> {
             current: None,
             line: 0,
             column: 0,
+            errors: Vec::new(),
         }
     }
 
@@ -146,7 +151,19 @@ impl<'source_code> Lexer<'source_code> {
         assert_eq!(self.next_char().unwrap(), '€');
         let begin = self.current_location();
 
-        assert_eq!(self.next_char().unwrap(), '"');
+        let location = self.current_location();
+        if self.next_char() != Some('"') {
+            self.errors.push(LexerError {
+                location,
+                kind: LexerErrorKind::InvalidTemplateString,
+            });
+
+            return Some(Token {
+                kind: TokenKind::TemplateString(Vec::new()),
+                begin,
+                end: begin,
+            });
+        }
 
         let mut parts = Vec::new();
 
@@ -262,7 +279,16 @@ impl<'source_code> Lexer<'source_code> {
 
         let end = self.current_location();
         let str = &self.input[begin.offset()..end.offset()];
-        let integer = str.parse().unwrap();
+        let integer = match str.parse() {
+            Ok(int) => int,
+            Err(..) => {
+                self.errors.push(LexerError {
+                    location: end,
+                    kind: LexerErrorKind::InvalidNumber,
+                });
+                0
+            }
+        };
 
         Some(Token {
             kind: TokenKind::Integer(integer),
@@ -351,6 +377,16 @@ impl<'source_code> Lexer<'source_code> {
             }
         }
     }
+
+    pub fn collect_all(mut self) -> (Vec<Token>, Vec<LexerError>) {
+        let mut tokens = Vec::new();
+
+        while let Some(token) = self.next() {
+            tokens.push(token);
+        }
+
+        (tokens, self.errors)
+    }
 }
 
 impl<'source_code> Iterator for Lexer<'source_code> {
@@ -368,8 +404,25 @@ fn is_identifier_char(c: char) -> bool {
         || c == '_'
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
-pub enum LexerError {
+#[derive(Clone, Debug)]
+pub struct LexerError {
+    pub location: FileLocation,
+    pub kind: LexerErrorKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error, AsRefStr)]
+pub enum LexerErrorKind {
+    #[error("Ongeldige sjabloonslinger")]
+    InvalidTemplateString,
+
+    #[error("Ongeldig nummer")]
+    InvalidNumber,
+}
+impl LexerErrorKind {
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.as_ref()
+    }
 }
 
 #[cfg(test)]

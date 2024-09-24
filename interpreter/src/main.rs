@@ -12,7 +12,7 @@ mod interpreter;
 mod logger;
 mod scope;
 
-use std::{fs::read_dir, path::{Path, PathBuf}, process::exit};
+use std::{fmt::Display, fs::read_dir, path::{Path, PathBuf}, process::exit};
 
 pub use babbelaar::*;
 // use babbelaar_compiler::LlvmContext;
@@ -158,47 +158,55 @@ fn parse(path: &Path) -> (SourceCode, ParseTree) {
     let source_code = SourceCode::new(path, 0, source_code);
 
     let lexer = Lexer::new(&source_code);
-    let tokens: Vec<_> = lexer.collect();
+    let (tokens, errors) = lexer.collect_all();
+
+    for e in &errors {
+        print_error(&source_code, e.location.as_zero_range(), &e.kind);
+    }
 
     let mut parser = Parser::new(path.to_path_buf(), &tokens);
     let tree = parser.parse_tree();
-    if parser.diagnostics().is_empty() {
+    if parser.diagnostics().is_empty() && errors.is_empty() {
         return (source_code, tree);
     }
 
     for e in parser.diagnostics() {
-        eprintln!("{}: {}", "fout".red().bold(), e.to_string().bold());
-
-        let range = e.range();
-        eprintln!();
-        let mut iter = source_code.lines().skip(range.start().line() - 1);
-
-        if let Some(line) = iter.next() {
-            if !line.trim().is_empty() {
-                eprintln!("{}", line);
-            }
-        }
-
-        if let Some(line) = iter.next() {
-            eprintln!("{line}");
-            eprintln!(
-                "{spaces}{caret}{tildes} {description}",
-                spaces = " ".repeat(range.start().column()),
-                caret = "^".bright_red().bold(),
-                tildes = "~".repeat(range.len().saturating_sub(1)).bright_blue(),
-                description = "fout trad hier op".bright_red()
-            );
-        }
-
-        if let Some(line) = iter.next() {
-            if !line.trim().is_empty() {
-                eprintln!("{}", line);
-            }
-        }
-
-        eprintln!();
-
-        eprintln!("In {}:{}:{}\n", path.display(), range.start().line() + 1, range.start().column() + 1);
+        print_error(&source_code, e.range(), e);
     }
+
     exit(1);
+}
+
+fn print_error(source_code: &SourceCode, range: FileRange, message: impl Display) {
+    eprintln!("{}: {}", "fout".red().bold(), message.to_string().bold());
+
+    eprintln!();
+    let mut iter = source_code.lines().skip(range.start().line().saturating_sub(1));
+
+    if let Some(line) = iter.next() {
+        if !line.trim().is_empty() {
+            eprintln!("{}", line);
+        }
+    }
+
+    if let Some(line) = iter.next() {
+        eprintln!("{line}");
+        eprintln!(
+            "{spaces}{caret}{tildes} {description}",
+            spaces = " ".repeat(range.start().column()),
+            caret = "^".bright_red().bold(),
+            tildes = "~".repeat(range.len().saturating_sub(1)).bright_blue(),
+            description = "fout trad hier op".bright_red()
+        );
+    }
+
+    if let Some(line) = iter.next() {
+        if !line.trim().is_empty() {
+            eprintln!("{}", line);
+        }
+    }
+
+    eprintln!();
+
+    eprintln!("In {}:{}:{}\n", source_code.path().display(), range.start().line() + 1, range.start().column() + 1);
 }

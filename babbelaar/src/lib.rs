@@ -26,7 +26,7 @@ pub use self::{
     expression::*,
     interpreter::Interpreter,
     keyword::Keyword,
-    lexer::Lexer,
+    lexer::{Lexer, LexerError, LexerErrorKind},
     parser::{Parser, ParseDiagnostic, ParseError},
     semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticLocalKind, SemanticReference, SemanticStructure, SemanticType},
     statement::{AssignStatement, ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
