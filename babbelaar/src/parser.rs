@@ -393,12 +393,11 @@ impl<'tokens> Parser<'tokens> {
             }
         });
 
-        self.expect_colon("veldnaam")?;
-        let ty = self.parse_type()?;
+        self.expect_colon("veldnaam");
         Ok(Field {
             attributes: Vec::new(),
             name,
-            ty,
+            ty: self.parse_type(),
         })
     }
 
@@ -434,9 +433,21 @@ impl<'tokens> Parser<'tokens> {
     fn parse_parameter(&mut self) -> Result<Parameter, ParseError> {
         let name = self.parse_parameter_name()?;
 
-        self.expect_colon("parameternaam")?;
+        let token = self.peek_token()?;
+        if token.kind != TokenKind::Punctuator(Punctuator::Colon) {
+            let range = FileRange::new(self.tokens[self.cursor.saturating_sub(2)].end, token.begin);
+            self.emit_diagnostic(ParseDiagnostic::ExpectedColon { token: token.clone(), range, context: "parameternaam" });
+            return Ok(Parameter {
+                name,
+                ty: Ranged::new(range, Type {
+                    specifier: Ranged::new(range,TypeSpecifier::BuiltIn(BuiltinType::Null)),
+                }),
+            })
+        }
 
-        let ty = self.parse_type()?;
+        _ = self.consume_token();
+
+        let ty = self.parse_type();
 
         Ok(Parameter {
             name,
@@ -455,15 +466,23 @@ impl<'tokens> Parser<'tokens> {
         Ok(Ranged::new(name_range, name))
     }
 
-    fn parse_type(&mut self) -> Result<Ranged<Type>, ParseError> {
-        let name_token = self.consume_token()?;
+    fn parse_type(&mut self) -> Ranged<Type> {
+        let Ok(name_token) = self.peek_token().cloned() else {
+            return Ranged::new(self.end_of_file_token.range(), Type {
+                specifier: Ranged::new(self.end_of_file_token.range(), TypeSpecifier::BuiltIn(BuiltinType::Null)),
+            })
+        };
+
         let name_range = name_token.range();
         let TokenKind::Identifier(ref name) = name_token.kind else {
             self.emit_diagnostic(ParseDiagnostic::TypeExpectedSpecifierName { token: name_token });
-            return Ok(Ranged::new(name_range, Type {
+            return Ranged::new(name_range, Type {
                 specifier: Ranged::new(name_range, TypeSpecifier::BuiltIn(BuiltinType::Null)),
-            }))
+            })
         };
+
+        _ = self.consume_token();
+
         let name = Ranged::new(name_token.range(), name.clone());
 
         let specifier = match Builtin::type_by_name(name.value()) {
@@ -474,7 +493,7 @@ impl<'tokens> Parser<'tokens> {
         let ty = Type {
             specifier: Ranged::new(name_token.range(), specifier),
         };
-        Ok(Ranged::new(name_token.range(), ty))
+        Ranged::new(name_token.range(), ty)
     }
 
     fn parse_for_statement(&mut self) -> Result<ForStatement, ParseError> {
@@ -866,15 +885,19 @@ impl<'tokens> Parser<'tokens> {
         Ok(())
     }
 
-    fn expect_colon(&mut self, context: &'static str) -> Result<(), ParseError> {
-        let token = self.consume_token()?;
+    fn expect_colon(&mut self, context: &'static str) {
+        let Ok(token) = self.peek_token() else {
+            self.emit_diagnostic(ParseDiagnostic::ExpectedColon { token: self.tokens.last().unwrap().clone(), range: self.token_end.as_zero_range(), context });
+            return;
+        };
+
 
         if token.kind != TokenKind::Punctuator(Punctuator::Colon) {
             let range = FileRange::new(self.tokens[self.cursor.saturating_sub(2)].end, token.begin);
-            self.emit_diagnostic(ParseDiagnostic::ExpectedColon { token, range, context });
+            self.emit_diagnostic(ParseDiagnostic::ExpectedColon { token: token.clone(), range, context });
         }
 
-        Ok(())
+        _ = self.consume_token();
     }
 
     fn expect_semicolon_after_statement(&mut self) -> Result<(), ParseError> {
@@ -973,7 +996,7 @@ impl<'tokens> Parser<'tokens> {
             }
         };
 
-        self.expect_colon("argumentnaam")?;
+        self.expect_colon("argumentnaam");
         let value = self.parse_primary_expression()?;
 
         Ok(AttributeArgument {
@@ -1017,7 +1040,7 @@ impl<'tokens> Parser<'tokens> {
                     let name = Ranged::new(token.range(), name.clone());
                     _ = self.consume_token();
 
-                    self.expect_colon("structuurveldverwijzing")?;
+                    self.expect_colon("structuurveldverwijzing");
                     let expression = match self.parse_expression() {
                         Ok(expr) => expr,
                         Err(e) => {
