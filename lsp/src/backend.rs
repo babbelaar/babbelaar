@@ -211,12 +211,12 @@ impl Backend {
             let related_information = Some(
                     e.related_info()
                         .iter()
-                        .map(|x| {
-                            let uri = urls.get(&x.range().file_id()).unwrap().uri.clone();
-                            DiagnosticRelatedInformation {
+                        .filter_map(|x| {
+                            let uri = urls.get(&x.range().file_id())?.uri.clone();
+                            Some(DiagnosticRelatedInformation {
                                 location: convert_file_range_to_location(uri, x.range()),
                                 message: x.message().to_string(),
-                            }
+                            })
                         })
                         .collect()
             );
