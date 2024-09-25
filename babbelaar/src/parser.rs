@@ -269,6 +269,7 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn emit_diagnostic(&mut self, error: ParseDiagnostic){
+        debug_assert!(self.diagnostics.len() < 1000, "Te veel parseerfouten verzameld, waarschijnlijk zitten we in een parseerloop.");
         self.diagnostics.push(error);
     }
 
