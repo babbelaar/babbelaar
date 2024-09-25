@@ -924,16 +924,19 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn expect_semicolon_after_statement(&mut self) -> Result<(), ParseError> {
-        let token = match self.consume_token() {
-            Ok(token) => token,
+        let range = self.tokens[self.cursor - 1].range().end().as_zero_range();
+        let token = match self.peek_token() {
+            Ok(token) => token.clone(),
             Err(ParseError::EndOfFile) => {
-                self.emit_diagnostic(ParseDiagnostic::ExpectedSemicolonAfterStatement { token: self.tokens[self.cursor - 1].clone() });
+                self.emit_diagnostic(ParseDiagnostic::ExpectedSemicolonAfterStatement { range, token: self.tokens[self.cursor - 1].clone() });
                 return Ok(())
             },
         };
 
         if token.kind != TokenKind::Punctuator(Punctuator::Semicolon) {
-            self.emit_diagnostic(ParseDiagnostic::ExpectedSemicolonAfterStatement { token });
+            self.emit_diagnostic(ParseDiagnostic::ExpectedSemicolonAfterStatement { range,token });
+        } else {
+            _ = self.consume_token();
         }
 
         Ok(())
@@ -1148,7 +1151,7 @@ pub enum ParseDiagnostic {
     ExpectedEqualsInsideVariable { token: Token },
 
     #[error("Puntkomma verwacht ';' na statement, maar kreeg: {token}")]
-    ExpectedSemicolonAfterStatement { token: Token },
+    ExpectedSemicolonAfterStatement { range: FileRange, token: Token },
 
     #[error("Accolade `{{` of puntkomma `;` verwacht, maar kreeg: {token}")]
     ExpectedSemicolonOrCurlyBracketForFunction { token: Token, range: FileRange },
@@ -1247,6 +1250,7 @@ impl ParseDiagnostic {
         match self {
             Self::ExpectedColon { range, .. } => *range,
             Self::ExpectedCommaAfterStructureMember { location, .. } => location.as_zero_range(),
+            Self::ExpectedSemicolonAfterStatement { range, .. } => *range,
             Self::ExpectedSemicolonOrCurlyBracketForFunction { range, .. } => *range,
             Self::FunctionMustHaveDefinition { range, .. } => *range,
             Self::PostfixMemberOrReferenceExpectedIdentifier { period, .. } => period.range(),
