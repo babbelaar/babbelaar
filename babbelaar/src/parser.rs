@@ -83,8 +83,9 @@ impl<'tokens> Parser<'tokens> {
             }
 
             TokenKind::Keyword(Keyword::Bekeer) => {
+                let range = first_token.range();
                 _ = self.consume_token().ok();
-                StatementKind::Return(self.parse_return_statement()?)
+                StatementKind::Return(self.parse_return_statement(range)?)
             }
 
             TokenKind::Keyword(Keyword::Werkwijze) => {
@@ -195,6 +196,13 @@ impl<'tokens> Parser<'tokens> {
 
         let parameters_right_paren_range = self.expect_right_paren("werkwijzenaam")?;
 
+        let return_type = if self.peek_punctuator() == Some(Punctuator::Arrow) {
+            _ = self.consume_token();
+            Some(self.parse_type())
+        } else {
+            None
+        };
+
         let token = self.consume_token();
         let has_body = match token.as_ref().map(|x| &x.kind) {
             Ok(TokenKind::Punctuator(Punctuator::LeftCurlyBracket)) => {
@@ -239,7 +247,14 @@ impl<'tokens> Parser<'tokens> {
 
         let range = FileRange::new(name_range.start(), self.previous_end());
 
-        Ok(FunctionStatement { name, body, parameters, parameters_right_paren_range, range })
+        Ok(FunctionStatement {
+            name,
+            body,
+            parameters,
+            parameters_right_paren_range,
+            return_type,
+            range,
+        })
     }
 
     fn consume_identifier(&mut self, ident_purpose: &'static str, previous: BabString) -> Result<Ranged<BabString>, ParseError> {
@@ -264,14 +279,20 @@ impl<'tokens> Parser<'tokens> {
         self.cursor >= self.tokens.len()
     }
 
-    fn parse_return_statement(&mut self) -> Result<ReturnStatement, ParseError> {
+    fn parse_return_statement(&mut self, keyword_range: FileRange) -> Result<ReturnStatement, ParseError> {
         match self.peek_punctuator() {
             Some(Punctuator::Semicolon) => {
                 _ = self.consume_token()?;
-                return Ok(ReturnStatement { expression: None });
+                return Ok(ReturnStatement {
+                    keyword_range,
+                    expression: None,
+                });
             }
 
-            Some(Punctuator::RightCurlyBracket) => return Ok(ReturnStatement { expression: None }),
+            Some(Punctuator::RightCurlyBracket) => return Ok(ReturnStatement {
+                keyword_range,
+                expression: None,
+            }),
 
             _ => (),
         }
@@ -280,6 +301,7 @@ impl<'tokens> Parser<'tokens> {
             Ok(expression) => {
                 self.expect_semicolon_after_statement()?;
                 Ok(ReturnStatement {
+                    keyword_range,
                     expression: Some(expression),
                 })
             }
@@ -287,6 +309,7 @@ impl<'tokens> Parser<'tokens> {
             Err(error) => {
                 self.handle_error(error);
                 Ok(ReturnStatement {
+                    keyword_range,
                     expression: None,
                 })
             }

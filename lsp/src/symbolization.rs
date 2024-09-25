@@ -115,6 +115,14 @@ impl Symbolizer {
             range: statement.name.range(),
         });
 
+        if let Some(return_type) = &statement.return_type {
+            self.symbols.insert(LspSymbol {
+                name: return_type.specifier.name().to_string(),
+                kind: LspTokenType::Class,
+                range: return_type.range(),
+            });
+        }
+
         for parameter in &statement.parameters {
             self.add_parameter(parameter);
         }

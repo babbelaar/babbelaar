@@ -71,12 +71,19 @@ impl SemanticAnalyzer {
                     continue;
                 }
 
+                let return_type = Box::new(
+                    match &function.return_type {
+                        Some(ty) => self.resolve_type(ty),
+                        None => SemanticType::Builtin(BuiltinType::Null),
+                    }
+                );
+
                 self.context.push_function(SemanticFunction {
                     name: function.name.clone(),
                     parameters: function.parameters.clone(),
                     parameters_right_paren_range: function.parameters_right_paren_range,
                     extern_function: None,
-                    return_type: Box::new(SemanticType::null()),
+                    return_type,
                 });
             }
         }
@@ -95,7 +102,7 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_function(&mut self, function: &FunctionStatement, this: Option<SemanticType>) {
-        self.context.push_function_scope(function.range.start(), this);
+        self.context.push_function_scope(function, this);
 
         for param in &function.parameters {
             let typ = self.resolve_type(&param.ty);
@@ -114,6 +121,21 @@ impl SemanticAnalyzer {
                 declaration_range: param.name.range(),
                 typ,
             });
+        }
+
+        if let Some(ty) = &function.return_type {
+            let typ = self.resolve_type(ty);
+
+            if let Some(tracker) = &mut self.context.definition_tracker {
+                tracker.insert(ty.range(), SemanticReference {
+                    local_name: function.name.value().clone(),
+                    local_kind: SemanticLocalKind::StructureReference,
+                    declaration_range: typ.declaration_range(),
+                    typ: typ.clone(),
+                });
+            }
+
+            self.context.current().return_type = Some(Ranged::new(ty.range(), typ));
         }
 
         self.analyze_statements(function.body.as_inner_slice());
@@ -209,11 +231,120 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_return_statement(&mut self, statement: &ReturnStatement) {
-        if let Some(expression) = &statement.expression {
-            self.analyze_expression(expression);
-        }
+        match (&statement.expression, self.context.current().return_type.clone()) {
+            (Some(actual), Some(expected)) => {
+                let actual_type = self.analyze_expression(actual);
+                let conversion_action = self.try_create_conversion_action(&expected, &actual_type.ty, actual);
 
-        // TODO analyze return type
+                if actual_type.ty != *expected.value() {
+                    self.diagnostics.push(
+                        SemanticDiagnostic::new(
+                            actual.range(),
+                            SemanticDiagnosticKind::ReturnStatementIncompatibleTypes {
+                                actual: actual_type.ty.clone(),
+                                expected: expected.value().clone(),
+                            },
+                        )
+                        .with_related(SemanticRelatedInformation::new(
+                            expected.range(),
+                            SemanticRelatedMessage::ReturnTypeDefinedHere {
+                                typ: expected.name(),
+                            }
+                        ))
+                        .with_action(conversion_action)
+                        .with_action(BabbelaarCodeAction::new(
+                            BabbelaarCodeActionType::ChangeReturnType {
+                                typ: actual_type.ty.name(),
+                            },
+                            vec![
+                                FileEdit::new(expected.range(), actual_type.ty.name().to_string())
+                            ]
+                        ))
+                    );
+                }
+            }
+
+            (Some(actual), None) => {
+                let actual_type = self.analyze_expression(actual);
+
+                let right_parameter_range = self.context.scope.iter().rev()
+                    .filter_map(|x| match &x.kind {
+                        SemanticScopeKind::Default => None,
+                        SemanticScopeKind::Function { right_parameter_range, .. } => Some(right_parameter_range.clone()),
+                    })
+                    .next();
+
+                let diag = SemanticDiagnostic::new(
+                    actual.range(),
+                    SemanticDiagnosticKind::ReturnStatementExpectedNoValue
+                );
+
+                let diag = diag.with_action(right_parameter_range.map(|right_parameter_range| {
+                    let edit = FileEdit::new(
+                        right_parameter_range.end().as_zero_range(),
+                        format!(" -> {}", actual_type.ty),
+                    );
+
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::AddReturnType {
+                            typ: actual_type.ty.name()
+                        },
+                        vec![edit]
+                    )
+                }));
+
+                let diag = diag.with_action(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::RemoveExpression,
+                        vec![
+                            FileEdit::new(
+                                FileRange::new(statement.keyword_range.end(), actual.range().end()),
+                                String::new()
+                            )
+                        ]
+                    )
+                );
+
+                self.diagnostics.push(diag);
+            }
+
+            (None, Some(expected)) => {
+                let right_parameter_range = self.context.scope.iter().rev()
+                    .filter_map(|x| match &x.kind {
+                        SemanticScopeKind::Default => None,
+                        SemanticScopeKind::Function { right_parameter_range, .. } => Some(right_parameter_range.clone()),
+                    })
+                    .next();
+
+                self.diagnostics.push(
+                    SemanticDiagnostic::new(
+                        statement.keyword_range.end().as_zero_range(),
+                        SemanticDiagnosticKind::ReturnStatementExpectedValue {
+                            typ: expected.name()
+                        },
+                    )
+                    .with_related(SemanticRelatedInformation::new(
+                        expected.range(),
+                        SemanticRelatedMessage::ReturnTypeDefinedHere {
+                            typ: expected.name(),
+                        }
+                    ))
+                    .with_action(right_parameter_range.map(|right_parameter_range| {
+                        BabbelaarCodeAction::new(
+                            BabbelaarCodeActionType::RemoveReturnType,
+                            vec![
+                                FileEdit::new(
+                                    FileRange::new(right_parameter_range.end(), expected.range().end()),
+                                    String::new(),
+                                )
+                            ]
+                        )
+                    }))
+                );
+            }
+
+            (None, None) => (),
+        }
     }
 
     fn analyze_structure(&mut self, statement: &Statement, structure: &Structure) {
@@ -229,7 +360,12 @@ impl SemanticAnalyzer {
                 parameters: x.function.parameters.clone(),
                 parameters_right_paren_range: x.function.parameters_right_paren_range,
                 extern_function: None,
-                return_type: Box::new(SemanticType::null()),
+                return_type: Box::new(
+                    match &x.function.return_type {
+                        Some(ty) => self.resolve_type(ty),
+                        None => SemanticType::Builtin(BuiltinType::Null),
+                    }
+                ),
             }
         }).collect();
 
@@ -556,7 +692,7 @@ impl SemanticAnalyzer {
                     let declaration_type = &field.ty;
                     let definition_type = self.analyze_expression(&field_instantiation.value).ty;
                     if declaration_type != &definition_type {
-                        let action = self.try_create_conversion_action(declaration_type, &definition_type, field_instantiation);
+                        let action = self.try_create_conversion_action(declaration_type, &definition_type, &field_instantiation.value);
 
                         self.diagnostics.push(SemanticDiagnostic::new(
                             field_instantiation.value.range(),
@@ -1063,19 +1199,19 @@ impl SemanticAnalyzer {
         &self,
         declaration_type: &SemanticType,
         definition_type: &SemanticType,
-        field_instantiation: &crate::FieldInstantiation,
+        expression: &Ranged<Expression>,
     ) -> Option<BabbelaarCodeAction> {
         let SemanticType::Builtin(declaration_type) = declaration_type else { return None };
         let SemanticType::Builtin(definition_type) = definition_type else { return None };
 
         if *declaration_type == BuiltinType::G32 && *definition_type == BuiltinType::Slinger {
-            if let Expression::Primary(PrimaryExpression::StringLiteral(literal)) = field_instantiation.value.value().clone(){
+            if let Expression::Primary(PrimaryExpression::StringLiteral(literal)) = expression.value().clone(){
                 if let Ok(value) = literal.trim().parse::<isize>() {
                     return Some(BabbelaarCodeAction::new(
                         BabbelaarCodeActionType::ChangeStringToNumber { number: value, },
                         vec![
                             FileEdit::new(
-                                field_instantiation.value.range(),
+                                expression.range(),
                                 value.to_string(),
                             )
                         ]
@@ -1279,6 +1415,9 @@ pub enum SemanticRelatedMessage {
 
     #[error("los gebruik van het veld `{name}` heeft geen effect")]
     UsageOfPureValueField { name: BabString },
+
+    #[error("bekeertype `{typ}` is hier gedefinieerd")]
+    ReturnTypeDefinedHere { typ: BabString },
 }
 
 #[derive(Debug, Clone, Error, AsRefStr)]
@@ -1407,6 +1546,18 @@ pub enum SemanticDiagnosticKind {
 
     #[error("De werkwijze genaamd `{name}` is meerdere keren gedefinieerd.")]
     DuplicateFunction { name: BabString },
+
+    #[error("`bekeer` verwacht een waarde van type `{typ}`")]
+    ReturnStatementExpectedValue { typ: BabString },
+
+    #[error("`bekeer` verwacht geen waarde")]
+    ReturnStatementExpectedNoValue,
+
+    #[error("`bekeer` verwachtte een waarde van type `{expected}`, maar expressie is van type `{actual}`")]
+    ReturnStatementIncompatibleTypes {
+        expected: SemanticType,
+        actual: SemanticType,
+    },
 }
 
 impl SemanticDiagnosticKind {
@@ -1441,23 +1592,31 @@ impl SemanticContext {
         self.scope.last_mut().unwrap()
     }
 
-    pub fn push_function_scope(&mut self, start: FileLocation, this: Option<SemanticType>) -> &mut SemanticScope {
+    pub fn push_function_scope(&mut self, function: &FunctionStatement, this: Option<SemanticType>) -> &mut SemanticScope {
+        let start = function.range.start();
         self.scope.push(SemanticScope {
             range: FileRange::new(start, start),
             locals: HashMap::new(),
             structures: HashMap::new(),
             this,
+            return_type: None,
+            kind: SemanticScopeKind::Function {
+                right_parameter_range: function.parameters_right_paren_range,
+            },
         });
         self.scope.last_mut().expect("we just pushed a scope")
     }
 
     pub fn push_block_scope(&mut self, start: FileLocation) -> &mut SemanticScope {
         let this = self.scope.last().and_then(|x| x.this.clone());
+        let return_type = self.scope.last().and_then(|x| x.return_type.clone());
         self.scope.push(SemanticScope {
             range: FileRange::new(start, start),
             locals: HashMap::new(),
             structures: HashMap::new(),
             this,
+            return_type,
+            kind: SemanticScopeKind::Default,
         });
         self.scope.last_mut().expect("we just pushed a scope")
     }
@@ -1542,6 +1701,8 @@ pub struct SemanticScope {
     pub locals: HashMap<BabString, SemanticLocal>,
     pub structures: HashMap<BabString, Arc<SemanticStructure>>,
     pub this: Option<SemanticType>,
+    pub return_type: Option<Ranged<SemanticType>>,
+    pub kind: SemanticScopeKind,
 }
 
 impl SemanticScope {
@@ -1554,6 +1715,8 @@ impl SemanticScope {
             structures: HashMap::new(),
             locals: HashMap::default(),
             this: None,
+            return_type: None,
+            kind: SemanticScopeKind::Default,
         };
 
         for func in Builtin::FUNCTIONS {
@@ -1575,6 +1738,16 @@ impl SemanticScope {
             _ => None,
         }
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub enum SemanticScopeKind {
+    #[default]
+    Default,
+
+    Function {
+        right_parameter_range: FileRange,
+    },
 }
 
 #[derive(Debug, Clone)]

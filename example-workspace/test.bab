@@ -1,14 +1,11 @@
-structuur Dier {
-    veld naam: Slinger,
+@uitheems(naam: "time")
+werkwijze time(ver: Slinger);
 
-    werkwijze zegGedag() {
-        schrijf(€"ik ben een {dit.naam}");
-    }
+werkwijze tijd() -> g32 {
+
+
+
+
+
+    bekeer "1";
 }
-
-stel anoniem = nieuw Persoon {
-    voornaam: "Pietje",
-    achternaam: "Bel",
-};
-
-anoniem.zegDoei();

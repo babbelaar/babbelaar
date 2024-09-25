@@ -362,6 +362,14 @@ pub enum BabbelaarCodeActionType {
         residual_args: usize,
     },
 
+    #[error("Bekeertype `{typ}` toevoegen aan werkwijze")]
+    AddReturnType {
+        typ: BabString,
+    },
+
+    #[error("Verander bekeertype naar `{typ}`")]
+    ChangeReturnType { typ: BabString },
+
     #[error("Zet Slinger `\"{number}\"` om naar getal `{number}`")]
     ChangeStringToNumber { number: isize },
 
@@ -393,6 +401,12 @@ pub enum BabbelaarCodeActionType {
 
     #[error("Verwijder attribute `@{name}`")]
     RemoveAttribute { name: BabString },
+
+    #[error("Haal bekeerwaarde weg")]
+    RemoveExpression,
+
+    #[error("Haal bekeerwaarde weg")]
+    RemoveReturnType,
 
     #[error("{0}")]
     Command(BabbelaarCommand),

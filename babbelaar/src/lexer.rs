@@ -51,7 +51,7 @@ impl<'source_code> Lexer<'source_code> {
             ',' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Comma)),
             '=' => self.consume_single_or_double_char_token(Punctuator::Assignment, Punctuator::Equals),
             '+' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PlusSign)),
-            '-' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::HyphenMinus)),
+            '-' => self.consume_minus_or_arrow(),
             '/' => self.handle_solidus(),
             '*' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Asterisk)),
             '%' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PercentageSign)),
@@ -386,6 +386,27 @@ impl<'source_code> Lexer<'source_code> {
         }
 
         (tokens, self.errors)
+    }
+
+    fn consume_minus_or_arrow(&mut self) -> Option<Token> {
+        let begin = self.current_location();
+
+        _ = self.next_char()?;
+
+        let kind = if self.peek_char() == Some('>') {
+            self.consume_char();
+            TokenKind::Punctuator(Punctuator::Arrow)
+        } else {
+            TokenKind::Punctuator(Punctuator::HyphenMinus)
+        };
+
+        let end = self.current_location();
+
+        Some(Token {
+            kind,
+            begin,
+            end,
+        })
     }
 }
 

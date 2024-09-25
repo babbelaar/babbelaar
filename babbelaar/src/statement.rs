@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{util::FileRange, Attribute, BabString, Expression, Parameter, RangeExpression, Ranged, Structure};
+use crate::{util::FileRange, Attribute, BabString, Expression, Parameter, RangeExpression, Ranged, Structure, Type};
 
 #[derive(Debug, Clone)]
 pub struct Statement {
@@ -54,6 +54,7 @@ pub struct FunctionStatement {
     pub parameters: Vec<Parameter>,
     pub body: Option<Vec<Statement>>,
     pub parameters_right_paren_range: FileRange,
+    pub return_type: Option<Ranged<Type>>,
 }
 
 #[derive(Clone, Debug)]
@@ -65,6 +66,7 @@ pub struct IfStatement {
 
 #[derive(Clone, Debug)]
 pub struct ReturnStatement {
+    pub keyword_range: FileRange,
     pub expression: Option<Ranged<Expression>>,
 }
 

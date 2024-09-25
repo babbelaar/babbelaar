@@ -9,6 +9,8 @@ use crate::{BabString, FileLocation, FileRange, Keyword};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, IntoStaticStr)]
 pub enum Punctuator {
+    #[strum(serialize = "pijl")]
+    Arrow,
     #[strum(serialize = "apenstaartje")]
     AtSign,
     #[strum(serialize = "dubbele punt")]
@@ -51,6 +53,7 @@ impl Punctuator {
     #[must_use]
     pub const fn as_str(&self) -> &str {
         match self {
+            Self::Arrow => ".",
             Self::AtSign => "@",
             Self::Colon => ":",
             Self::Comma => ",",
