@@ -236,6 +236,10 @@ impl SemanticAnalyzer {
                 let actual_type = self.analyze_expression(actual);
                 let conversion_action = self.try_create_conversion_action(&expected, &actual_type.ty, actual);
 
+                if actual_type.ty == SemanticType::Builtin(BuiltinType::Null) {
+                    return;
+                }
+
                 if actual_type.ty != *expected.value() {
                     self.diagnostics.push(
                         SemanticDiagnostic::new(
@@ -266,6 +270,10 @@ impl SemanticAnalyzer {
 
             (Some(actual), None) => {
                 let actual_type = self.analyze_expression(actual);
+
+                if actual_type.ty == SemanticType::Builtin(BuiltinType::Null) {
+                    return;
+                }
 
                 let right_parameter_range = self.context.scope.iter().rev()
                     .filter_map(|x| match &x.kind {

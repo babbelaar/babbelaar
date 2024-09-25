@@ -1,11 +1,6 @@
 @uitheems(naam: "time")
 werkwijze time(ver: Slinger);
 
-werkwijze tijd() -> g32 {
-
-
-
-
-
-    bekeer "1";
+werkwijze tijd() -> Slinger {
+    bekeer getalNaarSlinger(1);
 }
