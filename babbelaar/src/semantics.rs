@@ -1307,7 +1307,6 @@ impl SemanticAnalyzer {
 
     fn create_action_create_function(&mut self, function_name: BabString, expression: &FunctionCallExpression) -> Option<BabbelaarCodeAction> {
         let location = self.find_function_insertion_location()?;
-        log::info!("Scopes: {:#?}", self.context.scope);
 
         let mut text = format!("\n\nwerkwijze {function_name}(");
 

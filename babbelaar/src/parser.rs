@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use log::error;
 use strum::AsRefStr;
 
 use crate::{
@@ -44,11 +45,20 @@ impl<'tokens> Parser<'tokens> {
     pub fn parse_tree(&mut self) -> ParseTree {
         let mut tree = ParseTree::new(self.path.clone());
 
+        let mut cursor = self.cursor;
         while !self.is_at_end() {
+            let diag_count = self.diagnostics.len();
             match self.parse_statement() {
                 Ok(statement) => tree.push(statement),
                 Err(ParseError::EndOfFile) => break,
             }
+
+            if self.cursor == cursor {
+                error!("We zitten vast in een parseerherhaling: {:#?}", &self.diagnostics[diag_count..]);
+                break;
+            }
+
+            cursor = self.cursor;
         }
 
         tree
