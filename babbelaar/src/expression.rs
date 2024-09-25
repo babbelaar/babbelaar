@@ -1,6 +1,8 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::fmt::{Debug, Display, Write};
+
 use crate::{BabString, FileRange, Ranged};
 
 #[derive(Clone, Debug)]
@@ -15,6 +17,31 @@ pub enum PrimaryExpression {
         parts: Vec<TemplateStringExpressionPart>,
     },
     Parenthesized(Box<Ranged<Expression>>),
+}
+
+impl Display for PrimaryExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PrimaryExpression::Boolean(b) => f.write_str(if *b { "waar" } else { "onwaar" }),
+            PrimaryExpression::StringLiteral(bab_string) => {
+                f.write_char('"')?;
+                f.write_str(bab_string.as_str())?;
+                f.write_char('"')
+            }
+            PrimaryExpression::IntegerLiteral(i) => f.write_fmt(format_args!("{i}")),
+            PrimaryExpression::Reference(bab_string) => {
+                f.write_str(bab_string.as_str())
+            }
+            PrimaryExpression::ReferenceThis => f.write_str("dit"),
+            PrimaryExpression::StructureInstantiation(..) => todo!(),
+            PrimaryExpression::TemplateString { .. } => todo!(),
+            PrimaryExpression::Parenthesized(expr) => {
+                f.write_char('(')?;
+                Display::fmt(expr.value(), f)?;
+                f.write_char(')')
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -46,10 +73,43 @@ pub enum Expression {
     Primary(PrimaryExpression),
 }
 
+impl Display for Expression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BiExpression(expr) => Display::fmt(expr, f),
+            Self::Postfix(expr) => Display::fmt(expr, f),
+            Self::Primary(expr) => Display::fmt(expr, f),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PostfixExpression {
     pub lhs: Box<Ranged<Expression>>,
     pub kind: PostfixExpressionKind,
+}
+
+impl Display for PostfixExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.lhs.value(), f)?;
+
+        match &self.kind {
+            PostfixExpressionKind::Call(call) => {
+                Display::fmt(call, f)
+            }
+
+            PostfixExpressionKind::Member(member) => {
+                f.write_char('.')?;
+                f.write_str(member.as_str())
+            }
+
+            PostfixExpressionKind::MethodCall(method) => {
+                f.write_char('.')?;
+                f.write_str(method.method_name.as_str())?;
+                Display::fmt(&method.call, f)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -67,6 +127,22 @@ pub struct FunctionCallExpression {
     pub token_right_paren: FileRange,
 }
 
+impl Display for FunctionCallExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_char('(')?;
+
+        for (idx, arg) in self.arguments.iter().enumerate() {
+            if idx != 0 {
+                f.write_str(", ")?;
+            }
+
+            Display::fmt(arg.value(), f)?;
+        }
+
+        f.write_char(')')
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MethodCallExpression {
     pub method_name: Ranged<BabString>,
@@ -78,6 +154,18 @@ pub struct BiExpression {
     pub operator: Ranged<BiOperator>,
     pub lhs: Box<Ranged<Expression>>,
     pub rhs: Box<Ranged<Expression>>,
+}
+
+impl Display for BiExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.lhs.value(), f)?;
+
+        f.write_char(' ')?;
+        f.write_str(self.operator.as_str())?;
+        f.write_char(' ')?;
+
+        Display::fmt(self.rhs.value(), f)
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

@@ -20,6 +20,7 @@ pub struct Method {
 pub struct Structure {
     pub name: Ranged<BabString>,
     pub left_curly_range: FileRange,
+    pub right_curly_range: FileRange,
     pub fields: Vec<Field>,
     pub methods: Vec<Method>,
 }

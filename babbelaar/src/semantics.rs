@@ -34,11 +34,15 @@ impl SemanticAnalyzer {
     }
 
     pub fn analyze_tree_phase_1(&mut self, tree: &ParseTree) {
+        self.context.announce_file(tree);
+
         self.analyze_statements(tree.structures());
         self.analyze_statements(tree.functions());
     }
 
     pub fn analyze_tree_phase_2(&mut self, tree: &ParseTree) {
+        self.context.announce_file(tree);
+
         self.analyze_statements(tree.statements());
     }
 
@@ -140,7 +144,7 @@ impl SemanticAnalyzer {
 
         self.analyze_statements(function.body.as_inner_slice());
 
-        self.context.pop_scope(function.range.end());
+        self.context.pop_scope();
     }
 
     pub fn analyze_statement(&mut self, statement: &Statement) {
@@ -208,7 +212,7 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_for_statement(&mut self, statement: &ForStatement) {
-        let scope = self.context.push_block_scope(statement.keyword.start());
+        let scope = self.context.push_block_scope(statement.file_range);
         scope.locals.insert(statement.iterator_name.value().clone(), SemanticLocal {
             kind: SemanticLocalKind::Iterator,
             declaration_range: statement.iterator_name.range(),
@@ -217,17 +221,17 @@ impl SemanticAnalyzer {
 
         self.analyze_statements(&statement.body);
 
-        self.context.pop_scope(statement.file_range.end());
+        self.context.pop_scope();
     }
 
     fn analyze_if_statement(&mut self, statement: &IfStatement) {
-        self.context.push_block_scope(statement.condition.range().start());
+        self.context.push_block_scope(statement.range);
 
         self.analyze_expression(&statement.condition);
 
         self.analyze_statements(&statement.body);
 
-        self.context.pop_scope(statement.range.end());
+        self.context.pop_scope();
     }
 
     fn analyze_return_statement(&mut self, statement: &ReturnStatement) {
@@ -278,6 +282,8 @@ impl SemanticAnalyzer {
                 let right_parameter_range = self.context.scope.iter().rev()
                     .filter_map(|x| match &x.kind {
                         SemanticScopeKind::Default => None,
+                        SemanticScopeKind::Structure => None,
+                        SemanticScopeKind::Werkwijze => None,
                         SemanticScopeKind::Function { right_parameter_range, .. } => Some(right_parameter_range.clone()),
                     })
                     .next();
@@ -320,6 +326,8 @@ impl SemanticAnalyzer {
                 let right_parameter_range = self.context.scope.iter().rev()
                     .filter_map(|x| match &x.kind {
                         SemanticScopeKind::Default => None,
+                        SemanticScopeKind::Structure => None,
+                        SemanticScopeKind::Werkwijze => None,
                         SemanticScopeKind::Function { right_parameter_range, .. } => Some(right_parameter_range.clone()),
                     })
                     .next();
@@ -387,6 +395,8 @@ impl SemanticAnalyzer {
 
         self.context.push_structure(Arc::clone(&semantic_structure));
 
+        self.context.push_structure_scope(structure);
+
         let mut names = HashSet::new();
         for field in &semantic_structure.fields {
             if !names.insert(field.name.value()) {
@@ -418,6 +428,8 @@ impl SemanticAnalyzer {
 
             self.analyze_function(&method.function, this_type.clone());
         }
+
+        self.context.pop_scope();
     }
 
     fn analyze_variable_statement(&mut self, statement: &VariableStatement) {
@@ -451,8 +463,9 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn analyze_function_call_expression(&mut self, lhs: SemanticType, expression: &FunctionCallExpression) -> SemanticValue {
+    fn analyze_function_call_expression(&mut self, lhs: SemanticType, expression: &FunctionCallExpression, postfix: &PostfixExpression) -> SemanticValue {
         let function_name = match lhs {
+            SemanticType::Builtin(BuiltinType::Null) => postfix.lhs.value().to_string().into(),
             SemanticType::Builtin(builtin) => builtin.name(),
             SemanticType::Custom(custom) => custom.name.value().clone(),
             SemanticType::Function(func) => func.name.value().clone(),
@@ -460,10 +473,14 @@ impl SemanticAnalyzer {
         };
 
         let Some(function) = self.find_function(&function_name) else {
-            self.diagnostics.push(SemanticDiagnostic::new(
-                expression.token_left_paren,
+            let diag = SemanticDiagnostic::new(
+                postfix.lhs.range(),
                 SemanticDiagnosticKind::InvalidFunctionReference { name: function_name.clone() }
-            ));
+            );
+
+            let diag = diag.with_action(self.create_action_create_function(function_name, expression));
+
+            self.diagnostics.push(diag);
             return SemanticValue::null();
         };
 
@@ -956,7 +973,7 @@ impl SemanticAnalyzer {
     fn analyze_postfix_expression(&mut self, postfix: &PostfixExpression) -> SemanticValue {
         let lhs = self.analyze_expression(&postfix.lhs).ty;
         match &postfix.kind {
-            PostfixExpressionKind::Call(call) => self.analyze_function_call_expression(lhs, call),
+            PostfixExpressionKind::Call(call) => self.analyze_function_call_expression(lhs, call, postfix),
             PostfixExpressionKind::Member(member) => self.analyze_member_expression(lhs, member),
             PostfixExpressionKind::MethodCall(method) => self.analyze_method_expression(lhs, method),
         }
@@ -1287,6 +1304,78 @@ impl SemanticAnalyzer {
             (structure.left_curly_range.end(), format!("{indent}    "))
         }
     }
+
+    fn create_action_create_function(&mut self, function_name: BabString, expression: &FunctionCallExpression) -> Option<BabbelaarCodeAction> {
+        let location = self.find_function_insertion_location()?;
+        log::info!("Scopes: {:#?}", self.context.scope);
+
+        let mut text = format!("\n\nwerkwijze {function_name}(");
+
+        for (idx, arg) in expression.arguments.iter().enumerate() {
+            if idx != 0 {
+                text += ", ";
+            }
+
+            let ty = self.analyze_expression(arg).ty;
+
+            match self.find_canonical_name_for_variable(arg.value()) {
+                Some(name) => {
+                    text += &name;
+                }
+
+                None => {
+                    text += &format!("{}{idx}", ty.name().to_lowercase());
+                }
+            }
+            text += ": ";
+            text += &ty.name();
+        }
+
+        text += ") {\n\n}";
+
+        let edit = FileEdit::new(location.as_zero_range(), text);
+
+        Some(BabbelaarCodeAction::new(
+            BabbelaarCodeActionType::CreateFunction { name: function_name },
+            vec![edit]
+        ))
+    }
+
+    fn find_function_insertion_location(&self) -> Option<FileLocation> {
+        let mut location = self.context.current_scope().range.end();
+
+        for scope in &self.context.scope {
+            location = scope.range.end();
+            if !matches!(scope.kind, SemanticScopeKind::Default) {
+                break;
+            }
+        }
+
+        if location.file_id() != FileId::INTERNAL {
+            Some(location)
+        } else {
+            None
+        }
+    }
+
+    fn find_canonical_name_for_variable(&self, value: &Expression) -> Option<BabString> {
+        match value {
+            Expression::Primary(PrimaryExpression::Boolean(..)) => None,
+            Expression::Primary(PrimaryExpression::IntegerLiteral(..)) => Some(BabString::new_static("getal")),
+            Expression::Primary(PrimaryExpression::Parenthesized(expr)) => self.find_canonical_name_for_variable(expr.value()),
+            Expression::Primary(PrimaryExpression::Reference(reference)) => Some(reference.value().clone()),
+            Expression::Primary(PrimaryExpression::ReferenceThis) => {
+                Some(self.context.current_scope().this.as_ref()?.name().to_lowercase().into())
+            }
+            Expression::Primary(PrimaryExpression::StringLiteral(..)) => None,
+            Expression::Primary(PrimaryExpression::StructureInstantiation(structure)) => {
+                Some(structure.name.value().clone())
+            }
+            Expression::Primary(PrimaryExpression::TemplateString { .. }) => None,
+            Expression::Postfix(..) => None, // TODO
+            Expression::BiExpression(..) => None, // TODO
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1600,10 +1689,25 @@ impl SemanticContext {
         self.scope.last_mut().unwrap()
     }
 
+    #[must_use]
+    pub fn current_scope(&self) -> &SemanticScope {
+        self.scope.last().unwrap()
+    }
+
+    pub fn announce_file(&mut self, tree: &ParseTree) {
+        let location_end = tree.all()
+            .map(|statement| statement.range.end())
+            .max()
+            .unwrap_or_else(|| FileLocation::new(FileId::from_path(tree.path()), 0, 0, 0));
+
+        let location_start = FileLocation::new(location_end.file_id(), 0, 0, 0);
+
+        self.scope[0].range = FileRange::new(location_start, location_end);
+    }
+
     pub fn push_function_scope(&mut self, function: &FunctionStatement, this: Option<SemanticType>) -> &mut SemanticScope {
-        let start = function.range.start();
         self.scope.push(SemanticScope {
-            range: FileRange::new(start, start),
+            range: function.range,
             locals: HashMap::new(),
             structures: HashMap::new(),
             this,
@@ -1615,11 +1719,11 @@ impl SemanticContext {
         self.scope.last_mut().expect("we just pushed a scope")
     }
 
-    pub fn push_block_scope(&mut self, start: FileLocation) -> &mut SemanticScope {
+    pub fn push_block_scope(&mut self, range: FileRange) -> &mut SemanticScope {
         let this = self.scope.last().and_then(|x| x.this.clone());
         let return_type = self.scope.last().and_then(|x| x.return_type.clone());
         self.scope.push(SemanticScope {
-            range: FileRange::new(start, start),
+            range,
             locals: HashMap::new(),
             structures: HashMap::new(),
             this,
@@ -1627,6 +1731,19 @@ impl SemanticContext {
             kind: SemanticScopeKind::Default,
         });
         self.scope.last_mut().expect("we just pushed a scope")
+    }
+
+    fn push_structure_scope(&mut self, structure: &Structure) {
+        let this = self.scope.last().and_then(|x| x.this.clone());
+        let return_type = self.scope.last().and_then(|x| x.return_type.clone());
+        self.scope.push(SemanticScope {
+            range: FileRange::new(structure.left_curly_range.start(), structure.right_curly_range.end()),
+            locals: HashMap::new(),
+            structures: HashMap::new(),
+            this,
+            return_type,
+            kind: SemanticScopeKind::Structure,
+        });
     }
 
     fn push_function(&mut self, function: SemanticFunction) {
@@ -1680,11 +1797,9 @@ impl SemanticContext {
         self.scope.last_mut().unwrap().structures.insert(structure.name.value().clone(), structure);
     }
 
-    fn pop_scope(&mut self, location: FileLocation) {
+    fn pop_scope(&mut self) {
         debug_assert!(self.scope.len() > 1);
-        let mut scope = self.scope.pop().unwrap();
-
-        scope.range = FileRange::new(scope.range.start(), location);
+        let scope = self.scope.pop().unwrap();
 
         self.previous_scopes.push(scope);
     }
@@ -1752,6 +1867,9 @@ impl SemanticScope {
 pub enum SemanticScopeKind {
     #[default]
     Default,
+
+    Structure,
+    Werkwijze,
 
     Function {
         right_parameter_range: FileRange,

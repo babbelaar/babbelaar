@@ -332,6 +332,7 @@ impl<'tokens> Parser<'tokens> {
         let mut structure = Structure {
             name,
             left_curly_range,
+            right_curly_range: left_curly_range,
             fields: Vec::new(),
             methods: Vec::new(),
         };
@@ -401,6 +402,8 @@ impl<'tokens> Parser<'tokens> {
                 break;
             }
         }
+
+        structure.right_curly_range = self.previous_range();
 
         Ok(structure)
     }
@@ -942,11 +945,19 @@ impl<'tokens> Parser<'tokens> {
         Ok(())
     }
 
-    fn previous_end(&self) -> FileLocation {
-        match self.tokens.get(self.cursor - 1) {
-            Some(token) => token.end,
-            None => self.token_begin,
+    fn previous_range(&self) -> FileRange {
+        if self.cursor == 0 {
+            return FileRange::new(self.token_begin, self.token_begin);
         }
+
+        match self.tokens.get(self.cursor - 1) {
+            Some(token) => token.range(),
+            None => FileRange::new(self.token_begin, self.token_end),
+        }
+    }
+
+    fn previous_end(&self) -> FileLocation {
+        self.previous_range().end()
     }
 
     fn parse_attribute(&mut self) -> Result<Attribute, ParseError> {

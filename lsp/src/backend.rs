@@ -824,9 +824,13 @@ impl Backend {
             edits.push(OneOf::Left(edit));
         }
 
+        let file_id = action.edits()[0].replacement_range().file_id();
         TextDocumentEdit {
             text_document: OptionalVersionedTextDocumentIdentifier {
-                uri: self.context.path_of(action.edits()[0].replacement_range().file_id()).await.unwrap().to_uri(),
+                uri: match self.context.path_of(file_id).await {
+                    Some(path) => path.to_uri(),
+                    None => panic!("Failed to find path of {file_id:?} for action {action:#?}"),
+                },
                 version: None,
             },
             edits,

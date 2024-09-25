@@ -379,6 +379,9 @@ pub enum BabbelaarCodeActionType {
     #[error("Maak veld `{name}` aan binnen structuur `{structure}`")]
     CreateMethod { name: BabString, structure: BabString },
 
+    #[error("Maak werkwijze `{name}` aan")]
+    CreateFunction { name: BabString },
+
     #[error("Vul structuurvelden van `{structure}`")]
     FillStructureFields { structure: String },
 
@@ -552,7 +555,7 @@ impl FileId {
     pub const INTERNAL: Self = Self(usize::MAX);
 
     #[must_use]
-    fn from_path(path: &Path) -> Self {
+    pub fn from_path(path: &Path) -> Self {
         let mut hasher = DefaultHasher::new();
         path.hash(&mut hasher);
         Self(hasher.finish() as _)
