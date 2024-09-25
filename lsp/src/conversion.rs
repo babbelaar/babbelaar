@@ -42,6 +42,12 @@ pub fn convert_command(command: &BabbelaarCommand) -> Command {
             arguments: None,
         },
 
+        BabbelaarCommand::RenameParameter => Command {
+            title: command.to_string(),
+            command: "editor.action.rename".into(),
+            arguments: None,
+        },
+
         BabbelaarCommand::RenameFunction => Command {
             title: command.to_string(),
             command: "editor.action.rename".into(),

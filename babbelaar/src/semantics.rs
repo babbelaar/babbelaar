@@ -108,8 +108,23 @@ impl SemanticAnalyzer {
     fn analyze_function(&mut self, function: &FunctionStatement, this: Option<SemanticType>) {
         self.context.push_function_scope(function, this);
 
+        let mut params = HashSet::new();
+
         for param in &function.parameters {
             let typ = self.resolve_type(&param.ty);
+
+            if !params.insert(param.name.value().clone()) {
+                self.diagnostics.push(
+                    SemanticDiagnostic::new(
+                        param.name.range(),
+                        SemanticDiagnosticKind::DuplicateParameterName {
+                            name: param.name.value().clone(),
+                        }
+                    )
+                    .with_action(BabbelaarCodeAction::new_command(param.name.range(), BabbelaarCommand::RenameParameter))
+                );
+                continue;
+            }
 
             if let Some(tracker) = &mut self.context.definition_tracker {
                 tracker.insert(param.ty.range(), SemanticReference {
@@ -1653,6 +1668,11 @@ pub enum SemanticDiagnosticKind {
     ReturnStatementIncompatibleTypes {
         expected: SemanticType,
         actual: SemanticType,
+    },
+
+    #[error("Parameternaam `{name}` wordt meerdere keren gedefinieerd.")]
+    DuplicateParameterName {
+        name: BabString,
     },
 }
 

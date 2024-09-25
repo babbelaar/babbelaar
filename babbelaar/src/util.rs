@@ -263,6 +263,9 @@ pub enum BabbelaarCommand {
     #[error("Veld hernoemen")]
     RenameField,
 
+    #[error("Parameter hernoemen")]
+    RenameParameter,
+
     #[error("Werkwijze hernoemen")]
     RenameFunction,
 }
@@ -272,6 +275,7 @@ impl BabbelaarCommand {
     pub const fn fix_kind(&self) -> BabbelaarFixKind {
         match self {
             Self::RenameField => BabbelaarFixKind::Refactor,
+            Self::RenameParameter => BabbelaarFixKind::Refactor,
             Self::RenameFunction => BabbelaarFixKind::Refactor,
         }
     }
