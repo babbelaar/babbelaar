@@ -433,6 +433,17 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
                 );
             }
 
+            Self::ExpectedRightSquareBracketForArrayQualifier { token } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: "]" },
+                        vec![
+                            FileEdit::new(token.range().end().as_zero_range(), "]")
+                        ]
+                    ),
+                );
+            }
+
             Self::ExpectedStructureMethodPrefixWerkwijze { token } => {
                 ctx.items.push(
                     BabbelaarCodeAction::new(

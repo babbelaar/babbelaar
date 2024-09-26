@@ -1,7 +1,11 @@
 // @uitheems(naam: "time")
 // werkwijze time(ver: Slinger);
-stel getal = getalNaarSlinger(1, 2);
 
-werkwijze getalNaarSlinger(getal0: g32, getal1: g32) {
-
+werkwijze printOpeenvoling(opeenvolging: Slinger[]) {
+    // volg element in opeenvolging {
+    //     schrijf(€"Element: {element}");
+    // }
+    stel _ = opeenvolging;
 }
+
+stel _ = printOpeenvoling;

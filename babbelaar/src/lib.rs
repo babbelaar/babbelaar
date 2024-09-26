@@ -34,7 +34,7 @@ pub use self::{
     structure::{Field, Method, Structure},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     tree::ParseTree,
-    type_::{Parameter, Type, TypeSpecifier},
+    type_::{Parameter, Type, TypeQualifier, TypeSpecifier},
     util::{BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BabbelaarFixKind, DocumentationProvider, FileEdit, FileId, FileLocation, FileRange, LspCompletion, OptionExt, Ranged, SourceCode, StrExt, StrIterExt},
     value::{FunctionId, MethodId, StructureId, Value, ValueType},
 };

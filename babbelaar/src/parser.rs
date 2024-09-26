@@ -7,7 +7,7 @@ use log::error;
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, BabString, BiExpression, BiOperator, Builtin, BuiltinType, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement
+    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, BabString, BiExpression, BiOperator, Builtin, BuiltinType, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeQualifier, TypeSpecifier, VariableStatement
 };
 
 pub type ParseResult<T> = Result<T, ParseError>;
@@ -478,6 +478,7 @@ impl<'tokens> Parser<'tokens> {
                 name,
                 ty: Ranged::new(range, Type {
                     specifier: Ranged::new(range,TypeSpecifier::BuiltIn(BuiltinType::Null)),
+                    qualifiers: Vec::new(),
                 }),
             })
         }
@@ -504,18 +505,60 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_type(&mut self) -> Ranged<Type> {
-        let Ok(name_token) = self.peek_token().cloned() else {
-            return Ranged::new(self.end_of_file_token.range(), Type {
-                specifier: Ranged::new(self.end_of_file_token.range(), TypeSpecifier::BuiltIn(BuiltinType::Null)),
-            })
+        let mut ty = Type {
+            specifier: self.parse_type_specifier(),
+            qualifiers: Vec::new(),
         };
 
-        let name_range = name_token.range();
+        let start = ty.specifier.range().start();
+        while let Some(punctuator) = self.peek_punctuator() {
+            match punctuator {
+                Punctuator::LeftSquareBracket => {
+                    ty.qualifiers.push(self.parse_array_qualifier());
+                }
+
+                _ => break,
+            }
+        }
+
+        let end = self.previous_end();
+        Ranged::new(FileRange::new(start, end), ty)
+    }
+
+    fn parse_array_qualifier(&mut self) -> Ranged<TypeQualifier> {
+        let start_range = self.consume_token().unwrap().range();
+
+        let Ok(end_token) = self.peek_token() else {
+            self.emit_diagnostic(ParseDiagnostic::ExpectedRightSquareBracketForArrayQualifier {
+                token: self.tokens[self.cursor - 1].clone(),
+            });
+            return Ranged::new(self.end_of_file_token.range(), TypeQualifier::Array);
+        };
+
+        let end = end_token.end;
+
+        if end_token.kind == TokenKind::Punctuator(Punctuator::RightSquareBracket) {
+            _ = self.consume_token();
+        } else {
+            self.emit_diagnostic(ParseDiagnostic::ExpectedRightSquareBracketForArrayQualifier {
+                token: end_token.clone(),
+            });
+        }
+
+        Ranged::new(
+            FileRange::new(start_range.start(), end),
+            TypeQualifier::Array,
+        )
+    }
+
+    fn parse_type_specifier(&mut self) -> Ranged<TypeSpecifier> {
+        let Ok(name_token) = self.peek_token().cloned() else {
+            return Ranged::new(self.end_of_file_token.range(), TypeSpecifier::BuiltIn(BuiltinType::Null));
+        };
+
         let TokenKind::Identifier(ref name) = name_token.kind else {
             self.emit_diagnostic(ParseDiagnostic::TypeExpectedSpecifierName { token: name_token });
-            return Ranged::new(name_range, Type {
-                specifier: Ranged::new(name_range, TypeSpecifier::BuiltIn(BuiltinType::Null)),
-            })
+            return Ranged::new(self.end_of_file_token.range(), TypeSpecifier::BuiltIn(BuiltinType::Null));
         };
 
         _ = self.consume_token();
@@ -527,10 +570,7 @@ impl<'tokens> Parser<'tokens> {
             None => TypeSpecifier::Custom { name },
         };
 
-        let ty = Type {
-            specifier: Ranged::new(name_token.range(), specifier),
-        };
-        Ranged::new(name_token.range(), ty)
+        Ranged::new(name_token.range(), specifier)
     }
 
     fn parse_for_statement(&mut self) -> Result<ForStatement, ParseError> {
@@ -1172,6 +1212,9 @@ pub enum ParseDiagnostic {
     #[error("Is-teken `=` verwacht tussen naam van stelling en de toewijzing, maar kreeg: {token}")]
     ExpectedEqualsInsideVariable { token: Token },
 
+    #[error("`]` verwacht om opeenvolging af te sluiten")]
+    ExpectedRightSquareBracketForArrayQualifier { token: Token },
+
     #[error("Puntkomma verwacht ';' na statement, maar kreeg: {token}")]
     ExpectedSemicolonAfterStatement { range: FileRange, token: Token },
 
@@ -1250,6 +1293,7 @@ impl ParseDiagnostic {
             Self::ExpectedNameOfVariable { token } => token,
             Self::ExpectedIdentifier { token, .. } => token,
             Self::ExpectedEqualsInsideVariable { token } => token,
+            Self::ExpectedRightSquareBracketForArrayQualifier { token } => token,
             Self::ExpectedStructureMemberPrefixVeld { token } => token,
             Self::FunctionStatementExpectedName { token } => token,
             Self::ForStatementExpectedIteratorName { token } => token,

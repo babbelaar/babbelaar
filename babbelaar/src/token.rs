@@ -89,6 +89,7 @@ pub enum TokenKind {
     Identifier(BabString),
     StringLiteral(BabString),
     TemplateString(Vec<TemplateStringToken>),
+    // TODO change to unsigned
     Integer(i64),
 
     Punctuator(Punctuator),

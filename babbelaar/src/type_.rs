@@ -12,6 +12,7 @@ pub struct Parameter {
 #[derive(Debug, Clone)]
 pub struct Type {
     pub specifier: Ranged<TypeSpecifier>,
+    pub qualifiers: Vec<Ranged<TypeQualifier>>,
 }
 
 #[derive(Debug, Clone)]
@@ -30,4 +31,9 @@ impl TypeSpecifier {
             Self::Custom { name } => name.value().clone(),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum TypeQualifier {
+    Array,
 }
