@@ -167,9 +167,23 @@ impl SemanticAnalyzer {
 
         match &statement.kind {
             StatementKind::Expression(expr) => {
-                if let SemanticUsage::Pure(pure) = self.analyze_expression(expr).usage {
+                let value = self.analyze_expression(expr);
+
+                if let SemanticUsage::Pure(pure) = value.usage {
                     let diag = SemanticDiagnostic::new(expr.range(), SemanticDiagnosticKind::UnusedPureValue)
                         .warn()
+                        .with_action(BabbelaarCodeAction::new(
+                            BabbelaarCodeActionType::AssignToNewVariable,
+                            vec![
+                                FileEdit::new(
+                                    statement.range.start().as_zero_range(),
+                                    match self.find_canonical_name_for_variable(expr) {
+                                        Some(name) => format!("stel {name}"),
+                                        None => format!("stel {} = ", value.ty.value_or_field_name_hint()),
+                                    }
+                                )
+                            ]
+                        ))
                         .with_action(BabbelaarCodeAction::new(
                             BabbelaarCodeActionType::RemovePureStatement,
                             vec![
@@ -1334,7 +1348,7 @@ impl SemanticAnalyzer {
 
             match self.find_canonical_name_for_variable(arg.value()) {
                 Some(name) => {
-                    text += &name;
+                    text += &format!("{name}{idx}");
                 }
 
                 None => {
@@ -2138,8 +2152,8 @@ impl SemanticType {
         match self {
             Self::Builtin(BuiltinType::Slinger) => BabString::new_static("tekst"),
             Self::Builtin(BuiltinType::G32) => BabString::new_static("getal"),
-            Self::Builtin(builtin) => builtin.name(),
-            Self::Custom(custom) => custom.name.value().clone(),
+            Self::Builtin(builtin) => builtin.name().to_lowercase().into(),
+            Self::Custom(custom) => custom.name.value().to_lowercase().into(),
 
             Self::Function(..) => BabString::empty(),
             Self::FunctionReference(..) => BabString::empty(),

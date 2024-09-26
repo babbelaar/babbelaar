@@ -371,6 +371,9 @@ pub enum BabbelaarCodeActionType {
         typ: BabString,
     },
 
+    #[error("Wijs waarde toe aan een nieuwe variabele")]
+    AssignToNewVariable,
+
     #[error("Verander bekeertype naar `{typ}`")]
     ChangeReturnType { typ: BabString },
 

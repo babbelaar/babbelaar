@@ -447,7 +447,7 @@ impl Backend {
         }).await?;
 
         let range = Range { start: Position::default(), end, };
-        Ok(result.map(|new_text| vec![TextEdit { range, new_text }]))
+        Ok(result.map(|new_text| vec![TextEdit { range, new_text, insert_text_format: Some(InsertTextFormat::SNIPPET) }]))
     }
 
     pub async fn initialize(&self, config: InitializeParams) -> Result<InitializeResult> {
@@ -819,6 +819,7 @@ impl Backend {
             let edit = TextEdit {
                 range: convert_file_range(edit.replacement_range()),
                 new_text: edit.new_text().to_string(),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
             };
 
             edits.push(OneOf::Left(edit));
@@ -910,6 +911,7 @@ impl Backend {
                     .map(|range| OneOf::Left(TextEdit {
                         range: convert_file_range(range),
                         new_text: params.new_name.clone(),
+                        insert_text_format: Some(InsertTextFormat::SNIPPET),
                     }))
                     .collect();
 
