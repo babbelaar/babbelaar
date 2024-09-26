@@ -10,6 +10,11 @@ pub enum Value {
     /// hehe 5 billion dollar problem
     Null,
 
+    Array {
+        ty: ValueType,
+        values: Vec<Value>,
+    },
+
     Bool(bool),
     Integer(i64),
     String(String),
@@ -55,6 +60,7 @@ impl Value {
 
     pub fn typ(&self) -> ValueType {
         match self {
+            Self::Array{ ty, .. } => ValueType::Array(Box::new(ty.clone())),
             Self::Bool(..) => BuiltinType::Bool.into(),
             Self::Integer(..) => BuiltinType::G32.into(),
             Self::Null => BuiltinType::Null.into(),
@@ -82,6 +88,19 @@ impl PartialOrd for Value {
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Array { values, .. } => {
+                f.write_str("[")?;
+
+                for (idx, val) in values.iter().enumerate() {
+                    if idx != 0 {
+                        f.write_str(", ")?;
+                    }
+
+                    val.fmt(f)?;
+                }
+
+                f.write_str("]")
+            }
             Self::Null => f.write_str("null"),
             Self::Bool(false) => f.write_str("onwaar"),
             Self::Bool(true) => f.write_str("waar"),
@@ -95,8 +114,9 @@ impl Display for Value {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum ValueType {
+    Array(Box<ValueType>),
     Builtin(BuiltinType),
     Structure(StructureId),
 }

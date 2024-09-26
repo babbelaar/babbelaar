@@ -217,6 +217,20 @@ impl<D> Interpreter<D>
             }
 
             PrimaryExpression::Parenthesized(expression) => self.execute_expression(expression),
+
+            PrimaryExpression::SizedArrayInitializer { typ, size } => {
+                let size = self.execute_expression(&size);
+                let Value::Integer(size) = size else {
+                    panic!("Ongeldige opeensommingsgrootte: {size:#?}");
+                };
+
+                let (ty, default_value) = self.resolve_type(typ);
+
+                Value::Array {
+                    ty,
+                    values: vec![default_value; size as usize],
+                }
+            }
         }
     }
 
@@ -427,6 +441,8 @@ impl<D> Interpreter<D>
 
     fn get_method(&self, value: &Value, method_name: &str) -> Option<Value> {
         match value.typ() {
+            ValueType::Array(..) => (),
+
             ValueType::Builtin(builtin) => {
                 for method in builtin.methods() {
                     if method.name == method_name {
@@ -455,6 +471,24 @@ impl<D> Interpreter<D>
         }
 
         None
+    }
+
+    fn resolve_type(&self, typ: &Type) -> (ValueType, Value) {
+        assert!(typ.qualifiers.len() == 0);
+        match typ.specifier.value() {
+            TypeSpecifier::BuiltIn(ty) => {
+                let default_value = match ty {
+                    BuiltinType::Bool => Value::Bool(false),
+                    BuiltinType::G32 => Value::Integer(0),
+                    BuiltinType::Null => Value::Null,
+                    BuiltinType::Slinger => Value::String(String::new()),
+                };
+
+                (ValueType::Builtin(*ty), default_value)
+            }
+
+            TypeSpecifier::Custom { .. } => todo!(),
+        }
     }
 }
 

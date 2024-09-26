@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, BabString, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -51,7 +51,7 @@ impl Symbolizer {
 
     pub fn add_token(&mut self, token: &Token) {
         self.symbols.insert(LspSymbol {
-            name: token.kind.name().to_string(),
+            name: BabString::new_static(token.kind.name()),
             kind: (&token.kind).into(),
             range: token.range(),
         });
@@ -110,14 +110,14 @@ impl Symbolizer {
 
     fn add_statement_function(&mut self, statement: &FunctionStatement) {
         self.symbols.insert(LspSymbol {
-            name: statement.name.value().to_string(),
+            name: statement.name.value().clone(),
             kind: LspTokenType::Method,
             range: statement.name.range(),
         });
 
         if let Some(return_type) = &statement.return_type {
             self.symbols.insert(LspSymbol {
-                name: return_type.specifier.name().to_string(),
+                name: return_type.specifier.name().clone(),
                 kind: LspTokenType::Class,
                 range: return_type.range(),
             });
@@ -148,7 +148,7 @@ impl Symbolizer {
 
     fn add_statement_structure(&mut self, statement: &Structure) {
         self.symbols.insert(LspSymbol {
-            name: statement.name.value().to_string(),
+            name: statement.name.value().clone(),
             kind: LspTokenType::Class,
             range: statement.name.range(),
         });
@@ -166,13 +166,13 @@ impl Symbolizer {
         self.add_attributes(&field.attributes);
 
         self.symbols.insert(LspSymbol {
-            name: field.name.value().to_string(),
+            name: field.name.value().clone(),
             kind: LspTokenType::Property,
             range: field.name.range(),
         });
 
         self.symbols.insert(LspSymbol {
-            name: field.ty.specifier.name().to_string(),
+            name: field.ty.specifier.name().clone(),
             kind: LspTokenType::Class,
             range: field.ty.range(),
         });
@@ -188,13 +188,13 @@ impl Symbolizer {
 
     fn add_parameter(&mut self, parameter: &Parameter) {
         self.symbols.insert(LspSymbol {
-            name: parameter.name.value().to_string(),
+            name: parameter.name.value().clone(),
             kind: LspTokenType::ParameterName,
             range: parameter.name.range(),
         });
 
         self.symbols.insert(LspSymbol {
-            name: "Type".to_string(),
+            name: BabString::new_static("Type"),
             kind: LspTokenType::Class,
             range: parameter.ty.range(),
         });
@@ -218,7 +218,7 @@ impl Symbolizer {
             Expression::Primary(PrimaryExpression::Reference(identifier)) => {
                 if let Some(reference) = self.semantic_analyzer.find_reference(identifier.range()) {
                     self.symbols.insert(LspSymbol {
-                        name: identifier.value().to_string(),
+                        name: identifier.value().clone(),
                         kind: match reference.local_kind {
                             SemanticLocalKind::FieldReference => LspTokenType::Property,
                             SemanticLocalKind::Iterator => LspTokenType::Variable,
@@ -252,6 +252,16 @@ impl Symbolizer {
                 self.add_expression_structure_instantiation(instantiation);
             }
 
+            Expression::Primary(PrimaryExpression::SizedArrayInitializer{ typ, size }) => {
+                self.symbols.insert(LspSymbol {
+                    name: typ.specifier.name(),
+                    kind: LspTokenType::Class,
+                    range: typ.specifier.range(),
+                });
+
+                self.add_expression(&size);
+            }
+
             Expression::Primary(..) => (),
         }
     }
@@ -261,7 +271,7 @@ impl Symbolizer {
             PostfixExpressionKind::Call(..) => {
                 if let Expression::Primary(PrimaryExpression::Reference(ident)) = expression.lhs.value() {
                     self.symbols.insert(LspSymbol {
-                        name: ident.value().to_string(),
+                        name: ident.value().clone(),
                         kind: LspTokenType::Function,
                         range: ident.range(),
                     });
@@ -270,7 +280,7 @@ impl Symbolizer {
 
             PostfixExpressionKind::MethodCall(method) => {
                 self.symbols.insert(LspSymbol {
-                    name: method.method_name.value().to_string(),
+                    name: method.method_name.value().clone(),
                     kind: LspTokenType::Method,
                     range: method.method_name.range(),
                 });
@@ -278,7 +288,7 @@ impl Symbolizer {
 
             PostfixExpressionKind::Member(member) => {
                 self.symbols.insert(LspSymbol {
-                    name: member.value().to_string(),
+                    name: member.value().clone(),
                     kind: LspTokenType::Property,
                     range: member.range(),
                 });
@@ -288,7 +298,7 @@ impl Symbolizer {
 
     fn add_expression_structure_instantiation(&mut self, expression: &StructureInstantiationExpression) {
         self.symbols.insert(LspSymbol {
-            name: expression.name.value().to_string(),
+            name: expression.name.value().clone(),
             kind: LspTokenType::Class,
             range: expression.name.range(),
         });
@@ -359,7 +369,7 @@ impl SymbolMap {
 
 #[derive(Debug, Clone, PartialEq)]
 struct LspSymbol {
-    name: String,
+    name: BabString,
     kind: LspTokenType,
     range: FileRange,
 }
@@ -389,7 +399,7 @@ impl LspSymbol {
     fn to_symbol(self, uri: Uri) -> SymbolInformation {
         #[allow(deprecated)]
         SymbolInformation {
-            name: self.name,
+            name: self.name.to_string(),
             kind: self.kind.into(),
             tags: None,
             deprecated: None,

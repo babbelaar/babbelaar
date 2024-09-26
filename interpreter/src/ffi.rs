@@ -28,6 +28,7 @@ impl FFIManager {
     pub fn execute(&self, attrib: &Attribute, arguments: Vec<Value>) -> Value {
         let arguments = arguments.iter()
             .map(|x| match x {
+                Value::Array { .. } => todo!(),
                 Value::Bool(b) => *b as Primitive,
                 Value::Function { .. } => todo!(),
                 Value::Null => 0,

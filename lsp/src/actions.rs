@@ -178,6 +178,10 @@ impl CodeActionsAnalyzable for PrimaryExpression {
             Self::ReferenceThis => (),
             Self::StringLiteral(..) => (),
 
+            Self::SizedArrayInitializer{ size, .. } => {
+                size.analyze(ctx);
+            }
+
             Self::StructureInstantiation(structure) => {
                 structure.analyze(ctx);
             }
@@ -433,7 +437,7 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
                 );
             }
 
-            Self::ExpectedRightSquareBracketForArrayQualifier { token } => {
+            Self::ExpectedRightSquareBracketForArrayInitializer { token } | Self::ExpectedRightSquareBracketForArrayQualifier { token } => {
                 ctx.items.push(
                     BabbelaarCodeAction::new(
                         BabbelaarCodeActionType::Insert{ text: "]" },

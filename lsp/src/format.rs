@@ -376,6 +376,13 @@ impl Format for PrimaryExpression {
                 f.write_char(')');
             }
             Self::StructureInstantiation(structure) => structure.format(f),
+            Self::SizedArrayInitializer{ typ, size } => {
+                f.write_str("nieuw ");
+                typ.format(f);
+                f.write_char('[');
+                size.format(f);
+                f.write_char(']');
+            }
         }
     }
 }

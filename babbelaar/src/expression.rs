@@ -3,7 +3,7 @@
 
 use std::fmt::{Debug, Display, Write};
 
-use crate::{BabString, FileRange, Ranged};
+use crate::{BabString, FileRange, Ranged, Type};
 
 #[derive(Clone, Debug)]
 pub enum PrimaryExpression {
@@ -17,6 +17,10 @@ pub enum PrimaryExpression {
         parts: Vec<TemplateStringExpressionPart>,
     },
     Parenthesized(Box<Ranged<Expression>>),
+    SizedArrayInitializer {
+        typ: Ranged<Type>,
+        size: Box<Ranged<Expression>>,
+    },
 }
 
 impl Display for PrimaryExpression {
@@ -39,6 +43,9 @@ impl Display for PrimaryExpression {
                 f.write_char('(')?;
                 Display::fmt(expr.value(), f)?;
                 f.write_char(')')
+            }
+            PrimaryExpression::SizedArrayInitializer { typ, size } => {
+                f.write_fmt(format_args!("nieuw {}[{}]", typ.value(), size.value()))
             }
         }
     }

@@ -500,6 +500,7 @@ impl SemanticAnalyzer {
 
     fn analyze_function_call_expression(&mut self, lhs: SemanticType, expression: &FunctionCallExpression, postfix: &PostfixExpression) -> SemanticValue {
         let function_name = match lhs {
+            SemanticType::Array(..) => postfix.lhs.value().to_string().into(),
             SemanticType::Builtin(BuiltinType::Null) => postfix.lhs.value().to_string().into(),
             SemanticType::Builtin(builtin) => builtin.name(),
             SemanticType::Custom(custom) => custom.name.value().clone(),
@@ -714,6 +715,20 @@ impl SemanticAnalyzer {
             }
 
             PrimaryExpression::Parenthesized(expr) => return self.analyze_expression(expr),
+
+            PrimaryExpression::SizedArrayInitializer { typ, size } => {
+                let size_value = self.analyze_expression(&size);
+                if size_value.ty != SemanticType::Builtin(BuiltinType::G32) {
+                    self.diagnostics.push(SemanticDiagnostic::new(
+                        size.range(),
+                        SemanticDiagnosticKind::SizedArrayInitializerInvalidSize,
+                    ));
+                }
+
+                let ty = self.resolve_type(typ);
+
+                SemanticType::Array(Box::new(ty))
+            }
         };
 
         SemanticValue {
@@ -995,6 +1010,7 @@ impl SemanticAnalyzer {
 
     fn resolve_parameter_name<'this>(&'this mut self, function: &SemanticReference, arg_idx: usize) -> Option<Ranged<BabString>> {
         match &function.typ {
+            SemanticType::Array(..) => todo!(),
             SemanticType::Builtin(..) => todo!(),
             SemanticType::Custom(..) => todo!(),
             SemanticType::Function(func) => {
@@ -1011,6 +1027,7 @@ impl SemanticAnalyzer {
 
     fn resolve_parameter_type<'this>(&'this mut self, function: &SemanticReference, arg_idx: usize) -> Option<SemanticType> {
         Some(match &function.typ {
+            SemanticType::Array(..) => todo!(),
             SemanticType::Builtin(..) => todo!(),
             SemanticType::Custom(..) => todo!(),
             SemanticType::Function(func) => {
@@ -1082,6 +1099,17 @@ impl SemanticAnalyzer {
 
     fn analyze_method_expression(&mut self, typ: SemanticType, expression: &MethodCallExpression) -> SemanticValue {
         match typ {
+            SemanticType::Array(..) => {
+                // TODO
+
+                self.diagnostics.push(SemanticDiagnostic::new(
+                    expression.method_name.range(),
+                    SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value().clone()}
+                ));
+
+                SemanticValue::null()
+            }
+
             SemanticType::Builtin(builtin) => {
                 for method in builtin.methods() {
                     if *expression.method_name == method.name {
@@ -1426,6 +1454,7 @@ impl SemanticAnalyzer {
                 Some(structure.name.value().clone())
             }
             Expression::Primary(PrimaryExpression::TemplateString { .. }) => None,
+            Expression::Primary(PrimaryExpression::SizedArrayInitializer { .. }) => None,
             Expression::Postfix(..) => None, // TODO
             Expression::BiExpression(..) => None, // TODO
         }
@@ -1787,6 +1816,9 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Variabele `{name}` wordt nergens gebruikt.")]
     UnusedVariable { name: BabString },
+
+    #[error("Expressie resulteert niet in een getal, wat nodig is om de grootte van de opeenvolging te bepalen.")]
+    SizedArrayInitializerInvalidSize,
 }
 
 impl SemanticDiagnosticKind {
@@ -2077,6 +2109,7 @@ pub struct SemanticReference {
 impl SemanticReference {
     pub fn function_name(&self) -> BabString {
         match &self.typ {
+            SemanticType::Array(..) => todo!(),
             SemanticType::Builtin(..) => todo!(),
             SemanticType::Custom(..) => todo!(),
             SemanticType::Function(func) => BabString::clone(&func.name),
@@ -2086,6 +2119,7 @@ impl SemanticReference {
 
     pub fn documentation(&self) -> Option<BabString> {
         match &self.typ {
+            SemanticType::Array(..) => None,
             SemanticType::Builtin(builtin) => Some(builtin.documentation().into_bab_string()),
             SemanticType::Custom(..) => None,
             SemanticType::Function(..) => None,
@@ -2095,6 +2129,7 @@ impl SemanticReference {
 
     pub fn inline_detail(&self) -> Option<BabString> {
         match &self.typ {
+            SemanticType::Array(..) => None,
             SemanticType::Builtin(builtin) => Some(builtin.inline_detail()),
             SemanticType::Custom(..) => None,
             SemanticType::Function(..) => None,
@@ -2104,6 +2139,7 @@ impl SemanticReference {
 
     pub fn lsp_completion(&self) -> BabString {
         match &self.typ {
+            SemanticType::Array(ty) => format!("{}[]", ty.name()).into(),
             SemanticType::Builtin(builtin) => builtin.name(),
             SemanticType::Custom(custom) => BabString::clone(&custom.name),
             SemanticType::Function(func) => BabString::new(format!("{}($1);$0", func.name.value())),
@@ -2242,6 +2278,7 @@ impl PartialEq for SemanticStructure {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SemanticType {
+    Array(Box<SemanticType>),
     Builtin(BuiltinType),
     Custom(Arc<SemanticStructure>),
     Function(SemanticFunction),
@@ -2256,6 +2293,7 @@ impl SemanticType {
 
     pub fn declaration_range(&self) -> FileRange {
         match self {
+            Self::Array(ty) => ty.declaration_range(),
             Self::Builtin(..) => FileRange::default(),
             Self::Custom(custom) => custom.name.range(),
             Self::Function(func) => func.name.range(),
@@ -2265,6 +2303,7 @@ impl SemanticType {
 
     pub fn parameter_count(&self) -> Option<usize> {
         match self {
+            Self::Array(..) => None,
             Self::Builtin(..) => None,
             Self::Custom(..) => None,
             Self::Function(func) => Some(func.parameters.len()),
@@ -2276,6 +2315,7 @@ impl SemanticType {
     #[must_use]
     pub fn value_or_field_name_hint(&self) -> BabString {
         match self {
+            Self::Array(..) => BabString::new_static("opeenvolging"),
             Self::Builtin(BuiltinType::Slinger) => BabString::new_static("tekst"),
             Self::Builtin(BuiltinType::G32) => BabString::new_static("getal"),
             Self::Builtin(builtin) => builtin.name().to_lowercase().into(),
@@ -2301,6 +2341,7 @@ impl SemanticType {
     #[must_use]
     pub fn name(&self) -> BabString {
         match self {
+            Self::Array(..) => BabString::new_static("opeenvolging-naam"),
             Self::Builtin(builtin) => builtin.name().into(),
             Self::Custom(custom) => custom.name.value().clone(),
             Self::Function(func) => func.name.value().clone(),
@@ -2312,6 +2353,10 @@ impl SemanticType {
 impl Display for SemanticType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Array(arr) => {
+                arr.fmt(f)?;
+                f.write_str("[]")
+            }
             Self::Builtin(typ) => typ.fmt(f),
             Self::Custom(custom) => custom.fmt(f),
             Self::Function(func) => func.fmt(f),

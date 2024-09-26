@@ -683,7 +683,7 @@ impl<'tokens> Parser<'tokens> {
             TokenKind::TemplateString(template_string) => self.parse_template_string(template_string),
             TokenKind::Keyword(Keyword::Waar) => Ok(PrimaryExpression::Boolean(true)),
             TokenKind::Keyword(Keyword::Onwaar) => Ok(PrimaryExpression::Boolean(false)),
-            TokenKind::Keyword(Keyword::Nieuw) => self.parse_structure_instantiation(range.start()),
+            TokenKind::Keyword(Keyword::Nieuw) => self.parse_new_keyword(range.start()),
             TokenKind::Keyword(Keyword::Dit) => Ok(PrimaryExpression::ReferenceThis),
 
             TokenKind::Punctuator(Punctuator::LeftParenthesis) => {
@@ -1093,7 +1093,7 @@ impl<'tokens> Parser<'tokens> {
         })
     }
 
-    fn parse_structure_instantiation(&mut self, start: FileLocation) -> ParseResult<PrimaryExpression> {
+    fn parse_new_keyword(&mut self, start: FileLocation) -> ParseResult<PrimaryExpression> {
         let name_token = self.peek_token()?;
         let name = match &name_token.kind {
             TokenKind::Identifier(name) => Ranged::new(name_token.range(), name.clone()),
@@ -1106,6 +1106,14 @@ impl<'tokens> Parser<'tokens> {
 
         _ = self.consume_token();
 
+        if self.peek_punctuator() == Some(Punctuator::LeftSquareBracket) {
+            self.parse_sized_array_initializer(name)
+        } else {
+            self.parse_structure_instantiation(name, start)
+        }
+    }
+
+    fn parse_structure_instantiation(&mut self, name: Ranged<BabString>, start: FileLocation) -> ParseResult<PrimaryExpression> {
         let left_curly_bracket = self.expect_left_curly_bracket("nieuw")?;
 
         let mut expr = StructureInstantiationExpression {
@@ -1169,6 +1177,33 @@ impl<'tokens> Parser<'tokens> {
 
         Ok(PrimaryExpression::StructureInstantiation(expr))
     }
+
+    fn parse_sized_array_initializer(&mut self, name: Ranged<BabString>) -> ParseResult<PrimaryExpression> {
+        _ = self.consume_token();
+
+        let size = Box::new(self.parse_expression()?);
+
+        if self.peek_punctuator() == Some(Punctuator::RightSquareBracket) {
+            _ = self.consume_token();
+        } else {
+            let token = self.peek_token().cloned()?;
+            self.diagnostics.push(ParseDiagnostic::ExpectedRightSquareBracketForArrayInitializer { token })
+        }
+
+        let name_range = name.range();
+        let specifier = match Builtin::type_by_name(name.value()) {
+            Some(builtin) => TypeSpecifier::BuiltIn(builtin),
+            None => TypeSpecifier::Custom { name },
+        };
+
+        Ok(PrimaryExpression::SizedArrayInitializer {
+            typ: Ranged::new(name_range, Type {
+                specifier: Ranged::new(name_range, specifier),
+                qualifiers: Vec::new(),
+            }),
+            size,
+        })
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error, AsRefStr)]
@@ -1211,6 +1246,9 @@ pub enum ParseDiagnostic {
 
     #[error("Is-teken `=` verwacht tussen naam van stelling en de toewijzing, maar kreeg: {token}")]
     ExpectedEqualsInsideVariable { token: Token },
+
+    #[error("`]` verwacht om opeenvolging af te sluiten")]
+    ExpectedRightSquareBracketForArrayInitializer { token: Token },
 
     #[error("`]` verwacht om opeenvolging af te sluiten")]
     ExpectedRightSquareBracketForArrayQualifier { token: Token },
@@ -1293,6 +1331,7 @@ impl ParseDiagnostic {
             Self::ExpectedNameOfVariable { token } => token,
             Self::ExpectedIdentifier { token, .. } => token,
             Self::ExpectedEqualsInsideVariable { token } => token,
+            Self::ExpectedRightSquareBracketForArrayInitializer { token } => token,
             Self::ExpectedRightSquareBracketForArrayQualifier { token } => token,
             Self::ExpectedStructureMemberPrefixVeld { token } => token,
             Self::FunctionStatementExpectedName { token } => token,

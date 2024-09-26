@@ -1,11 +1,4 @@
 // @uitheems(naam: "time")
 // werkwijze time(ver: Slinger);
 
-werkwijze printOpeenvoling(opeenvolging: Slinger[]) {
-    // volg element in opeenvolging {
-    //     schrijf(€"Element: {element}");
-    // }
-    stel _ = opeenvolging;
-}
-
-stel _ = printOpeenvoling;
+stel a = nieuw Slinger[10];
