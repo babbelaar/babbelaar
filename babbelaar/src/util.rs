@@ -16,7 +16,7 @@ pub struct FileLocation {
 }
 
 impl FileLocation {
-    pub const BOGUS: Self = Self::new(FileId::INTERNAL, usize::MAX, usize::MAX, usize::MAX);
+    pub const INTERNAL: Self = Self::new(FileId::INTERNAL, 0, 0, 0);
 
     #[must_use]
     pub const fn new(file_id: FileId, offset: usize, line: usize, column: usize) -> Self {
@@ -76,6 +76,8 @@ pub struct FileRange {
 }
 
 impl FileRange {
+    pub const INTERNAL: Self = Self::new(FileLocation::INTERNAL, FileLocation::INTERNAL);
+
     #[must_use]
     pub const fn new(start: FileLocation, end: FileLocation) -> Self {
         debug_assert!(start.file_id.0 == end.file_id.0);
@@ -374,6 +376,11 @@ pub enum BabbelaarCodeActionType {
     #[error("Wijs waarde toe aan een nieuwe variabele")]
     AssignToNewVariable,
 
+    #[error("Hernoem naar `_{name}` om het probleem te negeren")]
+    AppendUnderscoreToName {
+        name: BabString,
+    },
+
     #[error("Verander bekeertype naar `{typ}`")]
     ChangeReturnType { typ: BabString },
 
@@ -420,6 +427,12 @@ pub enum BabbelaarCodeActionType {
 
     #[error("{0}")]
     Command(BabbelaarCommand),
+
+    #[error("Verwijder {kind} `{name}`")]
+    RemoveGenericStatement {
+        kind: &'static str,
+        name: BabString,
+    },
 }
 
 #[derive(Debug, Clone)]

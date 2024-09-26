@@ -44,6 +44,7 @@ impl SemanticAnalyzer {
         self.context.announce_file(tree);
 
         self.analyze_statements(tree.statements());
+        self.analyze_usages();
     }
 
     fn analyze_statements(&mut self, statements: &[Statement]) {
@@ -88,7 +89,7 @@ impl SemanticAnalyzer {
                     parameters_right_paren_range: function.parameters_right_paren_range,
                     extern_function: None,
                     return_type,
-                });
+                }, statement.range);
             }
         }
 
@@ -135,11 +136,11 @@ impl SemanticAnalyzer {
                 });
             }
 
-            self.context.push_local(&param.name, SemanticLocal {
-                kind: SemanticLocalKind::Parameter,
-                declaration_range: param.name.range(),
+            self.context.push_local(&param.name, SemanticLocal::new(
+                SemanticLocalKind::Parameter,
                 typ,
-            });
+                param.name.range(),
+            ));
         }
 
         if let Some(ty) = &function.return_type {
@@ -215,7 +216,7 @@ impl SemanticAnalyzer {
             StatementKind::If(statement) => self.analyze_if_statement(statement),
             StatementKind::Return(function) => self.analyze_return_statement(function),
             StatementKind::Structure(..) => (),
-            StatementKind::Variable(variable) => self.analyze_variable_statement(variable),
+            StatementKind::Variable(variable) => self.analyze_variable_statement(variable, statement),
         }
     }
 
@@ -242,11 +243,11 @@ impl SemanticAnalyzer {
 
     fn analyze_for_statement(&mut self, statement: &ForStatement) {
         let scope = self.context.push_block_scope(statement.file_range);
-        scope.locals.insert(statement.iterator_name.value().clone(), SemanticLocal {
-            kind: SemanticLocalKind::Iterator,
-            declaration_range: statement.iterator_name.range(),
-            typ: SemanticType::Builtin(BuiltinType::G32),
-        });
+        scope.locals.insert(statement.iterator_name.value().clone(), SemanticLocal::new(
+            SemanticLocalKind::Iterator,
+            SemanticType::Builtin(BuiltinType::G32),
+            statement.iterator_name.range(),
+        ));
 
         self.analyze_statements(&statement.body);
 
@@ -461,13 +462,18 @@ impl SemanticAnalyzer {
         self.context.pop_scope();
     }
 
-    fn analyze_variable_statement(&mut self, statement: &VariableStatement) {
+    fn analyze_variable_statement(&mut self, statement: &VariableStatement, stmt: &Statement) {
         let typ = self.analyze_expression(&statement.expression).ty;
-        self.context.push_local(&statement.name, SemanticLocal {
-            kind: SemanticLocalKind::Variable,
-            declaration_range: statement.name.range(),
+
+        let local = SemanticLocal::new(
+            SemanticLocalKind::Variable,
             typ,
-        });
+            statement.name.range(),
+        );
+
+        let local = local.with_declaration_range(stmt.range);
+
+        self.context.push_local(&statement.name, local);
     }
 
     fn analyze_bi_expression(&mut self, expression: &BiExpression) -> SemanticValue {
@@ -501,7 +507,7 @@ impl SemanticAnalyzer {
             SemanticType::FunctionReference(func) => func.name(),
         };
 
-        let Some(function) = self.find_function(&function_name) else {
+        let Some(function) = self.find_and_use_function(&function_name) else {
             let diag = SemanticDiagnostic::new(
                 postfix.lhs.range(),
                 SemanticDiagnosticKind::InvalidFunctionReference { name: function_name.clone() }
@@ -695,7 +701,7 @@ impl SemanticAnalyzer {
                 let local_reference = SemanticReference {
                     local_name: reference.value().clone(),
                     local_kind: local.kind,
-                    declaration_range: local.declaration_range,
+                    declaration_range: local.name_declaration_range,
                     typ: local.typ.clone(),
                 };
 
@@ -819,11 +825,12 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn find_local_by_name<'this, P>(&'this self, predicate: P) -> Option<&'this SemanticLocal>
+    fn find_local_by_name<'this, P>(&'this mut self, predicate: P) -> Option<&'this SemanticLocal>
             where P: Fn(&str) -> bool {
-        for scope in self.context.scope.iter().rev() {
-            for (local_name, local) in &scope.locals {
+        for scope in self.context.scope.iter_mut().rev() {
+            for (local_name, local) in &mut scope.locals {
                 if predicate(local_name) {
+                    local.add_usage();
                     return Some(local);
                 }
             }
@@ -844,7 +851,7 @@ impl SemanticAnalyzer {
         None
     }
 
-    pub fn find_function_by_name<'this, P>(&'this self, predicate: P) -> Option<SemanticReference>
+    pub fn find_function_by_name<P>(&self, predicate: P) -> Option<SemanticReference>
             where P: Fn(&str) -> bool {
         for scope in self.context.scope.iter().rev() {
             for (name, func) in &scope.locals {
@@ -866,8 +873,27 @@ impl SemanticAnalyzer {
         None
     }
 
-    pub fn find_function<'this>(&'this self, name: &str) -> Option<SemanticReference> {
-        self.find_function_by_name(|func| func == name)
+    fn find_and_use_function(&mut self, name: &str) -> Option<SemanticReference> {
+        for scope in self.context.scope.iter_mut().rev() {
+            for (func_name, func) in &mut scope.locals {
+                if !func.kind.is_function() {
+                    continue;
+                }
+
+                if name == func_name {
+                    func.add_usage();
+
+                    return Some(SemanticReference {
+                        local_name: func_name.clone(),
+                        local_kind: SemanticLocalKind::FunctionReference,
+                        declaration_range: func.typ.declaration_range(),
+                        typ: func.typ.clone(),
+                    });
+                }
+            }
+        }
+
+        None
     }
 
     pub fn find_reference(&self, range: FileRange) -> Option<SemanticReference> {
@@ -1404,6 +1430,67 @@ impl SemanticAnalyzer {
             Expression::BiExpression(..) => None, // TODO
         }
     }
+
+    fn analyze_usages(&mut self) {
+        for scope in self.context.scope.iter().chain(self.context.previous_scopes.iter()) {
+            for (name, local) in &scope.locals {
+                if local.usage_count != 0 {
+                    continue;
+                }
+
+                if local.name_declaration_range.file_id() == FileId::INTERNAL {
+                    continue;
+                }
+
+                if name.starts_with('_') {
+                    // TODO: make this configurable
+                    continue;
+                }
+
+                let diag = self.create_diagnostic_unused_local(name, local);
+                self.diagnostics.push(diag);
+            }
+        }
+    }
+
+    fn create_diagnostic_unused_local(&self, name: &BabString, local: &SemanticLocal) -> SemanticDiagnostic {
+        let kind = match &local.kind {
+            SemanticLocalKind::Function | SemanticLocalKind::FunctionReference =>
+                SemanticDiagnosticKind::UnusedFunction { name: name.clone() },
+            SemanticLocalKind::Iterator => SemanticDiagnosticKind::UnusedIterator { name: name.clone() },
+            SemanticLocalKind::Parameter => SemanticDiagnosticKind::UnusedParameter { name: name.clone() },
+            SemanticLocalKind::Variable => SemanticDiagnosticKind::UnusedVariable { name: name.clone() },
+
+            _ => SemanticDiagnosticKind::UnusedVariable { name: name.clone() } // TODO
+        };
+        let mut diag = SemanticDiagnostic::new(local.name_declaration_range, kind)
+            .warn()
+            .with_action(BabbelaarCodeAction::new(
+                BabbelaarCodeActionType::AppendUnderscoreToName {
+                    name: name.clone()
+                },
+                vec![
+                    FileEdit::new(
+                        local.name_declaration_range.start().as_zero_range(),
+                        '_'
+                    )
+                ]
+            ));
+
+        if let Some(range) = local.full_declaration_range {
+            diag = diag.with_action(BabbelaarCodeAction::new(
+                BabbelaarCodeActionType::RemoveGenericStatement {
+                    kind: local.kind.name(),
+                    name: name.clone(),
+                },
+                vec![
+                    FileEdit::new(range, String::new())
+                ]
+            ));
+        }
+
+        diag
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1688,6 +1775,18 @@ pub enum SemanticDiagnosticKind {
     DuplicateParameterName {
         name: BabString,
     },
+
+    #[error("Werkwijze `{name}` wordt nergens gebruikt.")]
+    UnusedFunction { name: BabString },
+
+    #[error("Iterator `{name}` wordt nergens gebruikt.")]
+    UnusedIterator { name: BabString },
+
+    #[error("Parameter `{name}` wordt nergens gebruikt.")]
+    UnusedParameter { name: BabString },
+
+    #[error("Variabele `{name}` wordt nergens gebruikt.")]
+    UnusedVariable { name: BabString },
 }
 
 impl SemanticDiagnosticKind {
@@ -1779,23 +1878,25 @@ impl SemanticContext {
         });
     }
 
-    fn push_function(&mut self, function: SemanticFunction) {
+    fn push_function(&mut self, function: SemanticFunction, range: FileRange) {
+        let declaration_range = function.name.range();
+
         if let Some(tracker) = &mut self.declaration_tracker {
             tracker.push(SemanticReference {
                 local_name: function.name.value().clone(),
                 local_kind: SemanticLocalKind::Function,
-                declaration_range: function.name.range(),
+                declaration_range,
                 typ: SemanticType::Function(function.clone()),
             });
         }
 
         self.scope.last_mut().unwrap().locals.insert(
             function.name.value().clone(),
-            SemanticLocal {
-                kind: SemanticLocalKind::Function,
-                declaration_range: function.name.range(),
-                typ: SemanticType::Function(function),
-            }
+            SemanticLocal::new(
+                SemanticLocalKind::Function,
+                SemanticType::Function(function),
+                declaration_range,
+            ).with_declaration_range(range)
         );
     }
 
@@ -1876,11 +1977,11 @@ impl SemanticScope {
         };
 
         for func in Builtin::FUNCTIONS {
-            this.locals.insert(BabString::new_static(func.name), SemanticLocal {
-                kind: SemanticLocalKind::Function,
-                declaration_range: FileRange::default(),
-                typ: SemanticType::FunctionReference(FunctionReference::Builtin(func)),
-            });
+            this.locals.insert(BabString::new_static(func.name), SemanticLocal::new(
+                SemanticLocalKind::Function,
+                SemanticType::FunctionReference(FunctionReference::Builtin(func)),
+                FileRange::INTERNAL,
+            ));
         }
 
         this
@@ -1935,9 +2036,34 @@ impl PartialEq for SemanticFunction {
 #[derive(Debug, Clone)]
 pub struct SemanticLocal {
     pub kind: SemanticLocalKind,
-    pub declaration_range: FileRange,
+    pub name_declaration_range: FileRange,
     pub typ: SemanticType,
-    // type ...
+    pub usage_count: usize,
+    pub full_declaration_range: Option<FileRange>,
+}
+
+impl SemanticLocal {
+    #[must_use]
+    pub fn new(kind: SemanticLocalKind, typ: SemanticType, declaration_range: FileRange) -> Self {
+        Self {
+            kind,
+            name_declaration_range: declaration_range,
+            typ,
+            usage_count: 0,
+            full_declaration_range: None,
+        }
+    }
+
+    pub fn with_declaration_range(self, range: FileRange) -> Self {
+        Self {
+            full_declaration_range: Some(range),
+            ..self
+        }
+    }
+
+    pub fn add_usage(&mut self) {
+        self.usage_count += 1;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2220,6 +2346,21 @@ impl SemanticLocalKind {
             Self::Variable => false,
             Self::Method => true,
             Self::ReferenceThis => false,
+        }
+    }
+
+    #[must_use]
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Parameter => "parameter",
+            Self::FieldReference => "veld",
+            Self::StructureReference => "structuur",
+            Self::Iterator => "iterator",
+            Self::Function => "werkwijze",
+            Self::FunctionReference => "werkwijze",
+            Self::Variable => "variabele",
+            Self::Method => "structuurwerkwijze",
+            Self::ReferenceThis => "dit",
         }
     }
 }

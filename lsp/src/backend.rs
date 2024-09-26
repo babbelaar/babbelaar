@@ -223,6 +223,10 @@ impl Backend {
         let analyzer = self.context.semantic_analysis().await;
 
         for e in analyzer.diagnostics() {
+            if e.range().file_id() == FileId::INTERNAL {
+                continue;
+            }
+
             let related_information = Some(
                     e.related_info()
                         .iter()
@@ -236,7 +240,10 @@ impl Backend {
                         .collect()
             );
 
-            let url = urls.get(&e.range().file_id()).cloned().unwrap();
+            let Some(url) = urls.get(&e.range().file_id()).cloned() else {
+                log::warn!("Ongeldige BestandID: {:?}", e.range().file_id());
+                continue;
+            };
 
             let actions: Vec<_> = e.actions().iter()
                 .map(|x| {
