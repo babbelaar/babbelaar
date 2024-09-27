@@ -512,17 +512,19 @@ impl<'tokens> Parser<'tokens> {
         };
 
         let start = ty.specifier.range().start();
+        let mut end = ty.specifier.range().end();
         while let Some(punctuator) = self.peek_punctuator() {
             match punctuator {
                 Punctuator::LeftSquareBracket => {
-                    ty.qualifiers.push(self.parse_array_qualifier());
+                    let qual = self.parse_array_qualifier();
+                    end = qual.range().end();
+                    ty.qualifiers.push(qual);
                 }
 
                 _ => break,
             }
         }
 
-        let end = self.previous_end();
         Ranged::new(FileRange::new(start, end), ty)
     }
 
@@ -558,8 +560,9 @@ impl<'tokens> Parser<'tokens> {
         };
 
         let TokenKind::Identifier(ref name) = name_token.kind else {
+            let range = name_token.begin.as_zero_range();
             self.emit_diagnostic(ParseDiagnostic::TypeExpectedSpecifierName { token: name_token });
-            return Ranged::new(self.end_of_file_token.range(), TypeSpecifier::BuiltIn(BuiltinType::Null));
+            return Ranged::new(range, TypeSpecifier::BuiltIn(BuiltinType::Null));
         };
 
         _ = self.consume_token();
