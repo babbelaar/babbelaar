@@ -678,6 +678,7 @@ impl<'tokens> Parser<'tokens> {
         let range = token.range();
 
         let expression = match token.kind {
+            TokenKind::CharacterLiteral(char) => Ok(PrimaryExpression::CharacterLiteral(char)),
             TokenKind::StringLiteral(literal) => Ok(PrimaryExpression::StringLiteral(literal)),
             TokenKind::Integer(integer) => Ok(PrimaryExpression::IntegerLiteral(integer)),
             TokenKind::Identifier(ref identifier) => Ok(PrimaryExpression::Reference(Ranged::new(token.range(), identifier.clone()))),

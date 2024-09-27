@@ -637,6 +637,10 @@ impl SemanticAnalyzer {
 
     fn analyze_primary_expression(&mut self, expression: &PrimaryExpression, range: FileRange) -> SemanticValue {
         let ty = match expression {
+            PrimaryExpression::CharacterLiteral(..) => {
+                SemanticType::Builtin(BuiltinType::Teken)
+            }
+
             PrimaryExpression::Boolean(..) => {
                 SemanticType::Builtin(BuiltinType::Bool)
             }
@@ -1461,6 +1465,7 @@ impl SemanticAnalyzer {
 
     fn find_canonical_name_for_variable(&self, value: &Expression) -> Option<BabString> {
         match value {
+            Expression::Primary(PrimaryExpression::CharacterLiteral(..)) => None,
             Expression::Primary(PrimaryExpression::Boolean(..)) => None,
             Expression::Primary(PrimaryExpression::IntegerLiteral(..)) => Some(BabString::new_static("getal")),
             Expression::Primary(PrimaryExpression::Parenthesized(expr)) => self.find_canonical_name_for_variable(expr.value()),
@@ -1541,7 +1546,7 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_subscript_expression(&mut self, lhs: SemanticType, expression: &Ranged<Expression>, range: FileRange) -> SemanticValue {
-        let SemanticType::Array(element_type) = lhs else {
+        let Some(element_type) = lhs.subscript() else {
             self.diagnostics.push(
                 SemanticDiagnostic::new(range, SemanticDiagnosticKind::CannotSubscriptNonArray { ty: lhs })
             );
@@ -1556,7 +1561,7 @@ impl SemanticAnalyzer {
         }
 
         SemanticValue {
-            ty: *element_type,
+            ty: element_type,
             usage: SemanticUsage::Pure(PureValue::IndexReference)
         }
     }
@@ -1877,7 +1882,7 @@ pub enum SemanticDiagnosticKind {
     #[error("Expressie resulteert niet in een getal, wat nodig is om de grootte van de opeenvolging te bepalen.")]
     SizedArrayInitializerInvalidSize,
 
-    #[error("Alleen opeenvolgingen kunnen worden geïndexeerd, maar dit is van type {ty}.")]
+    #[error("Een `{ty}` kan niet worden geïndexeerd. Types zoals `Slinger` en opeenvolgingen wel.")]
     CannotSubscriptNonArray { ty: SemanticType },
 
     #[error("Je kunt opeenvolgingen alleen met getallen indexeren, maar de index is van type {ty}.")]
@@ -2421,6 +2426,15 @@ impl SemanticType {
             Self::Function(func) => func.name.value().clone(),
             Self::FunctionReference(func) => func.name(),
             Self::IndexReference(ty) => ty.name(),
+        }
+    }
+
+    /// Returns the element type, if it is subscriptable.
+    pub fn subscript(&self) -> Option<SemanticType> {
+        match self {
+            Self::Array(ty) => Some(ty.as_ref().clone()),
+            Self::Builtin(BuiltinType::Slinger) => Some(SemanticType::Builtin(BuiltinType::Teken)),
+            _ => None,
         }
     }
 }

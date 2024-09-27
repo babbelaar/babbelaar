@@ -87,6 +87,7 @@ pub enum TokenKind {
     Keyword(Keyword),
 
     Identifier(BabString),
+    CharacterLiteral(char),
     StringLiteral(BabString),
     TemplateString(Vec<TemplateStringToken>),
     // TODO change to unsigned
@@ -102,6 +103,7 @@ impl TokenKind {
             Self::Keyword(..) => "sleutelwoord",
 
             Self::Identifier(..) => "identifier",
+            Self::CharacterLiteral(..) => "teken",
             Self::StringLiteral(..) => "slinger",
             Self::TemplateString(..) => "sjabloonslinger",
             Self::Integer(..) => "getal",
@@ -129,6 +131,7 @@ impl Display for TokenKind {
             Self::Integer(int) => int.fmt(f),
             Self::Keyword(keyword) => f.write_str(keyword.as_ref()),
             Self::Punctuator(punctuator) => punctuator.fmt(f),
+            Self::CharacterLiteral(c) => f.write_fmt(format_args!("'{c}'")),
             Self::StringLiteral(str) => f.write_fmt(format_args!("\"{str}\"")),
             Self::TemplateString(ts) => {
                 f.write_char('"')?;

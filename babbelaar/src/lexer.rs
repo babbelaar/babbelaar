@@ -37,6 +37,7 @@ impl<'source_code> Lexer<'source_code> {
         let tok = match ch {
             '"' => self.consume_string(),
             '€' => self.consume_template_string(),
+            '\'' => self.consume_character_literal(),
 
             'a'..='z' | 'A'..='Z' | '_' => self.consume_identifier_or_keyword(),
             '0'..='9' => self.consume_number(),
@@ -111,6 +112,29 @@ impl<'source_code> Lexer<'source_code> {
             kind,
             begin,
             end,
+        })
+    }
+
+    fn consume_character_literal(&mut self) -> Option<Token> {
+        let begin = self.current_location();
+        assert_eq!(self.next_char().unwrap(), '\'');
+
+        let ch = self.next_char()?;
+
+        if self.peek_char() == Some('\'') {
+            self.consume_char();
+        } else {
+            let location = self.current_location();
+            self.errors.push(LexerError {
+                location,
+                kind: LexerErrorKind::InvalidCharacterLiteral,
+            });
+        }
+
+        Some(Token {
+            kind: TokenKind::CharacterLiteral(ch),
+            begin,
+            end: self.current_location(),
         })
     }
 
@@ -438,6 +462,9 @@ pub enum LexerErrorKind {
 
     #[error("Ongeldig nummer")]
     InvalidNumber,
+
+    #[error("Ongeldig teken")]
+    InvalidCharacterLiteral,
 }
 impl LexerErrorKind {
     #[must_use]

@@ -34,6 +34,7 @@ impl FFIManager {
                 Value::Function { .. } => todo!(),
                 Value::Null => 0,
                 Value::Integer(int) => *int as Primitive,
+                Value::Character(char) => *char as Primitive,
                 Value::String(s) => s.as_ptr() as Primitive,
                 Value::MethodReference { .. } => todo!(),
                 Value::MethodIdReference { .. } => todo!(),

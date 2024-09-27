@@ -5,7 +5,7 @@ use std::fmt::Display;
 
 use crate::{BabString, BuiltinFunction};
 
-use super::methods::{METHODS_BOOL, METHODS_G32, METHODS_NULL, METHODS_SLINGER};
+use super::methods::{METHODS_BOOL, METHODS_G32, METHODS_NULL, METHODS_SLINGER, METHODS_TEKEN};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub enum BuiltinType {
@@ -13,6 +13,7 @@ pub enum BuiltinType {
     G32,
     Null,
     Slinger,
+    Teken,
 }
 
 impl BuiltinType {
@@ -23,6 +24,7 @@ impl BuiltinType {
             Self::G32 => BabString::new_static("g32"),
             Self::Null => BabString::new_static("null"),
             Self::Slinger => BabString::new_static("Slinger"),
+            Self::Teken => BabString::new_static("teken"),
         }
     }
 
@@ -74,6 +76,7 @@ impl BuiltinType {
             Self::G32 => "Een geheel getal met 32-bits precisie.",
             Self::Null => "Tijdelijk type, niet gebruiken",
             Self::Slinger => "Een stuk tekst, schrijfbaar met bijvoorbeeld: \"Hallo, slinger!\"",
+            Self::Teken => "Een letter, cijfer of speciaal teken.",
         })
     }
 
@@ -84,6 +87,7 @@ impl BuiltinType {
             Self::G32 => METHODS_G32,
             Self::Null => METHODS_NULL,
             Self::Slinger => METHODS_SLINGER,
+            Self::Teken => METHODS_TEKEN,
         }
     }
 }

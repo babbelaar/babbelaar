@@ -139,6 +139,8 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
     },
 ];
 
+pub(super) static METHODS_TEKEN: &'static [BuiltinFunction] = &[];
+
 pub fn slinger_lengte(_: &mut dyn Interpreter, _parameters: Vec<Value>, this: Option<Value>) -> Value {
     Value::Integer(this.unwrap().to_string().len() as _)
 }

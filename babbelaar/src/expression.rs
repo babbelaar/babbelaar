@@ -8,6 +8,7 @@ use crate::{BabString, FileRange, Ranged, Type};
 #[derive(Clone, Debug)]
 pub enum PrimaryExpression {
     Boolean(bool),
+    CharacterLiteral(char),
     StringLiteral(BabString),
     IntegerLiteral(i64),
     Reference(Ranged<BabString>),
@@ -27,6 +28,11 @@ impl Display for PrimaryExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PrimaryExpression::Boolean(b) => f.write_str(if *b { "waar" } else { "onwaar" }),
+            PrimaryExpression::CharacterLiteral(c) => {
+                f.write_char('\'')?;
+                f.write_char(*c)?;
+                f.write_char('\'')
+            }
             PrimaryExpression::StringLiteral(bab_string) => {
                 f.write_char('"')?;
                 f.write_str(bab_string.as_str())?;

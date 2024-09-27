@@ -363,6 +363,11 @@ impl Format for PrimaryExpression {
             }
             Self::ReferenceThis => f.write_str(Keyword::Dit.as_ref()),
             Self::Reference(s) => f.write_str(s.value()),
+            Self::CharacterLiteral(c) => {
+                f.write_char('"');
+                f.write_char(*c);
+                f.write_char('"');
+            }
             Self::StringLiteral(s) => {
                 f.write_char('"');
                 f.write_str(s);

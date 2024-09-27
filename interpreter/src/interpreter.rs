@@ -187,6 +187,10 @@ impl<D> Interpreter<D>
                 Value::Integer(*integer)
             }
 
+            PrimaryExpression::CharacterLiteral(char) => {
+                Value::Character(*char)
+            }
+
             PrimaryExpression::StringLiteral(str) => {
                 Value::String(str.to_string())
             }
@@ -503,6 +507,7 @@ impl<D> Interpreter<D>
                     BuiltinType::G32 => Value::Integer(0),
                     BuiltinType::Null => Value::Null,
                     BuiltinType::Slinger => Value::String(String::new()),
+                    BuiltinType::Teken => Value::Character('\0'),
                 };
 
                 (ValueType::Builtin(*ty), default_value)
@@ -518,6 +523,18 @@ impl<D> Interpreter<D>
         let Value::Integer(index) = subscript else {
             panic!("ICE: subscript index is not a number");
         };
+
+        if let Value::String(s) = lhs {
+            return match s.chars().nth(index as _) {
+                Some(c) => Value::Character(c),
+                None => {
+                    let error = RuntimeError::array_out_of_bounds(s.len(), index);
+                    self.debugger.on_runtime_error(&error);
+                    error!("Fout: {error}");
+                    exit(1);
+                }
+            };
+        }
 
         let Value::Array { values: array, .. } = lhs else {
             panic!("ICE: subscript operand is not an array");

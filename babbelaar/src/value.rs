@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{cell::RefCell, cmp::Ordering, collections::HashMap, fmt::Display, hash::{DefaultHasher, Hash, Hasher}, rc::Rc};
+use std::{cell::RefCell, cmp::Ordering, collections::HashMap, fmt::{Display, Write}, hash::{DefaultHasher, Hash, Hasher}, rc::Rc};
 
 use crate::{BuiltinMethodReference, BuiltinType, Comparison, FunctionStatement, Structure};
 
@@ -23,6 +23,7 @@ pub enum Value {
     Bool(bool),
     Integer(i64),
     String(String),
+    Character(char),
     MethodReference {
         lhs: Box<Value>,
         method: BuiltinMethodReference,
@@ -71,6 +72,7 @@ impl Value {
             Self::Integer(..) => BuiltinType::G32.into(),
             Self::Null => BuiltinType::Null.into(),
             Self::String(..) => BuiltinType::Slinger.into(),
+            Self::Character(..) => BuiltinType::Teken.into(),
             Self::MethodReference { .. } => todo!(),
             Self::MethodIdReference { .. } => todo!(),
             Self::Function { .. } => todo!(),
@@ -113,6 +115,7 @@ impl Display for Value {
             Self::Bool(true) => f.write_str("waar"),
             Self::Integer(i) => i.fmt(f),
             Self::String(str) => f.write_str(str),
+            Self::Character(c) => f.write_char(*c),
             Self::MethodReference { lhs, method } => f.write_fmt(format_args!("{lhs}.{}()", method.name())),
             Self::MethodIdReference { .. } => f.write_str("werkwijze"),
             Self::Function { name, .. } => f.write_fmt(format_args!("werkwijze {name}() {{ .. }}")),

@@ -172,6 +172,7 @@ impl CodeActionsAnalyzable for PrimaryExpression {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         match self {
             Self::Boolean(..) => (),
+            Self::CharacterLiteral(..) => (),
             Self::IntegerLiteral(..) => (),
 
             Self::Parenthesized(expr) => {

@@ -32,7 +32,7 @@ class BabbelaarTaskProvider implements TaskProvider<Task> {
 		const command = process.env.BABBELAAR || "babbelaar";
 
 		const path = task.definition["path"] as string;
-		const execution = new ShellExecution(`clear; \"${command.replaceAll(/(?<!\\)"/, "\"")}\" uitvoeren \"${path.replaceAll(/(?<!\\)"/, "\"")}\"`);
+		const execution = new ShellExecution(`clear; \"${command.replaceAll(/(?<!\\)"/g, "\"")}\" uitvoeren \"${path.replaceAll(/(?<!\\)"/g, "\"")}\"`);
 		console.log(JSON.stringify(task, null, ''));
 		const definition = task.definition;
 

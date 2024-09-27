@@ -7,6 +7,9 @@ a[0] = 10;
 schrijf(€"Getal={a}");
 
 
-stel bool = a.bevat(10);
+stel b = a.bevat(10);
 schrijf("Bevat");
-schrijf(€"Antwoord: {bool}");
+schrijf(€"Antwoord: {b}");
+
+stel c = "ASD"[0];
+schrijf(€"Teken={c}");

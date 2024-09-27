@@ -441,6 +441,7 @@ impl From<&TokenKind> for LspTokenType {
     fn from(value: &TokenKind) -> Self {
         match value {
             TokenKind::Keyword(..) => LspTokenType::Keyword,
+            TokenKind::CharacterLiteral(..) => LspTokenType::String,
             TokenKind::StringLiteral(..) => LspTokenType::String,
             TokenKind::TemplateString(..) => LspTokenType::String,
             TokenKind::Identifier(..) => LspTokenType::Variable,
