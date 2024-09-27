@@ -6,6 +6,11 @@ werkwijze schrijfLetterVoorLetter(tekst: Slinger) {
 
 schrijfLetterVoorLetter("hoi");
 
+stel a = nieuw Persoon {
+    voornaam: "Jantje",
+    achternaam: "Jansen",
+};
+
 // werkwijze schrijfLetterVoorLetter(tekst: Slinger) {
 //     stel a
 //     volg i in reeks(0, lengte) {

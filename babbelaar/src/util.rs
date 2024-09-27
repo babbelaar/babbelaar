@@ -309,6 +309,7 @@ impl BabbelaarCodeAction {
             edits: vec![FileEdit {
                 replacement_range: range.start().as_zero_range(),
                 new_text: String::new(),
+                new_file_path: None,
             }],
             command: Some(command),
             fix_kind: command.fix_kind(),
@@ -436,12 +437,19 @@ pub enum BabbelaarCodeActionType {
 
     #[error("Gebruik methode `{method_name}`")]
     UseMethod { method_name: BabString },
+
+    #[error("Maak structuur `{name}` aan")]
+    CreateStructure { name: BabString },
+
+    #[error("Maak structuur `{name}` aan in nieuw bestand")]
+    CreateStructureInNewFile { name: BabString },
 }
 
 #[derive(Debug, Clone)]
 pub struct FileEdit {
     replacement_range: FileRange,
     new_text: String,
+    new_file_path: Option<PathBuf>,
 }
 
 impl FileEdit {
@@ -450,6 +458,15 @@ impl FileEdit {
         Self {
             replacement_range,
             new_text: new_text.into(),
+            new_file_path: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_new_file(self, path: PathBuf) -> Self {
+        Self {
+            new_file_path: Some(path),
+            ..self
         }
     }
 
@@ -461,6 +478,11 @@ impl FileEdit {
     #[must_use]
     pub fn new_text(&self) -> &str {
         &self.new_text
+    }
+
+    #[must_use]
+    pub fn new_file_path(&self) -> Option<&Path> {
+        self.new_file_path.as_ref().map(|x| x.as_path())
     }
 }
 

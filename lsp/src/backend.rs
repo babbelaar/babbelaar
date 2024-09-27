@@ -809,8 +809,8 @@ impl Backend {
         let document_changes = if action.edits().is_empty() {
             None
         } else {
-            let edit = self.create_text_document_edit(action).await;
-            let edits = DocumentChanges::Edits(vec![edit]);
+            let edits = self.create_document_change_operation_for_action(action).await;
+            let edits = DocumentChanges::Operations(edits);
             Some(edits)
         };
 
@@ -821,10 +821,25 @@ impl Backend {
         }
     }
 
-    async fn create_text_document_edit(&self, action: &BabbelaarCodeAction) -> TextDocumentEdit {
+    async fn create_document_change_operation_for_action(&self, action: &BabbelaarCodeAction) -> Vec<DocumentChangeOperation> {
+        let mut operations = Vec::new();
         let mut edits = Vec::new();
+        let mut uri = None;
 
         for edit in action.edits() {
+            if let Some(new_file_path) = edit.new_file_path() {
+                let new_uri = new_file_path.to_uri();
+                uri = Some(new_uri.clone());
+                operations.push(DocumentChangeOperation::Op(ResourceOp::Create(CreateFile {
+                    uri: new_uri,
+                    options: Some(CreateFileOptions {
+                        overwrite: Some(false),
+                        ignore_if_exists: Some(false),
+                    }),
+                    annotation_id: None,
+                })));
+            }
+
             let edit = TextEdit {
                 range: convert_file_range(edit.replacement_range()),
                 new_text: edit.new_text().to_string(),
@@ -835,16 +850,24 @@ impl Backend {
         }
 
         let file_id = action.edits()[0].replacement_range().file_id();
-        TextDocumentEdit {
+
+        let uri = match uri {
+            Some(uri) => uri,
+            None => match self.context.path_of(file_id).await {
+                Some(path) => path.to_uri(),
+                None => panic!("Failed to find path of {file_id:?} for action {action:#?}"),
+            }
+        };
+
+        operations.push(DocumentChangeOperation::Edit(TextDocumentEdit {
             text_document: OptionalVersionedTextDocumentIdentifier {
-                uri: match self.context.path_of(file_id).await {
-                    Some(path) => path.to_uri(),
-                    None => panic!("Failed to find path of {file_id:?} for action {action:#?}"),
-                },
+                uri,
                 version: None,
             },
             edits,
-        }
+        }));
+
+        operations
     }
 
     async fn create_code_actions_based_on_semantics(&self, actions: &mut Vec<CodeActionOrCommand>, params: &CodeActionParams) -> Result<()> {

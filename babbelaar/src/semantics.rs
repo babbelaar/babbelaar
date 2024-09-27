@@ -770,7 +770,7 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_structure_instantiation(&mut self, instantiation: &StructureInstantiationExpression) -> SemanticValue {
-        let ty = self.resolve_type_by_name(&instantiation.name);
+        let ty = self.resolve_type_by_name(&instantiation.name, Some(instantiation));
         let SemanticType::Custom(structure) = &ty else {
             return SemanticValue::null();
         };
@@ -1005,22 +1005,27 @@ impl SemanticAnalyzer {
     pub fn resolve_type(&mut self, ty: &Ranged<Type>) -> SemanticType {
         match ty.specifier.value() {
             TypeSpecifier::BuiltIn(ty) => SemanticType::Builtin(*ty),
-            TypeSpecifier::Custom { name } => self.resolve_type_by_name(name),
+            TypeSpecifier::Custom { name } => self.resolve_type_by_name(name, None),
         }
     }
 
     #[must_use]
-    fn resolve_type_by_name(&mut self, name: &Ranged<BabString>) -> SemanticType {
+    fn resolve_type_by_name(&mut self, name: &Ranged<BabString>, instantiation: Option<&StructureInstantiationExpression>) -> SemanticType {
         for scope in self.context.scope.iter().rev() {
             if let Some(structure) = scope.structures.get(name.value()) {
                 return SemanticType::Custom(Arc::clone(structure));
             }
         }
 
-        self.diagnostics.push(SemanticDiagnostic::new(
-            name.range(),
-            SemanticDiagnosticKind::UnknownType { name: name.value().clone() },
-        ));
+        let body = self.build_structure_body_based_on_instantiation(instantiation);
+
+        self.diagnostics.push(
+            SemanticDiagnostic::new(
+                name.range(),
+                SemanticDiagnosticKind::UnknownType { name: name.value().clone() },
+            )
+            .with_actions(self.create_actions_create_structure(name, body))
+        );
 
         SemanticType::Builtin(BuiltinType::Null)
     }
@@ -1607,6 +1612,64 @@ impl SemanticAnalyzer {
                     .with_actions(self.try_create_conversion_actions(&destination_type, &source_type, &assign.source))
             );
         }
+    }
+
+    fn create_actions_create_structure(&self, name: &Ranged<BabString>, body: String) -> Vec<BabbelaarCodeAction> {
+        let file_id = name.range().file_id();
+        let name = name.value();
+
+        let mut actions = Vec::new();
+        let new_text = format!("structuur {name} {{\n{body}\n}}");
+
+        if let Some(location) = self.find_function_insertion_location() {
+            let edit = FileEdit::new(location.as_zero_range(), format!("\n\n{new_text}"));
+
+            actions.push(BabbelaarCodeAction::new(
+                BabbelaarCodeActionType::CreateStructure { name: name.clone() },
+                vec![edit]
+            ));
+        }
+
+        if let Some(current_file) = self.files.get(&file_id) {
+            let mut path = current_file.path().to_path_buf();
+            path.pop();
+            path.push(format!("{name}.bab"));
+
+            let new_file_id = FileId::from_path(&path);
+            let location = FileLocation::new(new_file_id, 0, 0, 0);
+            let range = FileRange::new(location, location);
+
+            let edit = FileEdit::new(range, new_text).with_new_file(path);
+            actions.push(BabbelaarCodeAction::new(
+                BabbelaarCodeActionType::CreateStructureInNewFile { name: name.clone() },
+                vec![edit]
+            ));
+        }
+
+        actions
+    }
+
+    fn build_structure_body_based_on_instantiation(&mut self, instantiation: Option<&StructureInstantiationExpression>) -> String {
+        let Some(instantiation) = instantiation else {
+            log::warn!("Kan structuurlichaam op dit moment alleen bepalen vanuit een `nieuw`-expressie");
+            return String::new();
+        };
+
+        let mut body = String::new();
+
+        for (idx, field) in instantiation.fields.iter().enumerate() {
+            if idx != 0 {
+                body += "\n";
+            }
+
+            body += "    veld ";
+            body += &field.name;
+            body += ": ";
+            body += &self.analyze_expression(&field.value).ty.name();
+            body += ",";
+        }
+
+        body
     }
 }
 
