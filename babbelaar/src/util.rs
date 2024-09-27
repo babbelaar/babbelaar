@@ -433,6 +433,9 @@ pub enum BabbelaarCodeActionType {
         kind: &'static str,
         name: BabString,
     },
+
+    #[error("Gebruik methode `{method_name}`")]
+    UseMethod { method_name: BabString },
 }
 
 #[derive(Debug, Clone)]

@@ -104,6 +104,9 @@ impl Symbolizer {
     }
 
     fn add_statement_for(&mut self, statement: &ForStatement) {
+        self.add_expression(&statement.range.start);
+        self.add_expression(&statement.range.end);
+
         for statement in &statement.body {
             self.add_statement(statement);
         }

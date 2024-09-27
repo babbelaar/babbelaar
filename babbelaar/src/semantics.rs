@@ -273,10 +273,10 @@ impl SemanticAnalyzer {
         }
 
         if ty != SemanticType::Builtin(BuiltinType::G32) {
-            let conversion_action = self.try_create_conversion_action(&SemanticType::Builtin(BuiltinType::G32), &ty, expression);
+            let conversion_actions = self.try_create_conversion_actions(&SemanticType::Builtin(BuiltinType::G32), &ty, expression);
             self.diagnostics.push(
                 SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::RangeExpectsInteger { name, ty })
-                    .with_action(conversion_action)
+                    .with_actions(conversion_actions)
             );
         }
     }
@@ -295,7 +295,7 @@ impl SemanticAnalyzer {
         match (&statement.expression, self.context.current().return_type.clone()) {
             (Some(actual), Some(expected)) => {
                 let actual_type = self.analyze_expression(actual);
-                let conversion_action = self.try_create_conversion_action(&expected, &actual_type.ty, actual);
+                let conversion_actions = self.try_create_conversion_actions(&expected, &actual_type.ty, actual);
 
                 if actual_type.ty == SemanticType::Builtin(BuiltinType::Null) {
                     return;
@@ -316,7 +316,7 @@ impl SemanticAnalyzer {
                                 typ: expected.name(),
                             }
                         ))
-                        .with_action(conversion_action)
+                        .with_actions(conversion_actions)
                         .with_action(BabbelaarCodeAction::new(
                             BabbelaarCodeActionType::ChangeReturnType {
                                 typ: actual_type.ty.name(),
@@ -799,7 +799,7 @@ impl SemanticAnalyzer {
                     let declaration_type = &field.ty;
                     let definition_type = self.analyze_expression(&field_instantiation.value).ty;
                     if declaration_type != &definition_type {
-                        let action = self.try_create_conversion_action(declaration_type, &definition_type, &field_instantiation.value);
+                        let actions = self.try_create_conversion_actions(declaration_type, &definition_type, &field_instantiation.value);
 
                         self.diagnostics.push(SemanticDiagnostic::new(
                             field_instantiation.value.range(),
@@ -809,7 +809,7 @@ impl SemanticAnalyzer {
                                 declaration_type: declaration_type.to_string(),
                                 definition_type: definition_type.to_string(),
                             },
-                        ).with_related(struct_hint.clone()).with_action(action));
+                        ).with_related(struct_hint.clone()).with_actions(actions));
                     }
 
                     if let Some(tracker) = &mut self.context.definition_tracker {
@@ -1349,19 +1349,18 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn try_create_conversion_action(
+    fn try_create_conversion_actions(
         &self,
         expected_type: &SemanticType,
         actual_type: &SemanticType,
         expression: &Ranged<Expression>,
-    ) -> Option<BabbelaarCodeAction> {
-        let SemanticType::Builtin(expected_type) = expected_type else { return None };
-        let SemanticType::Builtin(actual_type) = actual_type else { return None };
+    ) -> Vec<BabbelaarCodeAction> {
+        let mut actions = Vec::new();
 
         if *expected_type == BuiltinType::G32 && *actual_type == BuiltinType::Slinger {
             if let Expression::Primary(PrimaryExpression::StringLiteral(literal)) = expression.value().clone(){
                 if let Ok(value) = literal.trim().parse::<isize>() {
-                    return Some(BabbelaarCodeAction::new(
+                    actions.push(BabbelaarCodeAction::new(
                         BabbelaarCodeActionType::ChangeStringToNumber { number: value, },
                         vec![
                             FileEdit::new(
@@ -1372,9 +1371,19 @@ impl SemanticAnalyzer {
                     ));
                 }
             }
+
+            actions.push(BabbelaarCodeAction::new(
+                BabbelaarCodeActionType::UseMethod { method_name: BabString::new_static("lengte") },
+                vec![
+                    FileEdit::new(
+                        expression.range().end().as_zero_range(),
+                        ".lengte()",
+                    )
+                ]
+            ));
         }
 
-        None
+        actions
     }
 
     #[must_use]
@@ -1595,7 +1604,7 @@ impl SemanticAnalyzer {
                 SemanticDiagnostic::new(assign.equals_sign, SemanticDiagnosticKind::IncompatibleAssignmentTypes)
                     .with_related(SemanticRelatedInformation::new(assign.destination.range(), SemanticRelatedMessage::DestinationOfType { ty: destination_type.clone() }))
                     .with_related(SemanticRelatedInformation::new(assign.source.range(), SemanticRelatedMessage::SourceOfType { ty: source_type.clone() }))
-                    .with_action(self.try_create_conversion_action(&destination_type, &source_type, &assign.source))
+                    .with_actions(self.try_create_conversion_actions(&destination_type, &source_type, &assign.source))
             );
         }
     }
@@ -1657,6 +1666,12 @@ impl SemanticDiagnostic {
             self.actions.push(action);
         }
 
+        self
+    }
+
+    #[must_use]
+    fn with_actions(mut self, action: impl AsRef<[BabbelaarCodeAction]>) -> Self {
+        self.actions.extend_from_slice(action.as_ref());
         self
     }
 
@@ -2478,6 +2493,12 @@ impl Display for SemanticType {
             Self::FunctionReference(func) => func.fmt(f),
             Self::IndexReference(ty) => ty.fmt(f),
         }
+    }
+}
+
+impl PartialEq<BuiltinType> for SemanticType {
+    fn eq(&self, other: &BuiltinType) -> bool {
+        self == &Self::Builtin(*other)
     }
 }
 
