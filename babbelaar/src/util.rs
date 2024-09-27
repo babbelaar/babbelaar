@@ -391,7 +391,7 @@ pub enum BabbelaarCodeActionType {
     #[error("Maak veld `{name}` aan")]
     CreateField { name: String },
 
-    #[error("Maak veld `{name}` aan binnen structuur `{structure}`")]
+    #[error("Maak werkwijze `{name}` aan binnen structuur `{structure}`")]
     CreateMethod { name: BabString, structure: BabString },
 
     #[error("Maak werkwijze `{name}` aan")]
