@@ -1317,14 +1317,14 @@ impl SemanticAnalyzer {
 
     fn try_create_conversion_action(
         &self,
-        declaration_type: &SemanticType,
-        definition_type: &SemanticType,
+        expected_type: &SemanticType,
+        actual_type: &SemanticType,
         expression: &Ranged<Expression>,
     ) -> Option<BabbelaarCodeAction> {
-        let SemanticType::Builtin(declaration_type) = declaration_type else { return None };
-        let SemanticType::Builtin(definition_type) = definition_type else { return None };
+        let SemanticType::Builtin(expected_type) = expected_type else { return None };
+        let SemanticType::Builtin(actual_type) = actual_type else { return None };
 
-        if *declaration_type == BuiltinType::G32 && *definition_type == BuiltinType::Slinger {
+        if *expected_type == BuiltinType::G32 && *actual_type == BuiltinType::Slinger {
             if let Expression::Primary(PrimaryExpression::StringLiteral(literal)) = expression.value().clone(){
                 if let Ok(value) = literal.trim().parse::<isize>() {
                     return Some(BabbelaarCodeAction::new(
