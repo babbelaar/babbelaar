@@ -311,7 +311,7 @@ impl Backend {
                     return Ok(None);
                 };
 
-                let PostfixExpressionKind::Call(..) = &postfix.kind else {
+                let PostfixExpressionKind::Call(..) = postfix.kind.value() else {
                     log::warn!("Cannot give signature help for a non-call Postfix Expression");
                     return Ok(None);
                 };

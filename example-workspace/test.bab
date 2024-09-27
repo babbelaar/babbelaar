@@ -1,4 +1,7 @@
 // @uitheems(naam: "time")
 // werkwijze time(ver: Slinger);
 
-stel a = nieuw Slinger[10];
+stel a = nieuw g32[10];
+a[0] = 10;
+
+schrijf(€"{a}");

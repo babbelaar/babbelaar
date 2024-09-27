@@ -161,6 +161,7 @@ impl<'tokens> Parser<'tokens> {
 
         Ok(Some(AssignStatement {
             range: FileRange::new(dest.range().start(), expression.range().end()),
+            equals_sign: equals.range(),
             dest,
             expression,
         }))
@@ -779,9 +780,13 @@ impl<'tokens> Parser<'tokens> {
             let expr = match self.peek_punctuator() {
                 Some(Punctuator::LeftParenthesis) => {
                     let token_left_paren = self.consume_token()?.range();
+                    let func = self.parse_function_call_expression(token_left_paren)?;
                     Expression::Postfix(PostfixExpression {
                         lhs: Box::new(expression),
-                        kind: PostfixExpressionKind::Call(self.parse_function_call_expression(token_left_paren)?)
+                        kind: Ranged::new(
+                            FileRange::new(token_left_paren.start(), func.token_right_paren.end()),
+                            PostfixExpressionKind::Call(func),
+                        )
                     })
                 }
 
@@ -807,19 +812,48 @@ impl<'tokens> Parser<'tokens> {
 
                     if self.peek_punctuator() == Some(Punctuator::LeftParenthesis) {
                         let token_left_paren = self.consume_token()?.range();
+                        let call = self.parse_function_call_expression(token_left_paren)?;
                         Expression::Postfix(PostfixExpression {
                             lhs: Box::new(expression),
-                            kind: PostfixExpressionKind::MethodCall(MethodCallExpression {
-                                method_name: name,
-                                call: self.parse_function_call_expression(token_left_paren)?,
-                            })
+                            kind: Ranged::new(
+                                FileRange::new(period.begin, call.token_right_paren.end()),
+                                PostfixExpressionKind::MethodCall(MethodCallExpression {
+                                    method_name: name,
+                                    call,
+                                }),
+                            ),
                         })
                     } else {
                         Expression::Postfix(PostfixExpression {
                             lhs: Box::new(expression),
-                            kind: PostfixExpressionKind::Member(name),
+                            kind: Ranged::new(
+                                FileRange::new(period.begin, ident_token.end),
+                                PostfixExpressionKind::Member(name),
+                            ),
                         })
                     }
+                }
+
+                Some(Punctuator::LeftSquareBracket) => {
+                    let Ok(square_bracket) = self.consume_token() else {
+                        break;
+                    };
+
+                    let expr = self.parse_expression()?;
+
+                    if self.peek_punctuator() == Some(Punctuator::RightSquareBracket) {
+                        _ = self.consume_token();
+                    } else {
+                        self.emit_diagnostic(ParseDiagnostic::ExpectedRightSquareBracketForSubscript { token: self.peek_token()?.clone() });
+                    }
+
+                    Expression::Postfix(PostfixExpression {
+                        lhs: Box::new(expression),
+                        kind: Ranged::new(
+                            FileRange::new(square_bracket.begin, self.previous_end()),
+                            PostfixExpressionKind::Subscript(Box::new(expr))
+                        ),
+                    })
                 }
 
                 _ => break,
@@ -1253,6 +1287,9 @@ pub enum ParseDiagnostic {
     #[error("`]` verwacht om opeenvolging af te sluiten")]
     ExpectedRightSquareBracketForArrayQualifier { token: Token },
 
+    #[error("`]` verwacht om de index-expressie af te sluiten")]
+    ExpectedRightSquareBracketForSubscript { token: Token },
+
     #[error("Puntkomma verwacht ';' na statement, maar kreeg: {token}")]
     ExpectedSemicolonAfterStatement { range: FileRange, token: Token },
 
@@ -1333,6 +1370,7 @@ impl ParseDiagnostic {
             Self::ExpectedEqualsInsideVariable { token } => token,
             Self::ExpectedRightSquareBracketForArrayInitializer { token } => token,
             Self::ExpectedRightSquareBracketForArrayQualifier { token } => token,
+            Self::ExpectedRightSquareBracketForSubscript { token } => token,
             Self::ExpectedStructureMemberPrefixVeld { token } => token,
             Self::FunctionStatementExpectedName { token } => token,
             Self::ForStatementExpectedIteratorName { token } => token,

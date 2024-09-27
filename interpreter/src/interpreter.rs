@@ -2,10 +2,11 @@
 // All Rights Reserved.
 
 use std::{
-    cell::RefCell, collections::HashMap, rc::Rc, sync::Arc
+    cell::RefCell, collections::HashMap, process::exit, rc::Rc, sync::Arc
 };
 
 use babbelaar::*;
+use log::error;
 
 use crate::*;
 
@@ -131,7 +132,7 @@ impl<D> Interpreter<D>
 
             Expression::Postfix(postfix) => {
                 let value = self.execute_expression(&postfix.lhs);
-                match &postfix.kind {
+                match postfix.kind.value() {
                     PostfixExpressionKind::Member(member) => {
                         let Value::Object { fields, .. } = value else {
                             panic!("Cannot assign to non-Object Value");
@@ -139,6 +140,16 @@ impl<D> Interpreter<D>
 
                         let mut fields = fields.borrow_mut();
                         fields.insert(member.to_string(), new_value);
+                        return;
+                    }
+
+                    PostfixExpressionKind::Subscript(..) => {
+                        let value = self.execute_postfix_expression(postfix);
+                        let Value::ArrayElementReference { array, index } = value else {
+                            panic!("ICE: unexpected outcome of subscript postfix-expression: {value:#?}");
+                        };
+
+                        array.borrow_mut()[index] = new_value;
                         return;
                     }
 
@@ -228,7 +239,7 @@ impl<D> Interpreter<D>
 
                 Value::Array {
                     ty,
-                    values: vec![default_value; size as usize],
+                    values: Rc::new(RefCell::new(vec![default_value; size as usize])),
                 }
             }
         }
@@ -412,10 +423,11 @@ impl<D> Interpreter<D>
 
     fn execute_postfix_expression(&mut self, expression: &PostfixExpression) -> Value {
         let lhs = self.execute_expression(&expression.lhs);
-        match &expression.kind {
+        match expression.kind.value() {
             PostfixExpressionKind::Call(call) => self.execute_function_call(lhs, call),
             PostfixExpressionKind::Member(member) => self.execute_member_reference(lhs, member),
             PostfixExpressionKind::MethodCall(method) => self.execute_method_invocation(lhs, method),
+            PostfixExpressionKind::Subscript(subscript) => self.execute_subscript(lhs, subscript),
         }
     }
 
@@ -488,6 +500,31 @@ impl<D> Interpreter<D>
             }
 
             TypeSpecifier::Custom { .. } => todo!(),
+        }
+    }
+
+    fn execute_subscript(&mut self, lhs: Value, subscript: &Ranged<Expression>) -> Value {
+        let subscript = self.execute_expression(&subscript);
+
+        let Value::Integer(index) = subscript else {
+            panic!("ICE: subscript index is not a number");
+        };
+
+        let Value::Array { values: array, .. } = lhs else {
+            panic!("ICE: subscript operand is not an array");
+        };
+
+        let array_size = array.borrow().len();
+        if index < 0 || index as usize >= array_size {
+            let error = RuntimeError::array_out_of_bounds(array_size, index);
+            self.debugger.on_runtime_error(&error);
+            error!("Fout: {error}");
+            exit(1);
+        }
+
+        Value::ArrayElementReference {
+            array,
+            index: index as usize,
         }
     }
 }

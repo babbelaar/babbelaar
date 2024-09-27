@@ -93,14 +93,14 @@ impl Display for Expression {
 #[derive(Debug, Clone)]
 pub struct PostfixExpression {
     pub lhs: Box<Ranged<Expression>>,
-    pub kind: PostfixExpressionKind,
+    pub kind: Ranged<PostfixExpressionKind>,
 }
 
 impl Display for PostfixExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self.lhs.value(), f)?;
 
-        match &self.kind {
+        match self.kind.value() {
             PostfixExpressionKind::Call(call) => {
                 Display::fmt(call, f)
             }
@@ -115,6 +115,12 @@ impl Display for PostfixExpression {
                 f.write_str(method.method_name.as_str())?;
                 Display::fmt(&method.call, f)
             }
+
+            PostfixExpressionKind::Subscript(expr) => {
+                f.write_char('[')?;
+                Display::fmt(expr.value(), f)?;
+                f.write_char(']')
+            }
         }
     }
 }
@@ -124,6 +130,7 @@ pub enum PostfixExpressionKind {
     Call(FunctionCallExpression),
     Member(Ranged<BabString>),
     MethodCall(MethodCallExpression),
+    Subscript(Box<Ranged<Expression>>),
 }
 
 #[derive(Clone, Debug)]

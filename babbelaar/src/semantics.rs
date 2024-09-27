@@ -7,7 +7,7 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, AssignStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
@@ -208,8 +208,10 @@ impl SemanticAnalyzer {
                 }
             }
             StatementKind::Assignment(assign) => {
+                let destination_type = self.analyze_expression(&assign.dest).ty;
                 self.analyze_assignment_destination(assign.range(), &assign.dest);
-                self.analyze_expression(&assign.expression);
+                let source_type = self.analyze_expression(&assign.expression).ty;
+                self.analyze_assignment_source_dest(assign, destination_type, source_type);
             }
             StatementKind::For(statement) => self.analyze_for_statement(statement),
             StatementKind::Function(function) => self.analyze_function(function, None),
@@ -225,8 +227,10 @@ impl SemanticAnalyzer {
             Expression::Primary(PrimaryExpression::Reference(..)) => return,
 
             Expression::Postfix(postfix) => {
-                if let PostfixExpressionKind::Member(..) = postfix.kind {
-                    return;
+                match postfix.kind.value() {
+                    PostfixExpressionKind::Member(..) => return,
+                    PostfixExpressionKind::Subscript(..) => return,
+                    _ => (),
                 }
             }
 
@@ -506,6 +510,7 @@ impl SemanticAnalyzer {
             SemanticType::Custom(custom) => custom.name.value().clone(),
             SemanticType::Function(func) => func.name.value().clone(),
             SemanticType::FunctionReference(func) => func.name(),
+            SemanticType::IndexReference(ty) => ty.name().clone(),
         };
 
         let Some(function) = self.find_and_use_function(&function_name) else {
@@ -1022,6 +1027,7 @@ impl SemanticAnalyzer {
             SemanticType::FunctionReference(FunctionReference::Custom(func)) => {
                 Some(func.name.clone())
             }
+            SemanticType::IndexReference(..) => todo!(),
         }
     }
 
@@ -1039,15 +1045,17 @@ impl SemanticAnalyzer {
             SemanticType::FunctionReference(FunctionReference::Custom(func)) => {
                 self.resolve_type(&func.parameters.get(arg_idx)?.ty)
             }
+            SemanticType::IndexReference(..) => todo!(),
         })
     }
 
     fn analyze_postfix_expression(&mut self, postfix: &PostfixExpression) -> SemanticValue {
         let lhs = self.analyze_expression(&postfix.lhs).ty;
-        match &postfix.kind {
+        match postfix.kind.value() {
             PostfixExpressionKind::Call(call) => self.analyze_function_call_expression(lhs, call, postfix),
             PostfixExpressionKind::Member(member) => self.analyze_member_expression(lhs, member),
             PostfixExpressionKind::MethodCall(method) => self.analyze_method_expression(lhs, method),
+            PostfixExpressionKind::Subscript(expr) => self.analyze_subscript_expression(lhs, &expr, postfix.kind.range()),
         }
     }
 
@@ -1175,6 +1183,10 @@ impl SemanticAnalyzer {
 
                 // default SemanticUsage of functions should be default-must_use
                 SemanticValue::null()
+            }
+
+            SemanticType::IndexReference(ty) => {
+                self.analyze_method_expression(ty.as_ref().clone(), expression)
             }
         }
     }
@@ -1520,6 +1532,38 @@ impl SemanticAnalyzer {
 
         diag
     }
+
+    fn analyze_subscript_expression(&mut self, lhs: SemanticType, expression: &Ranged<Expression>, range: FileRange) -> SemanticValue {
+        let SemanticType::Array(element_type) = lhs else {
+            self.diagnostics.push(
+                SemanticDiagnostic::new(range, SemanticDiagnosticKind::CannotSubscriptNonArray { ty: lhs })
+            );
+            return SemanticValue::null();
+        };
+
+        let index_value = self.analyze_expression(expression);
+        if index_value.ty != SemanticType::Builtin(BuiltinType::G32) {
+            self.diagnostics.push(
+                SemanticDiagnostic::new(range, SemanticDiagnosticKind::CannotIndexArrayWithNonInteger { ty: index_value.ty })
+            );
+        }
+
+        SemanticValue {
+            ty: *element_type,
+            usage: SemanticUsage::Pure(PureValue::IndexReference)
+        }
+    }
+
+    fn analyze_assignment_source_dest(&mut self, assign: &AssignStatement, destination_type: SemanticType, source_type: SemanticType) {
+        if source_type != destination_type {
+            self.diagnostics.push(
+                SemanticDiagnostic::new(assign.equals_sign, SemanticDiagnosticKind::IncompatibleAssignmentTypes)
+                    .with_related(SemanticRelatedInformation::new(assign.dest.range(), SemanticRelatedMessage::DestinationOfType { ty: destination_type.clone() }))
+                    .with_related(SemanticRelatedInformation::new(assign.expression.range(), SemanticRelatedMessage::SourceOfType { ty: source_type.clone() }))
+                    .with_action(self.try_create_conversion_action(&destination_type, &source_type, &assign.expression))
+            );
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1636,6 +1680,9 @@ impl SemanticRelatedInformation {
 
 #[derive(Debug, Clone, Error, AsRefStr)]
 pub enum SemanticRelatedMessage {
+    #[error("Bestemming is van type `{ty}`")]
+    DestinationOfType { ty: SemanticType },
+
     #[error("`{name}` is hier voor het eerst geïnitialiseerd")]
     DuplicateFieldFirstUse { name: BabString },
 
@@ -1659,6 +1706,9 @@ pub enum SemanticRelatedMessage {
 
     #[error("bekeertype `{typ}` is hier gedefinieerd")]
     ReturnTypeDefinedHere { typ: BabString },
+
+    #[error("Bronwaarde is van type `{ty}`")]
+    SourceOfType { ty: SemanticType },
 }
 
 #[derive(Debug, Clone, Error, AsRefStr)]
@@ -1819,6 +1869,15 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Expressie resulteert niet in een getal, wat nodig is om de grootte van de opeenvolging te bepalen.")]
     SizedArrayInitializerInvalidSize,
+
+    #[error("Alleen opeenvolgingen kunnen worden geïndexeerd, maar dit is van type {ty}.")]
+    CannotSubscriptNonArray { ty: SemanticType },
+
+    #[error("Je kunt opeenvolgingen alleen met getallen indexeren, maar de index is van type {ty}.")]
+    CannotIndexArrayWithNonInteger { ty: SemanticType },
+
+    #[error("Toewijzingsbron en -bestemming zijn niet van hetzelfde type.")]
+    IncompatibleAssignmentTypes,
 }
 
 impl SemanticDiagnosticKind {
@@ -2114,6 +2173,7 @@ impl SemanticReference {
             SemanticType::Custom(..) => todo!(),
             SemanticType::Function(func) => BabString::clone(&func.name),
             SemanticType::FunctionReference(func) => func.name(),
+            SemanticType::IndexReference(..) => todo!(),
         }
     }
 
@@ -2124,6 +2184,7 @@ impl SemanticReference {
             SemanticType::Custom(..) => None,
             SemanticType::Function(..) => None,
             SemanticType::FunctionReference(func) => func.documentation(),
+            SemanticType::IndexReference(..) => None,
         }
     }
 
@@ -2134,6 +2195,7 @@ impl SemanticReference {
             SemanticType::Custom(..) => None,
             SemanticType::Function(..) => None,
             SemanticType::FunctionReference(func) => func.inline_detail(),
+            SemanticType::IndexReference(..) => None,
         }
     }
 
@@ -2144,6 +2206,7 @@ impl SemanticReference {
             SemanticType::Custom(custom) => BabString::clone(&custom.name),
             SemanticType::Function(func) => BabString::new(format!("{}($1);$0", func.name.value())),
             SemanticType::FunctionReference(func) => func.lsp_completion(),
+            SemanticType::IndexReference(..) => BabString::empty(),
         }
     }
 
@@ -2283,6 +2346,7 @@ pub enum SemanticType {
     Custom(Arc<SemanticStructure>),
     Function(SemanticFunction),
     FunctionReference(FunctionReference),
+    IndexReference(Box<SemanticType>),
 }
 
 impl SemanticType {
@@ -2298,6 +2362,7 @@ impl SemanticType {
             Self::Custom(custom) => custom.name.range(),
             Self::Function(func) => func.name.range(),
             Self::FunctionReference(func) => func.declaration_range(),
+            Self::IndexReference(ty) => ty.declaration_range(),
         }
     }
 
@@ -2308,6 +2373,7 @@ impl SemanticType {
             Self::Custom(..) => None,
             Self::Function(func) => Some(func.parameters.len()),
             Self::FunctionReference(func) => Some(func.parameter_count()),
+            Self::IndexReference(..) => None,
         }
     }
 
@@ -2323,6 +2389,7 @@ impl SemanticType {
 
             Self::Function(..) => BabString::empty(),
             Self::FunctionReference(..) => BabString::empty(),
+            Self::IndexReference(ty) => ty.value_or_field_name_hint(),
         }
     }
 
@@ -2346,6 +2413,7 @@ impl SemanticType {
             Self::Custom(custom) => custom.name.value().clone(),
             Self::Function(func) => func.name.value().clone(),
             Self::FunctionReference(func) => func.name(),
+            Self::IndexReference(ty) => ty.name(),
         }
     }
 }
@@ -2361,6 +2429,7 @@ impl Display for SemanticType {
             Self::Custom(custom) => custom.fmt(f),
             Self::Function(func) => func.fmt(f),
             Self::FunctionReference(func) => func.fmt(f),
+            Self::IndexReference(ty) => ty.fmt(f),
         }
     }
 }
@@ -2531,4 +2600,5 @@ pub enum PureValue {
         operator_range: FileRange,
     },
     ReturnValue,
+    IndexReference,
 }

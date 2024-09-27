@@ -195,6 +195,11 @@ impl Format for PostfixExpressionKind {
             Self::Call(call) => call.format(f),
             Self::Member(member) => f.write_str(&member),
             Self::MethodCall(method) => method.format(f),
+            Self::Subscript(subscript) => {
+                f.write_char('[');
+                subscript.format(f);
+                f.write_char(']');
+            }
         }
     }
 }

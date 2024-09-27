@@ -8,6 +8,7 @@ pub use babbelaar::*;
 mod data;
 mod debug_adapter;
 mod debugger;
+mod error;
 mod ffi;
 mod interpreter;
 mod scope;
@@ -23,6 +24,7 @@ pub use self::{
         DebuggerFunction,
         DebuggerFunctionType,
     },
+    error::RuntimeError,
     ffi::FFIManager,
     interpreter::Interpreter,
     scope::Scope,

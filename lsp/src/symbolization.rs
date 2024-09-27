@@ -267,7 +267,7 @@ impl Symbolizer {
     }
 
     fn add_expression_postfix(&mut self, expression: &PostfixExpression) {
-        match &expression.kind {
+        match expression.kind.value() {
             PostfixExpressionKind::Call(..) => {
                 if let Expression::Primary(PrimaryExpression::Reference(ident)) = expression.lhs.value() {
                     self.symbols.insert(LspSymbol {
@@ -292,6 +292,10 @@ impl Symbolizer {
                     kind: LspTokenType::Property,
                     range: member.range(),
                 });
+            }
+
+            PostfixExpressionKind::Subscript(ranged) => {
+                self.add_expression(&ranged);
             }
         }
     }

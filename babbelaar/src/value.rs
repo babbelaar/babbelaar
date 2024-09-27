@@ -12,7 +12,12 @@ pub enum Value {
 
     Array {
         ty: ValueType,
-        values: Vec<Value>,
+        values: Rc<RefCell<Vec<Value>>>,
+    },
+
+    ArrayElementReference {
+        array: Rc<RefCell<Vec<Value>>>,
+        index: usize,
     },
 
     Bool(bool),
@@ -61,6 +66,7 @@ impl Value {
     pub fn typ(&self) -> ValueType {
         match self {
             Self::Array{ ty, .. } => ValueType::Array(Box::new(ty.clone())),
+            Self::ArrayElementReference { array, index } => array.borrow()[*index].typ(),
             Self::Bool(..) => BuiltinType::Bool.into(),
             Self::Integer(..) => BuiltinType::G32.into(),
             Self::Null => BuiltinType::Null.into(),
@@ -91,7 +97,7 @@ impl Display for Value {
             Self::Array { values, .. } => {
                 f.write_str("[")?;
 
-                for (idx, val) in values.iter().enumerate() {
+                for (idx, val) in values.borrow().iter().enumerate() {
                     if idx != 0 {
                         f.write_str(", ")?;
                     }
@@ -101,6 +107,7 @@ impl Display for Value {
 
                 f.write_str("]")
             }
+            Self::ArrayElementReference { array, index } => array.borrow()[*index].fmt(f),
             Self::Null => f.write_str("null"),
             Self::Bool(false) => f.write_str("onwaar"),
             Self::Bool(true) => f.write_str("waar"),

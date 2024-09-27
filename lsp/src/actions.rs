@@ -150,7 +150,7 @@ impl CodeActionsAnalyzable for PostfixExpression {
             self.lhs.analyze(ctx);
         }
 
-        match &self.kind {
+        match self.kind.value() {
             PostfixExpressionKind::Call(expr) => {
                 expr.analyze(ctx);
             }
@@ -159,6 +159,10 @@ impl CodeActionsAnalyzable for PostfixExpression {
 
             PostfixExpressionKind::MethodCall(method) => {
                 method.call.analyze(ctx);
+            }
+
+            PostfixExpressionKind::Subscript(ranged) => {
+                ranged.analyze(ctx);
             }
         }
     }
@@ -437,7 +441,9 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
                 );
             }
 
-            Self::ExpectedRightSquareBracketForArrayInitializer { token } | Self::ExpectedRightSquareBracketForArrayQualifier { token } => {
+            Self::ExpectedRightSquareBracketForArrayInitializer { token }
+                | Self::ExpectedRightSquareBracketForArrayQualifier { token }
+                | Self::ExpectedRightSquareBracketForSubscript { token } => {
                 ctx.items.push(
                     BabbelaarCodeAction::new(
                         BabbelaarCodeActionType::Insert{ text: "]" },

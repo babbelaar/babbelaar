@@ -7,6 +7,7 @@
 mod data;
 mod debugger;
 mod debug_adapter;
+mod error;
 mod ffi;
 mod interpreter;
 mod logger;
@@ -31,6 +32,7 @@ pub use self::{
         DebuggerFunctionType,
     },
     debug_adapter::DebugAdapter,
+    error::RuntimeError,
     ffi::FFIManager,
     interpreter::Interpreter,
     scope::Scope,
