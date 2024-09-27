@@ -22,7 +22,7 @@ mod value;
 
 pub use self::{
     attribute::{Attribute, AttributeArgument},
-    builtin::{Builtin, BuiltinFunction, BuiltinType},
+    builtin::{ArrayMethod, ArrayMethodParameter, ArrayTypeRef, Builtin, BuiltinFunction, BuiltinMethodReference, BuiltinType},
     expression::*,
     interpreter::Interpreter,
     keyword::Keyword,

@@ -3,7 +3,7 @@
 
 use std::{cell::RefCell, cmp::Ordering, collections::HashMap, fmt::Display, hash::{DefaultHasher, Hash, Hasher}, rc::Rc};
 
-use crate::{BuiltinFunction, BuiltinType, Comparison, FunctionStatement, Structure};
+use crate::{BuiltinMethodReference, BuiltinType, Comparison, FunctionStatement, Structure};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -25,7 +25,7 @@ pub enum Value {
     String(String),
     MethodReference {
         lhs: Box<Value>,
-        method: &'static BuiltinFunction,
+        method: BuiltinMethodReference,
     },
     MethodIdReference {
         lhs: Box<Value>,
@@ -113,7 +113,7 @@ impl Display for Value {
             Self::Bool(true) => f.write_str("waar"),
             Self::Integer(i) => i.fmt(f),
             Self::String(str) => f.write_str(str),
-            Self::MethodReference { lhs, method } => f.write_fmt(format_args!("{lhs}.{}()", method.name)),
+            Self::MethodReference { lhs, method } => f.write_fmt(format_args!("{lhs}.{}()", method.name())),
             Self::MethodIdReference { .. } => f.write_str("werkwijze"),
             Self::Function { name, .. } => f.write_fmt(format_args!("werkwijze {name}() {{ .. }}")),
             Self::Object { .. } => f.write_str("te-doen(object-waarde-formatteren)"),

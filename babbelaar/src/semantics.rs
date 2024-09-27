@@ -1108,7 +1108,14 @@ impl SemanticAnalyzer {
     fn analyze_method_expression(&mut self, typ: SemanticType, expression: &MethodCallExpression) -> SemanticValue {
         match typ {
             SemanticType::Array(..) => {
-                // TODO
+                for method in Builtin::array().methods() {
+                    if *expression.method_name == method.name {
+                        return SemanticValue {
+                            ty: method.return_type.resolve(typ),
+                            usage: if method.must_use { SemanticUsage::Pure(PureValue::ReturnValue) } else { SemanticUsage::Indifferent },
+                        };
+                    }
+                }
 
                 self.diagnostics.push(SemanticDiagnostic::new(
                     expression.method_name.range(),

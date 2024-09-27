@@ -1,12 +1,15 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+mod array;
 mod functions;
 mod methods;
 mod types;
 
 pub use self::{
+    array::{BuiltinArray, ArrayMethod, ArrayMethodParameter, ArrayTypeRef},
     functions::{BuiltinFunction, BuiltinFunctionParameter},
+    methods::BuiltinMethodReference,
     types::BuiltinType,
 };
 
@@ -16,6 +19,10 @@ impl Builtin {
     #[must_use]
     pub fn type_by_name(name: &str) -> Option<BuiltinType> {
         Self::TYPES.iter().find(|x| x.name() == name).copied()
+    }
+
+    pub fn array() -> BuiltinArray {
+        BuiltinArray
     }
 
     pub const FUNCTIONS: &'static [BuiltinFunction] = &[

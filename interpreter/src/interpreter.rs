@@ -329,7 +329,7 @@ impl<D> Interpreter<D>
 
         match lhs {
             Value::MethodReference { lhs, method } => {
-                (method.function)(self, arguments, Some(*lhs))
+                (method.function())(self, arguments, Some(*lhs))
             }
 
             Value::MethodIdReference { lhs, method } => {
@@ -453,14 +453,23 @@ impl<D> Interpreter<D>
 
     fn get_method(&self, value: &Value, method_name: &str) -> Option<Value> {
         match value.typ() {
-            ValueType::Array(..) => (),
+            ValueType::Array(..) => {
+                for method in Builtin::array().methods() {
+                    if method.name == method_name {
+                        return Some(Value::MethodReference {
+                            lhs: Box::new(value.clone()),
+                            method: method.into(),
+                        });
+                    }
+                }
+            }
 
             ValueType::Builtin(builtin) => {
                 for method in builtin.methods() {
                     if method.name == method_name {
                         return Some(Value::MethodReference {
                             lhs: Box::new(value.clone()),
-                            method,
+                            method: method.into(),
                         });
                     }
                 }

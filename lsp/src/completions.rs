@@ -305,6 +305,10 @@ impl<'b> CompletionEngine<'b> {
         let completions = self.server.with_semantics(document, |analyzer, _| {
             let completions = if let Some(typ) = analyzer.context.definition_tracker.as_ref().and_then(|tracker| Some(tracker.get(&last_identifier)?.typ.clone())) {
                 match typ {
+                    SemanticType::Array(array) => {
+                        self.complete_array_methods(*array)
+                    }
+
                     SemanticType::Builtin(builtin) => {
                         self.complete_builtin_type(builtin)
                     }
@@ -324,6 +328,27 @@ impl<'b> CompletionEngine<'b> {
 
         self.completions.extend(completions);
         Ok(())
+    }
+
+    fn complete_array_methods(&self, _element_type: SemanticType) -> Vec<CompletionItem> {
+        let mut completions = Vec::new();
+
+        for method in Builtin::array().methods() {
+            completions.push(CompletionItem {
+                label: method.lsp_label(),
+                detail: Some(method.inline_detail.to_string()),
+                kind: Some(CompletionItemKind::METHOD),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: method.documentation.to_string(),
+                })),
+                insert_text: Some(method.lsp_completion().to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
+            });
+        }
+
+        completions
     }
 
     fn complete_builtin_type(&self, builtin: BuiltinType) -> Vec<CompletionItem> {

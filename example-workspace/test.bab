@@ -4,4 +4,9 @@
 stel a = nieuw g32[10];
 a[0] = 10;
 
-schrijf(€"{a}");
+schrijf(€"Getal={a}");
+
+
+stel bool = a.bevat(10);
+schrijf("Bevat");
+schrijf(€"Antwoord: {bool}");
