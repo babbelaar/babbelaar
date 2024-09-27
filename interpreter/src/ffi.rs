@@ -99,7 +99,25 @@ impl FFIManager {
 }
 
 fn load_libc() -> Library {
-    unsafe {
-        Library::new("/usr/lib/libSystem.B.dylib")
-    }.unwrap()
+    if cfg!(target_os = "linux") {
+        return unsafe { Library::new("/lib/x86_64-linux-gnu/libc.so.6") }.unwrap();
+    }
+
+    if cfg!(target_os = "windows") {
+        // TODO: Check if this is safe.
+
+        // Currently, the libs are specified relative to the DLL include path,
+        // Since the `C:\Windows` path may be different on different systems, etc.
+        if let Ok(dll) = unsafe { Library::new("ucrtbase.dll") } {
+            return dll;
+        }
+
+        return unsafe { Library::new("msvcrt.dll") }.unwrap();
+    }
+
+    if cfg!(target_os = "macos") {
+        return unsafe { Library::new("/usr/lib/libSystem.B.dylib") }.unwrap();
+    }
+
+    panic!("Dit besturingssysteem wordt niet ondersteund!")
 }
