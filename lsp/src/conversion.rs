@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use babbelaar::{BabbelaarCommand, FileId, FileLocation, FileRange, Token};
 use tower_lsp::lsp_types::{Command, Location, Position, Range, Uri as Url};
@@ -62,11 +62,15 @@ pub trait UrlExtension {
 
 impl UrlExtension for Url {
     fn to_path(&self) -> BabbelaarLspResult<PathBuf> {
-        if !self.is_absolute() || self.scheme().map(|x| x.as_str()) != Some("file") {
-            return Err(BabbelaarLspError::UrlNotFilePath);
-        }
+        let url = match url::Url::parse(self.as_str()) {
+            Ok(url) => url,
+            Err(e) => {
+                log::error!("Invalid URL: \"{}\" reason: {e}", self.as_str());
+                return Err(BabbelaarLspError::UrlNotFilePath);
+            }
+        };
 
-        Ok(Path::new(self.path().as_str()).to_path_buf())
+        url.to_file_path().map_err(|()| BabbelaarLspError::UrlNotFilePath)
     }
 }
 

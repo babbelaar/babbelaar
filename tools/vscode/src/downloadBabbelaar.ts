@@ -2,7 +2,7 @@
 // All Rights Reserved.
 
 import { File } from "buffer";
-import { existsSync } from "fs";
+import { copyFile, copyFileSync, existsSync, realpathSync } from "fs";
 import { chmod, mkdir, writeFile } from "fs/promises";
 import { window } from "vscode";
 import { unzip } from "zlib";
@@ -10,11 +10,25 @@ import { BabbelaarContext } from "./babbelaarContext";
 
 
 export async function ensureLspServer(context: BabbelaarContext): Promise<string|null> {
+    const path = await ensureLspServerPath(context);
+
+    if (!path)
+        return path;
+
+    if (process.platform === 'win32')
+        return copyTempPath(path);
+
+    return path;
+}
+
+async function ensureLspServerPath(context: BabbelaarContext): Promise<string|null> {
     console.log(`Versie ${context.version}`);
 
     const envPath = process.env.BABBELAAR_LSP_SERVER_PATH;
     if (envPath && existsSync(envPath)) {
-        return envPath;
+        const path = realpathSync(envPath);
+        console.log(`Omgevingspad is gekozen: ${path}`);
+        return path;
     }
 
     const installPath = ensureLspServerUsingDownload(context);
@@ -153,4 +167,13 @@ function showError(context: BabbelaarContext, message: string, messageOptions: M
 async function ensureExecutable(path: string): Promise<string> {
     await chmod(path, "700");
     return path;
+}
+
+/// In order to be able to debug on Windows, we must copy the executable to a
+/// temporary path, since we otherwise won't be able to both be executing the
+/// LSP server, and overwriting it using "cargo watch -x 'build --all --all-targets'"
+async function copyTempPath(path: string): Promise<string | null>{
+    const tempPath = path.replace(".exe", ".temp.exe");
+    copyFileSync(path, tempPath);
+    return tempPath;
 }

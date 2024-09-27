@@ -24,6 +24,7 @@ use crate::conversion::convert_file_range_to_location;
 use crate::conversion::StrExtension;
 use crate::convert_command;
 use crate::BabbelaarContext;
+use crate::BabbelaarLspError;
 use crate::CodeActionRepository;
 use crate::PathBufExt;
 use crate::UrlExtension;
@@ -467,8 +468,9 @@ impl Backend {
 
         if let Some(folder) = workspace_folder {
             let path = folder.to_path().unwrap();
+            let read_dir = read_dir(&path).map_err(|error| BabbelaarLspError::InvalidWorkspacePath { error, path })?;
 
-            for file in read_dir(path)?.flatten() {
+            for file in read_dir.flatten() {
                 if file.file_name().to_string_lossy().ends_with(".bab") {
                     self.context.load_and_register_file(file.path()).await?;
                 }

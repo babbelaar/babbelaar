@@ -26,7 +26,7 @@ impl BabbelaarContext {
     }
 
     pub async fn register_file(&self, source_code: SourceCode) {
-        let path = source_code.path().canonicalize().unwrap();
+        let path = source_code.path().canonicalize().unwrap_or_else(|_| source_code.path().to_path_buf());
         self.files.insert(path, Arc::new(Mutex::new(BabbelaarFile::new(source_code))));
         *self.semantic_analysis.write().await = None;
     }
@@ -55,13 +55,13 @@ impl BabbelaarContext {
     pub async fn with_file<K, F, R>(&self, key: K, f: F) -> Result<R, BabbelaarLspError>
             where K: ContextKey,
                   F: FnOnce(&mut BabbelaarFile) -> Result<R, BabbelaarLspError> {
-        let path = key.to_context_key();
+        let mut path = key.to_context_key().canonicalize()?;
 
         if !self.files.contains_key(&path) {
-            self.load_and_register_file(path.clone()).await?;
+            path = self.load_and_register_file(path.clone()).await?.path().to_path_buf();
         }
 
-        let mutex = self.files.get(&path).unwrap().value().clone();
+        let mutex = self.files.get(&path).ok_or_else(|| BabbelaarLspError::InternalFileRegistrationError { path })?.value().clone();
         let mut file = mutex.lock().await;
         let result = f(&mut file);
         result

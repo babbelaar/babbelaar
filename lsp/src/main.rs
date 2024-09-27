@@ -180,12 +180,12 @@ trait PathBufExt {
 
 impl PathBufExt for &Path {
     fn to_uri(&self) -> Uri {
-        self.to_string_lossy().parse().unwrap()
+        url::Url::from_file_path(self).unwrap().to_string().parse().unwrap()
     }
 }
 
 impl PathBufExt for PathBuf {
     fn to_uri(&self) -> Uri {
-        self.to_string_lossy().parse().unwrap()
+        self.as_path().to_uri()
     }
 }

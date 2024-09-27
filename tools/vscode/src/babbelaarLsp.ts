@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-import { Executable, LanguageClient, LanguageClientOptions, ServerOptions, TextDocumentFeature } from "vscode-languageclient/node";
+import { Executable, LanguageClient, LanguageClientOptions, ServerOptions, TextDocumentFeature, TransportKind } from "vscode-languageclient/node";
 import { BabbelaarContext } from "./babbelaarContext";
 import { ensureLspServer } from "./downloadBabbelaar";
 import { InlayHint, window, workspace } from "vscode";
@@ -41,8 +41,7 @@ async function startClient(context: BabbelaarContext) {
 	let clientOptions: LanguageClientOptions = {
 		documentSelector: [{ scheme: "file", language: "babbelaar" }],
 		synchronize: {
-			// Notify the server about file changes to '.clientrc files contained in the workspace
-			fileEvents: workspace.createFileSystemWatcher("**/.clientrc"),
+			fileEvents: workspace.createFileSystemWatcher("**/.bab"),
 		},
 		traceOutputChannel,
 	};
@@ -52,6 +51,7 @@ async function startClient(context: BabbelaarContext) {
 	client.registerProposedFeatures();
 	// activateInlayHints(context);
 	client.start();
+	console.log("Client is gestart");
 }
 
 export async function stopClient() {
