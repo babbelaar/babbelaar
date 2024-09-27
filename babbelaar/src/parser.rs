@@ -280,7 +280,7 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn emit_diagnostic(&mut self, error: ParseDiagnostic){
-        debug_assert!(self.diagnostics.len() < 1000, "Te veel parseerfouten verzameld, waarschijnlijk zitten we in een parseerloop.");
+        debug_assert!(self.diagnostics.len() < 1000, "Te veel parseerfouten verzameld, waarschijnlijk zitten we in een parseerloop, error: {error:#?}");
         self.diagnostics.push(error);
     }
 
@@ -453,9 +453,11 @@ impl<'tokens> Parser<'tokens> {
 
         let name = Ranged::new(name_range, name);
 
-        let equals = self.consume_token()?;
+        let equals = self.peek_token()?.clone();
         if equals.kind != TokenKind::Punctuator(Punctuator::Assignment) {
             self.emit_diagnostic(ParseDiagnostic::ExpectedEqualsInsideVariable { token: equals });
+        } else {
+            _ = self.consume_token();
         }
 
         let expression = self.parse_expression()?;
