@@ -91,7 +91,7 @@
             {
                 "command": "babbelaar.herstarten",
                 "icon": "$(refresh)",
-                "title": "Babbelaar: Taalserveerder herstarten"
+                "title": "Babbelaar: Taaldienaar herstarten"
             }
         ],
         "taskDefinitions": [

@@ -479,7 +479,7 @@ impl Backend {
 
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
-                name: "Babbelaar Taalserveerder".to_string(),
+                name: "Babbelaar Taaldienaar".to_string(),
                 version: Some(env!("CARGO_PKG_VERSION").to_string()),
             }),
             capabilities: self.capabilities(),

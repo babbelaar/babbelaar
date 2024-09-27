@@ -22,7 +22,7 @@ async function startClient(context: BabbelaarContext) {
 
 	stopClient();
 
-	const traceOutputChannel = window.createOutputChannel("Babbelaar Taalserveerder trace");
+	const traceOutputChannel = window.createOutputChannel("Babbelaar Taaldienaar-trace");
 	const run: Executable = {
 		command,
 		options: {
