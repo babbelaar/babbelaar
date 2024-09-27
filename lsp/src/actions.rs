@@ -210,7 +210,8 @@ impl CodeActionsAnalyzable for Statement {
             }
 
             StatementKind::Assignment(stmt) => {
-                stmt.expression.analyze(ctx);
+                stmt.destination.analyze(ctx);
+                stmt.source.analyze(ctx);
             }
 
             StatementKind::For(stmt) => {

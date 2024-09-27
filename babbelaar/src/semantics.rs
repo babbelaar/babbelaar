@@ -208,9 +208,9 @@ impl SemanticAnalyzer {
                 }
             }
             StatementKind::Assignment(assign) => {
-                let destination_type = self.analyze_expression(&assign.dest).ty;
-                self.analyze_assignment_destination(assign.range(), &assign.dest);
-                let source_type = self.analyze_expression(&assign.expression).ty;
+                let destination_type = self.analyze_expression(&assign.destination).ty;
+                self.analyze_assignment_destination(assign.range(), &assign.destination);
+                let source_type = self.analyze_expression(&assign.source).ty;
                 self.analyze_assignment_source_dest(assign, destination_type, source_type);
             }
             StatementKind::For(statement) => self.analyze_for_statement(statement),
@@ -1558,9 +1558,9 @@ impl SemanticAnalyzer {
         if source_type != destination_type {
             self.diagnostics.push(
                 SemanticDiagnostic::new(assign.equals_sign, SemanticDiagnosticKind::IncompatibleAssignmentTypes)
-                    .with_related(SemanticRelatedInformation::new(assign.dest.range(), SemanticRelatedMessage::DestinationOfType { ty: destination_type.clone() }))
-                    .with_related(SemanticRelatedInformation::new(assign.expression.range(), SemanticRelatedMessage::SourceOfType { ty: source_type.clone() }))
-                    .with_action(self.try_create_conversion_action(&destination_type, &source_type, &assign.expression))
+                    .with_related(SemanticRelatedInformation::new(assign.destination.range(), SemanticRelatedMessage::DestinationOfType { ty: destination_type.clone() }))
+                    .with_related(SemanticRelatedInformation::new(assign.source.range(), SemanticRelatedMessage::SourceOfType { ty: source_type.clone() }))
+                    .with_action(self.try_create_conversion_action(&destination_type, &source_type, &assign.source))
             );
         }
     }

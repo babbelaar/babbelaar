@@ -230,9 +230,9 @@ impl Format for MethodCallExpression {
 
 impl Format for AssignStatement {
     fn format(&self, f: &mut Formatter) {
-        self.dest.format(f);
+        self.destination.format(f);
         f.write_str(" = ");
-        self.expression.format(f);
+        self.source.format(f);
         f.write_str(";\n");
     }
 }

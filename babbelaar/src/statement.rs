@@ -35,8 +35,8 @@ impl StatementKind {
 pub struct AssignStatement {
     pub range: FileRange,
     pub equals_sign: FileRange,
-    pub dest: Ranged<Expression>,
-    pub expression: Ranged<Expression>,
+    pub destination: Ranged<Expression>,
+    pub source: Ranged<Expression>,
 }
 
 #[derive(Clone, Debug)]

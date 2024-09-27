@@ -57,8 +57,8 @@ impl<D> Interpreter<D>
         self.debugger.on_statement(statement);
         match &statement.kind {
             StatementKind::Assignment(assignment) => {
-                let new_value = self.execute_expression(&assignment.expression);
-                self.execute_assign(&assignment.dest, new_value);
+                let new_value = self.execute_expression(&assignment.source);
+                self.execute_assign(&assignment.destination, new_value);
                 StatementResult::Continue
             }
 

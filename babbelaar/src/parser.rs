@@ -144,7 +144,7 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_assign_statement(&mut self) -> Result<Option<AssignStatement>, ParseError> {
-        let Ok(dest) = self.parse_postfix_expression() else {
+        let Ok(destination) = self.parse_postfix_expression() else {
             return Ok(None);
         };
 
@@ -156,14 +156,14 @@ impl<'tokens> Parser<'tokens> {
             return Ok(None);
         }
 
-        let expression = self.parse_expression()?;
+        let source = self.parse_expression()?;
         self.expect_semicolon_after_statement()?;
 
         Ok(Some(AssignStatement {
-            range: FileRange::new(dest.range().start(), expression.range().end()),
+            range: FileRange::new(destination.range().start(), source.range().end()),
             equals_sign: equals.range(),
-            dest,
-            expression,
+            destination,
+            source,
         }))
     }
 

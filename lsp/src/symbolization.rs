@@ -99,7 +99,8 @@ impl Symbolizer {
     }
 
     fn add_statement_assign(&mut self, statement: &AssignStatement) {
-        self.add_expression(&statement.expression);
+        self.add_expression(&statement.destination);
+        self.add_expression(&statement.source);
     }
 
     fn add_statement_for(&mut self, statement: &ForStatement) {
