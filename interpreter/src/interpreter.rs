@@ -250,11 +250,11 @@ impl<D> Interpreter<D>
     }
 
     fn execute_for_statement(&mut self, statement: &ForStatement) -> StatementResult {
-        let Value::Integer(start) = self.execute_expression_primary(&statement.range.start) else {
+        let Value::Integer(start) = self.execute_expression(&statement.range.start) else {
             panic!("Invalid start");
         };
 
-        let Value::Integer(end) = self.execute_expression_primary(&statement.range.end) else {
+        let Value::Integer(end) = self.execute_expression(&statement.range.end) else {
             panic!("Invalid end");
         };
 

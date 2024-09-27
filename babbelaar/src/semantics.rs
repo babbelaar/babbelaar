@@ -7,7 +7,7 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, AssignStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
+use crate::{statement::VariableStatement, AssignStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, RangeExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
@@ -253,9 +253,32 @@ impl SemanticAnalyzer {
             statement.iterator_name.range(),
         ));
 
+        self.analyze_range(&statement.range);
+
         self.analyze_statements(&statement.body);
 
         self.context.pop_scope();
+    }
+
+    fn analyze_range(&mut self, range: &RangeExpression) {
+        self.analyze_range_param("Startwaarde", &range.start);
+        self.analyze_range_param("Eindwaarde", &range.end);
+    }
+
+    fn analyze_range_param(&mut self, name: &'static str, expression: &Ranged<Expression>) {
+        let ty = self.analyze_expression(expression).ty;
+
+        if ty == SemanticType::null() {
+            return;
+        }
+
+        if ty != SemanticType::Builtin(BuiltinType::G32) {
+            let conversion_action = self.try_create_conversion_action(&SemanticType::Builtin(BuiltinType::G32), &ty, expression);
+            self.diagnostics.push(
+                SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::RangeExpectsInteger { name, ty })
+                    .with_action(conversion_action)
+            );
+        }
     }
 
     fn analyze_if_statement(&mut self, statement: &IfStatement) {
@@ -1890,6 +1913,9 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Toewijzingsbron en -bestemming zijn niet van hetzelfde type.")]
     IncompatibleAssignmentTypes,
+
+    #[error("{name} moet van het type `g32` zijn, maar dit is een `{ty}`")]
+    RangeExpectsInteger { name: &'static str, ty: SemanticType },
 }
 
 impl SemanticDiagnosticKind {

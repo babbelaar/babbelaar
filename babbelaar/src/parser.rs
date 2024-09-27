@@ -666,11 +666,11 @@ impl<'tokens> Parser<'tokens> {
 
         self.expect_left_paren("reeks")?;
 
-        let start = self.parse_primary_expression()?;
+        let start = Box::new(self.parse_expression()?);
 
         self.expect_comma("reeks")?;
 
-        let end = self.parse_primary_expression()?;
+        let end = Box::new(self.parse_expression()?);
 
         self.expect_right_paren("reeks")?;
 

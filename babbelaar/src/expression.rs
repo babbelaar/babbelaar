@@ -239,8 +239,8 @@ impl Comparison {
 #[derive(Clone, Debug)]
 pub struct RangeExpression {
     /// Start, inclusive
-    pub start: Ranged<PrimaryExpression>,
+    pub start: Box<Ranged<Expression>>,
 
     /// End, exclusive
-    pub end: Ranged<PrimaryExpression>,
+    pub end: Box<Ranged<Expression>>,
 }

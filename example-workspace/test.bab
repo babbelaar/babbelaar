@@ -1,15 +1,14 @@
-// @uitheems(naam: "time")
-// werkwijze time(ver: Slinger);
+werkwijze schrijfLetterVoorLetter(tekst: Slinger) {
+    volg i in reeks(0, tekst.lengte()) {
+        schrijf(€"Letter {i} is: {tekst[i]}");
+    }
+}
 
-stel a = nieuw g32[10];
-a[0] = 10;
+schrijfLetterVoorLetter("hoi");
 
-schrijf(€"Getal={a}");
+// werkwijze schrijfLetterVoorLetter(tekst: Slinger) {
+//     stel a
+//     volg i in reeks(0, lengte) {
 
-
-stel b = a.bevat(10);
-schrijf("Bevat");
-schrijf(€"Antwoord: {b}");
-
-stel c = "ASD"[0];
-schrijf(€"Teken={c}");
+//     }
+// }
