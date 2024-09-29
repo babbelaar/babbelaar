@@ -68,6 +68,11 @@ impl<'b> CompletionEngine<'b> {
                 Ok(true)
             }
 
+            Some(CompletionMode::StructureMember(name)) => {
+                self.complete_member_definition(name).await;
+                Ok(true)
+            }
+
             None => Ok(false),
         }
     }
@@ -168,11 +173,27 @@ impl<'b> CompletionEngine<'b> {
                 }
             }
 
-            if let TokenKind::Identifier(ident) = &token.kind {
-                Ok(Some(CompletionMode::Function((token.range(), ident.to_string()))))
-            } else {
-                Ok(None)
+            let TokenKind::Identifier(ident) = &token.kind else {
+                return Ok(None);
+            };
+
+            let mut scope_stack = Vec::new();
+            for token in previous {
+                match token.kind {
+                    TokenKind::Keyword(kw @ Keyword::Structuur) => scope_stack.push(kw),
+                    TokenKind::Keyword(kw @ Keyword::Werkwijze) => scope_stack.push(kw),
+                    TokenKind::Keyword(kw @ Keyword::Volg) => scope_stack.push(kw),
+                    TokenKind::Punctuator(Punctuator::RightCurlyBracket) => {
+                        _ = scope_stack.pop();
+                    }
+                    _ => (),
+                }
             }
+
+            Ok(Some(match scope_stack.last() {
+                Some(Keyword::Structuur) => CompletionMode::StructureMember(Ranged::new(token.range(), ident.clone())),
+                _ => CompletionMode::Function((token.range(), ident.to_string())),
+            }))
         }).await?;
 
         if was_new_func {
@@ -180,6 +201,29 @@ impl<'b> CompletionEngine<'b> {
         }
 
         Ok(completion_mode)
+    }
+
+    async fn complete_member_definition(&mut self, name: Ranged<BabString>) {
+        let name = name.into_value();
+        self.completions.push(CompletionItem {
+            label: format!("Maak nieuw veld `{name}`"),
+            filter_text: Some(name.to_string()),
+            kind: Some(CompletionItemKind::FIELD),
+            insert_text: Some(format!("veld {name}: $0,")),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            documentation: None,
+            ..Default::default()
+        });
+
+        self.completions.push(CompletionItem {
+            label: format!("Maak nieuwe werkwijze `{name}`"),
+            filter_text: Some(name.to_string()),
+            kind: Some(CompletionItemKind::FIELD),
+            insert_text: Some(format!("werkwijze {name}() {{\n$0\n\n}}")),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            documentation: None,
+            ..Default::default()
+        });
     }
 
     async fn complete_global_function(&mut self, ident: &str) -> Result<()> {
@@ -545,4 +589,5 @@ enum CompletionMode {
     Attribute {
         name: BabString,
     },
+    StructureMember(Ranged<BabString>),
 }
