@@ -394,16 +394,13 @@ impl<'tokens> Parser<'tokens> {
                         }
                         _ => {
                             self.emit_diagnostic(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token });
-                            break;
                         }
                     }
-                    break;
                 }
 
                 _ => {
                     let token = self.consume_token()?;
                     self.emit_diagnostic(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token });
-                    break;
                 }
             }
 
@@ -414,7 +411,6 @@ impl<'tokens> Parser<'tokens> {
 
             if require_comma && self.peek_punctuator() != Some(Punctuator::RightCurlyBracket) {
                 self.emit_diagnostic(ParseDiagnostic::ExpectedCommaAfterStructureMember { token: self.peek_token()?.clone(), location: self.token_end });
-                break;
             }
         }
 
