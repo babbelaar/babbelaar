@@ -2433,7 +2433,7 @@ impl SemanticMethod {
 
     #[must_use]
     fn return_type(&self) -> SemanticType {
-        SemanticType::null()
+        self.function.return_type.as_ref().clone()
     }
 
     #[must_use]
