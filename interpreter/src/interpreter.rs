@@ -502,7 +502,7 @@ impl<D> Interpreter<D>
         assert!(typ.qualifiers.len() == 0);
         match typ.specifier.value() {
             TypeSpecifier::BuiltIn(ty) => {
-                let default_value = match ty {
+                let default_value = match ty.value() {
                     BuiltinType::Bool => Value::Bool(false),
                     BuiltinType::G32 => Value::Integer(0),
                     BuiltinType::Null => Value::Null,
@@ -510,7 +510,7 @@ impl<D> Interpreter<D>
                     BuiltinType::Teken => Value::Character('\0'),
                 };
 
-                (ValueType::Builtin(*ty), default_value)
+                (ValueType::Builtin(*ty.value()), default_value)
             }
 
             TypeSpecifier::Custom { .. } => todo!(),

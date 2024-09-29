@@ -381,6 +381,39 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
                 );
             }
 
+            Self::ExpectedCommaOrGreaterThanInGenericTypePack { token, .. } => {
+                let range = token.begin.as_zero_range();
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: ">" },
+                        vec![
+                            FileEdit::new(range, ">")
+                        ]
+                    ),
+                );
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: "," },
+                        vec![
+                            FileEdit::new(range, ",")
+                        ]
+                    ),
+                );
+            }
+
+            Self::ExpectedGreaterThanForParameterPack { location, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: ">" },
+                        vec![
+                            FileEdit::new(location.as_zero_range(), ">")
+                        ]
+                    ),
+                );
+            }
+
+            Self::ExpectedGenericTypeName { .. } => (),
+
             Self::ExpectedNameAfterNieuw { .. } => (),
 
             Self::ExpectedNameOfField { .. } => (),

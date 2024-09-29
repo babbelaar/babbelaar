@@ -313,8 +313,8 @@ impl<'b> CompletionEngine<'b> {
                         self.complete_builtin_type(builtin)
                     }
 
-                    SemanticType::Custom(custom) => {
-                        self.complete_structure_method_or_field(custom.clone(), "")
+                    SemanticType::Custom { base, ..} => {
+                        self.complete_structure_method_or_field(base.clone(), "")
                     }
 
                     _ => Vec::new(),
@@ -462,8 +462,8 @@ impl<'b> CompletionEngine<'b> {
 
             semantics.scopes_surrounding(range.start(), |scope| {
                 if let Some(this) = &scope.this {
-                    if let SemanticType::Custom(structure) = this {
-                        completions.extend(self.complete_structure_method_or_field(structure.clone(), "dit."));
+                    if let SemanticType::Custom { base, .. } = this {
+                        completions.extend(self.complete_structure_method_or_field(base.clone(), "dit."));
                     }
                 }
             });

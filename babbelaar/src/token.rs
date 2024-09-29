@@ -5,7 +5,7 @@ use std::fmt::{Display, Formatter, Write};
 
 use strum::IntoStaticStr;
 
-use crate::{BabString, FileLocation, FileRange, Keyword};
+use crate::{BabString, FileLocation, FileRange, Keyword, Ranged};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, IntoStaticStr)]
 pub enum Punctuator {
@@ -47,6 +47,10 @@ pub enum Punctuator {
     PercentageSign,
     #[strum(serialize = "punt")]
     Period,
+    #[strum(serialize = "minder-dan")]
+    LessThan,
+    #[strum(serialize = "meer-dan")]
+    GreaterThan,
 }
 
 impl Punctuator {
@@ -72,6 +76,8 @@ impl Punctuator {
             Self::Asterisk => "*",
             Self::PercentageSign => "%",
             Self::Period => ".",
+            Self::LessThan => "<",
+            Self::GreaterThan => ">",
         }
     }
 }
@@ -151,6 +157,16 @@ pub struct Token {
     pub kind: TokenKind,
     pub begin: FileLocation,
     pub end: FileLocation,
+}
+
+impl Token {
+    pub fn as_identifier(&self) -> Option<Ranged<BabString>> {
+        let TokenKind::Identifier(ident) = &self.kind else {
+            return None;
+        };
+
+        Some(Ranged::new(self.range(), ident.clone()))
+    }
 }
 
 impl Token {

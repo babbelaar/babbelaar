@@ -407,7 +407,20 @@ impl Backend {
             definition_provider: Some(OneOf::Left(true)),
             code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
             rename_provider: Some(OneOf::Left(true)),
-            ..ServerCapabilities::default()
+            notebook_document_sync: Some(OneOf::Left(NotebookDocumentSyncOptions {
+                notebook_selector: [
+                    NotebookSelector::ByCells {
+                        notebook: Some(Notebook::String("*".into())),
+                        cells: [
+                            NotebookCellSelector {
+                                language: "babbelaar".into(),
+                            }
+                        ].to_vec(),
+                    }
+                ].to_vec(),
+                save: None,
+            })),
+            ..Default::default()
         }
     }
 

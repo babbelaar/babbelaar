@@ -339,10 +339,13 @@ impl<'tokens> Parser<'tokens> {
             }
         });
 
+        let generic_types = self.parse_type_generic_parameters_declarations();
+
         let left_curly_range = self.expect_left_curly_bracket("structuurnaam")?;
 
         let mut structure = Structure {
             name,
+            generic_types,
             left_curly_range,
             right_curly_range: left_curly_range,
             fields: Vec::new(),
@@ -480,7 +483,7 @@ impl<'tokens> Parser<'tokens> {
             return Ok(Parameter {
                 name,
                 ty: Ranged::new(range, Type {
-                    specifier: Ranged::new(range,TypeSpecifier::BuiltIn(BuiltinType::Null)),
+                    specifier: Ranged::new(range, TypeSpecifier::BuiltIn(Ranged::new(range, BuiltinType::Null))),
                     qualifiers: Vec::new(),
                 }),
             })
@@ -558,13 +561,14 @@ impl<'tokens> Parser<'tokens> {
 
     fn parse_type_specifier(&mut self) -> Ranged<TypeSpecifier> {
         let Ok(name_token) = self.peek_token().cloned() else {
-            return Ranged::new(self.end_of_file_token.range(), TypeSpecifier::BuiltIn(BuiltinType::Null));
+            let range = self.end_of_file_token.range();
+            return Ranged::new(range, TypeSpecifier::BuiltIn(Ranged::new(range, BuiltinType::Null)));
         };
 
         let TokenKind::Identifier(ref name) = name_token.kind else {
             let range = name_token.begin.as_zero_range();
             self.emit_diagnostic(ParseDiagnostic::TypeExpectedSpecifierName { token: name_token });
-            return Ranged::new(range, TypeSpecifier::BuiltIn(BuiltinType::Null));
+            return Ranged::new(range, TypeSpecifier::BuiltIn(Ranged::new(range, BuiltinType::Null)));
         };
 
         _ = self.consume_token();
@@ -572,11 +576,125 @@ impl<'tokens> Parser<'tokens> {
         let name = Ranged::new(name_token.range(), name.clone());
 
         let specifier = match Builtin::type_by_name(name.value()) {
-            Some(builtin) => TypeSpecifier::BuiltIn(builtin),
-            None => TypeSpecifier::Custom { name },
+            Some(builtin) => TypeSpecifier::BuiltIn(Ranged::new(name.range(), builtin)),
+            None => {
+                let type_parameters = self.parse_type_generic_parameters_definitions();
+                TypeSpecifier::Custom { name, type_parameters }
+            }
         };
 
         Ranged::new(name_token.range(), specifier)
+    }
+
+    fn parse_type_generic_parameters_definitions(&mut self) -> Vec<Ranged<Type>> {
+        if self.peek_punctuator() != Some(Punctuator::LessThan) {
+            return Vec::new();
+        }
+
+        _ = self.consume_token();
+
+        if self.peek_punctuator() == Some(Punctuator::GreaterThan) {
+            _ = self.consume_token();
+
+            self.emit_diagnostic(ParseDiagnostic::ExpectedGenericTypeName {
+                token: self.peek_current_or_last_token(),
+            });
+
+            return Vec::new();
+        }
+
+        let mut types = Vec::new();
+        while !self.is_at_end() {
+            types.push(self.parse_type());
+
+            if self.peek_punctuator() != Some(Punctuator::Comma) {
+                break;
+            }
+
+            match self.peek_punctuator() {
+                Some(Punctuator::Comma) => {
+                    _ = self.consume_token();
+                    continue
+                }
+
+                Some(Punctuator::GreaterThan) => {
+                    break;
+                }
+
+                _ => {
+                    self.diagnostics.push(ParseDiagnostic::ExpectedGenericTypeName { token: self.peek_current_or_last_token() });
+                    break;
+                }
+            }
+        }
+
+        if self.peek_punctuator() != Some(Punctuator::GreaterThan) {
+            self.emit_diagnostic(ParseDiagnostic::ExpectedGreaterThanForParameterPack {
+                token: self.peek_current_or_last_token(),
+                location: self.previous_end(),
+            });
+        } else {
+            _ = self.consume_token();
+        }
+
+        types
+    }
+
+    fn parse_type_generic_parameters_declarations(&mut self) -> Vec<Ranged<BabString>> {
+        if self.peek_punctuator() != Some(Punctuator::LessThan) {
+            return Vec::new();
+        }
+
+        _ = self.consume_token();
+
+        if self.peek_punctuator() == Some(Punctuator::GreaterThan) {
+            _ = self.consume_token();
+
+            self.emit_diagnostic(ParseDiagnostic::ExpectedGenericTypeName {
+                token: self.peek_current_or_last_token(),
+            });
+
+            return Vec::new();
+        }
+
+        let mut types = Vec::new();
+        while !self.is_at_end() {
+            let Some(ty) = self.parse_generic_type_name() else {
+                break;
+            };
+            types.push(ty);
+
+            match self.peek_punctuator() {
+                Some(Punctuator::Comma) => {
+                    _ = self.consume_token();
+                    continue
+                }
+
+                Some(Punctuator::GreaterThan) => {
+                    break;
+                }
+
+                _ => {
+                    self.diagnostics.push(ParseDiagnostic::ExpectedGenericTypeName { token: self.peek_current_or_last_token() });
+                    break;
+                }
+            }
+        }
+
+        if self.peek_punctuator() != Some(Punctuator::GreaterThan) {
+            self.emit_diagnostic(ParseDiagnostic::ExpectedGreaterThanForParameterPack {
+                token: self.peek_current_or_last_token(),
+                location: self.previous_end(),
+            });
+        } else {
+            _ = self.consume_token();
+        }
+
+        types
+    }
+
+    fn parse_generic_type_name(&mut self) -> Option<Ranged<BabString>> {
+        self.consume_identifier("generieke typenaam", self.tokens[self.cursor - 1].kind.to_string().into()).ok()
     }
 
     fn parse_for_statement(&mut self) -> Result<ForStatement, ParseError> {
@@ -944,6 +1062,11 @@ impl<'tokens> Parser<'tokens> {
         }
     }
 
+    #[must_use]
+    fn peek_current_or_last_token(&self) -> Token {
+        self.tokens[self.cursor.min(self.tokens.len() - 1)].clone()
+    }
+
     fn peek_punctuator(&self) -> Option<Punctuator> {
         let Ok(token) = self.peek_token() else { return None };
         match token.kind {
@@ -1154,10 +1277,12 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_structure_instantiation(&mut self, name: Ranged<BabString>, start: FileLocation) -> ParseResult<PrimaryExpression> {
+        let type_parameters = self.parse_type_generic_parameters_definitions();
         let left_curly_bracket = self.expect_left_curly_bracket("nieuw")?;
 
         let mut expr = StructureInstantiationExpression {
             name,
+            type_parameters,
             fields: Vec::new(),
             range: FileRange::new(start, start),
             left_curly_bracket,
@@ -1230,10 +1355,12 @@ impl<'tokens> Parser<'tokens> {
             self.diagnostics.push(ParseDiagnostic::ExpectedRightSquareBracketForArrayInitializer { token })
         }
 
+        // TODO use [`parse_type_specifier`](Self::parse_type_specifier)
+
         let name_range = name.range();
         let specifier = match Builtin::type_by_name(name.value()) {
-            Some(builtin) => TypeSpecifier::BuiltIn(builtin),
-            None => TypeSpecifier::Custom { name },
+            Some(builtin) => TypeSpecifier::BuiltIn(Ranged::new(name_range, builtin)),
+            None => TypeSpecifier::Custom { name, type_parameters: Vec::new() },
         };
 
         Ok(PrimaryExpression::SizedArrayInitializer {
@@ -1269,8 +1396,17 @@ pub enum ParseDiagnostic {
     #[error("Komma verwacht ',' na {context}, maar kreeg: {token}")]
     ExpectedComma { token: Token, context: &'static str },
 
+    #[error("`,` of `>` verwacht in generieke typeverzameling")]
+    ExpectedCommaOrGreaterThanInGenericTypePack { token: Token },
+
     #[error("Na een structuurlid hoort een komma `;`")]
     ExpectedCommaAfterStructureMember { token: Token, location: FileLocation },
+
+    #[error("Generieke typenaam verwacht, bijvoorbeeld `T`")]
+    ExpectedGenericTypeName { token: Token },
+
+    #[error("`>` verwacht na generieke parameters")]
+    ExpectedGreaterThanForParameterPack { token: Token, location: FileLocation },
 
     #[error("Naam van structuur verwacht, maar kreeg: {token}")]
     ExpectedNameAfterNieuw { token: Token },
@@ -1365,6 +1501,9 @@ impl ParseDiagnostic {
             Self::ExpectedColon { token, .. } => token,
             Self::ExpectedComma { token, .. } => token,
             Self::ExpectedCommaAfterStructureMember { token, .. } => token,
+            Self::ExpectedCommaOrGreaterThanInGenericTypePack { token, .. } => token,
+            Self::ExpectedGenericTypeName { token, .. } => token,
+            Self::ExpectedGreaterThanForParameterPack { token, .. } => token,
             Self::ExpectedStructureMethodPrefixWerkwijze { token } => token,
             Self::ExpectedSemicolonAfterStatement { token, .. } => token,
             Self::ExpectedSemicolonOrCurlyBracketForFunction { token, .. } => token,

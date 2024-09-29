@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, BabString, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, BabString, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -120,11 +120,7 @@ impl Symbolizer {
         });
 
         if let Some(return_type) = &statement.return_type {
-            self.symbols.insert(LspSymbol {
-                name: return_type.specifier.name().clone(),
-                kind: LspTokenType::Class,
-                range: return_type.range(),
-            });
+            self.add_type(&return_type);
         }
 
         for parameter in &statement.parameters {
@@ -157,6 +153,14 @@ impl Symbolizer {
             range: statement.name.range(),
         });
 
+        for ty_param in &statement.generic_types {
+            self.symbols.insert(LspSymbol {
+                name: ty_param.value().clone(),
+                kind: LspTokenType::Class,
+                range: ty_param.range(),
+            });
+        }
+
         for field in &statement.fields {
             self.add_structure_field(field);
         }
@@ -176,7 +180,7 @@ impl Symbolizer {
         });
 
         self.symbols.insert(LspSymbol {
-            name: field.ty.specifier.name().clone(),
+            name: field.ty.specifier.fully_qualified_name().clone(),
             kind: LspTokenType::Class,
             range: field.ty.range(),
         });
@@ -197,11 +201,7 @@ impl Symbolizer {
             range: parameter.name.range(),
         });
 
-        self.symbols.insert(LspSymbol {
-            name: BabString::new_static("Type"),
-            kind: LspTokenType::Class,
-            range: parameter.ty.range(),
-        });
+        self.add_type(&parameter.ty);
     }
 
     fn add_attribute(&mut self, attribute: &Attribute) {
@@ -258,7 +258,7 @@ impl Symbolizer {
 
             Expression::Primary(PrimaryExpression::SizedArrayInitializer{ typ, size }) => {
                 self.symbols.insert(LspSymbol {
-                    name: typ.specifier.name(),
+                    name: typ.specifier.fully_qualified_name(),
                     kind: LspTokenType::Class,
                     range: typ.specifier.range(),
                 });
@@ -310,6 +310,44 @@ impl Symbolizer {
             kind: LspTokenType::Class,
             range: expression.name.range(),
         });
+
+        for ty in &expression.type_parameters {
+            self.add_type(ty);
+        }
+
+        for field_instantiation in &expression.fields {
+            self.symbols.insert(LspSymbol {
+                name: field_instantiation.name.value().clone(),
+                kind: LspTokenType::Variable,
+                range: field_instantiation.name.range(),
+            });
+            self.add_expression(&field_instantiation.value);
+        }
+    }
+
+    fn add_type(&mut self, ty: &Type) {
+        match ty.specifier.value() {
+            TypeSpecifier::BuiltIn(bt) => {
+                self.symbols.insert(LspSymbol {
+                    name: bt.name().clone(),
+                    kind: LspTokenType::Class,
+                    range: bt.range(),
+                });
+            }
+
+            TypeSpecifier::Custom { name, type_parameters } => {
+                self.symbols.insert(LspSymbol {
+                    name: name.value().clone(),
+                    kind: LspTokenType::Class,
+                    range: name.range(),
+                });
+
+                for param in type_parameters {
+                    self.add_type(param);
+                }
+            }
+        }
+
     }
 }
 

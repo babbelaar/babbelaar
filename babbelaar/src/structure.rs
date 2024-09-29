@@ -19,6 +19,7 @@ pub struct Method {
 #[derive(Debug, Clone)]
 pub struct Structure {
     pub name: Ranged<BabString>,
+    pub generic_types: Vec<Ranged<BabString>>,
     pub left_curly_range: FileRange,
     pub right_curly_range: FileRange,
     pub fields: Vec<Field>,

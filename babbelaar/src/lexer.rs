@@ -59,6 +59,8 @@ impl<'source_code> Lexer<'source_code> {
             ':' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Colon)),
             '.' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Period)),
             '@' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::AtSign)),
+            '<' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::LessThan)),
+            '>' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::GreaterThan)),
 
             _ => {
                 let (begin, char) = self.current?;

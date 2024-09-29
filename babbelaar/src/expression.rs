@@ -60,6 +60,7 @@ impl Display for PrimaryExpression {
 #[derive(Debug, Clone)]
 pub struct StructureInstantiationExpression {
     pub name: Ranged<BabString>,
+    pub type_parameters: Vec<Ranged<Type>>,
     pub fields: Vec<FieldInstantiation>,
     pub range: FileRange,
 
