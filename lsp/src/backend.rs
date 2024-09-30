@@ -295,6 +295,8 @@ impl Backend {
         let caret_line = params.text_document_position_params.position.line as usize;
         let caret_column = params.text_document_position_params.position.character as usize;
 
+        let analyzer = self.with_semantics(&params.text_document_position_params.text_document, |a, _| Ok(Arc::clone(&a))).await?;
+
         self.lexed_document(&params.text_document_position_params.text_document, |tokens, _| {
             let mut parser = Parser::new(params.text_document_position_params.text_document.uri.to_path()?, &tokens);
             info!("Caret is @ {caret_line}:{caret_column}");
@@ -324,36 +326,100 @@ impl Backend {
                     return Ok(None);
                 };
 
-                let PostfixExpressionKind::Call(..) = postfix.kind.value() else {
-                    log::warn!("Cannot give signature help for a non-call Postfix Expression");
-                    return Ok(None);
-                };
+                match postfix.kind.value() {
+                    PostfixExpressionKind::Call(..) => {
+                        let Expression::Primary(PrimaryExpression::Reference(calling_name)) = postfix.lhs.value() else {
+                            log::warn!("Cannot give signature help for a non-identifier Call Postfix Expression");
+                            return Ok(None);
+                        };
 
-                let Expression::Primary(PrimaryExpression::Reference(calling_name)) = postfix.lhs.value() else {
-                    log::warn!("Cannot give signature help for a non-identifier Call Postfix Expression");
-                    return Ok(None);
-                };
+                        let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| x.name == calling_name.value()) else {
+                            log::warn!("Cannot give signature help for a non-builtin function");
+                            return Ok(None);
+                        };
 
-                let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| x.name == calling_name.value()) else {
-                    log::warn!("Cannot give signature help for a non-builtin function");
-                    return Ok(None);
-                };
-
-                return Ok(Some(SignatureHelp {
-                    signatures: vec![
-                        SignatureInformation {
-                            label: format!("{}()", builtin_function.name),
-                            documentation: Some(Documentation::MarkupContent(MarkupContent {
-                                kind: MarkupKind::Markdown,
-                                value: builtin_function.documentation.to_string(),
-                            })),
-                            parameters: None,
+                        return Ok(Some(SignatureHelp {
+                            signatures: vec![
+                                SignatureInformation {
+                                    label: format!("{}()", builtin_function.name),
+                                    documentation: Some(Documentation::MarkupContent(MarkupContent {
+                                        kind: MarkupKind::Markdown,
+                                        value: builtin_function.documentation.to_string(),
+                                    })),
+                                    parameters: None,
+                                    active_parameter: None,
+                                }
+                            ],
+                            active_signature: Some(0),
                             active_parameter: None,
+                        }));
+                    }
+
+                    PostfixExpressionKind::MethodCall(call_expr) => {
+                        let Some(ty) = analyzer.context.value_type_tracker.as_ref().and_then(|x| x.get(&postfix.lhs.range())) else {
+                            log::warn!("Kan geen handtekeningshulp aanbieden voor deze methode, want we weten niet aan welk type hij gebonden zit.");
+                            return Ok(None);
+                        };
+
+                        let SemanticType::Custom { base, parameters: _ } = ty else {
+                            log::warn!("Kan geen handtekeningshulp aanbieden voor deze methode, want het is gebonden aan een ingebouwd of speciaal type.");
+                            return Ok(None);
+                        };
+
+                        let name_to_find = call_expr.method_name.value();
+                        let Some(method) = base.methods.iter().find(|x| x.function.name.value() == name_to_find) else {
+                            log::trace!("Kan geen handtekeningshulp aanbieden, want methode `{name_to_find}` bestaat niet.");
+                            return Ok(None);
+                        };
+
+                        let mut label = format!("{}.{}(", base.name.value(), method.function.name.value());
+                        let mut parameters = Vec::new();
+
+                        for (idx, param) in method.function.parameters.iter().enumerate() {
+                            if idx != 0 {
+                                label += ", ";
+                            }
+
+                            let start = label.len() as u32;
+                            label += param.name.value();
+                            label += ": ";
+                            label += &param.ty.as_ref().clone().resolve_against(ty).name();
+                            let end = label.len() as u32;
+
+                            parameters.push(ParameterInformation {
+                                label: ParameterLabel::LabelOffsets([start, end]),
+                                documentation: None,
+                            });
                         }
-                    ],
-                    active_signature: Some(0),
-                    active_parameter: None,
-                }));
+
+                        label += ")";
+
+                        let return_type = method.function.return_type.clone().resolve_against(ty);
+                        if !return_type.is_null() {
+                            label += " -> ";
+                            label += &return_type.name();
+                        }
+
+                        let active_parameter = Some(call_expr.call.arguments.len().saturating_sub(1) as u32);
+                        return Ok(Some(SignatureHelp {
+                            signatures: [
+                                SignatureInformation {
+                                    label,
+                                    documentation: None,
+                                    parameters: Some(parameters),
+                                    active_parameter,
+                                }
+                            ].to_vec(),
+                            active_signature: Some(0),
+                            active_parameter,
+                        }));
+                    }
+
+                    _ => {
+                        log::warn!("Cannot give signature help for this kind of Postfix Expression");
+                        return Ok(None);
+                    }
+                }
             }
 
             let client = self.client.clone();

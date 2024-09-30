@@ -109,11 +109,17 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_expression(&mut self, expression: &Ranged<Expression>) -> SemanticValue {
-        match expression.value() {
+        let value = match expression.value() {
             Expression::BiExpression(bi) => self.analyze_bi_expression(bi),
             Expression::Postfix(postfix) => self.analyze_postfix_expression(postfix),
             Expression::Primary(primary) => self.analyze_primary_expression(primary, expression.range()),
+        };
+
+        if let Some(value_type_tracker) = &mut self.context.value_type_tracker {
+            value_type_tracker.insert(expression.range(), value.ty.clone());
         }
+
+        value
     }
 
     fn analyze_function(&mut self, function: &FunctionStatement, this: Option<SemanticType>) {
@@ -2081,6 +2087,7 @@ pub struct SemanticContext {
 
     pub definition_tracker: Option<HashMap<FileRange, SemanticReference>>,
     pub declaration_tracker: Option<Vec<SemanticReference>>,
+    pub value_type_tracker: Option<HashMap<FileRange, SemanticType>>,
 }
 
 impl SemanticContext {
@@ -2092,6 +2099,7 @@ impl SemanticContext {
             previous_scopes: Vec::new(),
             definition_tracker: Some(HashMap::new()),
             declaration_tracker: Some(Vec::new()),
+            value_type_tracker: Some(HashMap::new()),
         }
     }
 
@@ -2589,6 +2597,11 @@ impl SemanticType {
         Self::Builtin(BuiltinType::Null)
     }
 
+    #[must_use]
+    pub const fn is_null(&self) -> bool {
+        matches!(self, Self::Builtin(BuiltinType::Null))
+    }
+
     pub fn declaration_range(&self) -> FileRange {
         match self {
             Self::Array(ty) => ty.declaration_range(),
@@ -2664,7 +2677,7 @@ impl SemanticType {
         }
     }
 
-    fn resolve_against(self, ty: &SemanticType) -> Self {
+    pub fn resolve_against(self, ty: &SemanticType) -> Self {
         let generic_index = match self {
             Self::Array(element_type) => {
                 let element_type = *element_type;
