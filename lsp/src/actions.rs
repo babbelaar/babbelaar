@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BiExpression, Expression, FileEdit, FileId, FileLocation, FileRange, FunctionCallExpression, ParseDiagnostic, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StrExt, StructureInstantiationExpression, TemplateStringExpressionPart};
+use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarFixKind, BiExpression, Expression, FileEdit, FileId, FileLocation, FileRange, FunctionCallExpression, ParseDiagnostic, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StrExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart};
 use tower_lsp::lsp_types::VersionedTextDocumentIdentifier;
 
 use crate::BabbelaarLspError;
@@ -54,6 +54,7 @@ pub struct CodeActionsAnalysisContext<'ctx> {
     pub items: Vec<BabbelaarCodeAction>,
     pub cursor_range: FileRange,
     pub contents: &'ctx str,
+    pub path: std::path::PathBuf,
 }
 
 impl<'ctx> CodeActionsAnalysisContext<'ctx> {
@@ -241,14 +242,44 @@ impl CodeActionsAnalyzable for Statement {
             }
 
             StatementKind::Structure(stmt) => {
-                _ = stmt;
-                // TODO
+                if stmt.name.range().contains(ctx.cursor_range.start()) {
+                    let code = ctx.contents[self.range.start().offset()..self.range.end().offset()].to_string();
+
+                    let mut path = ctx.path.clone();
+                    path.pop();
+                    path.push(format!("{}.bab", stmt.name.value()));
+
+                    let new_file_id = FileId::from_path(&path);
+                    let location = FileLocation::new(new_file_id, 0, 0, 0);
+                    let range = FileRange::new(location, location);
+
+                    ctx.items.push(
+                        BabbelaarCodeAction::new(
+                            BabbelaarCodeActionType::MoveStructureToNewFile,
+                            [
+                                FileEdit::new(self.range, String::new()),
+                                FileEdit::new(range, code)
+                                    .with_new_file(path)
+                            ].to_vec()
+                        )
+                        .with_fix_kind(BabbelaarFixKind::Refactor)
+                    );
+                }
+
+                stmt.analyze(ctx);
             }
 
             StatementKind::Variable(stmt) => {
                 stmt.expression.analyze(ctx);
             }
         }
+    }
+}
+
+impl CodeActionsAnalyzable for Structure {
+    fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
+        _ = ctx;
+        // TODO
     }
 }
 

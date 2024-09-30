@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fs::read_dir;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use babbelaar::*;
@@ -154,7 +155,17 @@ impl Backend {
         f(&analyzer, &source_code)
     }
 
-    pub async fn collect_diagnostics(&self, _: VersionedTextDocumentIdentifier) -> Result<()> {
+    pub fn collect_diagnostics_in_background(&self) {
+        let this = (*self).clone();
+        spawn(async move {
+            let this = this;
+            if let Err(e) = this.collect_diagnostics().await {
+                warn!("Kon geen diagnostieken verzamelen: {e}");
+            }
+        });
+    }
+
+    pub async fn collect_diagnostics(&self) -> Result<()> {
         let mut urls: HashMap<FileId, VersionedTextDocumentIdentifier> = HashMap::new();
         let mut diags: HashMap<FileId, Vec<Diagnostic>> = HashMap::new();
 
@@ -191,6 +202,7 @@ impl Backend {
                     items: Vec::new(),
                     cursor_range: FileRange::default(),
                     contents: source_code.contents(),
+                    path: source_code.path().to_path_buf(),
                 };
 
                 err.analyze(&mut ctx);
@@ -523,10 +535,7 @@ impl Backend {
         let this = (*self).clone();
         spawn(async move {
             let this = this;
-            let result = this.collect_diagnostics(VersionedTextDocumentIdentifier {
-                uri: params.text_document.uri,
-                version: params.text_document.version,
-            }).await;
+            let result = this.collect_diagnostics().await;
 
             if let Err(e) = result {
                 warn!("Kon bestand niet openen: {e}");
@@ -836,10 +845,10 @@ impl Backend {
 
     async fn create_document_change_operation_for_action(&self, action: &BabbelaarCodeAction) -> Vec<DocumentChangeOperation> {
         let mut operations = Vec::new();
-        let mut edits = Vec::new();
-        let mut uri = None;
 
         for edit in action.edits() {
+            let mut uri = None;
+
             if let Some(new_file_path) = edit.new_file_path() {
                 let new_uri = new_file_path.to_uri();
                 uri = Some(new_uri.clone());
@@ -859,26 +868,24 @@ impl Backend {
                 insert_text_format: Some(InsertTextFormat::SNIPPET),
             };
 
-            edits.push(OneOf::Left(edit));
+            let file_id = action.edits()[0].replacement_range().file_id();
+
+            let uri = match uri {
+                Some(uri) => uri,
+                None => match self.context.path_of(file_id).await {
+                    Some(path) => path.to_uri(),
+                    None => panic!("Failed to find path of {file_id:?} for action {action:#?}"),
+                }
+            };
+
+            operations.push(DocumentChangeOperation::Edit(TextDocumentEdit {
+                text_document: OptionalVersionedTextDocumentIdentifier {
+                    uri,
+                    version: None,
+                },
+                edits: vec![OneOf::Left(edit)],
+            }));
         }
-
-        let file_id = action.edits()[0].replacement_range().file_id();
-
-        let uri = match uri {
-            Some(uri) => uri,
-            None => match self.context.path_of(file_id).await {
-                Some(path) => path.to_uri(),
-                None => panic!("Failed to find path of {file_id:?} for action {action:#?}"),
-            }
-        };
-
-        operations.push(DocumentChangeOperation::Edit(TextDocumentEdit {
-            text_document: OptionalVersionedTextDocumentIdentifier {
-                uri,
-                version: None,
-            },
-            edits,
-        }));
 
         operations
     }
@@ -906,6 +913,7 @@ impl Backend {
                 items: Vec::new(),
                 cursor_range: FileRange::default(),
                 contents: source_code,
+                path: tree.path().to_path_buf(),
             };
 
             ctx.cursor_range = ctx.create_range_and_calculate_byte_column(start, end)?;

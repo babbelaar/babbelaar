@@ -443,6 +443,9 @@ pub enum BabbelaarCodeActionType {
 
     #[error("Maak structuur `{name}` aan in nieuw bestand")]
     CreateStructureInNewFile { name: BabString },
+
+    #[error("Verplaats structuur naar nieuw bestand")]
+    MoveStructureToNewFile,
 }
 
 #[derive(Debug, Clone)]

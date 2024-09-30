@@ -20,4 +20,3 @@ structuur Lijst<T> {
 stel lijst = nieuw Lijst<Slinger> {};
 lijst.voegToe("Abc");
 lijst.voegToe("Def");
-schrijf(€"Lijst: {lijst.inhoud}");
