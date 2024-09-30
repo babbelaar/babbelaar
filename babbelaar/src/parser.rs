@@ -200,12 +200,12 @@ impl<'tokens> Parser<'tokens> {
                     self.emit_diagnostic(ParseDiagnostic::ParameterExpectedComma{
                         token: self.peek_token().ok().cloned().unwrap_or_else(|| self.tokens[self.tokens.len() - 1].clone()),
                     });
-                    continue;
+                    break;
                 }
             }
         }
 
-        let parameters_right_paren_range = self.expect_right_paren("werkwijzenaam")?;
+        let parameters_right_paren_range = self.expect_right_paren("werkwijzenaam");
 
         let return_type = if self.peek_punctuator() == Some(Punctuator::Arrow) {
             _ = self.consume_token();
@@ -796,7 +796,7 @@ impl<'tokens> Parser<'tokens> {
 
         let end = Box::new(self.parse_expression()?);
 
-        self.expect_right_paren("reeks")?;
+        self.expect_right_paren("reeks");
 
         Ok(RangeExpression { start, end })
     }
@@ -819,7 +819,7 @@ impl<'tokens> Parser<'tokens> {
 
             TokenKind::Punctuator(Punctuator::LeftParenthesis) => {
                 let expression = self.parse_expression()?;
-                self.expect_right_paren("expressie binnen haakjes")?;
+                self.expect_right_paren("expressie binnen haakjes");
                 Ok(PrimaryExpression::Parenthesized(Box::new(expression)))
             }
 
@@ -1099,15 +1099,21 @@ impl<'tokens> Parser<'tokens> {
         Ok(token.range())
     }
 
-    fn expect_right_paren(&mut self, context: &'static str) -> Result<FileRange, ParseError> {
-        let token = self.consume_token()?;
+    fn expect_right_paren(&mut self, context: &'static str) -> FileRange {
+        let Ok(token) = self.peek_token() else {
+            self.emit_diagnostic(ParseDiagnostic::ExpectedRightParen { token: self.tokens.last().unwrap().clone(), context });
+            return self.token_end.as_zero_range();
+        };
+
         let range = token.range();
 
         if token.kind != TokenKind::Punctuator(Punctuator::RightParenthesis) {
-            self.emit_diagnostic(ParseDiagnostic::ExpectedRightParen { token, context });
+            self.emit_diagnostic(ParseDiagnostic::ExpectedRightParen { token: token.clone(), context });
         }
 
-        Ok(range)
+        _ = self.consume_token();
+
+        range
     }
 
     fn expect_left_curly_bracket(&mut self, context: &'static str) -> Result<FileRange, ParseError> {

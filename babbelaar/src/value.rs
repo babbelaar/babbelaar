@@ -3,7 +3,7 @@
 
 use std::{cell::RefCell, cmp::Ordering, collections::HashMap, fmt::{Display, Write}, hash::{DefaultHasher, Hash, Hasher}, rc::Rc};
 
-use crate::{BuiltinMethodReference, BuiltinType, Comparison, FunctionStatement, Structure};
+use crate::{BabString, BuiltinMethodReference, BuiltinType, Comparison, FunctionStatement, Structure};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -39,6 +39,7 @@ pub enum Value {
     Object {
         structure: StructureId,
         fields: Rc<RefCell<HashMap<String, Value>>>,
+        generic_types: HashMap<BabString, ValueType>,
     },
 }
 

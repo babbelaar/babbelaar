@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use babbelaar::BabString;
+use babbelaar::{BabString, ValueType};
 
 use crate::{Builtin, FunctionId, InterpreterStructure, Value};
 
@@ -12,6 +12,7 @@ pub struct Scope {
     pub parent: Option<Box<Scope>>,
     pub variables: HashMap<BabString, Value>,
     pub structures: HashMap<BabString, Rc<InterpreterStructure>>,
+    pub generic_types: HashMap<BabString, ValueType>,
     pub this: Option<Value>,
 }
 
@@ -21,6 +22,7 @@ impl Scope {
             parent: None,
             variables: HashMap::new(),
             structures: HashMap::new(),
+            generic_types: HashMap::new(),
             this,
         }
     }
@@ -45,6 +47,7 @@ impl Scope {
             parent: Some(Box::new(self)),
             variables: HashMap::new(),
             structures: HashMap::new(),
+            generic_types: HashMap::new(),
             this,
         }
     }
@@ -54,6 +57,7 @@ impl Scope {
             parent: Some(Box::new(self)),
             variables: HashMap::new(),
             structures: HashMap::new(),
+            generic_types: HashMap::new(),
             this,
         }
     }
@@ -81,6 +85,18 @@ impl Scope {
 
         if let Some(parent) = self.parent.as_mut() {
             return parent.find_mut(reference);
+        }
+
+        None
+    }
+
+    pub fn find_generic_type(&self, name: &BabString) -> Option<ValueType> {
+        if let Some(ty) = self.generic_types.get(name) {
+            return Some(ty.clone());
+        }
+
+        if let Some(parent) = &self.parent {
+            return parent.find_generic_type(name);
         }
 
         None

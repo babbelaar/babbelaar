@@ -206,6 +206,13 @@ impl<D> Interpreter<D>
 
                 let mut fields = HashMap::new();
 
+                self.scope = std::mem::take(&mut self.scope).push();
+
+                for (generic_decl, generic_def) in structure.structure.generic_types.iter().zip(instantiation.type_parameters.iter()) {
+                    let generic_type = self.resolve_type(&generic_def).0;
+                    self.scope.generic_types.insert(generic_decl.value().clone(), generic_type);
+                }
+
                 for field in &structure.structure.fields {
                     let instantiation = instantiation.fields.iter().find(|x| x.name.value() == field.name.value());
 
@@ -219,8 +226,12 @@ impl<D> Interpreter<D>
                     fields.insert(field.name.to_string(), value);
                 }
 
+                let generic_types = std::mem::take(&mut self.scope.generic_types);
+                self.scope = std::mem::take(&mut self.scope).pop();
+
                 Value::Object {
                     structure: id,
+                    generic_types,
                     fields: Rc::new(RefCell::new(fields))
                 }
             }
@@ -467,8 +478,19 @@ impl<D> Interpreter<D>
     }
 
     fn execute_method_invocation(&mut self, lhs: Value, expression: &MethodCallExpression) -> Value {
+        if let Value::Object { generic_types, .. } = &lhs {
+            self.scope = std::mem::take(&mut self.scope).push();
+            self.scope.generic_types = generic_types.clone();
+        }
+
         let method = self.get_method(&lhs, &expression.method_name).unwrap();
-        self.execute_function_call(method, &expression.call)
+        let return_value = self.execute_function_call(method, &expression.call);
+
+        if let Value::Object { .. } = &lhs {
+            self.scope = std::mem::take(&mut self.scope).pop();
+        }
+
+        return_value
     }
 
     fn get_method(&self, value: &Value, method_name: &str) -> Option<Value> {
@@ -518,18 +540,32 @@ impl<D> Interpreter<D>
         assert!(typ.qualifiers.len() == 0);
         match typ.specifier.value() {
             TypeSpecifier::BuiltIn(ty) => {
-                let default_value = match ty.value() {
-                    BuiltinType::Bool => Value::Bool(false),
-                    BuiltinType::G32 => Value::Integer(0),
-                    BuiltinType::Null => Value::Null,
-                    BuiltinType::Slinger => Value::String(String::new()),
-                    BuiltinType::Teken => Value::Character('\0'),
-                };
-
-                (ValueType::Builtin(*ty.value()), default_value)
+                let ty = ValueType::Builtin(*ty.value());
+                let default_value = self.get_default_value(&ty);
+                (ty, default_value)
             }
 
-            TypeSpecifier::Custom { .. } => todo!(),
+            TypeSpecifier::Custom { name, .. } => {
+                if let Some(generic) = self.scope.find_generic_type(&name) {
+                    let default_value = self.get_default_value(&generic);
+                    return (generic, default_value);
+                }
+
+                log::info!("Scope: {:#?}", self.scope);
+                todo!("Resolve typ: {typ:#?}")
+            }
+        }
+    }
+
+    fn get_default_value(&self, typ: &ValueType) -> Value {
+        match typ {
+            ValueType::Builtin(BuiltinType::Bool) => Value::Bool(false),
+            ValueType::Builtin(BuiltinType::G32) => Value::Integer(0),
+            ValueType::Builtin(BuiltinType::Null) => Value::Null,
+            ValueType::Builtin(BuiltinType::Slinger) => Value::String(String::new()),
+            ValueType::Builtin(BuiltinType::Teken) => Value::Character('\0'),
+
+            _ => todo!("Get default value of type {typ:#?}"),
         }
     }
 

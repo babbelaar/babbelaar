@@ -1,0 +1,4 @@
+structuur Persoon {
+    veld voornaam: Slinger,
+    veld achternaam: Slinger,
+}
