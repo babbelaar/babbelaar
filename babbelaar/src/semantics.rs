@@ -437,6 +437,7 @@ impl SemanticAnalyzer {
             attributes: x.attributes.clone(),
             name: x.name.clone(),
             ty: self.resolve_type(&x.ty),
+            has_default_value: x.default_value.is_some(),
         }).collect();
 
         let methods = structure.methods.iter().map(|x| SemanticMethod {
@@ -472,6 +473,12 @@ impl SemanticAnalyzer {
         });
 
         self.context.push_structure(Arc::clone(&semantic_structure));
+
+        for field in &structure.fields {
+            if let Some(default_value) = &field.default_value {
+                self.analyze_expression(default_value);
+            }
+        }
 
         let mut names = HashSet::new();
         for field in &semantic_structure.fields {
@@ -883,11 +890,19 @@ impl SemanticAnalyzer {
             }
         }
 
-        if !fields_left.is_empty() {
-            let names = fields_left.keys().map(|x| x.as_str()).join("`, `");
+        let count_fields_left = fields_left.iter()
+            .filter(|(_, field)| !field.has_default_value)
+            .count();
+
+        if count_fields_left != 0 {
+            let names = fields_left.iter()
+                .filter(|(_, x)| !x.has_default_value)
+                .map(|(x, _)| x.as_str())
+                .join("`, `");
+
             self.diagnostics.push(SemanticDiagnostic::new(instantiation.range, SemanticDiagnosticKind::MissingFieldInitializers {
                 names,
-                field_word: if fields_left.len() == 1 {
+                field_word: if count_fields_left == 1 {
                     "Het veld"
                 } else {
                     "De velden"
@@ -2510,6 +2525,7 @@ pub struct SemanticField {
     pub attributes: Vec<Attribute>,
     pub name: Ranged<BabString>,
     pub ty: SemanticType,
+    pub has_default_value: bool,
 }
 
 #[derive(Debug, Clone)]

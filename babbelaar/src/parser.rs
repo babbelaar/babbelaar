@@ -431,10 +431,20 @@ impl<'tokens> Parser<'tokens> {
         });
 
         self.expect_colon("veldnaam");
+
+        let ty = self.parse_type();
+        let mut default_value = None;
+
+        if self.peek_punctuator() == Some(Punctuator::Assignment) {
+            _ = self.consume_token();
+            default_value = self.parse_expression().ok();
+        }
+
         Ok(Field {
             attributes: Vec::new(),
             name,
-            ty: self.parse_type(),
+            ty,
+            default_value,
         })
     }
 

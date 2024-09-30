@@ -1,13 +1,14 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{Attribute, BabString, FileRange, FunctionStatement, Ranged, Type};
+use crate::{Attribute, BabString, Expression, FileRange, FunctionStatement, Ranged, Type};
 
 #[derive(Debug, Clone)]
 pub struct Field {
     pub attributes: Vec<Attribute>,
     pub name: Ranged<BabString>,
     pub ty: Ranged<Type>,
+    pub default_value: Option<Ranged<Expression>>,
 }
 
 #[derive(Debug, Clone)]

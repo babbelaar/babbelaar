@@ -184,6 +184,10 @@ impl Symbolizer {
             kind: LspTokenType::Class,
             range: field.ty.range(),
         });
+
+        if let Some(default_value) = &field.default_value {
+            self.add_expression(&default_value);
+        }
     }
 
     fn add_structure_method(&mut self, method: &Method) {

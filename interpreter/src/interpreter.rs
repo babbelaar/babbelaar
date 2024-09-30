@@ -101,7 +101,7 @@ impl<D> Interpreter<D>
                         .map(|x| Arc::new(
                             InterpreterFunction {
                                 attributes: Vec::new(),
-                                function: x.function.clone()
+                                function: x.function.clone(),
                             }
                         ))
                         .collect()
@@ -195,17 +195,33 @@ impl<D> Interpreter<D>
                 Value::String(str.to_string())
             }
 
-            PrimaryExpression::StructureInstantiation(structure) => {
+            PrimaryExpression::StructureInstantiation(instantiation) => {
+                let (id, structure) = self.structures.iter()
+                        .find(|(_, registered)| registered.name() == instantiation.name.value())
+                        .unwrap_or_else(|| panic!("failed to find structure `{}`, structures: {:#?}", instantiation.name.value(), self.structures))
+                        .clone();
+
+                let id = *id;
+                let structure = structure.clone();
+
+                let mut fields = HashMap::new();
+
+                for field in &structure.structure.fields {
+                    let instantiation = instantiation.fields.iter().find(|x| x.name.value() == field.name.value());
+
+                    let expression = if let Some(instantiation) = instantiation {
+                        &instantiation.value
+                    } else {
+                        field.default_value.as_ref().unwrap()
+                    };
+
+                    let value = self.execute_expression(expression);
+                    fields.insert(field.name.to_string(), value);
+                }
+
                 Value::Object {
-                    structure: *self.structures.iter()
-                        .find(|(_, registered)| registered.name() == structure.name.value())
-                        .unwrap_or_else(|| panic!("failed to find structure `{}`, structures: {:#?}", structure.name.value(), self.structures))
-                        .0,
-                    fields: Rc::new(RefCell::new(structure.fields.iter()
-                        .map(|field| {
-                            (field.name.to_string(), self.execute_expression(&field.value))
-                        })
-                        .collect()))
+                    structure: id,
+                    fields: Rc::new(RefCell::new(fields))
                 }
             }
 
