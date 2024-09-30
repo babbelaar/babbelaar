@@ -432,6 +432,35 @@ impl Backend {
                 ].to_vec(),
                 save: None,
             })),
+            workspace: Some(WorkspaceServerCapabilities {
+                workspace_folders: Some(WorkspaceFoldersServerCapabilities {
+                    supported: Some(true),
+                    change_notifications: None,
+                }),
+                file_operations: Some(WorkspaceFileOperationsServerCapabilities {
+                    will_delete: Some(FileOperationRegistrationOptions {
+                        filters: [FileOperationFilter {
+                            scheme: Some("file".into()),
+                            pattern: FileOperationPattern {
+                                glob: "**/*.bab".into(),
+                                matches: None,
+                                options: None,
+                            },
+                        }].to_vec(),
+                    }),
+                    did_delete: Some(FileOperationRegistrationOptions {
+                        filters: [FileOperationFilter {
+                            scheme: Some("file".into()),
+                            pattern: FileOperationPattern {
+                                glob: "**/*.bab".into(),
+                                matches: None,
+                                options: None,
+                            },
+                        }].to_vec(),
+                    }),
+                    ..Default::default()
+                })
+            }),
             ..Default::default()
         }
     }
@@ -549,13 +578,21 @@ impl Backend {
             let source_code = SourceCode::new(path, params.text_document.version, std::mem::take(&mut params.content_changes[0].text));
             self.context.register_file(source_code).await;
         }
-        let this = (*self).clone();
-        spawn(async move {
-            let this = this;
-            if let Err(e) = this.collect_diagnostics(params.text_document).await {
-                warn!("Kon geen diagnostieken verzamelen: {e}");
-            }
-        });
+
+        self.collect_diagnostics_in_background();
+    }
+
+    pub async fn did_delete_files(&self, params: DeleteFilesParams) {
+        let mut paths = Vec::new();
+        for file in params.files {
+            assert!(file.uri.starts_with("file://"));
+            let uri = &file.uri["file://".len()..];
+            let path = PathBuf::from(uri);
+            paths.push(path);
+        }
+
+        self.context.delete_files(&paths).await;
+        self.collect_diagnostics_in_background();
     }
 
     pub async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {

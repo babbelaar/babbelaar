@@ -31,6 +31,14 @@ impl BabbelaarContext {
         *self.semantic_analysis.write().await = None;
     }
 
+    pub async fn delete_files(&self, paths: &[PathBuf]) {
+        for path in paths {
+            self.files.remove(path.as_path());
+        }
+
+        *self.semantic_analysis.write().await = None;
+    }
+
     pub async fn load_and_register_file(&self, path: PathBuf) -> Result<SourceCode, BabbelaarLspError> {
         let mut contents = match tokio::fs::read_to_string(&path).await {
             Ok(contents) => contents,

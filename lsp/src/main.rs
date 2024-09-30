@@ -67,6 +67,10 @@ impl LanguageServer for Backend {
         self.did_change(params).await;
     }
 
+    async fn did_delete_files(&self, params: DeleteFilesParams) {
+        self.did_delete_files(params).await;
+    }
+
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         Ok(self.format(params).await?)
     }
