@@ -2082,7 +2082,7 @@ impl SemanticDiagnosticKind {
 
 #[derive(Debug)]
 pub struct SemanticContext {
-    scope: Vec<SemanticScope>,
+    pub scope: Vec<SemanticScope>,
     pub previous_scopes: Vec<SemanticScope>,
 
     pub definition_tracker: Option<HashMap<FileRange, SemanticReference>>,
@@ -2272,7 +2272,7 @@ impl Display for SemanticGenericType {
 
 #[derive(Debug)]
 pub struct SemanticScope {
-    range: FileRange,
+    pub range: FileRange,
     pub locals: HashMap<BabString, SemanticLocal>,
     pub structures: HashMap<BabString, Arc<SemanticStructure>>,
     pub generic_types: HashMap<BabString, SemanticGenericType>,

@@ -28,7 +28,7 @@ pub use self::{
     keyword::Keyword,
     lexer::{Lexer, LexerError, LexerErrorKind},
     parser::{Parser, ParseDiagnostic, ParseError},
-    semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticLocalKind, SemanticReference, SemanticStructure, SemanticType},
+    semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticLocal, SemanticLocalKind, SemanticReference, SemanticScope, SemanticStructure, SemanticType},
     statement::{AssignStatement, ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
     string::{BabString, IntoBabString, Slice},
     structure::{Field, Method, Structure},

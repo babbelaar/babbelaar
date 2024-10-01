@@ -1,0 +1,18 @@
+structuur Lijst<T> {
+    veld inhoud: T[] = nieuw T[0],
+
+    werkwijze lengte() -> g32 {
+        bekeer dit.inhoud.lengte();
+    }
+
+    werkwijze voegToe(item: T) {
+        stel oude = dit.inhoud;
+        dit.inhoud = nieuw T[oude.lengte() + 1];
+
+        volg i in reeks(0, oude.lengte()) {
+            dit.inhoud[i] = oude[i];
+        }
+
+        dit.inhoud[oude.lengte()] = item;
+    }
+}

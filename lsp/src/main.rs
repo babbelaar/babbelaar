@@ -10,6 +10,7 @@ mod completions;
 mod conversion;
 mod error;
 mod format;
+mod hints;
 mod logger;
 mod symbolization;
 

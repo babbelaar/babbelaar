@@ -24,6 +24,7 @@ use crate::actions::CodeActionsAnalyzable;
 use crate::conversion::convert_file_range_to_location;
 use crate::conversion::StrExtension;
 use crate::convert_command;
+use crate::hints::InlayHintsEngine;
 use crate::BabbelaarContext;
 use crate::BabbelaarLspError;
 use crate::CodeActionRepository;
@@ -31,7 +32,7 @@ use crate::PathBufExt;
 use crate::UrlExtension;
 use crate::{
     BabbelaarLspResult as Result,
-    conversion::{convert_file_range, convert_position, convert_token_range},
+    conversion::{convert_file_range, convert_token_range},
     completions::CompletionEngine,
     format::Format,
     symbolization::{LspTokenType, Symbolizer},
@@ -472,10 +473,8 @@ impl Backend {
                 resolve_provider: Some(true),
             }),
             inlay_hint_provider: Some(OneOf::Right(InlayHintServerCapabilities::Options(InlayHintOptions {
-                work_done_progress_options: WorkDoneProgressOptions {
-                    work_done_progress: None,
-                },
-                resolve_provider: Some(true),
+                work_done_progress_options: Default::default(),
+                resolve_provider: Some(false),
             }))),
             declaration_provider: Some(DeclarationCapability::Options(DeclarationOptions {
                 work_done_progress_options: WorkDoneProgressOptions {
@@ -797,36 +796,7 @@ impl Backend {
     }
 
     pub async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
-        let mut hints = Vec::new();
-
-        self.lexed_document(&params.text_document, |tokens, _| {
-            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens);
-            let tree = parser.parse_tree();
-
-            for statement in tree.all() {
-                match &statement.kind {
-                    StatementKind::For(statement) => {
-                        hints.push(InlayHint {
-                            position: convert_position(statement.iterator_name.range().end()),
-                            label: InlayHintLabel::String(": G32".into()),
-                            kind: Some(InlayHintKind::TYPE),
-                            text_edits: None,
-                            tooltip: None,
-                            padding_left: None,
-                            padding_right: None,
-                            data: None,
-                        });
-                    }
-
-                    _ => (),
-                }
-            }
-
-            Ok(())
-        }).await?;
-
-        self.client.show_message(MessageType::INFO, format!("Hints: {hints:#?}")).await;
-        Ok(Some(hints))
+        InlayHintsEngine::hint(self, params).await
     }
 
     pub async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
