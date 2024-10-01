@@ -6,10 +6,11 @@ use std::sync::Arc;
 use babbelaar::*;
 use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintParams};
 
-use crate::{convert_position, Backend, BabbelaarLspResult as Result};
+use crate::{BabbelaarLspResult as Result, Backend, Converter};
 
 pub struct InlayHintsEngine {
     target_file: FileId,
+    converter: Converter,
     params: InlayHintParams,
     analyzer: Arc<SemanticAnalyzer>,
     hints: Vec<InlayHint>,
@@ -17,12 +18,13 @@ pub struct InlayHintsEngine {
 
 impl InlayHintsEngine {
     pub async fn hint(server: &Backend, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
-        let (analyzer, target_file) = server.with_semantics(&params.text_document, |analyzer, source_code| {
-            Ok((Arc::clone(&analyzer), source_code.file_id()))
+        let (analyzer, source_code) = server.with_semantics(&params.text_document, |analyzer, source_code| {
+            Ok((Arc::clone(&analyzer), source_code.clone()))
         }).await?;
 
         let mut this = Self {
-            target_file,
+            target_file: source_code.file_id(),
+            converter: server.converter(&source_code),
             params,
             hints: Vec::new(),
             analyzer: Arc::clone(&analyzer),
@@ -56,7 +58,7 @@ impl InlayHintsEngine {
             }
 
             self.hints.push(InlayHint {
-                position: convert_position(reference.declaration_range.end()),
+                position: self.converter.convert_position(reference.declaration_range.end()),
                 label: format!(": {}", reference.typ).into(),
                 kind: Some(InlayHintKind::TYPE),
                 text_edits: None,
@@ -142,7 +144,7 @@ impl InlayHintsEngine {
 
                     for (argument, parameter) in method_call.call.arguments.iter().zip(method.function.parameters.iter()) {
                         self.hints.push(InlayHint {
-                            position: convert_position(argument.range().start()),
+                            position: self.converter.convert_position(argument.range().start()),
                             label: format!("{}: ", parameter.name.value()).into(),
                             kind: Some(InlayHintKind::PARAMETER),
                             text_edits: None,
@@ -228,7 +230,7 @@ impl InlayHintsEngine {
             SemanticType::Function(func) => {
                 for (argument, parameter) in call.arguments.iter().zip(func.parameters.iter()) {
                     self.hints.push(InlayHint {
-                        position: convert_position(argument.range().start()),
+                        position: self.converter.convert_position(argument.range().start()),
                         label: format!("{}: ", parameter.name.value()).into(),
                         kind: Some(InlayHintKind::PARAMETER),
                         text_edits: None,

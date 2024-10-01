@@ -21,18 +21,18 @@ use tower_lsp::lsp_types::Uri as Url;
 
 use crate::actions::CodeActionsAnalysisContext;
 use crate::actions::CodeActionsAnalyzable;
-use crate::conversion::convert_file_range_to_location;
 use crate::conversion::StrExtension;
 use crate::convert_command;
 use crate::hints::InlayHintsEngine;
 use crate::BabbelaarContext;
 use crate::BabbelaarLspError;
 use crate::CodeActionRepository;
+use crate::Converter;
 use crate::PathBufExt;
+use crate::TextEncoding;
 use crate::UrlExtension;
 use crate::{
     BabbelaarLspResult as Result,
-    conversion::{convert_file_range, convert_token_range},
     completions::CompletionEngine,
     format::Format,
     symbolization::{LspTokenType, Symbolizer},
@@ -47,9 +47,34 @@ pub struct Backend {
 }
 
 impl Backend {
+    #[must_use]
+    fn get_position_encoding(&self) -> TextEncoding {
+        self.get_position_encoding_impl().unwrap_or_default()
+    }
+
+    fn get_position_encoding_impl(&self) -> Option<TextEncoding> {
+        let config = block_in_place(|| {
+            self.client_configuration.blocking_read()
+        });
+        let config = config.as_ref().unwrap();
+        for encoding in config.capabilities.general.as_ref()?.position_encodings.as_ref()? {
+            if *encoding == PositionEncodingKind::UTF8 {
+                return Some(TextEncoding::Utf8);
+            }
+        }
+
+        Some(TextEncoding::Utf16)
+    }
+
+    #[must_use]
+    pub fn converter(&self, source_code: &SourceCode) -> Converter {
+        let encoding = self.get_position_encoding();
+        Converter::new(source_code.clone(), encoding)
+    }
+
     pub async fn find_tokens_at<F, R>(&self, params: &TextDocumentPositionParams, mut f: F) -> Result<Option<R>>
-            where F: FnMut(Token, Vec<Token>) -> Result<Option<R>> {
-        self.lexed_document(&params.text_document, |tokens, _| {
+            where F: FnMut(Token, Vec<Token>, &SourceCode) -> Result<Option<R>> {
+        self.lexed_document(&params.text_document, |tokens, source_code| {
             let mut previous = Vec::new();
             let mut tokens = VecDeque::from(Vec::from(tokens));
             while let Some(token) = tokens.pop_front() {
@@ -80,7 +105,7 @@ impl Backend {
                     continue;
                 }
 
-                return f(token, previous);
+                return f(token, previous, source_code);
             }
 
             Ok(None)
@@ -166,8 +191,19 @@ impl Backend {
         });
     }
 
+    pub async fn all_converters(&self) -> HashMap<FileId, Converter> {
+        let mut map = HashMap::new();
+
+        self.context.with_all_files(|file| {
+            map.insert(file.source_code().file_id(), self.converter(file.source_code()));
+            Ok(())
+        }).await.unwrap();
+
+        map
+    }
+
     pub async fn collect_diagnostics(&self) -> Result<()> {
-        let mut urls: HashMap<FileId, VersionedTextDocumentIdentifier> = HashMap::new();
+        let mut file_infos: HashMap<FileId, (Converter, VersionedTextDocumentIdentifier)> = HashMap::new();
         let mut diags: HashMap<FileId, Vec<Diagnostic>> = HashMap::new();
 
         self.context.with_all_files(|file| {
@@ -175,13 +211,15 @@ impl Backend {
                 uri: file.source_code().path().to_uri(),
                 version: file.source_code().version(),
             };
-            urls.insert(file.source_code().file_id(), document.clone());
+            file_infos.insert(file.source_code().file_id(), (self.converter(file.source_code()), document.clone()));
             diags.insert(file.source_code().file_id(), Vec::new());
+
+            let converter = self.converter(file.source_code());
 
             let source_code = file.source_code().clone();
             for err in file.lexer_diagnostics() {
                 diags.entry(err.location.file_id()).or_default().push(Diagnostic {
-                    range: convert_file_range(err.location.as_zero_range()),
+                    range: converter.convert_file_range(err.location.as_zero_range()),
                     severity: Some(DiagnosticSeverity::ERROR),
                     code: Some(NumberOrString::String(err.kind.name().to_string())),
                     code_description: None,
@@ -219,7 +257,7 @@ impl Backend {
                     .collect();
 
                 diags.entry(range.file_id()).or_default().push(Diagnostic {
-                    range: convert_file_range(range),
+                    range: converter.convert_file_range(range),
                     severity: Some(DiagnosticSeverity::ERROR),
                     code: Some(NumberOrString::String(err.name().to_string())),
                     code_description: None,
@@ -245,16 +283,16 @@ impl Backend {
                     e.related_info()
                         .iter()
                         .filter_map(|x| {
-                            let uri = urls.get(&x.range().file_id())?.uri.clone();
+                            let (converter, version) = file_infos.get(&x.range().file_id())?;
                             Some(DiagnosticRelatedInformation {
-                                location: convert_file_range_to_location(uri, x.range()),
+                                location: converter.convert_file_range_to_location(version.uri.clone(), x.range()),
                                 message: x.message().to_string(),
                             })
                         })
                         .collect()
             );
 
-            let Some(url) = urls.get(&e.range().file_id()).cloned() else {
+            let Some((converter, url)) = file_infos.get(&e.range().file_id()).cloned() else {
                 log::warn!("Ongeldige BestandID: {:?}", e.range().file_id());
                 continue;
             };
@@ -270,7 +308,7 @@ impl Backend {
                 .collect();
 
             diags.entry(e.range().file_id()).or_default().push(Diagnostic {
-                range: convert_file_range(e.range()),
+                range: converter.convert_file_range(e.range()),
                 severity: Some(match e.severity() {
                     SemanticDiagnosticSeverity::Error => DiagnosticSeverity::ERROR,
                     SemanticDiagnosticSeverity::Warning => DiagnosticSeverity::WARNING,
@@ -286,7 +324,7 @@ impl Backend {
         }
 
         for (file_id, diags) in diags.into_iter() {
-            let document = urls.get(&file_id).cloned().unwrap();
+            let document = file_infos.get(&file_id).cloned().unwrap().1;
             self.client.publish_diagnostics(document.uri, diags, Some(document.version)).await;
         }
         Ok(())
@@ -532,7 +570,7 @@ impl Backend {
 
     pub async fn on_semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>> {
         self.lexed_document(&params.text_document, |tokens, source_code| {
-            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone(), source_code);
+            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone(), source_code, self.converter(source_code));
 
             for token in tokens {
                 symbolizer.add_token(token);
@@ -670,7 +708,7 @@ impl Backend {
     ) -> Result<Option<DocumentSymbolResponse>> {
 
         self.lexed_document(&params.text_document, |tokens, source_code| {
-            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone(), source_code);
+            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone(), source_code, self.converter(source_code));
 
             for token in tokens {
                 symbolizer.add_token(token);
@@ -692,7 +730,7 @@ impl Backend {
 
     pub async fn document_highlight(&self, params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
         let res = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
-
+            let converter = self.converter(source_code);
             let pos = params.text_document_position_params.position;
             let location = FileLocation::new(source_code.file_id(), 0, pos.line as _, pos.character as _);
 
@@ -706,14 +744,14 @@ impl Backend {
 
             let mut highlights = vec![
                 DocumentHighlight {
-                    range: convert_file_range(reference.declaration_range),
+                    range: converter.convert_file_range(reference.declaration_range),
                     kind: None,
                 }
             ];
 
             for reference in references {
                 highlights.push(DocumentHighlight {
-                    range: convert_file_range(reference),
+                    range: converter.convert_file_range(reference),
                     kind: None,
                 });
             }
@@ -727,7 +765,9 @@ impl Backend {
     pub async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let mut hover = None;
 
-        self.find_tokens_at(&params.text_document_position_params, |token, _| {
+        self.find_tokens_at(&params.text_document_position_params, |token, _, source_code| {
+            let converter = self.converter(source_code);
+
             match &token.kind {
                 TokenKind::Identifier(ident) => {
                     if let Some(builtin_function) = Builtin::FUNCTIONS.iter().find(|x| ident == x.name) {
@@ -736,7 +776,7 @@ impl Backend {
                                 kind: MarkupKind::Markdown,
                                 value: builtin_function.documentation.to_string(),
                             }),
-                            range: Some(convert_token_range(&token)),
+                            range: Some(converter.convert_token_range(&token)),
                         });
                     }
 
@@ -746,7 +786,7 @@ impl Backend {
                                 kind: MarkupKind::Markdown,
                                 value: builtin_typ.documentation().to_string(),
                             }),
-                            range: Some(convert_token_range(&token)),
+                            range: Some(converter.convert_token_range(&token)),
                         });
                     }
                 }
@@ -757,7 +797,7 @@ impl Backend {
                             kind: MarkupKind::Markdown,
                             value: keyword.provide_documentation().into_owned(),
                         }),
-                        range: Some(convert_token_range(&token)),
+                        range: Some(converter.convert_token_range(&token)),
                     });
                 }
 
@@ -768,10 +808,10 @@ impl Backend {
         }).await?;
 
         if hover.is_none() {
-            let reference = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
+            let (reference, source_code) = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
                 let pos = params.text_document_position_params.position;
                 let location = source_code.canonicalize_position(source_code.file_id(), pos);
-                Ok(analyzer.find_declaration_range_at(location))
+                Ok((analyzer.find_declaration_range_at(location), source_code.clone()))
             }).await?;
 
             if let Some((range, reference)) = reference {
@@ -783,7 +823,7 @@ impl Backend {
                         kind: MarkupKind::Markdown,
                         value: format!("```babbelaar\n// In bestand {file_name}\n{text}\n```"),
                     }),
-                    range: Some(convert_file_range(range)),
+                    range: Some(self.converter(&source_code).convert_file_range(range)),
                 });
             }
         }
@@ -800,15 +840,16 @@ impl Backend {
     }
 
     pub async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
-        let reference = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
+        let (reference, source_code) = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
             let pos = params.text_document_position_params.position;
             let location = source_code.canonicalize_position(source_code.file_id(), pos);
-            Ok(analyzer.find_declaration_range_at(location))
+            Ok((analyzer.find_declaration_range_at(location), source_code.clone()))
         }).await?;
 
         Ok(match reference {
             Some((origin_range, reference)) => {
-                let target_range = convert_file_range(reference.declaration_range);
+                let converter = self.converter(&source_code);
+                let target_range = converter.convert_file_range(reference.declaration_range);
 
                 let file_id = reference.declaration_range.file_id();
                 if file_id == FileId::INTERNAL {
@@ -823,7 +864,7 @@ impl Backend {
 
                 Some(GotoDefinitionResponse::Link(vec![
                     LocationLink {
-                        origin_selection_range: Some(convert_file_range(origin_range)),
+                        origin_selection_range: Some(converter.convert_file_range(origin_range)),
                         target_uri,
                         target_range,
                         target_selection_range: target_range,
@@ -922,7 +963,7 @@ impl Backend {
         for edit in action.edits() {
             let mut uri = None;
 
-            if let Some(new_file_path) = edit.new_file_path() {
+            let source_code = if let Some(new_file_path) = edit.new_file_path() {
                 let new_uri = new_file_path.to_uri();
                 uri = Some(new_uri.clone());
                 operations.push(DocumentChangeOperation::Op(ResourceOp::Create(CreateFile {
@@ -933,10 +974,15 @@ impl Backend {
                     }),
                     annotation_id: None,
                 })));
-            }
+                SourceCode::new(new_file_path.to_string_lossy().to_string(), 0, edit.new_text().to_string())
+            } else {
+                self.context.source_code_of(edit.replacement_range().file_id()).await
+            };
+
+            let converter = self.converter(&source_code);
 
             let edit = TextEdit {
-                range: convert_file_range(edit.replacement_range()),
+                range: converter.convert_file_range(edit.replacement_range()),
                 new_text: edit.new_text().to_string(),
                 insert_text_format: Some(InsertTextFormat::SNIPPET),
             };
@@ -1021,6 +1067,8 @@ impl Backend {
 
         let pos = params.text_document_position.position;
 
+        let converters = self.all_converters().await;
+
         self.with_semantics(&params.text_document_position.text_document, |analyzer, source_code| {
             let location = FileLocation::new(source_code.file_id(), 0, pos.line as _, pos.character as _);
 
@@ -1034,11 +1082,14 @@ impl Backend {
 
             let edits = references.into_iter()
                     .chain(std::iter::once(declaration_range))
-                    .map(|range| OneOf::Left(TextEdit {
-                        range: convert_file_range(range),
-                        new_text: params.new_name.clone(),
-                        insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    }))
+                    .map(|range| {
+                        let converter = converters.get(&range.file_id()).unwrap();
+                        OneOf::Left(TextEdit {
+                            range: converter.convert_file_range(range),
+                            new_text: params.new_name.clone(),
+                            insert_text_format: Some(InsertTextFormat::SNIPPET),
+                        })
+                    })
                     .collect();
 
             let edits = TextDocumentEdit {

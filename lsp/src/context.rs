@@ -128,6 +128,16 @@ impl BabbelaarContext {
         log::warn!("Kan bestand niet vinden met het nummer {file_id:?}");
         None
     }
+
+    pub async fn source_code_of(&self, file_id: FileId) -> SourceCode {
+        for file in self.files.iter() {
+            let file = file.lock().await;
+            if file.source_code().file_id() == file_id {
+                return file.source_code().clone();
+            }
+        }
+        panic!("Illegal file id")
+    }
 }
 
 #[derive(Debug)]

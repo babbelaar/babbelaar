@@ -7,7 +7,7 @@ use babbelaar::*;
 use log::warn;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams, CompletionResponse, Documentation, InsertTextFormat, MarkupContent, MarkupKind};
 
-use crate::{Backend, BabbelaarLspResult as Result};
+use crate::{BabbelaarLspResult as Result, Backend};
 
 pub struct CompletionEngine<'b> {
     server: &'b Backend,
@@ -81,7 +81,7 @@ impl<'b> CompletionEngine<'b> {
         let mut was_new_func = false;
         let mut prev_punc = None;
 
-        let completion_mode = self.server.find_tokens_at(&self.params.text_document_position, |token, previous| {
+        let completion_mode = self.server.find_tokens_at(&self.params.text_document_position, |token, previous, _| {
             let last_keyword = previous.iter().enumerate().rev()
                 .filter_map(|(idx, token)| {
                     if let TokenKind::Keyword(kw) = token.kind {

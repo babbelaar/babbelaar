@@ -8,18 +8,20 @@ use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
 
-use crate::conversion::convert_file_range_to_location;
+use crate::Converter;
 
 pub struct Symbolizer {
     uri: Uri,
+    converter: Converter,
     symbols: SymbolMap,
     semantic_analyzer: SemanticAnalyzer,
 }
 
 impl Symbolizer {
-    pub fn new(uri: Uri, source_code: &SourceCode) -> Self {
+    pub fn new(uri: Uri, source_code: &SourceCode, converter: Converter) -> Self {
         Self {
             uri,
+            converter,
             symbols: SymbolMap::default(),
             semantic_analyzer: SemanticAnalyzer::new_single(source_code),
         }
@@ -71,13 +73,13 @@ impl Symbolizer {
         }
     }
 
-    pub fn to_response(self) -> DocumentSymbolResponse {
-        let mut values: Vec<_> = self.symbols.to_vec();
+    pub fn to_response(mut self) -> DocumentSymbolResponse {
+        let mut values: Vec<_> = std::mem::take(&mut self.symbols).to_vec();
         values.sort_by(|(range_a, _), (range_b, _)| range_a.start().offset().cmp(&range_b.start().offset()));
 
         let values = values.into_iter()
             .map(|(_, info)| info)
-            .map(|info| info.to_symbol(self.uri.clone()))
+            .map(|info| info.to_symbol(&self))
             .collect();
         DocumentSymbolResponse::Flat(values)
     }
@@ -446,14 +448,14 @@ impl LspSymbol {
     }
 
     #[must_use]
-    fn to_symbol(self, uri: Uri) -> SymbolInformation {
+    fn to_symbol(self, symbolizer: &Symbolizer) -> SymbolInformation {
         #[allow(deprecated)]
         SymbolInformation {
             name: self.name.to_string(),
             kind: self.kind.into(),
             tags: None,
             deprecated: None,
-            location: convert_file_range_to_location(uri, self.range),
+            location: symbolizer.converter.convert_file_range_to_location(symbolizer.uri.clone(), self.range),
             container_name: None,
         }
     }
@@ -544,6 +546,8 @@ impl From<LspTokenType> for SymbolKind {
 mod tests {
     use std::path::PathBuf;
 
+    use crate::TextEncoding;
+
     use super::*;
     use babbelaar::{BabString, Lexer, SourceCode};
     use rstest::rstest;
@@ -556,7 +560,7 @@ mod tests {
         let input = SourceCode::new(PathBuf::new(), 0, BabString::new_static(input));
         let tokens: Vec<Token> = Lexer::new(&input).collect();
 
-        let mut symbolizer = Symbolizer::new("file:///test.h".parse().unwrap(), &input);
+        let mut symbolizer = Symbolizer::new("file:///test.h".parse().unwrap(), &input, Converter::new(input.clone(), TextEncoding::Utf8));
         for token in &tokens {
             symbolizer.add_token(token);
         }

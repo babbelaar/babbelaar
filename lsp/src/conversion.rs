@@ -3,34 +3,74 @@
 
 use std::path::PathBuf;
 
-use babbelaar::{BabbelaarCommand, FileId, FileLocation, FileRange, Token};
+use babbelaar::{BabbelaarCommand, FileId, FileLocation, FileRange, SourceCode, Token};
 use tower_lsp::lsp_types::{Command, Location, Position, Range, Uri as Url};
 
 use crate::{BabbelaarLspError, BabbelaarLspResult};
 
-pub fn convert_file_range_to_location(uri: Url, range: FileRange) -> Location {
-    Location {
-        uri,
-        range: convert_file_range(range),
+#[derive(Debug, Clone)]
+pub struct Converter {
+    source_code: SourceCode,
+    encoding: TextEncoding,
+}
+
+impl Converter {
+    pub fn new(source_code: SourceCode, encoding: TextEncoding) -> Self {
+        Self {
+            source_code,
+            encoding,
+        }
+    }
+
+    #[must_use]
+    pub fn convert_file_range_to_location(&self, uri: Url, range: FileRange) -> Location {
+        Location {
+            uri,
+            range: self.convert_file_range(range),
+        }
+    }
+
+    #[must_use]
+    pub fn convert_token_range(&self, token: &Token) -> Range {
+        self.convert_file_range(token.range())
+    }
+
+    #[must_use]
+    pub fn convert_file_range(&self, range: FileRange) -> Range {
+        Range {
+            start: self.convert_position(range.start()),
+            end: self.convert_position(range.end()),
+        }
+    }
+
+    #[must_use]
+    pub fn convert_position(&self, location: FileLocation) -> Position {
+        match self.encoding {
+            TextEncoding::Utf8 => {
+                Position {
+                    line: location.line() as _,
+                    character: location.column() as _,
+                }
+            }
+
+            TextEncoding::Utf16 => {
+                let line = self.source_code.lines().nth(location.line() as _).unwrap();
+                let line = &line[..location.column() as _];
+
+                Position {
+                    line: location.line() as _,
+                    character: line.encode_utf16().count() as _,
+                }
+            }
+        }
     }
 }
 
-pub fn convert_token_range(token: &Token) -> Range {
-    convert_file_range(token.range())
-}
-
-pub fn convert_file_range(range: FileRange) -> Range {
-    Range {
-        start: convert_position(range.start()),
-        end: convert_position(range.end()),
-    }
-}
-
-pub fn convert_position(location: FileLocation) -> Position {
-    Position {
-        line: location.line() as _,
-        character: location.column() as _,
-    }
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum TextEncoding {
+    #[default]
+    Utf16,
+    Utf8,
 }
 
 #[must_use]
