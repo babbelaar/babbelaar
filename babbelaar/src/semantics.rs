@@ -1260,8 +1260,13 @@ impl SemanticAnalyzer {
 
                         self.analyze_function_parameters(method.name().clone(), local_reference, &expression.call, Some(&typ));
 
+                        let ty = method.return_type().resolve_against(&typ);
+                        if ty.is_null() {
+                            return SemanticValue::null();
+                        }
+
                         return SemanticValue {
-                            ty: method.return_type().resolve_against(&typ),
+                            ty,
                             usage: method.return_type_usage(),
                         };
                     }
@@ -2554,7 +2559,7 @@ impl SemanticMethod {
 
     #[must_use]
     fn return_type_usage(&self) -> SemanticUsage {
-        SemanticUsage::Indifferent
+        SemanticUsage::Pure(PureValue::ReturnValue)
     }
 }
 
