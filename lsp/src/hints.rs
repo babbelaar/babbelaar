@@ -49,25 +49,38 @@ impl InlayHintsEngine {
 
     fn visit_semantics(&mut self, analyzer: &SemanticAnalyzer) {
         for reference in analyzer.context.declaration_tracker.as_ref().unwrap_or(&Vec::new()) {
-            if reference.declaration_range.file_id() != self.target_file {
-                continue;
-            }
-
-            if reference.local_kind != SemanticLocalKind::Variable {
-                continue;
-            }
-
-            self.hints.push(InlayHint {
-                position: self.converter.convert_position(reference.declaration_range.end()),
-                label: format!(": {}", reference.typ).into(),
-                kind: Some(InlayHintKind::TYPE),
-                text_edits: None,
-                tooltip: None,
-                padding_left: None,
-                padding_right: None,
-                data: None,
-            });
+            self.visit_semantic_reference(reference);
         }
+    }
+
+    fn visit_semantic_reference(&mut self, reference: &SemanticReference) {
+        if reference.declaration_range.file_id() != self.target_file {
+            return;
+        }
+
+        match reference.local_kind {
+            SemanticLocalKind::Method => return,
+            SemanticLocalKind::Function => return,
+            SemanticLocalKind::FunctionReference => return,
+            SemanticLocalKind::FieldReference => return,
+            SemanticLocalKind::StructureReference => return,
+            SemanticLocalKind::Parameter => return,
+
+            SemanticLocalKind::Iterator => (),
+            SemanticLocalKind::Variable => (),
+            SemanticLocalKind::ReferenceThis => (),
+        }
+
+        self.hints.push(InlayHint {
+            position: self.converter.convert_position(reference.declaration_range.end()),
+            label: format!(": {}", reference.typ).into(),
+            kind: Some(InlayHintKind::TYPE),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        });
     }
 
     fn visit_statement(&mut self, statement: &Statement) {

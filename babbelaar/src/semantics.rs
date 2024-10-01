@@ -262,10 +262,21 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_for_statement(&mut self, statement: &ForStatement) {
+        let ty = SemanticType::Builtin(BuiltinType::G32);
+
+        if let Some(tracker) = &mut self.context.declaration_tracker {
+            tracker.push(SemanticReference {
+                local_name: statement.iterator_name.value().clone(),
+                local_kind: SemanticLocalKind::Iterator,
+                declaration_range: statement.iterator_name.range(),
+                typ: ty.clone(),
+            });
+        }
+
         let scope = self.context.push_block_scope(statement.file_range);
         scope.locals.insert(statement.iterator_name.value().clone(), SemanticLocal::new(
             SemanticLocalKind::Iterator,
-            SemanticType::Builtin(BuiltinType::G32),
+            ty,
             statement.iterator_name.range(),
         ));
 
