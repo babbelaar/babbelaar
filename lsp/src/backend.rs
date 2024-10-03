@@ -820,17 +820,18 @@ impl Backend {
             let (reference, source_code) = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
                 let pos = params.text_document_position_params.position;
                 let location = self.converter(source_code).convert_location(pos);
-                Ok((analyzer.find_declaration_range_at(location), source_code.clone()))
+                Ok((analyzer.find_reference_at(location), source_code.clone()))
             }).await?;
 
             if let Some((range, reference)) = reference {
+                debug_assert_eq!(range.file_id(), source_code.file_id(), "is invalid");
                 let text = reference.hover();
-                let file_name = self.file_humanized_name(range.file_id()).await.unwrap_or_else(|| "(onbekend)".to_string());
+                let file_name = self.file_humanized_name(reference.declaration_range.file_id()).await.unwrap_or_else(|| "(onbekend)".to_string());
 
                 hover = Some(Hover {
                     contents: HoverContents::Markup(MarkupContent {
                         kind: MarkupKind::Markdown,
-                        value: format!("```babbelaar\n// In bestand {file_name}\n{text}\n```"),
+                        value: format!("```babbelaar\n// In bestand {file_name}\n{text}\nreferentie is op {range:#?}\n```"),
                     }),
                     range: Some(self.converter(&source_code).convert_file_range(range)),
                 });

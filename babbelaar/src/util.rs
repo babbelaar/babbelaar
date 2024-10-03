@@ -12,6 +12,10 @@ pub struct FileLocation {
     file_id: FileId,
     offset: usize,
     line: usize,
+
+    // Currently, the `column` is actually the code point index into the line, which makes it
+    // effectively UTF-32. This is maybe good, but maybe awful because the `offset` is UTF-8,
+    // and the LSP engine expects UTF-16.
     column: usize,
 }
 

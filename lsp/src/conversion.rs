@@ -56,21 +56,30 @@ impl Converter {
             }
 
             TextEncoding::Utf16 => {
-                let Some(line) = self.source_code.lines().nth(location.line()) else {
-                    panic!("Illegal line {}, we have {} lines!", location.line(), self.source_code.lines().count());
+                let line = match self.source_code.lines().nth(location.line()) {
+                    Some(line) => line,
+
+                    None => {
+                        let line_count = self.source_code.lines().count();
+                        if location.line() == line_count {
+                            // we always have an empty trailing line
+                            ""
+                        } else {
+                            panic!("Illegal line {}, we have {line_count} lines!", location.line());
+                        }
+                    }
                 };
 
-                let line = if location.column() == line.len() {
-                    line
-                } else if location.column() < line.len() {
-                    &line[..location.column()]
-                } else {
-                    panic!("Illegal line position! Line {} len={} while column={}", location.line(), line.len(), location.column());
-                };
+                // TODO: improve this (see comment at `FileLocation` in util.rs`)
+                // This basically converts the *UTF-32 FileLocation::column()* to UTF-16.
+                let utf16_column: usize = line.chars()
+                    .take(location.column())
+                    .map(|ch| ch.len_utf16())
+                    .sum();
 
                 Position {
                     line: location.line() as _,
-                    character: line.encode_utf16().count() as _,
+                    character: utf16_column as _,
                 }
             }
         }
