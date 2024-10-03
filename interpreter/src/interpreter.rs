@@ -292,7 +292,7 @@ impl<D> Interpreter<D>
         let values = values.borrow().clone();
 
         for x in values {
-            self.scope.variables.insert(BabString::clone(&statement.iterator_name), x);
+            self.scope.variables.insert(BabString::clone(&statement.iterator_name), x.actual_value().into_owned());
 
             for statement in &statement.body {
                 if let StatementResult::Return(value) = self.execute_statement(statement) {

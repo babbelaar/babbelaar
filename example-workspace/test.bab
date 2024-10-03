@@ -18,7 +18,6 @@ structuur Lijst<T> {
 
     werkwijze bevat(item: T) -> bool {
         volg bestaandItem in dit.inhoud {
-            schrijf(€"{item}=={bestaandItem} => {bestaandItem == item}");
             als bestaandItem == item {
                 bekeer waar;
             }

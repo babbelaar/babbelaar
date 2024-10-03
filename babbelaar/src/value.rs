@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{cell::RefCell, cmp::Ordering, collections::HashMap, fmt::{Display, Write}, hash::{DefaultHasher, Hash, Hasher}, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, cmp::Ordering, collections::HashMap, fmt::{Display, Write}, hash::{DefaultHasher, Hash, Hasher}, rc::Rc};
 
 use crate::{BabString, BuiltinMethodReference, BuiltinType, Comparison, FunctionStatement, Structure};
 
@@ -80,11 +80,24 @@ impl Value {
             Self::Object { structure, .. } => structure.into(),
         }
     }
+
+    #[must_use]
+    pub fn actual_value(&self) -> Cow<'_, Value> {
+        match self {
+            Self::ArrayElementReference { array, index } => {
+                Cow::Owned(array.borrow()[*index].clone())
+            }
+            _ => Cow::Borrowed(self),
+        }
+    }
 }
 
 impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
+        let this = self.actual_value();
+        let that = other.actual_value();
+
+        match (this.as_ref(), that.as_ref()) {
             (Self::Null, Self::Null) => Some(Ordering::Equal),
             (Self::Bool(this), Self::Bool(that)) => Some(this.cmp(that)),
             (Self::Integer(this), Self::Integer(that)) => Some(this.cmp(that)),
