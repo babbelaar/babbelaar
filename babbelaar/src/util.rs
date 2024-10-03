@@ -28,16 +28,19 @@ impl FileLocation {
         }
     }
 
+    /// Zero based byte index
     #[must_use]
     pub const fn offset(&self) -> usize {
         self.offset
     }
 
+    /// Zero-based line number
     #[must_use]
     pub const fn line(&self) -> usize {
         self.line
     }
 
+    /// Zero-based column number
     #[must_use]
     pub const fn column(&self) -> usize {
         self.column

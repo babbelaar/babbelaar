@@ -21,7 +21,6 @@ use tower_lsp::lsp_types::Uri as Url;
 
 use crate::actions::CodeActionsAnalysisContext;
 use crate::actions::CodeActionsAnalyzable;
-use crate::conversion::StrExtension;
 use crate::convert_command;
 use crate::hints::InlayHintsEngine;
 use crate::BabbelaarContext;
@@ -70,6 +69,10 @@ impl Backend {
     pub fn converter(&self, source_code: &SourceCode) -> Converter {
         let encoding = self.get_position_encoding();
         Converter::new(source_code.clone(), encoding)
+    }
+
+    async fn converter_for(&self, file_id: FileId) -> Converter {
+        self.converter(&self.context.source_code_of(file_id).await)
     }
 
     pub async fn find_tokens_at<F, R>(&self, params: &TextDocumentPositionParams, mut f: F) -> Result<Option<R>>
@@ -331,12 +334,14 @@ impl Backend {
     }
 
     pub async fn collect_signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
-        let caret_line = params.text_document_position_params.position.line as usize;
-        let caret_column = params.text_document_position_params.position.character as usize;
-
         let analyzer = self.with_semantics(&params.text_document_position_params.text_document, |a, _| Ok(Arc::clone(&a))).await?;
 
-        self.lexed_document(&params.text_document_position_params.text_document, |tokens, _| {
+        self.lexed_document(&params.text_document_position_params.text_document, |tokens, source_code| {
+            let converter = self.converter(source_code);
+            let location = converter.convert_location(params.text_document_position_params.position);
+            let caret_line = location.line();
+            let caret_column = location.column();
+
             let mut parser = Parser::new(params.text_document_position_params.text_document.uri.to_path()?, &tokens);
             info!("Caret is @ {caret_line}:{caret_column}");
             loop {
@@ -731,8 +736,7 @@ impl Backend {
     pub async fn document_highlight(&self, params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
         let res = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
             let converter = self.converter(source_code);
-            let pos = params.text_document_position_params.position;
-            let location = FileLocation::new(source_code.file_id(), 0, pos.line as _, pos.character as _);
+            let location = converter.convert_location(params.text_document_position_params.position);
 
             let Some((_, reference)) = analyzer.find_reference_at(location) else {
                 return Ok(Some(Vec::new()));
@@ -742,14 +746,19 @@ impl Backend {
                 return Ok(Some(Vec::new()));
             };
 
-            let mut highlights = vec![
-                DocumentHighlight {
+            let mut highlights = Vec::new();
+            if reference.declaration_range.file_id() == source_code.file_id() {
+                highlights.push(DocumentHighlight {
                     range: converter.convert_file_range(reference.declaration_range),
                     kind: None,
-                }
-            ];
+                });
+            }
 
             for reference in references {
+                if reference.file_id() != source_code.file_id() {
+                    continue;
+                }
+
                 highlights.push(DocumentHighlight {
                     range: converter.convert_file_range(reference),
                     kind: None,
@@ -810,7 +819,7 @@ impl Backend {
         if hover.is_none() {
             let (reference, source_code) = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
                 let pos = params.text_document_position_params.position;
-                let location = source_code.canonicalize_position(source_code.file_id(), pos);
+                let location = self.converter(source_code).convert_location(pos);
                 Ok((analyzer.find_declaration_range_at(location), source_code.clone()))
             }).await?;
 
@@ -842,14 +851,13 @@ impl Backend {
     pub async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
         let (reference, source_code) = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
             let pos = params.text_document_position_params.position;
-            let location = source_code.canonicalize_position(source_code.file_id(), pos);
+            let location = self.converter(source_code).convert_location(pos);
             Ok((analyzer.find_declaration_range_at(location), source_code.clone()))
         }).await?;
 
         Ok(match reference {
             Some((origin_range, reference)) => {
-                let converter = self.converter(&source_code);
-                let target_range = converter.convert_file_range(reference.declaration_range);
+                let target_range = self.converter_for(reference.declaration_range.file_id()).await.convert_file_range(reference.declaration_range);
 
                 let file_id = reference.declaration_range.file_id();
                 if file_id == FileId::INTERNAL {
@@ -864,7 +872,7 @@ impl Backend {
 
                 Some(GotoDefinitionResponse::Link(vec![
                     LocationLink {
-                        origin_selection_range: Some(converter.convert_file_range(origin_range)),
+                        origin_selection_range: Some(self.converter(&source_code).convert_file_range(origin_range)),
                         target_uri,
                         target_range,
                         target_selection_range: target_range,
@@ -1013,19 +1021,9 @@ impl Backend {
         let analyzer = self.context.semantic_analysis().await;
 
         let items = self.with_syntax(&params.text_document, |tree, source_code| {
-            let start = FileLocation::new(
-                source_code.file_id(),
-                usize::MAX,
-                params.range.start.line as _,
-                params.range.start.character as _,
-            );
-
-            let end = FileLocation::new(
-                source_code.file_id(),
-                usize::MAX,
-                params.range.end.line as _,
-                params.range.end.character as _,
-            );
+            let converter = self.converter(source_code);
+            let start = converter.convert_location(params.range.start);
+            let end = converter.convert_location(params.range.end);
 
             let mut ctx = CodeActionsAnalysisContext {
                 semantics: &analyzer,
@@ -1070,7 +1068,8 @@ impl Backend {
         let converters = self.all_converters().await;
 
         self.with_semantics(&params.text_document_position.text_document, |analyzer, source_code| {
-            let location = FileLocation::new(source_code.file_id(), 0, pos.line as _, pos.character as _);
+            let converter = self.converter(source_code);
+            let location = converter.convert_location(pos);
 
             let Some((declaration_range, _)) = analyzer.find_declaration_range_at(location) else {
                 return Ok(None);

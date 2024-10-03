@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use babbelaar::{BabbelaarCommand, FileId, FileLocation, FileRange, SourceCode, Token};
+use babbelaar::{BabbelaarCommand, FileLocation, FileRange, SourceCode, Token};
 use tower_lsp::lsp_types::{Command, Location, Position, Range, Uri as Url};
 
 use crate::{BabbelaarLspError, BabbelaarLspResult};
@@ -45,6 +45,8 @@ impl Converter {
 
     #[must_use]
     pub fn convert_position(&self, location: FileLocation) -> Position {
+        debug_assert_eq!(location.file_id(), self.source_code.file_id(), "Incompatible file IDs!");
+
         match self.encoding {
             TextEncoding::Utf8 => {
                 Position {
@@ -54,8 +56,17 @@ impl Converter {
             }
 
             TextEncoding::Utf16 => {
-                let line = self.source_code.lines().nth(location.line() as _).unwrap();
-                let line = &line[..location.column() as _];
+                let Some(line) = self.source_code.lines().nth(location.line()) else {
+                    panic!("Illegal line {}, we have {} lines!", location.line(), self.source_code.lines().count());
+                };
+
+                let line = if location.column() == line.len() {
+                    line
+                } else if location.column() < line.len() {
+                    &line[..location.column()]
+                } else {
+                    panic!("Illegal line position! Line {} len={} while column={}", location.line(), line.len(), location.column());
+                };
 
                 Position {
                     line: location.line() as _,
@@ -63,6 +74,37 @@ impl Converter {
                 }
             }
         }
+    }
+
+    pub fn convert_location(&self, position: Position) -> FileLocation {
+        let offset = 0; // TODO: it would be nice to encode this :)
+        let line = position.line as usize;
+        let column = position.character as usize;
+
+        let column = match self.encoding {
+            TextEncoding::Utf8 => column,
+            TextEncoding::Utf16 => {
+                let Some(line) = self.source_code.lines().nth(line) else {
+                    panic!("Illegal position given, line index={line} while file has {} line(s)", self.source_code.lines().count());
+                };
+
+                let mut utf8_column = 0;
+                let mut utf16_column = 0;
+                for character in line.chars() {
+                    if utf16_column == column {
+                        break;
+                    }
+
+                    utf16_column += character.len_utf16();
+                    utf8_column += character.len_utf8();
+                }
+
+                debug_assert!(utf16_column == column);
+                utf8_column
+            }
+        };
+
+        FileLocation::new(self.source_code.file_id(), offset, line, column)
     }
 }
 
@@ -111,25 +153,5 @@ impl UrlExtension for Url {
         };
 
         url.to_file_path().map_err(|()| BabbelaarLspError::UrlNotFilePath)
-    }
-}
-
-pub trait StrExtension {
-    #[must_use]
-    fn canonicalize_position(&self, file_id: FileId, position: Position) -> FileLocation;
-}
-
-impl StrExtension for str {
-    fn canonicalize_position(&self, file_id: FileId, position: Position) -> FileLocation {
-        let line = (position.line as usize).saturating_sub(1);
-        let column = position.character as usize;
-
-        let line_offset = self.char_indices()
-            .filter(|(_, c)| *c == '\n')
-            .map(|(offset, _)| offset + 1)
-            .nth(line)
-            .unwrap_or(usize::MAX);
-
-        FileLocation::new(file_id, line_offset.saturating_add(column), line, column)
     }
 }
