@@ -185,8 +185,13 @@ impl InlayHintsEngine {
     }
 
     fn visit_for_statement(&mut self, for_statement: &ForStatement) {
-        self.visit_expression(&for_statement.range.start);
-        self.visit_expression(&for_statement.range.end);
+        match for_statement.iterable.value() {
+            ForIterableKind::Expression(expression) => self.visit_expression(&expression),
+            ForIterableKind::Range(range) => {
+                self.visit_expression(&range.start);
+                self.visit_expression(&range.end);
+            }
+        }
 
         for statement in &for_statement.body {
             self.visit_statement(statement);

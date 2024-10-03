@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, BabString, Expression, Field, FileRange, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, BabString, Expression, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -106,8 +106,15 @@ impl Symbolizer {
     }
 
     fn add_statement_for(&mut self, statement: &ForStatement) {
-        self.add_expression(&statement.range.start);
-        self.add_expression(&statement.range.end);
+        match statement.iterable.value() {
+            ForIterableKind::Expression(expr) => {
+                self.add_expression(&expr);
+            }
+            ForIterableKind::Range(range) => {
+                self.add_expression(&range.start);
+                self.add_expression(&range.end);
+            }
+        }
 
         for statement in &statement.body {
             self.add_statement(statement);

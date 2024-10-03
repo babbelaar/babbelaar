@@ -277,11 +277,41 @@ impl<D> Interpreter<D>
     }
 
     fn execute_for_statement(&mut self, statement: &ForStatement) -> StatementResult {
-        let Value::Integer(start) = self.execute_expression(&statement.range.start) else {
+        match statement.iterable.value() {
+            ForIterableKind::Expression(expression) => self.execute_iterating_for_statement(statement, expression),
+            ForIterableKind::Range(range) => self.execute_ranged_for_statement(statement, range),
+        }
+    }
+
+    fn execute_iterating_for_statement(&mut self, statement: &ForStatement, expression: &Ranged<Expression>) -> StatementResult {
+        let Value::Array { values, .. } = self.execute_expression(expression) else {
+            panic!("Invalid iterable");
+        };
+
+        self.scope = std::mem::take(&mut self.scope).push();
+        let values = values.borrow().clone();
+
+        for x in values {
+            self.scope.variables.insert(BabString::clone(&statement.iterator_name), x);
+
+            for statement in &statement.body {
+                if let StatementResult::Return(value) = self.execute_statement(statement) {
+                    return StatementResult::Return(value);
+                }
+            }
+        }
+
+        self.scope = std::mem::take(&mut self.scope).pop();
+
+        StatementResult::Continue
+    }
+
+    fn execute_ranged_for_statement(&mut self, statement: &ForStatement, range: &RangeExpression) -> StatementResult {
+        let Value::Integer(start) = self.execute_expression(&range.start) else {
             panic!("Invalid start");
         };
 
-        let Value::Integer(end) = self.execute_expression(&statement.range.end) else {
+        let Value::Integer(end) = self.execute_expression(&range.end) else {
             panic!("Invalid end");
         };
 

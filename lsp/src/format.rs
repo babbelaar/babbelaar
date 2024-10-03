@@ -6,7 +6,7 @@
 
 use std::fmt::Write;
 
-use babbelaar::{AssignStatement, BiExpression, BuiltinType, Expression, Field, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, BiExpression, BuiltinType, Expression, Field, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
 
 pub struct Formatter {
     buffer: String,
@@ -259,11 +259,18 @@ impl Format for ForStatement {
     fn format(&self, f: &mut Formatter) {
         f.write_str("volg ");
         f.write_str(self.iterator_name.value());
-        f.write_str(" in reeks(");
-        self.range.start.value().format(f);
-        f.write_str(", ");
-        self.range.end.value().format(f);
-        f.write_char(')');
+        f.write_str(" in ");
+
+        match self.iterable.value() {
+            ForIterableKind::Expression(expression) => expression.value().format(f),
+            ForIterableKind::Range(range) => {
+                f.write_str("reeks(");
+                range.start.value().format(f);
+                f.write_str(", ");
+                range.end.value().format(f);
+                f.write_char(')');
+            }
+        }
 
         f.with_body_statements(&self.body);
     }

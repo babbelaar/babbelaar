@@ -7,7 +7,7 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, AssignStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, RangeExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeQualifier, TypeSpecifier};
+use crate::{statement::VariableStatement, AssignStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, RangeExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeQualifier, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
@@ -262,7 +262,17 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_for_statement(&mut self, statement: &ForStatement) {
-        let ty = SemanticType::Builtin(BuiltinType::G32);
+        let ty = match statement.iterable.value() {
+            ForIterableKind::Expression(expression) => {
+                let ty = self.analyze_expression(expression).ty;
+                self.analyze_for_statement_iterable_expression(expression, ty)
+            }
+
+            ForIterableKind::Range(range) => {
+                self.analyze_range(range);
+                SemanticType::Builtin(BuiltinType::G32)
+            }
+        };
 
         if let Some(tracker) = &mut self.context.declaration_tracker {
             tracker.push(SemanticReference {
@@ -280,11 +290,25 @@ impl SemanticAnalyzer {
             statement.iterator_name.range(),
         ));
 
-        self.analyze_range(&statement.range);
-
         self.analyze_statements(&statement.body);
 
         self.context.pop_scope();
+    }
+
+    fn analyze_for_statement_iterable_expression(&mut self, expression: &Ranged<Expression>, ty: SemanticType) -> SemanticType {
+        match ty {
+            SemanticType::Array(item_type) => {
+                item_type.as_ref().clone()
+            }
+
+            _ => {
+                self.diagnostics.push(
+                    SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::ExpressionNotIterable)
+                        .with_related(SemanticRelatedInformation::new(expression.range(), SemanticRelatedMessage::ExpressionIsOfType { ty: ty.clone() }))
+                );
+                ty
+            }
+        }
     }
 
     fn analyze_range(&mut self, range: &RangeExpression) {
@@ -1893,6 +1917,9 @@ pub enum SemanticRelatedMessage {
     #[error("`{name}` is hier voor het eerst geïnitialiseerd")]
     DuplicateFieldFirstUse { name: BabString },
 
+    #[error("expressie is van het type `{ty}`")]
+    ExpressionIsOfType { ty: SemanticType },
+
     #[error("veld `{name}` is hier gedefinieerd")]
     FieldDefinedHere { name: BabString },
 
@@ -2088,6 +2115,9 @@ pub enum SemanticDiagnosticKind {
 
     #[error("{name} moet van het type `g32` zijn, maar dit is een `{ty}`")]
     RangeExpectsInteger { name: &'static str, ty: SemanticType },
+
+    #[error("Kan niet itereren over deze expressie, gebruik een opeenvolging of `reeks`.")]
+    ExpressionNotIterable,
 }
 
 impl SemanticDiagnosticKind {

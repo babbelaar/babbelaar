@@ -44,8 +44,14 @@ pub struct ForStatement {
     pub file_range: FileRange,
     pub keyword: FileRange,
     pub iterator_name: Ranged<BabString>,
-    pub range: RangeExpression,
+    pub iterable: Ranged<ForIterableKind>,
     pub body: Vec<Statement>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ForIterableKind {
+    Range(RangeExpression),
+    Expression(Box<Ranged<Expression>>),
 }
 
 #[derive(Clone, Debug)]

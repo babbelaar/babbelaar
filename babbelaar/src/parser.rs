@@ -7,7 +7,7 @@ use log::error;
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, BabString, BiExpression, BiOperator, Builtin, BuiltinType, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeQualifier, TypeSpecifier, VariableStatement
+    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, BabString, BiExpression, BiOperator, Builtin, BuiltinType, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeQualifier, TypeSpecifier, VariableStatement
 };
 
 pub type ParseResult<T> = Result<T, ParseError>;
@@ -721,7 +721,15 @@ impl<'tokens> Parser<'tokens> {
             self.emit_diagnostic(ParseDiagnostic::ForStatementExpectedInKeyword { token: in_keyword, iterator_name: iterator_name.clone() });
         }
 
-        let range = self.parse_range()?;
+        let iterable = if self.peek_keyword() == Some(Keyword::Reeks) {
+            let iterable_start = self.peek_token()?.begin;
+            let range = self.parse_range()?;
+            Ranged::new(FileRange::new(iterable_start, self.previous_end()), ForIterableKind::Range(range))
+        } else {
+            let expression = self.parse_expression()?;
+            let range = expression.range();
+            Ranged::new(range, ForIterableKind::Expression(Box::new(expression)))
+        };
 
         self.expect_left_curly_bracket("reeks van volg-lus")?;
 
@@ -740,7 +748,7 @@ impl<'tokens> Parser<'tokens> {
 
         let file_range = FileRange::new(keyword.start(), self.previous_end());
 
-        Ok(ForStatement { keyword, iterator_name, range, body, file_range })
+        Ok(ForStatement { keyword, iterator_name, iterable, body, file_range })
     }
 
     fn parse_if_statement(&mut self) -> Result<IfStatement, ParseError> {
@@ -1077,6 +1085,14 @@ impl<'tokens> Parser<'tokens> {
         let Ok(token) = self.peek_token() else { return None };
         match token.kind {
             TokenKind::Punctuator(punctuator) => Some(punctuator),
+            _ => None,
+        }
+    }
+
+    fn peek_keyword(&self) -> Option<Keyword> {
+        let Ok(token) = self.peek_token() else { return None };
+        match token.kind {
+            TokenKind::Keyword(keyword) => Some(keyword),
             _ => None,
         }
     }
