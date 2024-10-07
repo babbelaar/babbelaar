@@ -7,7 +7,7 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, AssignStatement, Attribute, AttributeList, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, RangeExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeQualifier, TypeSpecifier};
+use crate::*;
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
@@ -122,6 +122,41 @@ impl SemanticAnalyzer {
         value
     }
 
+    fn analyze_extension_statement(&mut self, extension: &ExtensionStatement, range: FileRange) {
+        let ty = self.resolve_type_specifier(&extension.type_specifier);
+
+        if !ty.can_be_extended() {
+            self.diagnostics.push(SemanticDiagnostic::new(extension.type_specifier.range(), SemanticDiagnosticKind::TypeCannotBeExtended { name: extension.type_specifier.fully_qualified_name() }));
+            return;
+        }
+
+        let mut ext = SemanticExtension {
+            ty,
+            methods: HashMap::new(),
+        };
+
+        self.context.push_extension_scope(extension, range);
+        for method in &extension.methods {
+            let name = method.function.name.value();
+            if let Some(existing) = ext.methods.get(name) {
+                let name = name.clone();
+                self.diagnostics.push(
+                    SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
+                        .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
+                        .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
+                );
+                continue;
+            }
+
+            let method = self.create_semantic_method(method);
+            ext.methods.insert(name.clone(), method);
+        }
+        self.context.pop_scope();
+
+        let scope = self.context.current();
+        scope.extensions.push(ext);
+    }
+
     fn analyze_function(&mut self, function: &FunctionStatement, this: Option<SemanticType>) {
         let is_definition = function.body.is_some();
 
@@ -228,6 +263,9 @@ impl SemanticAnalyzer {
 
                     self.diagnostics.push(diag);
                 }
+            }
+            StatementKind::Extension(extension) => {
+                self.analyze_extension_statement(extension, statement.range);
             }
             StatementKind::Assignment(assign) => {
                 let source_type = self.analyze_expression(&assign.source).ty;
@@ -495,28 +533,7 @@ impl SemanticAnalyzer {
             has_default_value: x.default_value.is_some(),
         }).collect();
 
-        let methods = structure.methods.iter().map(|x| SemanticMethod {
-            function: SemanticFunction {
-                name: x.function.name.clone(),
-                parameters: x.function.parameters.iter()
-                    .map(|param| {
-                        let ty = self.resolve_type(&param.ty);
-                        SemanticParameter {
-                            name: param.name.clone(),
-                            ty: Ranged::new(param.ty.range(), ty),
-                        }
-                    })
-                    .collect(),
-                parameters_right_paren_range: x.function.parameters_right_paren_range,
-                extern_function: None,
-                return_type: Box::new(
-                    match &x.function.return_type {
-                        Some(ty) => self.resolve_type(ty),
-                        None => SemanticType::Builtin(BuiltinType::Null),
-                    }
-                ),
-            }
-        }).collect();
+        let methods = structure.methods.iter().map(|x| self.create_semantic_method(x)).collect();
 
         let semantic_structure = Arc::new(SemanticStructure {
             attributes: statement.attributes.clone(),
@@ -571,6 +588,43 @@ impl SemanticAnalyzer {
         }
 
         self.context.pop_scope();
+    }
+
+    #[must_use]
+    fn create_semantic_method(&mut self, method: &Method) -> SemanticMethod {
+        SemanticMethod {
+            function: self.create_semantic_function(&method.function),
+        }
+    }
+
+    #[must_use]
+    fn create_semantic_function(&mut self, function: &FunctionStatement) -> SemanticFunction {
+        let parameters = function.parameters.iter()
+            .map(|param| self.create_semantic_parameter(param))
+            .collect();
+
+        let return_type = Box::new(
+            match &function.return_type {
+                Some(ty) => self.resolve_type(ty),
+                None => SemanticType::Builtin(BuiltinType::Null),
+            }
+        );
+
+        SemanticFunction {
+            name: function.name.clone(),
+            parameters,
+            parameters_right_paren_range: function.parameters_right_paren_range,
+            extern_function: None,
+            return_type,
+        }
+    }
+
+    fn create_semantic_parameter(&mut self, parameter: &Parameter) -> SemanticParameter {
+        let ty = self.resolve_type(&parameter.ty);
+        SemanticParameter {
+            name: parameter.name.clone(),
+            ty: Ranged::new(parameter.ty.range(), ty),
+        }
     }
 
     fn analyze_variable_statement(&mut self, statement: &VariableStatement, stmt: &Statement) {
@@ -1108,12 +1162,7 @@ impl SemanticAnalyzer {
 
     #[must_use]
     pub fn resolve_type(&mut self, ty: &Ranged<Type>) -> SemanticType {
-        let mut semantic_type = match ty.specifier.value() {
-            TypeSpecifier::BuiltIn(ty) => SemanticType::Builtin(*ty.value()),
-            TypeSpecifier::Custom { name, type_parameters } => {
-                self.resolve_type_by_name(name, &type_parameters, None)
-            }
-        };
+        let mut semantic_type = self.resolve_type_specifier(&ty.specifier);
 
         for qual in &ty.qualifiers {
             semantic_type = match qual.value() {
@@ -1123,6 +1172,16 @@ impl SemanticAnalyzer {
         }
 
         semantic_type
+    }
+
+    #[must_use]
+    fn resolve_type_specifier(&mut self, specifier: &TypeSpecifier) -> SemanticType {
+        match specifier {
+            TypeSpecifier::BuiltIn(ty) => SemanticType::Builtin(*ty.value()),
+            TypeSpecifier::Custom { name, type_parameters } => {
+                self.resolve_type_by_name(name, &type_parameters, None)
+            }
+        }
     }
 
     #[must_use]
@@ -1986,6 +2045,9 @@ pub enum SemanticRelatedMessage {
     #[error("`{name}` is hier voor het eerst geïnitialiseerd")]
     DuplicateFieldFirstUse { name: BabString },
 
+    #[error("werkwijze `{name}` is hier voor het eerst aangemaakt")]
+    DuplicateMethodFirstDefinedHere { name: BabString },
+
     #[error("expressie is van het type `{ty}`")]
     ExpressionIsOfType { ty: SemanticType },
 
@@ -2194,6 +2256,12 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Attribuut `@{name}` kan alleen gebruikt worden op functies die `@uitheems` zijn.")]
     AttributeCanOnlyBeUsedOnExternFunctions { name: &'static str },
+
+    #[error("Type `{name}` kan niet uitgebreid worden.")]
+    TypeCannotBeExtended { name: BabString },
+
+    #[error("Werkwijzenaam `{name}` bestaat al in structuur `{structure}`")]
+    DuplicateMethodNameInExtension { name: BabString, structure: BabString },
 }
 
 impl SemanticDiagnosticKind {
@@ -2265,6 +2333,7 @@ impl SemanticContext {
             kind: SemanticScopeKind::Function {
                 right_parameter_range: function.parameters_right_paren_range,
             },
+            extensions: Vec::new(),
         });
         self.scope.last_mut().expect("we just pushed a scope")
     }
@@ -2280,6 +2349,7 @@ impl SemanticContext {
             this,
             return_type,
             kind: SemanticScopeKind::Default,
+            extensions: Vec::new(),
         });
         self.scope.last_mut().expect("we just pushed a scope")
     }
@@ -2306,6 +2376,24 @@ impl SemanticContext {
             this,
             return_type,
             kind: SemanticScopeKind::Structure,
+            extensions: Vec::new(),
+        });
+    }
+
+    fn push_extension_scope(&mut self, extension: &ExtensionStatement, range: FileRange) {
+        _ = extension;
+
+        let this = self.scope.last().and_then(|x| x.this.clone());
+        let return_type = self.scope.last().and_then(|x| x.return_type.clone());
+        self.scope.push(SemanticScope {
+            range,
+            locals: HashMap::new(),
+            structures: HashMap::new(),
+            generic_types: Default::default(), // TODO: this should be implemented, right?
+            this,
+            return_type,
+            kind: SemanticScopeKind::Structure,
+            extensions: Vec::new(),
         });
     }
 
@@ -2409,6 +2497,7 @@ pub struct SemanticScope {
     pub this: Option<SemanticType>,
     pub return_type: Option<Ranged<SemanticType>>,
     pub kind: SemanticScopeKind,
+    pub extensions: Vec<SemanticExtension>,
 }
 
 impl SemanticScope {
@@ -2424,6 +2513,7 @@ impl SemanticScope {
             return_type: None,
             generic_types: HashMap::new(),
             kind: SemanticScopeKind::Default,
+            extensions: Vec::new(),
         };
 
         for func in Builtin::FUNCTIONS {
@@ -2445,6 +2535,12 @@ impl SemanticScope {
             _ => None,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct SemanticExtension {
+    pub ty: SemanticType,
+    pub methods: HashMap<BabString, SemanticMethod>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -2840,6 +2936,11 @@ impl SemanticType {
         }
 
         parameters[generic_index].clone()
+    }
+
+    #[must_use]
+    fn can_be_extended(&self) -> bool {
+        !self.is_null()
     }
 }
 
