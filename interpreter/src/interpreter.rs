@@ -67,6 +67,11 @@ impl<D> Interpreter<D>
                 StatementResult::Continue
             }
 
+            StatementKind::Extension(ext) => {
+                _ = ext;
+                todo!()
+            }
+
             StatementKind::For(statement) => {
                 self.execute_for_statement(statement)
             }

@@ -12,6 +12,15 @@ pub struct Parameter {
     pub ty: Ranged<Type>,
 }
 
+/// A type declarator is a name with optional generic arguments, that is used for
+/// ***defining*** a type. [`Type`]/[`TypeSpecifier`] can be used for specifying/using
+/// an existing type.
+#[derive(Debug, Clone)]
+pub struct TypeDeclarator {
+    pub name: Ranged<BabString>,
+    pub generic_types: Vec<Ranged<BabString>>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Type {
     pub specifier: Ranged<TypeSpecifier>,

@@ -6,9 +6,7 @@ use std::path::PathBuf;
 use log::error;
 use strum::AsRefStr;
 
-use crate::{
-    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, AttributeList, BabString, BiExpression, BiOperator, Builtin, BuiltinType, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeQualifier, TypeSpecifier, VariableStatement
-};
+use crate::*;
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
@@ -106,6 +104,11 @@ impl<'tokens> Parser<'tokens> {
                 StatementKind::Structure(self.parse_structure_statement()?)
             }
 
+            TokenKind::Keyword(Keyword::Uitbreiding) => {
+                _ = self.consume_token().ok();
+                StatementKind::Extension(self.parse_extension_statement()?)
+            }
+
             TokenKind::Keyword(Keyword::Volg) => {
                 StatementKind::For(self.parse_for_statement()?)
             }
@@ -158,6 +161,61 @@ impl<'tokens> Parser<'tokens> {
             destination,
             source,
         }))
+    }
+
+    fn parse_extension_statement(&mut self) -> ParseResult<ExtensionStatement> {
+        let type_declarator = self.parse_type_declarator()?;
+
+        self.expect_left_curly_bracket("structuurnaam")?;
+
+        let mut extension = ExtensionStatement {
+            type_declarator,
+            methods: Vec::new(),
+        };
+
+        loop {
+            if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
+                _ = self.consume_token()?;
+                break;
+            }
+
+            let peeked_token = self.peek_token()?;
+            match peeked_token.kind {
+                TokenKind::Keyword(Keyword::Veld) => {
+                    _ = self.consume_token();
+
+                }
+
+                TokenKind::Keyword(Keyword::Werkwijze) => {
+                    let start = self.consume_token()?.begin;
+
+                    let function = self.parse_function(FunctionParsingContext::Method)?;
+
+                    let range = FileRange::new(start, self.token_end);
+
+                    extension.methods.push(Method {
+                        range,
+                        function,
+                    });
+                }
+
+                TokenKind::Identifier(..) => {
+                    let token = self.consume_token()?;
+                    self.emit_diagnostic(ParseDiagnostic::ExpectedStructureMethodPrefixWerkwijze { token });
+                }
+
+                _ => {
+                    let token = self.consume_token()?;
+                    self.emit_diagnostic(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token });
+                }
+            }
+
+            if self.peek_punctuator() == Some(Punctuator::Comma) {
+                _ = self.consume_token()?;
+            }
+        }
+
+        Ok(extension)
     }
 
     pub fn parse_function(&mut self, ctx: FunctionParsingContext) -> Result<FunctionStatement, ParseError> {
@@ -455,6 +513,26 @@ impl<'tokens> Parser<'tokens> {
             name,
             ty,
             default_value,
+        })
+    }
+
+    #[must_use]
+    fn parse_type_declarator(&mut self) -> ParseResult<TypeDeclarator> {
+        let name_token = self.consume_token()?;
+
+        let name = Ranged::new(name_token.range(), match name_token.kind {
+            TokenKind::Identifier(ident) => ident,
+            _ => {
+                self.emit_diagnostic(ParseDiagnostic::ExpectedNameOfStructuur { token: name_token });
+                BabString::empty()
+            }
+        });
+
+        let generic_types = self.parse_type_generic_parameters_declarations();
+
+        Ok(TypeDeclarator {
+            name,
+            generic_types,
         })
     }
 
@@ -1489,6 +1567,9 @@ pub enum ParseDiagnostic {
     #[error("Na een structuurlid hoort een komma `;`")]
     ExpectedCommaAfterStructureMember { token: Token, location: FileLocation },
 
+    #[error("Onjuiste uitbreidingswerkwijze, deze hoort te starten met `werkwijze`")]
+    ExpectedExtensionMethodPrefixWerkwijze { token: Token },
+
     #[error("Generieke typenaam verwacht, bijvoorbeeld `T`")]
     ExpectedGenericTypeName { token: Token },
 
@@ -1592,6 +1673,7 @@ impl ParseDiagnostic {
             Self::ExpectedComma { token, .. } => token,
             Self::ExpectedCommaAfterStructureMember { token, .. } => token,
             Self::ExpectedCommaOrGreaterThanInGenericTypePack { token, .. } => token,
+            Self::ExpectedExtensionMethodPrefixWerkwijze { token, .. } => token,
             Self::ExpectedGenericTypeName { token, .. } => token,
             Self::ExpectedGreaterThanForParameterPack { token, .. } => token,
             Self::ExpectedStructureMethodPrefixWerkwijze { token } => token,
