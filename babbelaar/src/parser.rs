@@ -76,14 +76,7 @@ impl<'tokens> Parser<'tokens> {
 
     pub fn parse_statement(&mut self) -> Result<Statement, ParseError> {
         let start = self.peek_token()?.begin;
-        let mut attributes = Vec::new();
-
-        while let Some(Punctuator::AtSign) = self.peek_punctuator() {
-            match self.parse_attribute() {
-                Ok(attr) => attributes.push(attr),
-                Err(e) => self.handle_error(e),
-            }
-        }
+        let attributes = self.parse_attribute_list();
 
         let first_token = self.peek_token()?;
         let kind = match first_token.kind {
@@ -480,6 +473,8 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_parameter(&mut self) -> Result<Parameter, ParseError> {
+        let attributes = self.parse_attribute_list();
+
         let name = self.parse_parameter_name()?;
 
         let token = self.peek_token()?;
@@ -487,6 +482,7 @@ impl<'tokens> Parser<'tokens> {
             let range = FileRange::new(self.tokens[self.cursor.saturating_sub(2)].end, token.begin);
             self.emit_diagnostic(ParseDiagnostic::ExpectedColon { token: token.clone(), range, context: "parameternaam" });
             return Ok(Parameter {
+                attributes,
                 name,
                 ty: Ranged::new(range, Type {
                     specifier: Ranged::new(range, TypeSpecifier::BuiltIn(Ranged::new(range, BuiltinType::Null))),
@@ -500,6 +496,7 @@ impl<'tokens> Parser<'tokens> {
         let ty = self.parse_type();
 
         Ok(Parameter {
+            attributes,
             name,
             ty,
         })
@@ -1202,6 +1199,19 @@ impl<'tokens> Parser<'tokens> {
         self.previous_range().end()
     }
 
+    fn parse_attribute_list(&mut self) -> Vec<Attribute> {
+        let mut attributes = Vec::new();
+
+        while let Some(Punctuator::AtSign) = self.peek_punctuator() {
+            match self.parse_attribute() {
+                Ok(attr) => attributes.push(attr),
+                Err(e) => self.handle_error(e),
+            }
+        }
+
+        attributes
+    }
+
     fn parse_attribute(&mut self) -> Result<Attribute, ParseError> {
         let at_sign = self.consume_token()?;
 
@@ -1213,10 +1223,15 @@ impl<'tokens> Parser<'tokens> {
             }
         };
 
+        let first_token = self.peek_token()?.range();
+        let mut end = first_token.start();
         let arguments = if let Some(Punctuator::LeftParenthesis) = self.peek_punctuator() {
             _ = self.consume_token();
             match self.parse_attribute_argument_list() {
-                Ok(arguments) => arguments,
+                Ok(arguments) => {
+                    end = self.previous_end();
+                    arguments
+                }
                 Err(e) => {
                     self.handle_error(e);
                     Vec::new()
@@ -1225,6 +1240,8 @@ impl<'tokens> Parser<'tokens> {
         } else {
             Vec::new()
         };
+        let arguments = Ranged::new(FileRange::new(first_token.start(), end), arguments);
+
 
         Ok(Attribute {
             at_range: at_sign.range(),

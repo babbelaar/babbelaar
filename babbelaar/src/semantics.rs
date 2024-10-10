@@ -7,7 +7,7 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, AssignStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, RangeExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeQualifier, TypeSpecifier};
+use crate::{statement::VariableStatement, AssignStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, RangeExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeQualifier, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
@@ -161,6 +161,8 @@ impl SemanticAnalyzer {
                     param.name.range(),
                 ));
             }
+
+            self.analyze_attributes_for_parameter(function, param);
         }
 
         if let Some(ty) = &function.return_type {
@@ -1347,7 +1349,7 @@ impl SemanticAnalyzer {
 
     fn analyze_attributes_for_statement(&mut self, statement: &Statement) {
         for attribute in &statement.attributes {
-            if attribute.name.value() == "uitheems" {
+            if attribute.name.value() == Attribute::NAME_EXTERN {
                 self.analyze_attribute_extern(statement, attribute);
                 continue;
             }
@@ -1356,6 +1358,21 @@ impl SemanticAnalyzer {
                 attribute.name.range(),
                 SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone() },
             ));
+        }
+    }
+
+    fn analyze_attributes_for_parameter(&mut self, function: &FunctionStatement, parameter: &Parameter) {
+        for attribute in &parameter.attributes {
+            match attribute.name.as_str() {
+                _ => {
+                    _ = function;
+
+                    self.diagnostics.push(SemanticDiagnostic::new(
+                        attribute.name.range(),
+                        SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone() },
+                    ));
+                }
+            }
         }
     }
 
@@ -1410,7 +1427,7 @@ impl SemanticAnalyzer {
     fn attribute_extern_evaluate(&mut self, attr: &Attribute) -> Option<SemanticExternFunction> {
         let mut name = None;
 
-        for arg in &attr.arguments {
+        for arg in attr.arguments.value() {
             if arg.name.value() == "naam" {
                 if name.is_none() {
                     name = Some(&arg.value);
@@ -2122,6 +2139,12 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Kan niet itereren over deze expressie, gebruik een opeenvolging of `reeks`.")]
     ExpressionNotIterable,
+
+    #[error("Attribuut `@{name}` verwacht geen argumenten.")]
+    AttributeCannotHaveArguments { name: &'static str },
+
+    #[error("Attribuut `@{name}` kan alleen gebruikt worden op functies die `@uitheems` zijn.")]
+    AttributeCanOnlyBeUsedOnExternFunctions { name: &'static str },
 }
 
 impl SemanticDiagnosticKind {

@@ -832,7 +832,7 @@ impl Backend {
                 hover = Some(Hover {
                     contents: HoverContents::Markup(MarkupContent {
                         kind: MarkupKind::Markdown,
-                        value: format!("```babbelaar\n// In bestand {file_name}\n{text}\nreferentie is op {range:#?}\n```"),
+                        value: format!("```babbelaar\n// In bestand {file_name}\n{text}\n```"),
                     }),
                     range: Some(self.converter(&source_code).convert_file_range(range)),
                 });

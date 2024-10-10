@@ -7,7 +7,11 @@ use crate::{BabString, FileRange, PrimaryExpression, Ranged};
 pub struct Attribute {
     pub at_range: FileRange,
     pub name: Ranged<BabString>,
-    pub arguments: Vec<AttributeArgument>
+    pub arguments: Ranged<Vec<AttributeArgument>>,
+}
+
+impl Attribute {
+    pub const NAME_EXTERN: &'static str = "uitheems";
 }
 
 #[derive(Debug, Clone)]

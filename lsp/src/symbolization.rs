@@ -221,6 +221,8 @@ impl Symbolizer {
     }
 
     fn add_parameter(&mut self, parameter: &Parameter) {
+        self.add_attributes(&parameter.attributes);
+
         self.symbols.insert(LspSymbol {
             name: parameter.name.value().clone(),
             kind: LspTokenType::ParameterName,

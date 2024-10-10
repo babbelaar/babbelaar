@@ -3,10 +3,11 @@
 
 use std::fmt::{Display, Write};
 
-use crate::{BabString, BuiltinType, Ranged};
+use crate::{Attribute, BabString, BuiltinType, Ranged};
 
 #[derive(Debug, Clone)]
 pub struct Parameter {
+    pub attributes: Vec<Attribute>,
     pub name: Ranged<BabString>,
     pub ty: Ranged<Type>,
 }

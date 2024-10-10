@@ -455,7 +455,7 @@ impl<D> Interpreter<D>
 
     fn execute_function(&mut self, func: Arc<InterpreterFunction>, arguments: Vec<Value>, this: Option<Value>) -> Value {
         for attrib in &func.attributes {
-            if attrib.name.value() == "uitheems" {
+            if attrib.name.value() == Attribute::NAME_EXTERN {
                 debug_assert!(this.is_none());
                 return self.ffi.execute(attrib, arguments);
             }

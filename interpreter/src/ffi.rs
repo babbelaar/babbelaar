@@ -46,7 +46,7 @@ impl FFIManager {
     }
 
     fn do_execute(&self, attrib: &Attribute, arguments: Vec<i64>) -> Value {
-        for arg in &attrib.arguments {
+        for arg in attrib.arguments.value() {
             if arg.name.value() == "naam" {
                 let PrimaryExpression::StringLiteral(literal) = arg.value.value() else {
                     error!("Invalid @uitheems `naam`!");
