@@ -1022,7 +1022,7 @@ impl Backend {
     async fn create_code_actions_based_on_semantics(&self, actions: &mut Vec<CodeActionOrCommand>, params: &CodeActionParams) -> Result<()> {
         let analyzer = self.context.semantic_analysis().await;
 
-        let items = self.with_syntax(&params.text_document, |tree, source_code| {
+        let mut items = self.with_syntax(&params.text_document, |tree, source_code| {
             let converter = self.converter(source_code);
             let start = converter.convert_location(params.range.start);
             let end = converter.convert_location(params.range.end);
@@ -1040,6 +1040,14 @@ impl Backend {
             tree.analyze(&mut ctx);
 
             Ok(ctx.items)
+        }).await?;
+
+        self.with_semantics(&params.text_document, |analyzer, source_code| {
+            for diagnostic in analyzer.diagnostics() {
+                self.create_code_actions_by_semantic_diagnostic(diagnostic, analyzer, source_code, &mut items);
+            }
+
+            Ok(())
         }).await?;
 
         for action in items {
@@ -1129,5 +1137,31 @@ impl Backend {
         }
 
         Some(path.to_string())
+    }
+
+    fn create_code_actions_by_semantic_diagnostic(
+        &self,
+        diagnostic: &SemanticDiagnostic,
+        analyzer: &SemanticAnalyzer,
+        source_code: &SourceCode,
+        items: &mut Vec<BabbelaarCodeAction>
+    ) {
+        _ = analyzer;
+        _ = source_code;
+
+        match diagnostic.kind() {
+            SemanticDiagnosticKind::UnknownAttribute { name, range } => {
+                items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::RemoveAttribute { name: name.clone() },
+                        [
+                            FileEdit::new(*range, "")
+                        ].to_vec()
+                    )
+                );
+            }
+
+            _ => (),
+        }
     }
 }
