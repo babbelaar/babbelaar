@@ -123,6 +123,8 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_function(&mut self, function: &FunctionStatement, this: Option<SemanticType>) {
+        let is_definition = function.body.is_some();
+
         self.context.push_function_scope(function, this);
 
         let mut params = HashSet::new();
@@ -152,11 +154,13 @@ impl SemanticAnalyzer {
                 });
             }
 
-            self.context.push_local(&param.name, SemanticLocal::new(
-                SemanticLocalKind::Parameter,
-                typ,
-                param.name.range(),
-            ));
+            if is_definition {
+                self.context.push_local(&param.name, SemanticLocal::new(
+                    SemanticLocalKind::Parameter,
+                    typ,
+                    param.name.range(),
+                ));
+            }
         }
 
         if let Some(ty) = &function.return_type {
