@@ -3,10 +3,10 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, BabString, Expression, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, BabString, Expression, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
 use log::error;
 use strum::EnumIter;
-use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
+use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenModifier, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
 
 use crate::Converter;
 
@@ -56,6 +56,14 @@ impl Symbolizer {
             name: BabString::new_static(token.kind.name()),
             kind: (&token.kind).into(),
             range: token.range(),
+            modifier: match token.kind {
+                TokenKind::Keyword(Keyword::Als) => LspSymbolModifier::ControlFlow,
+                TokenKind::Keyword(Keyword::Bekeer) => LspSymbolModifier::ControlFlow,
+                TokenKind::Keyword(Keyword::In) => LspSymbolModifier::ControlFlow,
+                TokenKind::Keyword(Keyword::Reeks) => LspSymbolModifier::ControlFlow,
+                TokenKind::Keyword(Keyword::Volg) => LspSymbolModifier::ControlFlow,
+                _ => LspSymbolModifier::None,
+            },
         });
 
         match &token.kind {
@@ -126,6 +134,7 @@ impl Symbolizer {
             name: statement.name.value().clone(),
             kind: LspTokenType::Method,
             range: statement.name.range(),
+            modifier: LspSymbolModifier::default(),
         });
 
         if let Some(return_type) = &statement.return_type {
@@ -160,6 +169,7 @@ impl Symbolizer {
             name: statement.name.value().clone(),
             kind: LspTokenType::Class,
             range: statement.name.range(),
+            modifier: LspSymbolModifier::default(),
         });
 
         for ty_param in &statement.generic_types {
@@ -167,6 +177,7 @@ impl Symbolizer {
                 name: ty_param.value().clone(),
                 kind: LspTokenType::Class,
                 range: ty_param.range(),
+                modifier: LspSymbolModifier::default(),
             });
         }
 
@@ -186,12 +197,14 @@ impl Symbolizer {
             name: field.name.value().clone(),
             kind: LspTokenType::Property,
             range: field.name.range(),
+            modifier: LspSymbolModifier::default(),
         });
 
         self.symbols.insert(LspSymbol {
             name: field.ty.specifier.fully_qualified_name().clone(),
             kind: LspTokenType::Class,
             range: field.ty.range(),
+            modifier: LspSymbolModifier::default(),
         });
 
         if let Some(default_value) = &field.default_value {
@@ -212,6 +225,7 @@ impl Symbolizer {
             name: parameter.name.value().clone(),
             kind: LspTokenType::ParameterName,
             range: parameter.name.range(),
+            modifier: LspSymbolModifier::default(),
         });
 
         self.add_type(&parameter.ty);
@@ -248,6 +262,7 @@ impl Symbolizer {
                             SemanticLocalKind::ReferenceThis => LspTokenType::ParameterName,
                         },
                         range: identifier.range(),
+                        modifier: LspSymbolModifier::default(),
                     });
                 }
             }
@@ -274,6 +289,7 @@ impl Symbolizer {
                     name: typ.specifier.fully_qualified_name(),
                     kind: LspTokenType::Class,
                     range: typ.specifier.range(),
+                    modifier: LspSymbolModifier::default(),
                 });
 
                 self.add_expression(&size);
@@ -291,6 +307,7 @@ impl Symbolizer {
                         name: ident.value().clone(),
                         kind: LspTokenType::Function,
                         range: ident.range(),
+                        modifier: LspSymbolModifier::default(),
                     });
                 }
             }
@@ -300,6 +317,7 @@ impl Symbolizer {
                     name: method.method_name.value().clone(),
                     kind: LspTokenType::Method,
                     range: method.method_name.range(),
+                    modifier: LspSymbolModifier::default(),
                 });
             }
 
@@ -308,6 +326,7 @@ impl Symbolizer {
                     name: member.value().clone(),
                     kind: LspTokenType::Property,
                     range: member.range(),
+                    modifier: LspSymbolModifier::default(),
                 });
             }
 
@@ -322,6 +341,7 @@ impl Symbolizer {
             name: expression.name.value().clone(),
             kind: LspTokenType::Class,
             range: expression.name.range(),
+            modifier: LspSymbolModifier::default(),
         });
 
         for ty in &expression.type_parameters {
@@ -333,6 +353,7 @@ impl Symbolizer {
                 name: field_instantiation.name.value().clone(),
                 kind: LspTokenType::Variable,
                 range: field_instantiation.name.range(),
+                modifier: LspSymbolModifier::default(),
             });
             self.add_expression(&field_instantiation.value);
         }
@@ -345,6 +366,7 @@ impl Symbolizer {
                     name: bt.name().clone(),
                     kind: LspTokenType::Class,
                     range: bt.range(),
+                    modifier: LspSymbolModifier::default(),
                 });
             }
 
@@ -353,6 +375,7 @@ impl Symbolizer {
                     name: name.value().clone(),
                     kind: LspTokenType::Class,
                     range: name.range(),
+                    modifier: LspSymbolModifier::default(),
                 });
 
                 for param in type_parameters {
@@ -396,8 +419,6 @@ impl SymbolMap {
         };
         let mut sym_end = sym_begin.clone();
 
-        // eprintln!("sym_begin={:?} range={range:?}", sym_begin.range);
-
         if sym_begin.range.start() < range.start() {
             sym_begin.range = FileRange::new(sym_begin.range.start(), range.start());
         } else {
@@ -431,6 +452,7 @@ struct LspSymbol {
     name: BabString,
     kind: LspTokenType,
     range: FileRange,
+    modifier: LspSymbolModifier,
 }
 
 impl LspSymbol {
@@ -450,7 +472,7 @@ impl LspSymbol {
             delta_start,
             length,
             token_type: self.kind.into(),
-            token_modifiers_bitset: 0,
+            token_modifiers_bitset: self.modifier as u32,
         }
     }
 
@@ -545,6 +567,30 @@ impl From<LspTokenType> for SymbolKind {
             LspTokenType::ParameterName => SymbolKind::PROPERTY,
             LspTokenType::Class => SymbolKind::CLASS,
             LspTokenType::Property => SymbolKind::PROPERTY,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, EnumIter)]
+#[repr(u32)]
+pub enum LspSymbolModifier {
+    #[default]
+    None,
+    ControlFlow,
+}
+
+impl LspSymbolModifier {
+    pub fn legend() -> Vec<SemanticTokenModifier> {
+        use strum::IntoEnumIterator;
+        Self::iter().filter_map(|x| x.into()).collect()
+    }
+}
+
+impl From<LspSymbolModifier> for Option<SemanticTokenModifier> {
+    fn from(value: LspSymbolModifier) -> Self {
+        match value {
+            LspSymbolModifier::None => None,
+            LspSymbolModifier::ControlFlow => Some(SemanticTokenModifier::new("controlFlow")),
         }
     }
 }

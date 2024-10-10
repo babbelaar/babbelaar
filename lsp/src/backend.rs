@@ -23,6 +23,7 @@ use crate::actions::CodeActionsAnalysisContext;
 use crate::actions::CodeActionsAnalyzable;
 use crate::convert_command;
 use crate::hints::InlayHintsEngine;
+use crate::symbolization::LspSymbolModifier;
 use crate::BabbelaarContext;
 use crate::BabbelaarLspError;
 use crate::CodeActionRepository;
@@ -506,7 +507,7 @@ impl Backend {
                     },
                     legend: SemanticTokensLegend {
                         token_types: LspTokenType::legend(),
-                        token_modifiers: Vec::new(),
+                        token_modifiers: LspSymbolModifier::legend()
                     },
                     range: Some(false),
                     full: Some(SemanticTokensFullOptions::Bool(true)),

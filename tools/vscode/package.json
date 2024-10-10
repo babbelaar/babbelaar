@@ -141,6 +141,19 @@
                 }
             ]
         },
+        "semanticTokenScopes": [
+            {
+                "language": "babbelaar",
+                "scopes": {
+                    "keyword": [
+                        "keyword.other.babbelaar"
+                    ],
+                    "keyword.controlFlow": [
+                        "keyword.control.babbelaar"
+                    ]
+                }
+            }
+        ],
         "snippets": [
             {
                 "language": "babbelaar",
