@@ -21,7 +21,7 @@ mod util;
 mod value;
 
 pub use self::{
-    attribute::{Attribute, AttributeArgument},
+    attribute::{Attribute, AttributeArgument, AttributeList},
     builtin::{ArrayMethod, ArrayMethodParameter, ArrayTypeRef, Builtin, BuiltinFunction, BuiltinMethodReference, BuiltinType},
     expression::*,
     interpreter::Interpreter,

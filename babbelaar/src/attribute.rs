@@ -3,6 +3,8 @@
 
 use crate::{BabString, FileRange, PrimaryExpression, Ranged};
 
+pub type AttributeList = Vec<Ranged<Attribute>>;
+
 #[derive(Debug, Clone)]
 pub struct Attribute {
     pub at_range: FileRange,

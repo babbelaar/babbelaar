@@ -7,7 +7,7 @@ use log::warn;
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{statement::VariableStatement, AssignStatement, Attribute, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, RangeExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeQualifier, TypeSpecifier};
+use crate::{statement::VariableStatement, AssignStatement, Attribute, AttributeList, BabString, BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BiExpression, Builtin, BuiltinFunction, BuiltinType, Expression, FileEdit, FileId, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, IntoBabString, Keyword, MethodCallExpression, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, RangeExpression, Ranged, ReturnStatement, SourceCode, Statement, StatementKind, StrExt, StrIterExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeQualifier, TypeSpecifier};
 
 #[derive(Debug)]
 pub struct SemanticAnalyzer {
@@ -2603,7 +2603,7 @@ impl SemanticReference {
 
 #[derive(Debug, Clone)]
 pub struct SemanticField {
-    pub attributes: Vec<Attribute>,
+    pub attributes: AttributeList,
     pub name: Ranged<BabString>,
     pub ty: SemanticType,
     pub has_default_value: bool,
@@ -2633,7 +2633,7 @@ impl SemanticMethod {
 
 #[derive(Debug, Clone)]
 pub struct SemanticStructure {
-    pub attributes: Vec<Attribute>,
+    pub attributes: AttributeList,
     pub name: Ranged<BabString>,
     pub generic_types: Vec<Ranged<BabString>>,
     pub left_curly_range: FileRange,

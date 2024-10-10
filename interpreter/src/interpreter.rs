@@ -100,7 +100,7 @@ impl<D> Interpreter<D>
                     methods: structure.methods.iter()
                         .map(|x| Arc::new(
                             InterpreterFunction {
-                                attributes: Vec::new(),
+                                attributes: AttributeList::new(),
                                 function: x.function.clone(),
                             }
                         ))

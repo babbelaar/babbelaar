@@ -1,12 +1,12 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{util::FileRange, Attribute, BabString, Expression, Parameter, RangeExpression, Ranged, Structure, Type};
+use crate::{util::FileRange, AttributeList, BabString, Expression, Parameter, RangeExpression, Ranged, Structure, Type};
 
 #[derive(Debug, Clone)]
 pub struct Statement {
     pub range: FileRange,
-    pub attributes: Vec<Attribute>,
+    pub attributes: AttributeList,
     pub kind: StatementKind,
 }
 

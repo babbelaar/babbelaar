@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, BabString, Expression, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, BabString, Expression, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenModifier, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -238,7 +238,7 @@ impl Symbolizer {
         self.symbols.remove(attribute.name.range());
     }
 
-    fn add_attributes(&mut self, attributes: &[Attribute]) {
+    fn add_attributes(&mut self, attributes: &[Ranged<Attribute>]) {
         for attribute in attributes {
             self.add_attribute(attribute);
         }
