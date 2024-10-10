@@ -1356,7 +1356,7 @@ impl SemanticAnalyzer {
 
             self.diagnostics.push(SemanticDiagnostic::new(
                 attribute.name.range(),
-                SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone() },
+                SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone(), range: attribute.range() },
             ));
         }
     }
@@ -1369,7 +1369,7 @@ impl SemanticAnalyzer {
 
                     self.diagnostics.push(SemanticDiagnostic::new(
                         attribute.name.range(),
-                        SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone() },
+                        SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone(), range: attribute.range() },
                     ));
                 }
             }
@@ -1481,7 +1481,7 @@ impl SemanticAnalyzer {
         for attribute in &field.attributes {
             self.diagnostics.push(SemanticDiagnostic::new(
                 attribute.name.range(),
-                SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone() },
+                SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone(), range: attribute.range() },
             ));
         }
     }
@@ -2029,7 +2029,7 @@ pub enum SemanticDiagnosticKind {
     },
 
     #[error("Attribuut `{name}` is onbekend")]
-    UnknownAttribute { name: BabString, },
+    UnknownAttribute { name: BabString, range: FileRange },
 
     #[error("Veldnaam `{name}` wordt meerdere keren gebruikt")]
     DuplicateFieldName { name: BabString },
