@@ -859,12 +859,12 @@ impl Backend {
 
         Ok(match reference {
             Some((origin_range, reference)) => {
-                let target_range = self.converter_for(reference.declaration_range.file_id()).await.convert_file_range(reference.declaration_range);
-
                 let file_id = reference.declaration_range.file_id();
                 if file_id == FileId::INTERNAL {
                     return Ok(None);
                 }
+
+                let target_range = self.converter_for(reference.declaration_range.file_id()).await.convert_file_range(reference.declaration_range);
 
                 let Some(path) = self.context.path_of(file_id).await else {
                     return Ok(None);
