@@ -7,7 +7,7 @@ use log::error;
 use strum::AsRefStr;
 
 use crate::{
-    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, BabString, BiExpression, BiOperator, Builtin, BuiltinType, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeQualifier, TypeSpecifier, VariableStatement
+    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, AttributeList, BabString, BiExpression, BiOperator, Builtin, BuiltinType, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeQualifier, TypeSpecifier, VariableStatement
 };
 
 pub type ParseResult<T> = Result<T, ParseError>;
@@ -1199,7 +1199,7 @@ impl<'tokens> Parser<'tokens> {
         self.previous_range().end()
     }
 
-    fn parse_attribute_list(&mut self) -> Vec<Attribute> {
+    fn parse_attribute_list(&mut self) -> AttributeList {
         let mut attributes = Vec::new();
 
         while let Some(Punctuator::AtSign) = self.peek_punctuator() {
@@ -1212,7 +1212,7 @@ impl<'tokens> Parser<'tokens> {
         attributes
     }
 
-    fn parse_attribute(&mut self) -> Result<Attribute, ParseError> {
+    fn parse_attribute(&mut self) -> Result<Ranged<Attribute>, ParseError> {
         let at_sign = self.consume_token()?;
 
         let name = match self.consume_identifier("Attribuutnaam", BabString::new_static("@")) {
@@ -1242,12 +1242,13 @@ impl<'tokens> Parser<'tokens> {
         };
         let arguments = Ranged::new(FileRange::new(first_token.start(), end), arguments);
 
-
-        Ok(Attribute {
+        let attribute = Attribute {
             at_range: at_sign.range(),
             name,
             arguments,
-        })
+        };
+
+        Ok(Ranged::new(FileRange::new(at_sign.begin, end), attribute))
     }
 
     fn parse_attribute_argument_list(&mut self) -> Result<Vec<AttributeArgument>, ParseError> {

@@ -3,11 +3,11 @@
 
 use std::sync::Arc;
 
-use babbelaar::{Attribute, BabString, FunctionStatement, Structure};
+use babbelaar::{AttributeList, BabString, FunctionStatement, Structure};
 
 #[derive(Debug)]
 pub struct InterpreterFunction {
-    pub attributes: Vec<Attribute>,
+    pub attributes: AttributeList,
     pub function: FunctionStatement,
 }
 
