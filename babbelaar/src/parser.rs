@@ -529,6 +529,12 @@ impl<'tokens> Parser<'tokens> {
                     ty.qualifiers.push(qual);
                 }
 
+                Punctuator::Asterisk => {
+                    let range = self.consume_token().unwrap().range();
+                    end = range.end();
+                    ty.qualifiers.push(Ranged::new(range, TypeQualifier::Pointer));
+                }
+
                 _ => break,
             }
         }

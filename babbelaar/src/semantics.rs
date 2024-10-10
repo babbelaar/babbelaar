@@ -611,6 +611,7 @@ impl SemanticAnalyzer {
             SemanticType::FunctionReference(func) => func.name(),
             SemanticType::IndexReference(ty) => ty.name().clone(),
             SemanticType::Generic(ty) => ty.name.clone(),
+            SemanticType::Pointer(..) => postfix.lhs.value().to_string().into(),
         };
 
         let Some(function) = self.find_and_use_function(&function_name) else {
@@ -1104,6 +1105,7 @@ impl SemanticAnalyzer {
         for qual in &ty.qualifiers {
             semantic_type = match qual.value() {
                 TypeQualifier::Array => SemanticType::Array(Box::new(semantic_type)),
+                TypeQualifier::Pointer => SemanticType::Pointer(Box::new(semantic_type)),
             };
         }
 
@@ -1169,6 +1171,7 @@ impl SemanticAnalyzer {
             }
             SemanticType::IndexReference(..) => todo!(),
             SemanticType::Generic(..) => todo!(),
+            SemanticType::Pointer(..) => todo!(),
         }
     }
 
@@ -1188,6 +1191,7 @@ impl SemanticAnalyzer {
             }
             SemanticType::IndexReference(..) => todo!(),
             SemanticType::Generic(..) => todo!(),
+            SemanticType::Pointer(..) => todo!(),
         })
     }
 
@@ -1344,6 +1348,8 @@ impl SemanticAnalyzer {
             }
 
             SemanticType::Generic(..) => todo!(),
+
+            SemanticType::Pointer(..) => todo!(),
         }
     }
 
@@ -2483,6 +2489,7 @@ impl SemanticReference {
             SemanticType::FunctionReference(func) => func.name(),
             SemanticType::IndexReference(..) => todo!(),
             SemanticType::Generic(..) => todo!(),
+            SemanticType::Pointer(..) => todo!(),
         }
     }
 
@@ -2495,6 +2502,7 @@ impl SemanticReference {
             SemanticType::FunctionReference(func) => func.documentation(),
             SemanticType::IndexReference(..) => None,
             SemanticType::Generic(..) => None,
+            SemanticType::Pointer(..) => None,
         }
     }
 
@@ -2507,6 +2515,7 @@ impl SemanticReference {
             SemanticType::FunctionReference(func) => func.inline_detail(),
             SemanticType::IndexReference(..) => None,
             SemanticType::Generic(..) => None,
+            SemanticType::Pointer(..) => None,
         }
     }
 
@@ -2519,6 +2528,7 @@ impl SemanticReference {
             SemanticType::FunctionReference(func) => func.lsp_completion(),
             SemanticType::IndexReference(..) => BabString::empty(),
             SemanticType::Generic(..) => BabString::empty(),
+            SemanticType::Pointer(ty) => format!("{}*", ty.name()).into(),
         }
     }
 
@@ -2660,8 +2670,9 @@ pub enum SemanticType {
     Custom { base: Arc<SemanticStructure>, parameters: Vec<SemanticType> },
     Function(SemanticFunction),
     FunctionReference(FunctionReference),
-    IndexReference(Box<SemanticType>),
     Generic(SemanticGenericType),
+    IndexReference(Box<SemanticType>),
+    Pointer(Box<SemanticType>),
 }
 
 impl SemanticType {
@@ -2684,6 +2695,7 @@ impl SemanticType {
             Self::FunctionReference(func) => func.declaration_range(),
             Self::IndexReference(ty) => ty.declaration_range(),
             Self::Generic(ty) => ty.declaration_range,
+            Self::Pointer(ty) => ty.declaration_range(),
         }
     }
 
@@ -2696,6 +2708,7 @@ impl SemanticType {
             Self::FunctionReference(func) => Some(func.parameter_count()),
             Self::IndexReference(..) => None,
             Self::Generic(..) => None,
+            Self::Pointer(..) => None,
         }
     }
 
@@ -2713,6 +2726,7 @@ impl SemanticType {
             Self::FunctionReference(..) => BabString::empty(),
             Self::IndexReference(ty) => ty.value_or_field_name_hint(),
             Self::Generic(ty) => ty.name.clone(),
+            Self::Pointer(..) => BabString::new_static("wijzer"),
         }
     }
 
@@ -2738,6 +2752,7 @@ impl SemanticType {
             Self::FunctionReference(func) => func.name(),
             Self::IndexReference(ty) => ty.name(),
             Self::Generic(ty) => ty.name.clone(),
+            Self::Pointer(..) => BabString::new_static("wijzer-naam"),
         }
     }
 
@@ -2803,6 +2818,7 @@ impl Display for SemanticType {
             Self::FunctionReference(func) => func.fmt(f),
             Self::IndexReference(ty) => ty.fmt(f),
             Self::Generic(ty) => ty.fmt(f),
+            Self::Pointer(ty) => ty.fmt(f),
         }
     }
 }
