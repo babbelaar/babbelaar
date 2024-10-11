@@ -18,5 +18,14 @@
         "prefix": ["als"],
         "body": ["als ${1:conditie} {", "\t${0:dan}", "}"],
         "description": "Volg in reeks."
+    },
+    "Opeenvolging aanmaken": {
+        "prefix": ["array", "opeenvolging"],
+        "body": ["als ${1:conditie} {", "\t${0:dan}", "}"],
+        "description": "Maak een opeenvolging, een lijst met een voorafbepaalde grootte."
+    },
+    "Sjabloonslinger aanmaken": {
+        "prefix": ["$"],
+        "body": "€"
     }
 }

@@ -5,10 +5,12 @@ use std::fmt::{Display, Formatter, Write};
 
 use strum::IntoStaticStr;
 
-use crate::{FileLocation, FileRange, Keyword};
+use crate::{BabString, FileLocation, FileRange, Keyword, Ranged};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, IntoStaticStr)]
 pub enum Punctuator {
+    #[strum(serialize = "pijl")]
+    Arrow,
     #[strum(serialize = "apenstaartje")]
     AtSign,
     #[strum(serialize = "dubbele punt")]
@@ -45,12 +47,17 @@ pub enum Punctuator {
     PercentageSign,
     #[strum(serialize = "punt")]
     Period,
+    #[strum(serialize = "minder-dan")]
+    LessThan,
+    #[strum(serialize = "meer-dan")]
+    GreaterThan,
 }
 
 impl Punctuator {
     #[must_use]
     pub const fn as_str(&self) -> &str {
         match self {
+            Self::Arrow => ".",
             Self::AtSign => "@",
             Self::Colon => ":",
             Self::Comma => ",",
@@ -69,6 +76,8 @@ impl Punctuator {
             Self::Asterisk => "*",
             Self::PercentageSign => "%",
             Self::Period => ".",
+            Self::LessThan => "<",
+            Self::GreaterThan => ">",
         }
     }
 }
@@ -80,24 +89,27 @@ impl Display for Punctuator {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum TokenKind<'source_code> {
+pub enum TokenKind {
     Keyword(Keyword),
 
-    Identifier(&'source_code str),
-    StringLiteral(&'source_code str),
-    TemplateString(Vec<TemplateStringToken<'source_code>>),
+    Identifier(BabString),
+    CharacterLiteral(char),
+    StringLiteral(BabString),
+    TemplateString(Vec<TemplateStringToken>),
+    // TODO change to unsigned
     Integer(i64),
 
     Punctuator(Punctuator),
     IllegalCharacter(char),
 }
 
-impl<'source_code> TokenKind<'source_code> {
+impl TokenKind {
     pub fn name(&self) -> &'static str {
         match self {
             Self::Keyword(..) => "sleutelwoord",
 
             Self::Identifier(..) => "identifier",
+            Self::CharacterLiteral(..) => "teken",
             Self::StringLiteral(..) => "slinger",
             Self::TemplateString(..) => "sjabloonslinger",
             Self::Integer(..) => "getal",
@@ -117,7 +129,7 @@ impl<'source_code> TokenKind<'source_code> {
     }
 }
 
-impl<'source_code> Display for TokenKind<'source_code> {
+impl Display for TokenKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Identifier(ident) => ident.fmt(f),
@@ -125,6 +137,7 @@ impl<'source_code> Display for TokenKind<'source_code> {
             Self::Integer(int) => int.fmt(f),
             Self::Keyword(keyword) => f.write_str(keyword.as_ref()),
             Self::Punctuator(punctuator) => punctuator.fmt(f),
+            Self::CharacterLiteral(c) => f.write_fmt(format_args!("'{c}'")),
             Self::StringLiteral(str) => f.write_fmt(format_args!("\"{str}\"")),
             Self::TemplateString(ts) => {
                 f.write_char('"')?;
@@ -140,35 +153,45 @@ impl<'source_code> Display for TokenKind<'source_code> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Token<'source_code> {
-    pub kind: TokenKind<'source_code>,
+pub struct Token {
+    pub kind: TokenKind,
     pub begin: FileLocation,
     pub end: FileLocation,
 }
 
-impl<'source_code> Token<'source_code> {
+impl Token {
+    pub fn as_identifier(&self) -> Option<Ranged<BabString>> {
+        let TokenKind::Identifier(ident) = &self.kind else {
+            return None;
+        };
+
+        Some(Ranged::new(self.range(), ident.clone()))
+    }
+}
+
+impl Token {
     pub fn range(&self) -> FileRange {
         (self.begin, self.end).into()
     }
 }
 
-impl<'source_code> Display for Token<'source_code> {
+impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.kind.fmt(f)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TemplateStringToken<'source_code> {
+pub enum TemplateStringToken {
     Plain {
         begin: FileLocation,
         end: FileLocation,
-        str: &'source_code str,
+        str: BabString,
     },
-    Expression(Vec<Token<'source_code>>),
+    Expression(Vec<Token>),
 }
 
-impl<'source_code> Display for TemplateStringToken<'source_code> {
+impl Display for TemplateStringToken {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TemplateStringToken::Expression(expr) => {

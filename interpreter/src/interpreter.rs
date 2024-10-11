@@ -2,22 +2,24 @@
 // All Rights Reserved.
 
 use std::{
-    cell::RefCell, collections::HashMap, rc::Rc
+    cell::RefCell, collections::HashMap, process::exit, rc::Rc, sync::Arc
 };
 
 use babbelaar::*;
+use log::error;
 
 use crate::*;
 
-pub struct Interpreter<'source_code, D>
+pub struct Interpreter<D>
         where D: Debugger {
-    functions: HashMap<FunctionId, Rc<FunctionStatement<'source_code>>>,
-    structures: HashMap<StructureId, Rc<Structure<'source_code>>>,
+    functions: HashMap<FunctionId, Arc<InterpreterFunction>>,
+    structures: HashMap<StructureId, Rc<InterpreterStructure>>,
     debugger: D,
-    scope: Scope<'source_code>,
+    scope: Scope,
+    ffi: FFIManager,
 }
 
-impl<'source_code, D> Interpreter<'source_code, D>
+impl<D> Interpreter<D>
         where D: Debugger {
     pub fn new(debugger: D) -> Self {
         Self {
@@ -25,10 +27,11 @@ impl<'source_code, D> Interpreter<'source_code, D>
             structures: HashMap::new(),
             scope: Scope::new_top_level(),
             debugger,
+            ffi: FFIManager::new(),
         }
     }
 
-    pub fn execute_tree(&mut self, tree: &ParseTree<'source_code>) {
+    pub fn execute_tree(&mut self, tree: &ParseTree) {
         for statement in tree.structures() {
             _ = self.execute_statement(statement);
         }
@@ -45,17 +48,17 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    pub fn execute(&mut self, statement: &Statement<'source_code>) {
+    pub fn execute(&mut self, statement: &Statement) {
         self.debugger.initialize(&InterpreterAdapter);
         _ = self.execute_statement(statement);
     }
 
-    fn execute_statement(&mut self, statement: &Statement<'source_code>) -> StatementResult {
+    fn execute_statement(&mut self, statement: &Statement) -> StatementResult {
         self.debugger.on_statement(statement);
         match &statement.kind {
             StatementKind::Assignment(assignment) => {
-                let new_value = self.execute_expression(&assignment.expression);
-                self.execute_assign(&assignment.dest, new_value);
+                let new_value = self.execute_expression(&assignment.source);
+                self.execute_assign(&assignment.destination, new_value);
                 StatementResult::Continue
             }
 
@@ -70,8 +73,11 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
             StatementKind::Function(func) => {
                 let id = FunctionId::from(func);
-                self.functions.insert(id, Rc::new(func.clone()));
-                self.scope.variables.insert(func.name.to_string(), Value::Function { name: func.name.to_string(), id });
+                self.functions.insert(id, Arc::new(InterpreterFunction {
+                    attributes: statement.attributes.clone(),
+                    function: func.clone(),
+                }));
+                self.scope.variables.insert(BabString::clone(&func.name), Value::Function { name: func.name.to_string(), id });
                 StatementResult::Continue
             }
 
@@ -88,21 +94,34 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
             StatementKind::Structure(structure) => {
                 let id = StructureId::from(structure);
-                let structure = Rc::new(structure.clone());
-                self.structures.insert(id, Rc::clone(&structure));
-                self.scope.structures.insert(structure.name.to_string(), structure);
+
+                let structure = Rc::new(InterpreterStructure {
+                    structure: structure.clone(),
+                    methods: structure.methods.iter()
+                        .map(|x| Arc::new(
+                            InterpreterFunction {
+                                attributes: Vec::new(),
+                                function: x.function.clone(),
+                            }
+                        ))
+                        .collect()
+                });
+
+                let prev = self.structures.insert(id, Rc::clone(&structure));
+                assert!(prev.is_none(), "Illegal double value: {prev:#?} and now: {structure:#?}");
+                self.scope.structures.insert(BabString::clone(structure.name()), structure);
                 StatementResult::Continue
             }
 
             StatementKind::Variable(variable) => {
                 let value = self.execute_expression(&variable.expression);
-                self.scope.variables.insert(variable.name.to_string(), value);
+                self.scope.variables.insert(BabString::clone(&variable.name), value);
                 StatementResult::Continue
             }
         }
     }
 
-    pub fn execute_assign(&mut self, expression: &Expression<'source_code>, new_value: Value) {
+    pub fn execute_assign(&mut self, expression: &Expression, new_value: Value) {
         match expression {
             Expression::Primary(PrimaryExpression::Reference(reference)) => {
                 if let Some(variable) = self.scope.find_mut(reference) {
@@ -113,7 +132,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
             Expression::Postfix(postfix) => {
                 let value = self.execute_expression(&postfix.lhs);
-                match &postfix.kind {
+                match postfix.kind.value() {
                     PostfixExpressionKind::Member(member) => {
                         let Value::Object { fields, .. } = value else {
                             panic!("Cannot assign to non-Object Value");
@@ -121,6 +140,16 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
                         let mut fields = fields.borrow_mut();
                         fields.insert(member.to_string(), new_value);
+                        return;
+                    }
+
+                    PostfixExpressionKind::Subscript(..) => {
+                        let value = self.execute_postfix_expression(postfix);
+                        let Value::ArrayElementReference { array, index } = value else {
+                            panic!("ICE: unexpected outcome of subscript postfix-expression: {value:#?}");
+                        };
+
+                        array.borrow_mut()[index] = new_value;
                         return;
                     }
 
@@ -134,7 +163,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         panic!("Invalid reference: {expression:#?}")
     }
 
-    pub fn execute_expression(&mut self, expression: &Ranged<Expression<'source_code>>) -> Value {
+    pub fn execute_expression(&mut self, expression: &Ranged<Expression>) -> Value {
         self.debugger.on_expression(expression);
 
         match expression.value() {
@@ -144,7 +173,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    fn execute_expression_primary(&mut self, expression: &PrimaryExpression<'source_code>) -> Value {
+    fn execute_expression_primary(&mut self, expression: &PrimaryExpression) -> Value {
         match expression {
             PrimaryExpression::Boolean(boolean) => {
                 Value::Bool(*boolean)
@@ -158,21 +187,52 @@ impl<'source_code, D> Interpreter<'source_code, D>
                 Value::Integer(*integer)
             }
 
+            PrimaryExpression::CharacterLiteral(char) => {
+                Value::Character(*char)
+            }
+
             PrimaryExpression::StringLiteral(str) => {
                 Value::String(str.to_string())
             }
 
-            PrimaryExpression::StructureInstantiation(structure) => {
+            PrimaryExpression::StructureInstantiation(instantiation) => {
+                let (id, structure) = self.structures.iter()
+                        .find(|(_, registered)| registered.name() == instantiation.name.value())
+                        .unwrap_or_else(|| panic!("failed to find structure `{}`, structures: {:#?}", instantiation.name.value(), self.structures))
+                        .clone();
+
+                let id = *id;
+                let structure = structure.clone();
+
+                let mut fields = HashMap::new();
+
+                self.scope = std::mem::take(&mut self.scope).push();
+
+                for (generic_decl, generic_def) in structure.structure.generic_types.iter().zip(instantiation.type_parameters.iter()) {
+                    let generic_type = self.resolve_type(&generic_def).0;
+                    self.scope.generic_types.insert(generic_decl.value().clone(), generic_type);
+                }
+
+                for field in &structure.structure.fields {
+                    let instantiation = instantiation.fields.iter().find(|x| x.name.value() == field.name.value());
+
+                    let expression = if let Some(instantiation) = instantiation {
+                        &instantiation.value
+                    } else {
+                        field.default_value.as_ref().unwrap()
+                    };
+
+                    let value = self.execute_expression(expression);
+                    fields.insert(field.name.to_string(), value);
+                }
+
+                let generic_types = std::mem::take(&mut self.scope.generic_types);
+                self.scope = std::mem::take(&mut self.scope).pop();
+
                 Value::Object {
-                    structure: *self.structures.iter()
-                        .find(|(_, structure)| structure.name.value() == structure.name.value())
-                        .unwrap_or_else(|| panic!("failed to find structure `{}`, structures: {:#?}", structure.name.value(), self.structures))
-                        .0,
-                    fields: Rc::new(RefCell::new(structure.fields.iter()
-                        .map(|field| {
-                            (field.name.to_string(), self.execute_expression(&field.value))
-                        })
-                        .collect()))
+                    structure: id,
+                    generic_types,
+                    fields: Rc::new(RefCell::new(fields))
                 }
             }
 
@@ -199,22 +259,40 @@ impl<'source_code, D> Interpreter<'source_code, D>
             }
 
             PrimaryExpression::Parenthesized(expression) => self.execute_expression(expression),
+
+            PrimaryExpression::SizedArrayInitializer { typ, size } => {
+                let size = self.execute_expression(&size);
+                let Value::Integer(size) = size else {
+                    panic!("Ongeldige opeensommingsgrootte: {size:#?}");
+                };
+
+                let (ty, default_value) = self.resolve_type(typ);
+
+                Value::Array {
+                    ty,
+                    values: Rc::new(RefCell::new(vec![default_value; size as usize])),
+                }
+            }
         }
     }
 
-    fn execute_for_statement(&mut self, statement: &ForStatement<'source_code>) -> StatementResult {
-        let Value::Integer(start) = self.execute_expression_primary(&statement.range.start) else {
-            panic!("Invalid start");
-        };
+    fn execute_for_statement(&mut self, statement: &ForStatement) -> StatementResult {
+        match statement.iterable.value() {
+            ForIterableKind::Expression(expression) => self.execute_iterating_for_statement(statement, expression),
+            ForIterableKind::Range(range) => self.execute_ranged_for_statement(statement, range),
+        }
+    }
 
-        let Value::Integer(end) = self.execute_expression_primary(&statement.range.end) else {
-            panic!("Invalid end");
+    fn execute_iterating_for_statement(&mut self, statement: &ForStatement, expression: &Ranged<Expression>) -> StatementResult {
+        let Value::Array { values, .. } = self.execute_expression(expression) else {
+            panic!("Invalid iterable");
         };
 
         self.scope = std::mem::take(&mut self.scope).push();
+        let values = values.borrow().clone();
 
-        for x in start..end {
-            self.scope.variables.insert(statement.iterator_name.to_string(), Value::Integer(x));
+        for x in values {
+            self.scope.variables.insert(BabString::clone(&statement.iterator_name), x.actual_value().into_owned());
 
             for statement in &statement.body {
                 if let StatementResult::Return(value) = self.execute_statement(statement) {
@@ -228,7 +306,33 @@ impl<'source_code, D> Interpreter<'source_code, D>
         StatementResult::Continue
     }
 
-    fn execute_if_statement(&mut self, statement: &IfStatement<'source_code>) -> StatementResult {
+    fn execute_ranged_for_statement(&mut self, statement: &ForStatement, range: &RangeExpression) -> StatementResult {
+        let Value::Integer(start) = self.execute_expression(&range.start) else {
+            panic!("Invalid start");
+        };
+
+        let Value::Integer(end) = self.execute_expression(&range.end) else {
+            panic!("Invalid end");
+        };
+
+        self.scope = std::mem::take(&mut self.scope).push();
+
+        for x in start..end {
+            self.scope.variables.insert(BabString::clone(&statement.iterator_name), Value::Integer(x));
+
+            for statement in &statement.body {
+                if let StatementResult::Return(value) = self.execute_statement(statement) {
+                    return StatementResult::Return(value);
+                }
+            }
+        }
+
+        self.scope = std::mem::take(&mut self.scope).pop();
+
+        StatementResult::Continue
+    }
+
+    fn execute_if_statement(&mut self, statement: &IfStatement) -> StatementResult {
         self.scope = std::mem::take(&mut self.scope).push();
 
         if !self.execute_expression(&statement.condition).is_true() {
@@ -246,7 +350,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         StatementResult::Continue
     }
 
-    fn execute_bi_expression(&mut self, expression: &BiExpression<'source_code>) -> Value {
+    fn execute_bi_expression(&mut self, expression: &BiExpression) -> Value {
         let lhs = self.execute_expression(&expression.lhs);
         let rhs = self.execute_expression(&expression.rhs);
 
@@ -278,7 +382,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    fn execute_function_call(&mut self, lhs: Value, func: &FunctionCallExpression<'source_code>) -> Value {
+    fn execute_function_call(&mut self, lhs: Value, func: &FunctionCallExpression) -> Value {
         let mut arguments: Vec<Value> = Vec::with_capacity(func.arguments.len());
         for argument in &func.arguments {
             arguments.push(self.execute_expression(argument));
@@ -286,12 +390,12 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
         match lhs {
             Value::MethodReference { lhs, method } => {
-                (method.function)(self, arguments, Some(*lhs))
+                (method.function())(self, arguments, Some(*lhs))
             }
 
             Value::MethodIdReference { lhs, method } => {
                 let structure = self.structures.get(&method.structure).unwrap();
-                let method = Rc::clone(&structure.methods[method.index].function);
+                let method = Arc::clone(&structure.methods[method.index]);
 
                 self.execute_function(method.clone(), arguments, Some(*lhs))
             }
@@ -326,7 +430,8 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
             Some(value)
         } else {
-            let func = self.functions.get(&id).cloned().expect("Invalid FunctionId");
+            let function = self.functions.get(&id).cloned().expect("Invalid FunctionId");
+            let func = &function.function;
 
             self.debugger.enter_function(DebuggerFunction {
                 ty: DebuggerFunctionType::Normal,
@@ -335,7 +440,7 @@ impl<'source_code, D> Interpreter<'source_code, D>
                 callee_location: Some(func.name.range()),
             }, &arguments);
 
-            let value = self.execute_function(Rc::clone(&func), arguments, this);
+            let value = self.execute_function(Arc::clone(&function), arguments, this);
 
             self.debugger.leave_function(DebuggerFunction {
                 ty: DebuggerFunctionType::Normal,
@@ -348,15 +453,22 @@ impl<'source_code, D> Interpreter<'source_code, D>
         }
     }
 
-    fn execute_function(&mut self, func: Rc<FunctionStatement<'source_code>>, arguments: Vec<Value>, this: Option<Value>) -> Value {
+    fn execute_function(&mut self, func: Arc<InterpreterFunction>, arguments: Vec<Value>, this: Option<Value>) -> Value {
+        for attrib in &func.attributes {
+            if attrib.name.value() == Attribute::NAME_EXTERN {
+                debug_assert!(this.is_none());
+                return self.ffi.execute(attrib, arguments);
+            }
+        }
+
         self.scope = std::mem::take(&mut self.scope).push_function(this);
 
-        for idx in 0..func.parameters.len() {
-            let name = func.parameters[idx].name.to_string();
+        for idx in 0..func.function.parameters.len() {
+            let name = BabString::clone(&func.function.parameters[idx].name);
             self.scope.variables.insert(name, arguments[idx].clone());
         }
 
-        for statement in func.body.as_ref().unwrap() {
+        for statement in func.function.body.as_ref().unwrap() {
             match self.execute_statement(statement) {
                 StatementResult::Continue => (),
                 StatementResult::Return(value) => {
@@ -370,37 +482,66 @@ impl<'source_code, D> Interpreter<'source_code, D>
         Value::Null
     }
 
-    fn execute_postfix_expression(&mut self, expression: &PostfixExpression<'source_code>) -> Value {
+    fn execute_postfix_expression(&mut self, expression: &PostfixExpression) -> Value {
         let lhs = self.execute_expression(&expression.lhs);
-        match &expression.kind {
+        match expression.kind.value() {
             PostfixExpressionKind::Call(call) => self.execute_function_call(lhs, call),
             PostfixExpressionKind::Member(member) => self.execute_member_reference(lhs, member),
             PostfixExpressionKind::MethodCall(method) => self.execute_method_invocation(lhs, method),
+            PostfixExpressionKind::Subscript(subscript) => self.execute_subscript(lhs, subscript),
         }
     }
 
-    fn execute_member_reference(&mut self, lhs: Value, member: &Ranged<&'source_code str>) -> Value {
+    fn execute_member_reference(&mut self, lhs: Value, member: &Ranged<BabString>) -> Value {
         let Value::Object { fields, .. } = lhs else {
             todo!("Invalid member reference: {member:?} for value {lhs:#?}");
         };
 
         let fields = fields.borrow();
-        fields.get(*member.value()).unwrap().clone()
+        let name = member.value().as_str();
+        match fields.get(name) {
+            Some(field) => field.clone(),
+            None => {
+                panic!("Kon veld `{name}` niet vinden binnen {fields:#?}");
+            }
+        }
     }
 
-    fn execute_method_invocation(&mut self, lhs: Value, expression: &MethodCallExpression<'source_code>) -> Value {
+    fn execute_method_invocation(&mut self, lhs: Value, expression: &MethodCallExpression) -> Value {
+        if let Value::Object { generic_types, .. } = &lhs {
+            self.scope = std::mem::take(&mut self.scope).push();
+            self.scope.generic_types = generic_types.clone();
+        }
+
         let method = self.get_method(&lhs, &expression.method_name).unwrap();
-        self.execute_function_call(method, &expression.call)
+        let return_value = self.execute_function_call(method, &expression.call);
+
+        if let Value::Object { .. } = &lhs {
+            self.scope = std::mem::take(&mut self.scope).pop();
+        }
+
+        return_value
     }
 
     fn get_method(&self, value: &Value, method_name: &str) -> Option<Value> {
         match value.typ() {
+            ValueType::Array(..) => {
+                for method in Builtin::array().methods() {
+                    if method.name == method_name {
+                        return Some(Value::MethodReference {
+                            lhs: Box::new(value.clone()),
+                            method: method.into(),
+                        });
+                    }
+                }
+            }
+
             ValueType::Builtin(builtin) => {
                 for method in builtin.methods() {
                     if method.name == method_name {
                         return Some(Value::MethodReference {
                             lhs: Box::new(value.clone()),
-                            method,
+                            method: method.into(),
                         });
                     }
                 }
@@ -424,9 +565,79 @@ impl<'source_code, D> Interpreter<'source_code, D>
 
         None
     }
+
+    fn resolve_type(&self, typ: &Type) -> (ValueType, Value) {
+        assert!(typ.qualifiers.len() == 0);
+        match typ.specifier.value() {
+            TypeSpecifier::BuiltIn(ty) => {
+                let ty = ValueType::Builtin(*ty.value());
+                let default_value = self.get_default_value(&ty);
+                (ty, default_value)
+            }
+
+            TypeSpecifier::Custom { name, .. } => {
+                if let Some(generic) = self.scope.find_generic_type(&name) {
+                    let default_value = self.get_default_value(&generic);
+                    return (generic, default_value);
+                }
+
+                log::info!("Scope: {:#?}", self.scope);
+                todo!("Resolve typ: {typ:#?}")
+            }
+        }
+    }
+
+    fn get_default_value(&self, typ: &ValueType) -> Value {
+        match typ {
+            ValueType::Builtin(BuiltinType::Bool) => Value::Bool(false),
+            ValueType::Builtin(BuiltinType::G32) => Value::Integer(0),
+            ValueType::Builtin(BuiltinType::Null) => Value::Null,
+            ValueType::Builtin(BuiltinType::Slinger) => Value::String(String::new()),
+            ValueType::Builtin(BuiltinType::Teken) => Value::Character('\0'),
+
+            _ => todo!("Get default value of type {typ:#?}"),
+        }
+    }
+
+    fn execute_subscript(&mut self, lhs: Value, subscript: &Ranged<Expression>) -> Value {
+        let subscript = self.execute_expression(&subscript);
+
+        let Value::Integer(index) = subscript else {
+            panic!("ICE: subscript index is not a number");
+        };
+
+        if let Value::String(s) = lhs {
+            return match s.chars().nth(index as _) {
+                Some(c) => Value::Character(c),
+                None => {
+                    let error = RuntimeError::array_out_of_bounds(s.len(), index);
+                    self.debugger.on_runtime_error(&error);
+                    error!("Fout: {error}");
+                    exit(1);
+                }
+            };
+        }
+
+        let Value::Array { values: array, .. } = lhs else {
+            panic!("ICE: subscript operand is not an array");
+        };
+
+        let array_size = array.borrow().len();
+        if index < 0 || index as usize >= array_size {
+            let error = RuntimeError::array_out_of_bounds(array_size, index);
+            self.debugger.on_runtime_error(&error);
+            error!("Fout: {error}");
+            exit(1);
+        }
+
+        Value::ArrayElementReference {
+            array,
+            index: index as usize,
+        }
+    }
 }
 
-impl<'source_code, D> babbelaar::Interpreter for Interpreter<'source_code, D>
+impl<D> babbelaar::Interpreter for Interpreter<D>
         where D: Debugger {
 
 }

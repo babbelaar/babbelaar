@@ -4,25 +4,36 @@
 #![feature(thread_id_value)]
 #![deny(elided_lifetimes_in_paths)]
 
+mod data;
 mod debugger;
 mod debug_adapter;
+mod error;
+mod ffi;
 mod interpreter;
+mod logger;
 mod scope;
 
-use std::{path::{Path, PathBuf}, process::exit};
+use std::{fmt::Display, fs::read_dir, path::{Path, PathBuf}, process::exit};
 
 pub use babbelaar::*;
 // use babbelaar_compiler::LlvmContext;
 use clap::Subcommand;
 use colored::Colorize;
+use logger::Logger;
 
 pub use self::{
+    data::{
+        InterpreterFunction,
+        InterpreterStructure,
+    },
     debugger::{
         Debugger,
         DebuggerFunction,
         DebuggerFunctionType,
     },
     debug_adapter::DebugAdapter,
+    error::RuntimeError,
+    ffi::FFIManager,
     interpreter::Interpreter,
     scope::Scope,
 };
@@ -58,6 +69,7 @@ enum Commands {
 }
 
 fn main() {
+    Logger::initialize();
     let args = Args::parse_args();
 
     match args.command {
@@ -86,17 +98,36 @@ fn main() {
 // }
 
 pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
-    parse(path, |tree| {
-        analyze(&tree);
+    let files: Vec<(SourceCode, ParseTree)> = read_dir(&path.parent().unwrap())
+        .unwrap()
+        .flatten()
+        .filter(|x| x.file_name().to_string_lossy().ends_with(".bab"))
+        .map(|x| parse(&x.path()))
+        .collect();
 
-        let mut interpreter = Interpreter::new(debugger);
+    analyze(&files);
+
+    let mut interpreter = Interpreter::new(debugger);
+
+    for (_, tree) in files {
         interpreter.execute_tree(&tree);
-    });
+    }
 }
 
-fn analyze(tree: &ParseTree<'_>) {
-    let mut analyzer = SemanticAnalyzer::new();
-    analyzer.analyze_tree(&tree);
+fn analyze(files: &[(SourceCode, ParseTree)]) {
+    let file_ids = files.iter()
+        .map(|(source_code, _)| (source_code.file_id(), source_code.clone()))
+        .collect();
+
+    let mut analyzer = SemanticAnalyzer::new(file_ids);
+
+    for (_, tree) in files {
+        analyzer.analyze_tree_phase_1(tree);
+    }
+
+    for (_, tree) in files {
+        analyzer.analyze_tree_phase_2(tree);
+    }
 
     let diags = analyzer.into_diagnostics();
     let mut has_error = false;
@@ -124,50 +155,60 @@ fn analyze(tree: &ParseTree<'_>) {
     }
 }
 
-fn parse(path: &Path, f: impl FnOnce(ParseTree<'_>)) {
+fn parse(path: &Path) -> (SourceCode, ParseTree) {
     let source_code = std::fs::read_to_string(path).unwrap();
+    let source_code = SourceCode::new(path, 0, source_code);
 
     let lexer = Lexer::new(&source_code);
-    let tokens: Vec<_> = lexer.collect();
+    let (tokens, errors) = lexer.collect_all();
+
+    for e in &errors {
+        print_error(&source_code, e.location.as_zero_range(), &e.kind);
+    }
 
     let mut parser = Parser::new(path.to_path_buf(), &tokens);
-    match parser.parse_tree() {
-        Ok(tree) => f(tree),
-        Err(e) => {
-            eprintln!("{}: {}", "fout".red().bold(), e.to_string().bold());
+    let tree = parser.parse_tree();
+    if parser.diagnostics().is_empty() && errors.is_empty() {
+        return (source_code, tree);
+    }
 
-            if let Some(range) = e.range() {
-                eprintln!();
-                let mut iter = source_code.lines().skip(range.start().line() - 1);
+    for e in parser.diagnostics() {
+        print_error(&source_code, e.range(), e);
+    }
 
-                if let Some(line) = iter.next() {
-                    if !line.trim().is_empty() {
-                        eprintln!("{}", line);
-                    }
-                }
+    exit(1);
+}
 
-                if let Some(line) = iter.next() {
-                    eprintln!("{line}");
-                    eprintln!(
-                        "{spaces}{caret}{tildes} {description}",
-                        spaces = " ".repeat(range.start().column()),
-                        caret = "^".bright_red().bold(),
-                        tildes = "~".repeat(range.len().saturating_sub(1)).bright_blue(),
-                        description = "fout trad hier op".bright_red()
-                    );
-                }
+fn print_error(source_code: &SourceCode, range: FileRange, message: impl Display) {
+    eprintln!("{}: {}", "fout".red().bold(), message.to_string().bold());
 
-                if let Some(line) = iter.next() {
-                    if !line.trim().is_empty() {
-                        eprintln!("{}", line);
-                    }
-                }
+    eprintln!();
+    let mut iter = source_code.lines().skip(range.start().line().saturating_sub(1));
 
-                eprintln!();
-
-                eprintln!("In {}:{}:{}\n", path.display(), range.start().line() + 1, range.start().column() + 1);
-                exit(1);
-            }
+    if let Some(line) = iter.next() {
+        if !line.trim().is_empty() {
+            eprintln!("{}", line);
         }
     }
+
+    if let Some(line) = iter.next() {
+        eprintln!("{line}");
+        eprintln!(
+            "{spaces}{caret}{tildes} {description}",
+            spaces = " ".repeat(range.start().column()),
+            caret = "^".bright_red().bold(),
+            tildes = "~".repeat(range.len().saturating_sub(1)).bright_blue(),
+            description = "fout trad hier op".bright_red()
+        );
+    }
+
+    if let Some(line) = iter.next() {
+        if !line.trim().is_empty() {
+            eprintln!("{}", line);
+        }
+    }
+
+    eprintln!();
+
+    eprintln!("In {}:{}:{}\n", source_code.path().display(), range.start().line() + 1, range.start().column() + 1);
 }

@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::path::PathBuf;
+
 use babbelaar::ParseDiagnostic;
 use thiserror::Error;
 use tower_lsp::jsonrpc::ErrorCode;
@@ -16,13 +18,19 @@ pub enum BabbelaarLspError {
     IoError(IoError),
 
     #[error("parseerfout: {0}")]
-    ParseError(String),
+    ParseError(ParseDiagnostic),
 
     #[error("geopend document heeft geen bestandspad as URL")]
     UrlNotFilePath,
 
     #[error("ongeldige data verstuurd: {explanation}")]
     InvalidDataSent { explanation: String },
+
+    #[error("\"{}\" is een ongeldige werkruimte-map: {error}", path.display())]
+    InvalidWorkspacePath { error: IoError, path: PathBuf },
+
+    #[error("Interne fout met pad: \"{}\"", path.display())]
+    InternalFileRegistrationError { path: PathBuf },
 }
 
 impl From<IoError> for BabbelaarLspError {
@@ -31,9 +39,9 @@ impl From<IoError> for BabbelaarLspError {
     }
 }
 
-impl From<ParseDiagnostic<'_>> for BabbelaarLspError {
-    fn from(value: ParseDiagnostic<'_>) -> Self {
-        Self::ParseError(value.to_string())
+impl From<ParseDiagnostic> for BabbelaarLspError {
+    fn from(value: ParseDiagnostic) -> Self {
+        Self::ParseError(value)
     }
 }
 

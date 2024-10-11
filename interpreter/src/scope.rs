@@ -3,24 +3,26 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use babbelaar::Structure;
+use babbelaar::{BabString, ValueType};
 
-use crate::{Builtin, FunctionId, Value};
+use crate::{Builtin, FunctionId, InterpreterStructure, Value};
 
 #[derive(Default, Debug)]
-pub struct Scope<'source_code> {
-    pub parent: Option<Box<Scope<'source_code>>>,
-    pub variables: HashMap<String, Value>,
-    pub structures: HashMap<String, Rc<Structure<'source_code>>>,
+pub struct Scope {
+    pub parent: Option<Box<Scope>>,
+    pub variables: HashMap<BabString, Value>,
+    pub structures: HashMap<BabString, Rc<InterpreterStructure>>,
+    pub generic_types: HashMap<BabString, ValueType>,
     pub this: Option<Value>,
 }
 
-impl<'source_code> Scope<'source_code> {
+impl Scope {
     pub fn new(this: Option<Value>) -> Self {
         Self {
             parent: None,
             variables: HashMap::new(),
             structures: HashMap::new(),
+            generic_types: HashMap::new(),
             this,
         }
     }
@@ -33,7 +35,7 @@ impl<'source_code> Scope<'source_code> {
                 namespace: usize::MAX,
                 id: func_idx,
             };
-            this.variables.insert(func.name.to_string(), Value::Function { name: func.name.to_string(), id });
+            this.variables.insert(BabString::new_static(func.name), Value::Function { name: func.name.to_string(), id });
         }
 
         this
@@ -45,6 +47,7 @@ impl<'source_code> Scope<'source_code> {
             parent: Some(Box::new(self)),
             variables: HashMap::new(),
             structures: HashMap::new(),
+            generic_types: HashMap::new(),
             this,
         }
     }
@@ -54,6 +57,7 @@ impl<'source_code> Scope<'source_code> {
             parent: Some(Box::new(self)),
             variables: HashMap::new(),
             structures: HashMap::new(),
+            generic_types: HashMap::new(),
             this,
         }
     }
@@ -62,7 +66,7 @@ impl<'source_code> Scope<'source_code> {
         *self.parent.expect("Top-level scope popped!")
     }
 
-    pub fn find(&self, reference: &str) -> Value {
+    pub fn find(&self, reference: &BabString) -> Value {
         if let Some(value) = self.variables.get(reference) {
             return value.clone();
         }
@@ -74,7 +78,7 @@ impl<'source_code> Scope<'source_code> {
         Value::Null
     }
 
-    pub fn find_mut(&mut self, reference: &str) -> Option<&mut Value> {
+    pub fn find_mut(&mut self, reference: &BabString) -> Option<&mut Value> {
         if let Some(value) = self.variables.get_mut(reference) {
             return Some(value);
         }
@@ -86,7 +90,19 @@ impl<'source_code> Scope<'source_code> {
         None
     }
 
-    pub fn overwrite(&mut self, reference: &str, new: Value) -> bool {
+    pub fn find_generic_type(&self, name: &BabString) -> Option<ValueType> {
+        if let Some(ty) = self.generic_types.get(name) {
+            return Some(ty.clone());
+        }
+
+        if let Some(parent) = &self.parent {
+            return parent.find_generic_type(name);
+        }
+
+        None
+    }
+
+    pub fn overwrite(&mut self, reference: &BabString, new: Value) -> bool {
         if let Some(value) = self.variables.get_mut(reference) {
             *value = new;
             return true;

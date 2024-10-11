@@ -12,16 +12,16 @@ use rstest::rstest;
 }
 ")]
 fn test(#[case] input: &str) {
-    let tokens: Vec<Token<'_>> = Lexer::new(input).collect();
-    let mut parser = Parser::new(PathBuf::new(), &tokens).attempt_to_ignore_errors();
+    let input = SourceCode::new(PathBuf::new(), 0, input.to_string());
+    let tokens: Vec<Token> = Lexer::new(&input).collect();
+    let mut parser = Parser::new(PathBuf::new(), &tokens);
 
     loop {
         match parser.parse_statement() {
             Ok(stmt) => println!("Stmt: {stmt:#?}"),
-            Err(ParseDiagnostic::EndOfFile) => break,
-            Err(e) => panic!("Unexpected error: {e}"),
+            Err(ParseError::EndOfFile) => break,
         }
     }
 
-    assert!(parser.errors.is_empty());
+    assert!(parser.diagnostics().is_empty());
 }

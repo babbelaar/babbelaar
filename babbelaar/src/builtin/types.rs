@@ -3,9 +3,9 @@
 
 use std::fmt::Display;
 
-use crate::BuiltinFunction;
+use crate::{BabString, BuiltinFunction};
 
-use super::methods::{METHODS_BOOL, METHODS_G32, METHODS_NULL, METHODS_SLINGER};
+use super::methods::{METHODS_BOOL, METHODS_G32, METHODS_NULL, METHODS_SLINGER, METHODS_TEKEN};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub enum BuiltinType {
@@ -13,16 +13,18 @@ pub enum BuiltinType {
     G32,
     Null,
     Slinger,
+    Teken,
 }
 
 impl BuiltinType {
     #[must_use]
-    pub const fn name(&self) -> &'static str {
+    pub const fn name(&self) -> BabString {
         match self {
-            Self::Bool => "bool",
-            Self::G32 => "g32",
-            Self::Null => "null",
-            Self::Slinger => "Slinger",
+            Self::Bool => BabString::new_static("bool"),
+            Self::G32 => BabString::new_static("g32"),
+            Self::Null => BabString::new_static("null"),
+            Self::Slinger => BabString::new_static("Slinger"),
+            Self::Teken => BabString::new_static("teken"),
         }
     }
 
@@ -54,11 +56,11 @@ impl BuiltinType {
                 }
                 str += param.name;
                 str += ": ";
-                str += param.typ.name();
+                str += &param.typ.name();
             }
 
             str += ") -> ";
-            str += method.return_type.name();
+            str += &method.return_type.name();
             str += " { /* (ingebouwd) */ }\n";
         }
 
@@ -68,13 +70,14 @@ impl BuiltinType {
     }
 
     #[must_use]
-    pub const fn inline_detail(&self) -> &'static str {
-        match self {
+    pub const fn inline_detail(&self) -> BabString {
+        BabString::new_static(match self {
             Self::Bool => "Een schakeling tussen `waar` en `onwaar`.",
             Self::G32 => "Een geheel getal met 32-bits precisie.",
             Self::Null => "Tijdelijk type, niet gebruiken",
             Self::Slinger => "Een stuk tekst, schrijfbaar met bijvoorbeeld: \"Hallo, slinger!\"",
-        }
+            Self::Teken => "Een letter, cijfer of speciaal teken.",
+        })
     }
 
     #[must_use]
@@ -84,12 +87,13 @@ impl BuiltinType {
             Self::G32 => METHODS_G32,
             Self::Null => METHODS_NULL,
             Self::Slinger => METHODS_SLINGER,
+            Self::Teken => METHODS_TEKEN,
         }
     }
 }
 
 impl Display for BuiltinType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name())
+        f.write_str(&self.name())
     }
 }

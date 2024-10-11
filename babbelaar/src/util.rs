@@ -1,46 +1,66 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{borrow::Cow, fmt::Display, ops::{Deref, DerefMut}};
+use std::{borrow::Cow, fmt::{Debug, Display}, hash::{DefaultHasher, Hash, Hasher}, ops::{Deref, DerefMut}, path::{Path, PathBuf}, sync::Arc};
 
 use thiserror::Error;
 
+use crate::BabString;
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileLocation {
+    file_id: FileId,
     offset: usize,
     line: usize,
+
+    // Currently, the `column` is actually the code point index into the line, which makes it
+    // effectively UTF-32. This is maybe good, but maybe awful because the `offset` is UTF-8,
+    // and the LSP engine expects UTF-16.
     column: usize,
 }
 
 impl FileLocation {
+    pub const INTERNAL: Self = Self::new(FileId::INTERNAL, 0, 0, 0);
+
     #[must_use]
-    pub const fn new(offset: usize, line: usize, column: usize) -> Self {
+    pub const fn new(file_id: FileId, offset: usize, line: usize, column: usize) -> Self {
         Self {
+            file_id,
             offset,
             line,
             column,
         }
     }
 
+    /// Zero based byte index
     #[must_use]
     pub const fn offset(&self) -> usize {
         self.offset
     }
 
+    /// Zero-based line number
     #[must_use]
     pub const fn line(&self) -> usize {
         self.line
     }
 
+    /// Zero-based column number
     #[must_use]
     pub const fn column(&self) -> usize {
         self.column
     }
-}
 
-impl From<(usize, usize, usize)> for FileLocation {
-    fn from(value: (usize, usize, usize)) -> Self {
-        Self::new(value.0, value.1, value.2)
+    #[must_use]
+    pub const fn as_zero_range(&self) -> FileRange {
+        FileRange {
+            start: *self,
+            end: *self,
+        }
+    }
+
+    #[must_use]
+    pub const fn file_id(&self) -> FileId {
+        self.file_id
     }
 }
 
@@ -63,8 +83,11 @@ pub struct FileRange {
 }
 
 impl FileRange {
+    pub const INTERNAL: Self = Self::new(FileLocation::INTERNAL, FileLocation::INTERNAL);
+
     #[must_use]
     pub const fn new(start: FileLocation, end: FileLocation) -> Self {
+        debug_assert!(start.file_id.0 == end.file_id.0);
         debug_assert!(end.offset >= start.offset);
         Self {
             start,
@@ -88,7 +111,15 @@ impl FileRange {
     }
 
     #[must_use]
-    pub const fn contains(&self, location: FileLocation) -> bool {
+    pub fn contains(&self, location: FileLocation) -> bool {
+        if self.file_id() != location.file_id && location.file_id != FileId::INTERNAL && self.file_id() != FileId::INTERNAL {
+            return false;
+        }
+
+        if location == FileLocation::default() {
+            return self.start == location;
+        }
+
         let start = if location.line == self.start.line {
             self.start.column <= location.column
         } else {
@@ -112,16 +143,23 @@ impl FileRange {
     pub fn as_full_line(&self) -> Self {
         Self {
             start: FileLocation {
+                file_id: self.start.file_id,
                 offset: self.start.offset - self.start.column,
                 line: self.start.line,
                 column: 0,
             },
             end: FileLocation {
+                file_id: self.start.file_id,
                 offset: self.end.offset + 1,
                 line: self.end.line + 1,
                 column: 0,
             }
         }
+    }
+
+    #[must_use]
+    pub const fn file_id(&self) -> FileId {
+        self.start.file_id()
     }
 }
 
@@ -229,10 +267,35 @@ pub struct LspCompletion<'a> {
     pub inline_detail: &'a str,
 }
 
+#[derive(Debug, Clone, Copy, Error)]
+pub enum BabbelaarCommand {
+    #[error("Veld hernoemen")]
+    RenameField,
+
+    #[error("Parameter hernoemen")]
+    RenameParameter,
+
+    #[error("Werkwijze hernoemen")]
+    RenameFunction,
+}
+
+impl BabbelaarCommand {
+    #[must_use]
+    pub const fn fix_kind(&self) -> BabbelaarFixKind {
+        match self {
+            Self::RenameField => BabbelaarFixKind::Refactor,
+            Self::RenameParameter => BabbelaarFixKind::Refactor,
+            Self::RenameFunction => BabbelaarFixKind::Refactor,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BabbelaarCodeAction {
     ty: BabbelaarCodeActionType,
     edits: Vec<FileEdit>,
+    command: Option<BabbelaarCommand>,
+    fix_kind: BabbelaarFixKind,
 }
 
 impl BabbelaarCodeAction {
@@ -241,6 +304,22 @@ impl BabbelaarCodeAction {
         Self {
             ty,
             edits,
+            command: None,
+            fix_kind: BabbelaarFixKind::QuickFix,
+        }
+    }
+
+    #[must_use]
+    pub fn new_command(range: FileRange, command: BabbelaarCommand) -> Self {
+        Self {
+            ty: BabbelaarCodeActionType::Command(command),
+            edits: vec![FileEdit {
+                replacement_range: range.start().as_zero_range(),
+                new_text: String::new(),
+                new_file_path: None,
+            }],
+            command: Some(command),
+            fix_kind: command.fix_kind(),
         }
     }
 
@@ -253,32 +332,151 @@ impl BabbelaarCodeAction {
     pub fn edits(&self) -> &[FileEdit] {
         &self.edits
     }
+
+    #[must_use]
+    pub fn command(&self) -> Option<&BabbelaarCommand> {
+        self.command.as_ref()
+    }
+
+    #[must_use]
+    pub fn with_command(self, command: impl Into<Option<BabbelaarCommand>>) -> Self {
+        Self {
+            command: command.into(),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn with_fix_kind(self, fix_kind: impl Into<BabbelaarFixKind>) -> Self {
+        Self {
+            fix_kind: fix_kind.into(),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub const fn fix_kind(&self) -> BabbelaarFixKind {
+        self.fix_kind
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BabbelaarFixKind {
+    QuickFix,
+    Refactor,
 }
 
 #[derive(Debug, Clone, Error)]
 pub enum BabbelaarCodeActionType {
+    #[error("Sleutelwoord `{keyword}` toevoegen")]
+    AddKeyword { keyword: &'static str, },
+
+    #[error("Voeg parameter{} toe",  if *residual_args == 1 { "" } else { "s" })]
+    AddParameter {
+        residual_args: usize,
+    },
+
+    #[error("Bekeertype `{typ}` toevoegen aan werkwijze")]
+    AddReturnType {
+        typ: BabString,
+    },
+
+    #[error("Wijs waarde toe aan een nieuwe variabele")]
+    AssignToNewVariable,
+
+    #[error("Hernoem naar `_{name}` om het probleem te negeren")]
+    AppendUnderscoreToName {
+        name: BabString,
+    },
+
+    #[error("Verander bekeertype naar `{typ}`")]
+    ChangeReturnType { typ: BabString },
+
     #[error("Zet Slinger `\"{number}\"` om naar getal `{number}`")]
     ChangeStringToNumber { number: isize },
+
+    #[error("Maak veld `{name}` aan")]
+    CreateField { name: String },
+
+    #[error("Maak werkwijze `{name}` aan binnen structuur `{structure}`")]
+    CreateMethod { name: BabString, structure: BabString },
+
+    #[error("Maak werkwijze `{name}` aan")]
+    CreateFunction { name: BabString },
 
     #[error("Vul structuurvelden van `{structure}`")]
     FillStructureFields { structure: String },
 
+    #[error("Functielichaam aanmaken met `{{` en `}}`")]
+    StartFunctionBody,
+
+    #[error("`{text}` invoegen")]
+    Insert { text: &'static str, },
+
+    #[error("Extra {} verwijderen", if *residual_args == 1 { "argument" } else { "argumenten" })]
+    RemoveArgument {
+        residual_args: usize,
+    },
+
     #[error("Verwijder puur statement")]
     RemovePureStatement,
+
+    #[error("Verwijder extra tekens")]
+    RemoveResidualTokens,
+
+    #[error("Verwijder attribute `@{name}`")]
+    RemoveAttribute { name: BabString },
+
+    #[error("Haal bekeerwaarde weg")]
+    RemoveExpression,
+
+    #[error("Haal bekeerwaarde weg")]
+    RemoveReturnType,
+
+    #[error("{0}")]
+    Command(BabbelaarCommand),
+
+    #[error("Verwijder {kind} `{name}`")]
+    RemoveGenericStatement {
+        kind: &'static str,
+        name: BabString,
+    },
+
+    #[error("Gebruik methode `{method_name}`")]
+    UseMethod { method_name: BabString },
+
+    #[error("Maak structuur `{name}` aan")]
+    CreateStructure { name: BabString },
+
+    #[error("Maak structuur `{name}` aan in nieuw bestand")]
+    CreateStructureInNewFile { name: BabString },
+
+    #[error("Verplaats structuur naar nieuw bestand")]
+    MoveStructureToNewFile,
 }
 
 #[derive(Debug, Clone)]
 pub struct FileEdit {
     replacement_range: FileRange,
     new_text: String,
+    new_file_path: Option<PathBuf>,
 }
 
 impl FileEdit {
     #[must_use]
-    pub fn new(replacement_range: FileRange, new_text: String) -> Self {
+    pub fn new(replacement_range: FileRange, new_text: impl Into<String>) -> Self {
         Self {
             replacement_range,
-            new_text,
+            new_text: new_text.into(),
+            new_file_path: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_new_file(self, path: PathBuf) -> Self {
+        Self {
+            new_file_path: Some(path),
+            ..self
         }
     }
 
@@ -290,6 +488,11 @@ impl FileEdit {
     #[must_use]
     pub fn new_text(&self) -> &str {
         &self.new_text
+    }
+
+    #[must_use]
+    pub fn new_file_path(&self) -> Option<&Path> {
+        self.new_file_path.as_ref().map(|x| x.as_path())
     }
 }
 
@@ -311,5 +514,115 @@ impl<'s, T> StrIterExt for T
         }
 
         s
+    }
+}
+
+pub trait StrExt {
+    #[must_use]
+    fn count_whitespace_at_end(&self) -> usize;
+
+    #[must_use]
+    fn count_space_at_end(&self) -> usize;
+
+    #[must_use]
+    fn indentation_at(&self, start: FileLocation) -> Option<&str>;
+}
+
+impl StrExt for str {
+    fn count_whitespace_at_end(&self) -> usize {
+        self.len() - self.trim_end().len()
+    }
+
+    fn count_space_at_end(&self) -> usize {
+        self.len() - self.trim_end_matches(|c: char| c == ' ').len()
+    }
+
+    fn indentation_at(&self, start: FileLocation) -> Option<&str> {
+        let line = self.lines().nth(start.line())?;
+
+        let line = &line[..start.column()];
+        Some(&line[..line.len() - line.trim_start().len()])
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceCode {
+    id: FileId,
+    version: i32,
+    path: Arc<PathBuf>,
+    contents: BabString,
+}
+
+impl SourceCode {
+    #[must_use]
+    #[cfg(test)]
+    pub fn new_test(contents: impl Into<BabString>) -> Self {
+        Self::new(PathBuf::new(), 0, contents.into())
+    }
+
+    #[must_use]
+    pub fn new(path: impl Into<PathBuf>, version: i32, contents: impl Into<BabString>) -> Self {
+        let path = Arc::new(path.into());
+        let id = FileId::from_path(&path);
+        let contents = contents.into();
+
+        Self {
+            id,
+            version,
+            path,
+            contents,
+        }
+    }
+
+    #[must_use]
+    pub const fn file_id(&self) -> FileId {
+        self.id
+    }
+
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    #[must_use]
+    pub fn contents(&self) -> &BabString {
+        &self.contents
+    }
+
+    #[must_use]
+    pub const fn version(&self) -> i32 {
+        self.version
+    }
+}
+
+impl Deref for SourceCode {
+    type Target = BabString;
+
+    fn deref(&self) -> &Self::Target {
+        self.contents()
+    }
+}
+
+#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FileId(usize);
+
+impl FileId {
+    pub const INTERNAL: Self = Self(usize::MAX);
+
+    #[must_use]
+    pub fn from_path(path: &Path) -> Self {
+        let mut hasher = DefaultHasher::new();
+        path.hash(&mut hasher);
+        Self(hasher.finish() as _)
+    }
+}
+
+impl Debug for FileId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if *self == Self::INTERNAL {
+            f.write_str("FileId::INTERNAL")
+        } else {
+            f.debug_tuple("FileId").field(&self.0).finish()
+        }
     }
 }

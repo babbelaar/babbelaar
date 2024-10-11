@@ -56,7 +56,7 @@ impl Keyword {
                 inline_detail: "Een nieuwe structuur",
             }),
             Self::Veld => Some(LspCompletion {
-                completion: "veld ${1:naam} = ${0:type},",
+                completion: "veld ${1:naam}: ${0:type},",
                 inline_detail: "Een nieuw veld",
             }),
             Self::Volg => Some(LspCompletion {

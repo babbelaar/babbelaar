@@ -1,9 +1,51 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::fmt::Debug;
+
 use crate::{BuiltinFunction, BuiltinType, Interpreter, Value};
 
-use super::BuiltinFunctionParameter;
+use super::{functions::BuiltinFunctionSignature, ArrayMethod, BuiltinFunctionParameter};
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum BuiltinMethodReference {
+    Function(&'static BuiltinFunction),
+    Array(&'static ArrayMethod),
+}
+
+impl BuiltinMethodReference {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Function(func) => func.name,
+            Self::Array(array) => array.name,
+        }
+    }
+
+    pub fn function(&self) -> BuiltinFunctionSignature {
+        match self {
+            Self::Function(f) => f.function,
+            Self::Array(f) => f.function,
+        }
+    }
+}
+
+impl Debug for BuiltinMethodReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BuiltinMethodReference").finish_non_exhaustive()
+    }
+}
+
+impl From<&'static BuiltinFunction> for BuiltinMethodReference {
+    fn from(value: &'static BuiltinFunction) -> Self {
+        Self::Function(value)
+    }
+}
+
+impl From<&'static ArrayMethod> for BuiltinMethodReference {
+    fn from(value: &'static ArrayMethod) -> Self {
+        Self::Array(value)
+    }
+}
 
 pub(super) static METHODS_BOOL: &'static [BuiltinFunction] = &[];
 pub(super) static METHODS_G32: &'static [BuiltinFunction] = &[];
@@ -96,6 +138,8 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
         must_use: true,
     },
 ];
+
+pub(super) static METHODS_TEKEN: &'static [BuiltinFunction] = &[];
 
 pub fn slinger_lengte(_: &mut dyn Interpreter, _parameters: Vec<Value>, this: Option<Value>) -> Value {
     Value::Integer(this.unwrap().to_string().len() as _)

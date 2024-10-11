@@ -7,6 +7,9 @@
             "include": "#keywords"
         },
         {
+            "include": "#template-strings"
+        },
+        {
             "include": "#strings"
         },
         {
@@ -16,6 +19,9 @@
             "include": "#constant.numeric"
         },
         {
+            "include": "#attributes"
+        },
+        {
             "include": "#comments"
         }
     ],
@@ -23,8 +29,12 @@
         "keywords": {
             "patterns": [
                 {
-                    "match": "\\b(volg|in|reeks|werkwijze|bekeer|waar|onwaar|als|structuur|veld|nieuw|stel|dit)\\b",
+                    "match": "\\b(volg|in|reeks|bekeer|als)\\b",
                     "name": "keyword.control.babbelaar"
+                },
+                {
+                    "match": "\\b(werkwijze|waar|structuur|onwaar|veld|nieuw|stel|dit)\\b",
+                    "name": "keyword.other.babbelaar"
                 }
             ]
         },
@@ -48,7 +58,21 @@
                 },
                 {
                     "match": "€\"[^\"]*\"",
+                    "patterns": [
+                        {
+                            "begin": "\\{",
+                            "end": "\\}"
+                        }
+                    ],
                     "name": "string.quoted.double.template.babbelaar"
+                }
+            ]
+        },
+        "attributes": {
+            "patterns": [
+                {
+                    "name": "keyword.other",
+                    "match": "@[a-zA-Z0-9]+"
                 }
             ]
         },

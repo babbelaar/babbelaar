@@ -85,11 +85,13 @@
         "commands": [
             {
                 "command": "babbelaar.uitvoeren",
+                "icon": "$(run)",
                 "title": "Babbelaar: Bestand uitvoeren"
             },
             {
                 "command": "babbelaar.herstarten",
-                "title": "Babbelaar: Taalserveerder herstarten"
+                "icon": "$(refresh)",
+                "title": "Babbelaar: Taaldienaar herstarten"
             }
         ],
         "taskDefinitions": [
@@ -130,6 +132,28 @@
                 "path": "./syntaxes/babbelaar.tmGrammar.json"
             }
         ],
+        "menus": {
+            "editor/title": [
+                {
+                    "when": "resourceLangId == babbelaar",
+                    "command": "babbelaar.uitvoeren",
+                    "group": "navigation"
+                }
+            ]
+        },
+        "semanticTokenScopes": [
+            {
+                "language": "babbelaar",
+                "scopes": {
+                    "keyword": [
+                        "keyword.other.babbelaar"
+                    ],
+                    "keyword.controlFlow": [
+                        "keyword.control.babbelaar"
+                    ]
+                }
+            }
+        ],
         "snippets": [
             {
                 "language": "babbelaar",
@@ -150,7 +174,7 @@
         "test": "vscode-test"
     },
     "dependencies": {
-        "vscode-languageclient": "^7.0.0"
+        "vscode-languageclient": "^9.0.1"
     },
     "devDependencies": {
         "@types/mocha": "^10.0.6",

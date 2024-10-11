@@ -28,3 +28,4 @@ obj/
 # Babbelaar
 *.babbelaar-object
 babbelaar-programma
+example-workspace/.vscode/

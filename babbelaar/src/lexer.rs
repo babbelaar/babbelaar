@@ -3,35 +3,41 @@
 
 use std::str::CharIndices;
 
-use crate::{FileLocation, Keyword, Punctuator, TemplateStringToken, Token, TokenKind};
+use strum::AsRefStr;
+use thiserror::Error;
+
+use crate::{FileLocation, Keyword, Punctuator, Slice, SourceCode, TemplateStringToken, Token, TokenKind};
 
 pub struct Lexer<'source_code> {
-    input: &'source_code str,
+    input: &'source_code SourceCode,
     chars: CharIndices<'source_code>,
 
     current: Option<(FileLocation, char)>,
     line: usize,
     column: usize,
+    errors: Vec<LexerError>,
 }
 
 impl<'source_code> Lexer<'source_code> {
-    pub fn new(input: &'source_code str) -> Self {
+    pub fn new(input: &'source_code SourceCode) -> Self {
         Self {
             input,
             chars: input.char_indices(),
             current: None,
             line: 0,
             column: 0,
+            errors: Vec::new(),
         }
     }
 
-    pub fn next(&mut self) -> Option<Token<'source_code>> {
+    pub fn next(&mut self) -> Option<Token> {
         self.skip_whitespace();
 
         let ch = self.peek_char()?;
         let tok = match ch {
             '"' => self.consume_string(),
             '€' => self.consume_template_string(),
+            '\'' => self.consume_character_literal(),
 
             'a'..='z' | 'A'..='Z' | '_' => self.consume_identifier_or_keyword(),
             '0'..='9' => self.consume_number(),
@@ -46,13 +52,15 @@ impl<'source_code> Lexer<'source_code> {
             ',' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Comma)),
             '=' => self.consume_single_or_double_char_token(Punctuator::Assignment, Punctuator::Equals),
             '+' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PlusSign)),
-            '-' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::HyphenMinus)),
+            '-' => self.consume_minus_or_arrow(),
             '/' => self.handle_solidus(),
             '*' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Asterisk)),
             '%' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PercentageSign)),
             ':' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Colon)),
             '.' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Period)),
             '@' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::AtSign)),
+            '<' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::LessThan)),
+            '>' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::GreaterThan)),
 
             _ => {
                 let (begin, char) = self.current?;
@@ -61,7 +69,7 @@ impl<'source_code> Lexer<'source_code> {
                     .map(|(pos, _)| pos)
                     .unwrap_or_else(|| {
                         let length = char.len_utf8();
-                        FileLocation::new(begin.offset() + length, begin.line(), begin.column() + length)
+                        FileLocation::new(self.input.file_id(), begin.offset() + length, begin.line(), begin.column() + length)
                     });
                 Some(Token {
                     begin,
@@ -74,7 +82,7 @@ impl<'source_code> Lexer<'source_code> {
         tok
     }
 
-    fn consume_single_char_token(&mut self, kind: TokenKind<'source_code>) -> Option<Token<'source_code>> {
+    fn consume_single_char_token(&mut self, kind: TokenKind) -> Option<Token> {
         let begin = self.current_location();
 
         self.consume_char();
@@ -88,7 +96,7 @@ impl<'source_code> Lexer<'source_code> {
         })
     }
 
-    fn consume_single_or_double_char_token(&mut self, single: Punctuator, double: Punctuator) -> Option<Token<'source_code>> {
+    fn consume_single_or_double_char_token(&mut self, single: Punctuator, double: Punctuator) -> Option<Token> {
         let begin = self.current_location();
 
         let char = self.next_char()?;
@@ -109,7 +117,30 @@ impl<'source_code> Lexer<'source_code> {
         })
     }
 
-    fn consume_string(&mut self) -> Option<Token<'source_code>> {
+    fn consume_character_literal(&mut self) -> Option<Token> {
+        let begin = self.current_location();
+        assert_eq!(self.next_char().unwrap(), '\'');
+
+        let ch = self.next_char()?;
+
+        if self.peek_char() == Some('\'') {
+            self.consume_char();
+        } else {
+            let location = self.current_location();
+            self.errors.push(LexerError {
+                location,
+                kind: LexerErrorKind::InvalidCharacterLiteral,
+            });
+        }
+
+        Some(Token {
+            kind: TokenKind::CharacterLiteral(ch),
+            begin,
+            end: self.current_location(),
+        })
+    }
+
+    fn consume_string(&mut self) -> Option<Token> {
         let begin = self.current_location();
 
         assert_eq!(self.next_char().unwrap(), '"');
@@ -129,7 +160,7 @@ impl<'source_code> Lexer<'source_code> {
         }
 
         let offset_end = self.current_location().offset();
-        let str = &self.input[offset_begin..offset_end];
+        let str = self.input.slice(offset_begin..offset_end);
 
         self.consume_char();
 
@@ -142,11 +173,23 @@ impl<'source_code> Lexer<'source_code> {
         })
     }
 
-    fn consume_template_string(&mut self) -> Option<Token<'source_code>> {
+    fn consume_template_string(&mut self) -> Option<Token> {
         assert_eq!(self.next_char().unwrap(), '€');
         let begin = self.current_location();
 
-        assert_eq!(self.next_char().unwrap(), '"');
+        let location = self.current_location();
+        if self.next_char() != Some('"') {
+            self.errors.push(LexerError {
+                location,
+                kind: LexerErrorKind::InvalidTemplateString,
+            });
+
+            return Some(Token {
+                kind: TokenKind::TemplateString(Vec::new()),
+                begin,
+                end: begin,
+            });
+        }
 
         let mut parts = Vec::new();
 
@@ -194,9 +237,9 @@ impl<'source_code> Lexer<'source_code> {
 
             if let Some(TemplateStringToken::Plain{ begin, end, str }) = parts.last_mut() {
                 *end = end_pos;
-                *str = &self.input[begin.offset()..end_pos.offset()];
+                *str = self.input.slice(begin.offset()..end_pos.offset());
             } else {
-                let str = &self.input[begin.offset()..end.offset()];
+                let str = self.input.slice(begin.offset()..end.offset());
                 parts.push(TemplateStringToken::Plain {
                     begin,
                     end,
@@ -215,7 +258,7 @@ impl<'source_code> Lexer<'source_code> {
         })
     }
 
-    fn consume_identifier_or_keyword(&mut self) -> Option<Token<'source_code>> {
+    fn consume_identifier_or_keyword(&mut self) -> Option<Token> {
         let begin = self.current_location();
 
         loop {
@@ -231,9 +274,9 @@ impl<'source_code> Lexer<'source_code> {
         }
 
         let end = self.current_location();
-        let str = &self.input[begin.offset()..end.offset()];
+        let str = self.input.slice(begin.offset()..end.offset());
 
-        let kind = match Keyword::parse(str) {
+        let kind = match Keyword::parse(&str) {
             Some(keyword) => TokenKind::Keyword(keyword),
             None => TokenKind::Identifier(str)
         };
@@ -245,7 +288,7 @@ impl<'source_code> Lexer<'source_code> {
         })
     }
 
-    fn consume_number(&mut self) -> Option<Token<'source_code>> {
+    fn consume_number(&mut self) -> Option<Token> {
         let begin = self.current_location();
 
         loop {
@@ -262,7 +305,16 @@ impl<'source_code> Lexer<'source_code> {
 
         let end = self.current_location();
         let str = &self.input[begin.offset()..end.offset()];
-        let integer = str.parse().unwrap();
+        let integer = match str.parse() {
+            Ok(int) => int,
+            Err(..) => {
+                self.errors.push(LexerError {
+                    location: end,
+                    kind: LexerErrorKind::InvalidNumber,
+                });
+                0
+            }
+        };
 
         Some(Token {
             kind: TokenKind::Integer(integer),
@@ -299,7 +351,7 @@ impl<'source_code> Lexer<'source_code> {
 
         self.current = self.chars.next()
             .map(|(offset, char)| {
-                let location = FileLocation::new(offset, self.line, self.column);
+                let location = FileLocation::new(self.input.file_id(), offset, self.line, self.column);
 
                 if char == '\n' {
                     self.line += 1;
@@ -328,11 +380,11 @@ impl<'source_code> Lexer<'source_code> {
         _ = self.peek_char();
         match self.current {
             Some((location, _)) => location,
-            None => FileLocation::new(self.input.len(), self.line, self.column),
+            None => FileLocation::new(self.input.file_id(), self.input.len(), self.line, self.column),
         }
     }
 
-    fn handle_solidus(&mut self) -> Option<Token<'source_code>> {
+    fn handle_solidus(&mut self) -> Option<Token> {
         self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus))
     }
 
@@ -351,10 +403,41 @@ impl<'source_code> Lexer<'source_code> {
             }
         }
     }
+
+    pub fn collect_all(mut self) -> (Vec<Token>, Vec<LexerError>) {
+        let mut tokens = Vec::new();
+
+        while let Some(token) = self.next() {
+            tokens.push(token);
+        }
+
+        (tokens, self.errors)
+    }
+
+    fn consume_minus_or_arrow(&mut self) -> Option<Token> {
+        let begin = self.current_location();
+
+        _ = self.next_char()?;
+
+        let kind = if self.peek_char() == Some('>') {
+            self.consume_char();
+            TokenKind::Punctuator(Punctuator::Arrow)
+        } else {
+            TokenKind::Punctuator(Punctuator::HyphenMinus)
+        };
+
+        let end = self.current_location();
+
+        Some(Token {
+            kind,
+            begin,
+            end,
+        })
+    }
 }
 
 impl<'source_code> Iterator for Lexer<'source_code> {
-    type Item = Token<'source_code>;
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next()
@@ -368,28 +451,52 @@ fn is_identifier_char(c: char) -> bool {
         || c == '_'
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
-pub enum LexerError {
+#[derive(Clone, Debug)]
+pub struct LexerError {
+    pub location: FileLocation,
+    pub kind: LexerErrorKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error, AsRefStr)]
+pub enum LexerErrorKind {
+    #[error("Ongeldige sjabloonslinger")]
+    InvalidTemplateString,
+
+    #[error("Ongeldig nummer")]
+    InvalidNumber,
+
+    #[error("Ongeldig teken")]
+    InvalidCharacterLiteral,
+}
+impl LexerErrorKind {
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.as_ref()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
     use rstest::rstest;
+    use crate::{BabString, FileId};
 
     #[rstest]
     #[case("h", Token {
-        kind: TokenKind::Identifier("h"),
-        begin: FileLocation::new(0, 0, 0),
-        end: FileLocation::new(1, 0, 1),
+        kind: TokenKind::Identifier(BabString::new_static("h")),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
     })]
     #[case("s ", Token {
-        kind: TokenKind::Identifier("s"),
-        begin: FileLocation::new(0, 0, 0),
-        end: FileLocation::new(1, 0, 1),
+        kind: TokenKind::Identifier(BabString::new_static("s")),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
     })]
-    fn next_text(#[case] input: &'static str, #[case] expected: Token<'static>) {
-        let actual = Lexer::new(input).next();
+    fn next_text(#[case] input: &'static str, #[case] expected: Token) {
+        let source_code = SourceCode::new(PathBuf::new(), 0, input.to_string());
+        let actual = Lexer::new(&source_code).next();
 
         assert_eq!(actual, Some(expected));
     }

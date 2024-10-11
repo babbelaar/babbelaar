@@ -6,21 +6,18 @@
 
 use std::fmt::Write;
 
-use babbelaar::{AssignStatement, BiExpression, BuiltinType, Expression, Field, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, BiExpression, BuiltinType, Expression, Field, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
 
-pub struct Formatter<'source> {
-    #[allow(unused)]
-    source: &'source str,
+pub struct Formatter {
     buffer: String,
     indents: Vec<LastSiblingKind>,
     must_indent: bool,
 }
 
-impl<'source_code> Formatter<'source_code> {
+impl Formatter {
     #[must_use]
-    pub fn new(source: &'source_code str) -> Self {
+    pub fn new() -> Self {
         Self {
-            source,
             buffer: String::new(),
             indents: vec![LastSiblingKind::None],
             must_indent: false,
@@ -72,7 +69,7 @@ impl<'source_code> Formatter<'source_code> {
         self.new_line();
     }
 
-    fn with_body_statements(&mut self, body: &[Statement<'_>]) {
+    fn with_body_statements(&mut self, body: &[Statement]) {
         self.with_curly_block(|f| {
             for statement in body {
                 statement.format(f);
@@ -95,7 +92,7 @@ enum LastSiblingKind {
     OtherStatement,
 }
 
-impl<'source_code> Write for Formatter<'source_code> {
+impl Write for Formatter {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         self.write_str(s);
         Ok(())
@@ -106,27 +103,27 @@ pub trait Format {
     fn format(&self, f: &mut Formatter);
 
     #[must_use]
-    fn format_to_string(&self, source: &str) -> String {
-        let mut formatter = Formatter::new(source);
+    fn format_to_string(&self) -> String {
+        let mut formatter = Formatter::new();
         self.format(&mut formatter);
         formatter.buffer
     }
 }
 
 impl Format for BuiltinType {
-    fn format(&self, f: &mut Formatter<'_>) {
-        f.write_str(self.name());
+    fn format(&self, f: &mut Formatter) {
+        f.write_str(&self.name());
     }
 }
 
-impl<'source_code> Format for Statement<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for Statement {
+    fn format(&self, f: &mut Formatter) {
         self.kind.format(f)
     }
 }
 
-impl<'source_code> Format for StatementKind<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for StatementKind {
+    fn format(&self, f: &mut Formatter) {
         match f.indents.last().copied().unwrap_or_default() {
             LastSiblingKind::None => (),
             LastSiblingKind::OtherStatement => f.new_line(),
@@ -165,8 +162,8 @@ impl<'source_code> Format for StatementKind<'source_code> {
     }
 }
 
-impl<'source_code> Format for Expression<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for Expression {
+    fn format(&self, f: &mut Formatter) {
         match self {
             Self::BiExpression(bi) => bi.format(f),
             Self::Postfix(postfix) => postfix.format(f),
@@ -175,8 +172,8 @@ impl<'source_code> Format for Expression<'source_code> {
     }
 }
 
-impl<'source_code> Format for BiExpression<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for BiExpression {
+    fn format(&self, f: &mut Formatter) {
         self.lhs.format(f);
         f.write_char(' ');
         f.write_str(self.operator.as_str());
@@ -185,25 +182,30 @@ impl<'source_code> Format for BiExpression<'source_code> {
     }
 }
 
-impl<'source_code> Format for PostfixExpression<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for PostfixExpression {
+    fn format(&self, f: &mut Formatter) {
         self.lhs.format(f);
         self.kind.format(f);
     }
 }
 
-impl<'source_code> Format for PostfixExpressionKind<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for PostfixExpressionKind {
+    fn format(&self, f: &mut Formatter) {
         match self {
             Self::Call(call) => call.format(f),
             Self::Member(member) => f.write_str(&member),
             Self::MethodCall(method) => method.format(f),
+            Self::Subscript(subscript) => {
+                f.write_char('[');
+                subscript.format(f);
+                f.write_char(']');
+            }
         }
     }
 }
 
-impl<'source_code> Format for FunctionCallExpression<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for FunctionCallExpression {
+    fn format(&self, f: &mut Formatter) {
         f.write_char('(');
 
         for (idx, arg) in self.arguments.iter().enumerate() {
@@ -218,25 +220,25 @@ impl<'source_code> Format for FunctionCallExpression<'source_code> {
     }
 }
 
-impl<'source_code> Format for MethodCallExpression<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for MethodCallExpression {
+    fn format(&self, f: &mut Formatter) {
         f.write_char('.');
         f.write_str(&self.method_name);
         self.call.format(f);
     }
 }
 
-impl<'source_code> Format for AssignStatement<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
-        self.dest.format(f);
+impl Format for AssignStatement {
+    fn format(&self, f: &mut Formatter) {
+        self.destination.format(f);
         f.write_str(" = ");
-        self.expression.format(f);
+        self.source.format(f);
         f.write_str(";\n");
     }
 }
 
-impl<'source_code> Format for FunctionStatement<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for FunctionStatement {
+    fn format(&self, f: &mut Formatter) {
         f.write_str("werkwijze ");
         f.write_str(self.name.value());
         f.write_char('(');
@@ -253,22 +255,29 @@ impl<'source_code> Format for FunctionStatement<'source_code> {
     }
 }
 
-impl<'source_code> Format for ForStatement<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for ForStatement {
+    fn format(&self, f: &mut Formatter) {
         f.write_str("volg ");
         f.write_str(self.iterator_name.value());
-        f.write_str(" in reeks(");
-        self.range.start.value().format(f);
-        f.write_str(", ");
-        self.range.end.value().format(f);
-        f.write_char(')');
+        f.write_str(" in ");
+
+        match self.iterable.value() {
+            ForIterableKind::Expression(expression) => expression.value().format(f),
+            ForIterableKind::Range(range) => {
+                f.write_str("reeks(");
+                range.start.value().format(f);
+                f.write_str(", ");
+                range.end.value().format(f);
+                f.write_char(')');
+            }
+        }
 
         f.with_body_statements(&self.body);
     }
 }
 
-impl<'source_code> Format for IfStatement<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for IfStatement {
+    fn format(&self, f: &mut Formatter) {
         f.write_str("als ");
         self.condition.format(f);
 
@@ -280,8 +289,8 @@ impl<'source_code> Format for IfStatement<'source_code> {
     }
 }
 
-impl<'source_code> Format for ReturnStatement<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for ReturnStatement {
+    fn format(&self, f: &mut Formatter) {
         f.write_str("bekeer");
 
         if let Some(expr) = &self.expression {
@@ -293,8 +302,8 @@ impl<'source_code> Format for ReturnStatement<'source_code> {
     }
 }
 
-impl<'source_code> Format for Structure<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for Structure {
+    fn format(&self, f: &mut Formatter) {
         f.write_str("structuur ");
         f.write_str(self.name.value());
         f.with_curly_block(|f| {
@@ -308,8 +317,8 @@ impl<'source_code> Format for Structure<'source_code> {
     }
 }
 
-impl<'source_code> Format for Field<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for Field {
+    fn format(&self, f: &mut Formatter) {
         f.write_str("veld ");
         f.write_str(self.name.value());
         f.write_str(": ");
@@ -317,8 +326,8 @@ impl<'source_code> Format for Field<'source_code> {
     }
 }
 
-impl<'source_code> Format for VariableStatement<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for VariableStatement {
+    fn format(&self, f: &mut Formatter) {
         f.write_str("stel ");
         f.write_str(&self.name);
         f.write_str(" = ");
@@ -327,22 +336,22 @@ impl<'source_code> Format for VariableStatement<'source_code> {
     }
 }
 
-impl<'source_code> Format for Parameter<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for Parameter {
+    fn format(&self, f: &mut Formatter) {
         f.write_str(&self.name);
         f.write_str(": ");
         self.ty.format(f);
     }
 }
 
-impl<'source_code> Format for Type<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for Type {
+    fn format(&self, f: &mut Formatter) {
         self.specifier.format(f);
     }
 }
 
-impl<'source_code> Format for TypeSpecifier<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for TypeSpecifier {
+    fn format(&self, f: &mut Formatter) {
         match self {
             Self::BuiltIn(builtin) => builtin.format(f),
             Self::Custom { .. } => todo!(),
@@ -350,8 +359,8 @@ impl<'source_code> Format for TypeSpecifier<'source_code> {
     }
 }
 
-impl<'source_code> Format for PrimaryExpression<'source_code> {
-    fn format(&self, f: &mut Formatter<'_>) {
+impl Format for PrimaryExpression {
+    fn format(&self, f: &mut Formatter) {
         match self {
             Self::Boolean(true) => f.write_str("waar"),
             Self::Boolean(false) => f.write_str("onwaar"),
@@ -361,6 +370,11 @@ impl<'source_code> Format for PrimaryExpression<'source_code> {
             }
             Self::ReferenceThis => f.write_str(Keyword::Dit.as_ref()),
             Self::Reference(s) => f.write_str(s.value()),
+            Self::CharacterLiteral(c) => {
+                f.write_char('"');
+                f.write_char(*c);
+                f.write_char('"');
+            }
             Self::StringLiteral(s) => {
                 f.write_char('"');
                 f.write_str(s);
@@ -379,11 +393,18 @@ impl<'source_code> Format for PrimaryExpression<'source_code> {
                 f.write_char(')');
             }
             Self::StructureInstantiation(structure) => structure.format(f),
+            Self::SizedArrayInitializer{ typ, size } => {
+                f.write_str("nieuw ");
+                typ.format(f);
+                f.write_char('[');
+                size.format(f);
+                f.write_char(']');
+            }
         }
     }
 }
 
-impl<'source_code> Format for StructureInstantiationExpression<'source_code> {
+impl Format for StructureInstantiationExpression {
     fn format(&self, f: &mut Formatter) {
         f.write_str("nieuw ");
         f.write_str(&self.name);
@@ -400,7 +421,7 @@ impl<'source_code> Format for StructureInstantiationExpression<'source_code> {
     }
 }
 
-impl<'source_code> Format for TemplateStringExpressionPart<'source_code> {
+impl Format for TemplateStringExpressionPart {
     fn format(&self, f: &mut Formatter) {
         match self {
             Self::Expression(expr) => {

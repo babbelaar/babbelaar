@@ -174,7 +174,7 @@ impl Debugger for DebugAdapter {
         self.stack_frames.pop();
     }
 
-    fn on_statement(&mut self, statement: &Statement<'_>) {
+    fn on_statement(&mut self, statement: &Statement) {
         self.handle_requests();
 
         let Some(frame) = self.stack_frames.last_mut() else {
@@ -186,7 +186,7 @@ impl Debugger for DebugAdapter {
         self.finish_handling();
     }
 
-    fn on_expression(&mut self, expression: &Ranged<Expression<'_>>) {
+    fn on_expression(&mut self, expression: &Ranged<Expression>) {
         self.handle_requests();
 
         let Some(frame) = self.stack_frames.last_mut() else {

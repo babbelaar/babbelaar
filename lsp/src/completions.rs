@@ -1,13 +1,13 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use babbelaar::*;
 use log::warn;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams, CompletionResponse, Documentation, InsertTextFormat, MarkupContent, MarkupKind};
 
-use crate::{Backend, BabbelaarLspResult as Result};
+use crate::{BabbelaarLspResult as Result, Backend};
 
 pub struct CompletionEngine<'b> {
     server: &'b Backend,
@@ -63,6 +63,16 @@ impl<'b> CompletionEngine<'b> {
                 Ok(true)
             }
 
+            Some(CompletionMode::Attribute { name }) => {
+                self.complete_attribute(name).await?;
+                Ok(true)
+            }
+
+            Some(CompletionMode::StructureMember(name)) => {
+                self.complete_member_definition(name).await;
+                Ok(true)
+            }
+
             None => Ok(false),
         }
     }
@@ -71,7 +81,7 @@ impl<'b> CompletionEngine<'b> {
         let mut was_new_func = false;
         let mut prev_punc = None;
 
-        let completion_mode = self.server.find_tokens_at(&self.params.text_document_position, |token, previous| {
+        let completion_mode = self.server.find_tokens_at(&self.params.text_document_position, |token, previous, _| {
             let last_keyword = previous.iter().enumerate().rev()
                 .filter_map(|(idx, token)| {
                     if let TokenKind::Keyword(kw) = token.kind {
@@ -94,6 +104,12 @@ impl<'b> CompletionEngine<'b> {
 
             // TODO: this should be replaced by looking at the syntactic tree structure.
             if let TokenKind::Identifier(ident) = &token.kind {
+                if previous.last().is_some_and(|last| last.kind == TokenKind::Punctuator(Punctuator::AtSign)) {
+                    return Ok(Some(CompletionMode::Attribute {
+                        name: ident.clone(),
+                    }));
+                }
+
                 if previous.last().is_some_and(|last| last.kind == TokenKind::Keyword(Keyword::Nieuw)) {
                     return Ok(Some(CompletionMode::Structure {
                         range: token.range(),
@@ -132,6 +148,12 @@ impl<'b> CompletionEngine<'b> {
                 }
             }
 
+            if let TokenKind::Punctuator(Punctuator::AtSign) = &token.kind {
+                return Ok(Some(CompletionMode::Attribute {
+                    name: BabString::empty(),
+                }));
+            }
+
             was_new_func = previous.last().is_some_and(|tok| matches!(tok.kind, TokenKind::Keyword(Keyword::Werkwijze)));
             prev_punc = previous.last().and_then(|x| if let TokenKind::Punctuator(punc) = x.kind { Some(punc) } else { None });
 
@@ -151,11 +173,27 @@ impl<'b> CompletionEngine<'b> {
                 }
             }
 
-            if let TokenKind::Identifier(ident) = &token.kind {
-                Ok(Some(CompletionMode::Function((token.range(), ident.to_string()))))
-            } else {
-                Ok(None)
+            let TokenKind::Identifier(ident) = &token.kind else {
+                return Ok(None);
+            };
+
+            let mut scope_stack = Vec::new();
+            for token in previous {
+                match token.kind {
+                    TokenKind::Keyword(kw @ Keyword::Structuur) => scope_stack.push(kw),
+                    TokenKind::Keyword(kw @ Keyword::Werkwijze) => scope_stack.push(kw),
+                    TokenKind::Keyword(kw @ Keyword::Volg) => scope_stack.push(kw),
+                    TokenKind::Punctuator(Punctuator::RightCurlyBracket) => {
+                        _ = scope_stack.pop();
+                    }
+                    _ => (),
+                }
             }
+
+            Ok(Some(match scope_stack.last() {
+                Some(Keyword::Structuur) => CompletionMode::StructureMember(Ranged::new(token.range(), ident.clone())),
+                _ => CompletionMode::Function((token.range(), ident.to_string())),
+            }))
         }).await?;
 
         if was_new_func {
@@ -165,10 +203,33 @@ impl<'b> CompletionEngine<'b> {
         Ok(completion_mode)
     }
 
+    async fn complete_member_definition(&mut self, name: Ranged<BabString>) {
+        let name = name.into_value();
+        self.completions.push(CompletionItem {
+            label: format!("Maak nieuw veld `{name}`"),
+            filter_text: Some(name.to_string()),
+            kind: Some(CompletionItemKind::FIELD),
+            insert_text: Some(format!("veld {name}: $0,")),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            documentation: None,
+            ..Default::default()
+        });
+
+        self.completions.push(CompletionItem {
+            label: format!("Maak nieuwe werkwijze `{name}`"),
+            filter_text: Some(name.to_string()),
+            kind: Some(CompletionItemKind::FIELD),
+            insert_text: Some(format!("werkwijze {name}() {{\n$0\n\n}}")),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            documentation: None,
+            ..Default::default()
+        });
+    }
+
     async fn complete_global_function(&mut self, ident: &str) -> Result<()> {
         let document = &self.params.text_document_position.text_document;
 
-        self.server.with_semantics(document, |analyzer| {
+        self.server.with_semantics(document, |analyzer, _| {
             if let Some(func) = analyzer.find_function_by_name(|f| f.starts_with(&ident)) {
                 self.completions.push(CompletionItem {
                     label: func.function_name().to_string(),
@@ -178,7 +239,7 @@ impl<'b> CompletionEngine<'b> {
                         kind: MarkupKind::Markdown,
                         value: x.to_string(),
                     })),
-                    insert_text: Some(func.lsp_completion().into_owned()),
+                    insert_text: Some(func.lsp_completion().to_string()),
                     insert_text_format: Some(InsertTextFormat::SNIPPET),
                     ..Default::default()
                 });
@@ -191,7 +252,7 @@ impl<'b> CompletionEngine<'b> {
     async fn complete_structure_name(&mut self, range: FileRange, structure_to_complete: String) -> Result<()> {
         let document = &self.params.text_document_position.text_document;
 
-        self.server.with_semantics(document, |analyzer| {
+        self.server.with_semantics(document, |analyzer, _| {
             analyzer.scopes_surrounding(range.start(), |scope| {
                 for (name, _) in &scope.structures {
                     if let Some(idx) = name.find(&structure_to_complete) {
@@ -210,12 +271,13 @@ impl<'b> CompletionEngine<'b> {
         }).await
     }
 
-    async fn complete_field_instantiation(&mut self, range: FileRange, field_to_complete: String, structure: String, new_line: bool) -> Result<()> {
+    async fn complete_field_instantiation(&mut self, range: FileRange, field_to_complete: String, structure: impl Into<BabString>, new_line: bool) -> Result<()> {
+        let structure = structure.into();
         let document = &self.params.text_document_position.text_document;
 
-        self.server.with_semantics(document, |analyzer| {
+        self.server.with_semantics(document, |analyzer, _| {
             analyzer.scopes_surrounding(range.start(), |scope| {
-                if let Some(structure) = scope.structures.get(structure.as_str()) {
+                if let Some(structure) = scope.structures.get(&structure) {
                     for field in &structure.fields {
                         if let Some(idx) = field.name.find(&field_to_complete) {
                             let value_hint = field.ty.value_or_field_name_hint();
@@ -246,7 +308,7 @@ impl<'b> CompletionEngine<'b> {
     async fn complete_variable(&mut self, range: FileRange) -> Result<()> {
         let document = &self.params.text_document_position.text_document;
 
-        self.server.with_semantics(document, |analyzer| {
+        self.server.with_semantics(document, |analyzer, _| {
             analyzer.scopes_surrounding(range.start(), |scope| {
                 for (name, local) in &scope.locals {
                     self.completions.push(CompletionItem {
@@ -266,18 +328,37 @@ impl<'b> CompletionEngine<'b> {
         }).await
     }
 
+    async fn complete_attribute(&mut self, name: BabString) -> Result<()> {
+        _ = name;
+
+        self.completions.push(CompletionItem {
+            label: "@uitheems".to_string(),
+            kind: Some(CompletionItemKind::FUNCTION),
+            insert_text: Some("uitheems(naam: \"${1:werkwijzenaam}\")\nwerkwijze ${1:werkwijzenaam}(${3:argumenten});$0".to_string()),
+            insert_text_format: Some(InsertTextFormat::SNIPPET),
+            documentation: None,
+            ..Default::default()
+        });
+
+        Ok(())
+    }
+
     async fn complete_method(&mut self, last_identifier: FileRange) -> Result<()> {
         let document = &self.params.text_document_position.text_document;
 
-        let completions = self.server.with_semantics(document, |analyzer| {
+        let completions = self.server.with_semantics(document, |analyzer, _| {
             let completions = if let Some(typ) = analyzer.context.definition_tracker.as_ref().and_then(|tracker| Some(tracker.get(&last_identifier)?.typ.clone())) {
                 match typ {
+                    SemanticType::Array(array) => {
+                        self.complete_array_methods(*array)
+                    }
+
                     SemanticType::Builtin(builtin) => {
                         self.complete_builtin_type(builtin)
                     }
 
-                    SemanticType::Custom(custom) => {
-                        self.complete_structure_method_or_field(custom.clone(), "")
+                    SemanticType::Custom { base, ..} => {
+                        self.complete_structure_method_or_field(base.clone(), "")
                     }
 
                     _ => Vec::new(),
@@ -291,6 +372,27 @@ impl<'b> CompletionEngine<'b> {
 
         self.completions.extend(completions);
         Ok(())
+    }
+
+    fn complete_array_methods(&self, _element_type: SemanticType) -> Vec<CompletionItem> {
+        let mut completions = Vec::new();
+
+        for method in Builtin::array().methods() {
+            completions.push(CompletionItem {
+                label: method.lsp_label(),
+                detail: Some(method.inline_detail.to_string()),
+                kind: Some(CompletionItemKind::METHOD),
+                documentation: Some(Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: method.documentation.to_string(),
+                })),
+                insert_text: Some(method.lsp_completion().to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
+            });
+        }
+
+        completions
     }
 
     fn complete_builtin_type(&self, builtin: BuiltinType) -> Vec<CompletionItem> {
@@ -314,7 +416,7 @@ impl<'b> CompletionEngine<'b> {
         completions
     }
 
-    fn complete_structure_method_or_field(&self, structure: Rc<SemanticStructure>, prefix: &str) -> Vec<CompletionItem> {
+    fn complete_structure_method_or_field(&self, structure: Arc<SemanticStructure>, prefix: &str) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
 
         for method in &structure.methods {
@@ -399,13 +501,13 @@ impl<'b> CompletionEngine<'b> {
 
         let document = &self.params.text_document_position.text_document;
 
-        let completions = self.server.with_semantics(document, |semantics| {
+        let completions = self.server.with_semantics(document, |semantics, _| {
             let mut completions = Vec::new();
 
             semantics.scopes_surrounding(range.start(), |scope| {
                 if let Some(this) = &scope.this {
-                    if let SemanticType::Custom(structure) = this {
-                        completions.extend(self.complete_structure_method_or_field(structure.clone(), "dit."));
+                    if let SemanticType::Custom { base, .. } = this {
+                        completions.extend(self.complete_structure_method_or_field(base.clone(), "dit."));
                     }
                 }
             });
@@ -484,4 +586,8 @@ enum CompletionMode {
         new_line: bool,
     },
     Structure { range: FileRange, name: String },
+    Attribute {
+        name: BabString,
+    },
+    StructureMember(Ranged<BabString>),
 }

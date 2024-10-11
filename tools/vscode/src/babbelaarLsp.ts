@@ -22,7 +22,7 @@ async function startClient(context: BabbelaarContext) {
 
 	stopClient();
 
-	const traceOutputChannel = window.createOutputChannel("Babbelaar Taalserveerder trace");
+	const traceOutputChannel = window.createOutputChannel("Babbelaar Taaldienaar-trace");
 	const run: Executable = {
 		command,
 		options: {
@@ -41,16 +41,15 @@ async function startClient(context: BabbelaarContext) {
 	let clientOptions: LanguageClientOptions = {
 		documentSelector: [{ scheme: "file", language: "babbelaar" }],
 		synchronize: {
-			// Notify the server about file changes to '.clientrc files contained in the workspace
-			fileEvents: workspace.createFileSystemWatcher("**/.clientrc"),
+			fileEvents: workspace.createFileSystemWatcher("**/.bab"),
 		},
 		traceOutputChannel,
 	};
 
 	// Create the language client and start the client.
 	client = new LanguageClient("babbelaar-lsp", "Babbelaar Taalondersteuning", serverOptions, clientOptions);
-	// activateInlayHints(context);
 	client.start();
+	console.log("Client is gestart");
 }
 
 export async function stopClient() {

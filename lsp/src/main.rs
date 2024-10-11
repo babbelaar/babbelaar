@@ -1,21 +1,25 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+#![feature(thread_id_value)]
+
 mod actions;
 mod backend;
+mod context;
 mod completions;
 mod conversion;
 mod error;
 mod format;
+mod hints;
 mod logger;
 mod symbolization;
 
-use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use std::{fs::File, io::Write, pin::Pin};
 
-use log::{info, warn, LevelFilter};
+use log::LevelFilter;
 use logger::Logger;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::RwLock;
@@ -26,7 +30,8 @@ use tower_lsp::{LanguageServer, LspService, Server};
 pub use self::{
     actions::CodeActionRepository,
     backend::Backend,
-    conversion::{UrlExtension, convert_file_range, convert_position, convert_token_range},
+    context::{BabbelaarContext, BabbelaarFile},
+    conversion::{UrlExtension, convert_command, Converter, TextEncoding},
     completions::CompletionEngine,
     error::{BabbelaarLspError, BabbelaarLspResult},
     format::Format,
@@ -51,8 +56,8 @@ impl LanguageServer for Backend {
         Ok(params)
     }
 
-    async fn initialized(&self, _: InitializedParams) {
-        info!("Initialized");
+    async fn initialized(&self, params: InitializedParams) {
+        self.initialized(params).await
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -61,6 +66,10 @@ impl LanguageServer for Backend {
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         self.did_change(params).await;
+    }
+
+    async fn did_delete_files(&self, params: DeleteFilesParams) {
+        self.did_delete_files(params).await;
     }
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
@@ -75,10 +84,8 @@ impl LanguageServer for Backend {
         Ok(self.on_semantic_tokens_full(params).await?)
     }
 
-    async fn document_highlight(&self, _params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
-        // TODO is this needed anymore?
-        warn!("Got document_highlight, will always return empty Vec, do we need it?");
-        Ok(Some(Vec::new()))
+    async fn document_highlight(&self, params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
+        Ok(self.document_highlight(params).await?)
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
@@ -104,6 +111,10 @@ impl LanguageServer for Backend {
     async fn shutdown(&self) -> Result<()> {
         Ok(())
     }
+
+    async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+        Ok(self.rename(params).await?)
+    }
 }
 
 #[tokio::main]
@@ -125,7 +136,7 @@ pub async fn run<I, O>(stdin: I, stdout: O)
         Backend {
             client,
             client_configuration: Arc::new(RwLock::new(None)),
-            file_store: Arc::new(RwLock::new(HashMap::new())),
+            context: Arc::new(BabbelaarContext::new()),
             code_actions: Arc::new(RwLock::new(CodeActionRepository::new()))
         }
     });
@@ -165,5 +176,21 @@ impl AsyncRead for Reader {
         this.file.write_all(temp_buf.filled()).unwrap();
 
         result
+    }
+}
+
+trait PathBufExt {
+    fn to_uri(&self) -> Uri;
+}
+
+impl PathBufExt for &Path {
+    fn to_uri(&self) -> Uri {
+        url::Url::from_file_path(self).unwrap().to_string().parse().unwrap()
+    }
+}
+
+impl PathBufExt for PathBuf {
+    fn to_uri(&self) -> Uri {
+        self.as_path().to_uri()
     }
 }

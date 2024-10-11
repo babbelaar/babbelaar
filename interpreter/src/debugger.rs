@@ -3,6 +3,8 @@
 
 use babbelaar::{Expression, FileRange, Interpreter, Ranged, Statement, Value};
 
+use crate::RuntimeError;
+
 #[derive(Debug, Clone, Copy)]
 pub struct DebuggerFunction<'interpreter> {
     pub ty: DebuggerFunctionType,
@@ -22,8 +24,8 @@ pub trait Debugger {
     fn initialize(&mut self, interpreter: &dyn Interpreter) { _ = interpreter }
     fn on_exit(&mut self) {}
 
-    fn on_statement(&mut self, statement: &Statement<'_>) { _ = statement }
-    fn on_expression(&mut self, expression: &Ranged<Expression<'_>>) { _ = expression }
+    fn on_statement(&mut self, statement: &Statement) { _ = statement }
+    fn on_expression(&mut self, expression: &Ranged<Expression>) { _ = expression }
 
     fn enter_function(&mut self, function: DebuggerFunction<'_>, args: &[Value]) {
         _ = function;
@@ -32,6 +34,10 @@ pub trait Debugger {
 
     fn leave_function(&mut self, function: DebuggerFunction<'_>) {
         _ = function;
+    }
+
+    fn on_runtime_error(&mut self, error: &RuntimeError) {
+        _ = error;
     }
 }
 

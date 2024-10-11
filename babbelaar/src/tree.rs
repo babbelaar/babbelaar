@@ -6,14 +6,14 @@ use std::{borrow::Cow, path::{Path, PathBuf}};
 use crate::{Statement, StatementKind};
 
 #[derive(Debug, Default, Clone)]
-pub struct ParseTree<'source_code> {
+pub struct ParseTree {
     pub(crate) path: PathBuf,
-    functions: Vec<Statement<'source_code>>,
-    statements: Vec<Statement<'source_code>>,
-    structures: Vec<Statement<'source_code>>,
+    functions: Vec<Statement>,
+    statements: Vec<Statement>,
+    structures: Vec<Statement>,
 }
 
-impl<'source_code> ParseTree<'source_code> {
+impl ParseTree {
     #[must_use]
     pub fn new(path: PathBuf) -> Self {
         Self {
@@ -35,27 +35,27 @@ impl<'source_code> ParseTree<'source_code> {
     }
 
     #[must_use]
-    pub fn statements(&self) -> &[Statement<'source_code>] {
+    pub fn statements(&self) -> &[Statement] {
         &self.statements
     }
 
     #[must_use]
-    pub fn functions(&self) -> &[Statement<'source_code>] {
+    pub fn functions(&self) -> &[Statement] {
         &self.functions
     }
 
     #[must_use]
-    pub fn structures(&self) -> &[Statement<'source_code>] {
+    pub fn structures(&self) -> &[Statement] {
         &self.structures
     }
 
-    pub fn all(&self) -> impl Iterator<Item = &Statement<'source_code>> {
+    pub fn all(&self) -> impl Iterator<Item = &Statement> {
         self.functions.iter()
             .chain(self.statements.iter())
             .chain(self.structures.iter())
     }
 
-    pub fn push(&mut self, statement: Statement<'source_code>) {
+    pub fn push(&mut self, statement: Statement) {
         match &statement.kind {
             StatementKind::Function(..) => self.functions.push(statement),
             StatementKind::Structure(..) => self.structures.push(statement),
