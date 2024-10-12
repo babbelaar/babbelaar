@@ -193,7 +193,7 @@ impl SemanticAnalyzer {
                 let value = self.analyze_expression(expr);
 
                 if let SemanticUsage::Pure(pure) = value.usage {
-                    let diag = SemanticDiagnostic::new(expr.range(), SemanticDiagnosticKind::UnusedPureValue)
+                    let diag = SemanticDiagnostic::new(expr.range(), SemanticDiagnosticKind::UnusedPureValue { ty: value.ty.to_string().into() })
                         .warn()
                         .with_action(BabbelaarCodeAction::new(
                             BabbelaarCodeActionType::AssignToNewVariable,
@@ -2102,8 +2102,8 @@ pub enum SemanticDiagnosticKind {
         definition_type: String,
     },
 
-    #[error("Pure waarde ongebruikt. Stelling heeft geen gevolg.")]
-    UnusedPureValue,
+    #[error("Pure waarde van type `{ty}` ongebruikt. Stelling heeft geen gevolg.")]
+    UnusedPureValue { ty: BabString },
 
     #[error("`dit` kan uitsluitend gebruikt worden binnen een werkwijze van een `structuur`")]
     ThisOutsideStructure,
