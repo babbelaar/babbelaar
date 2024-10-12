@@ -395,8 +395,11 @@ pub enum BabbelaarCodeActionType {
     #[error("Zet Slinger `\"{number}\"` om naar getal `{number}`")]
     ChangeStringToNumber { number: isize },
 
-    #[error("Maak veld `{name}` aan")]
-    CreateField { name: String },
+    #[error("Maak veld `{name}` met type `{ty}` aan")]
+    CreateField { name: String, ty: BabString },
+
+    #[error("Maak veld `{name}` met generiek parametertype `{ty}` aan")]
+    CreateFieldGeneric { name: String, ty: BabString },
 
     #[error("Maak werkwijze `{name}` aan binnen structuur `{structure}`")]
     CreateMethod { name: BabString, structure: BabString },

@@ -928,7 +928,7 @@ impl SemanticAnalyzer {
                         self.diagnostics.push(diag.with_related(field_def_hint).with_related(struct_hint.clone()));
                     } else {
                         let definition_type = self.analyze_expression(&field_instantiation.value).ty;
-                        let create_field_action = self.create_action_create_field(&base, &field_instantiation.name, definition_type);
+                        let create_field_actions = self.create_actions_create_field(&ty, &field_instantiation.name, definition_type);
 
                         self.diagnostics.push(
                             SemanticDiagnostic::new(
@@ -938,7 +938,7 @@ impl SemanticAnalyzer {
                                     field_name: name.value().clone()
                                 },
                             )
-                            .with_action(create_field_action)
+                            .with_actions(create_field_actions)
                             .with_related(struct_hint.clone()),
                         );
                     }
@@ -1249,18 +1249,19 @@ impl SemanticAnalyzer {
             SemanticRelatedMessage::StructureDefinedHere { name: base.name.value().clone() }
         );
 
-        let action = self.context.statements_state.last()
+        let actions = self.context.statements_state.last()
             .and_then(|x| x.assignment_type.as_ref())
             .map(|ty| {
-                self.create_action_create_field(&typ, &member, ty.clone())
-            });
+                self.create_actions_create_field(&typ, &member, ty.clone())
+            })
+            .unwrap_or_default();
 
         let diag = SemanticDiagnostic::new(
             member.range(),
             SemanticDiagnosticKind::InvalidMember { typ, name: member.value().clone() }
         );
 
-        self.diagnostics.push(diag.with_related(struct_hint).with_action(actions));
+        self.diagnostics.push(diag.with_related(struct_hint).with_actions(actions));
 
         SemanticValue::null()
     }
@@ -1544,14 +1545,34 @@ impl SemanticAnalyzer {
     }
 
     #[must_use]
-    fn create_action_create_field(&self, structure: &SemanticStructure, name: &str, ty: SemanticType) -> BabbelaarCodeAction {
-        let (add_location, indent) = self.calculate_new_field_or_method_location(structure);
-        let add_text = format!("\n{indent}veld {name}: {ty},");
+    fn create_actions_create_field(&self, structure: &SemanticType, name: &str, ty: SemanticType) -> Vec<BabbelaarCodeAction> {
+        let SemanticType::Custom { base: structure, parameters: generic_parameters, .. } = structure else {
+            return Vec::new();
+        };
 
-        BabbelaarCodeAction::new(
-            BabbelaarCodeActionType::CreateField { name: name.to_string() },
+        let (add_location, indent) = self.calculate_new_field_or_method_location(structure);
+
+        let mut items = Vec::new();
+
+        for (generic_index,generic_parameter_type) in generic_parameters.iter().enumerate() {
+            if generic_parameter_type == &ty {
+                let ty = structure.generic_types[generic_index].value().clone();
+                let add_text = format!("\n{indent}veld {name}: {ty},");
+
+                items.push(BabbelaarCodeAction::new(
+                    BabbelaarCodeActionType::CreateFieldGeneric { name: name.to_string(), ty },
+                    vec![FileEdit::new(add_location.as_zero_range(), add_text)]
+                ));
+            }
+        }
+
+        let add_text = format!("\n{indent}veld {name}: {ty},");
+        items.push(BabbelaarCodeAction::new(
+            BabbelaarCodeActionType::CreateField { name: name.to_string(), ty: ty.to_string().into() },
             vec![FileEdit::new(add_location.as_zero_range(), add_text)]
-        )
+        ));
+
+        items
     }
 
     #[must_use]
