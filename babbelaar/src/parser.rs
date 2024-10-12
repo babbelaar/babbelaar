@@ -847,7 +847,6 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_primary_expression(&mut self) -> ParseResult<Ranged<PrimaryExpression>> {
-        let reset = (self.cursor, self.token_begin, self.token_end);
         let token = self.consume_token()?;
         let range = token.range();
 
@@ -869,7 +868,6 @@ impl<'tokens> Parser<'tokens> {
             }
 
             _ => {
-                (self.cursor, self.token_begin, self.token_end) = reset;
                 let replacement_token = PrimaryExpression::Reference(Ranged::new(token.range(), BabString::empty()));
                 self.emit_diagnostic(ParseDiagnostic::UnknownStartOfExpression { token });
                 return Ok(Ranged::new(FileRange::new(self.token_begin, self.token_end), replacement_token));
@@ -1455,6 +1453,11 @@ impl<'tokens> Parser<'tokens> {
             size,
         })
     }
+
+    #[must_use]
+    fn previous_token(&self) -> &Token {
+        &self.tokens[self.cursor.saturating_sub(1)]
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error, AsRefStr)]
@@ -1667,6 +1670,16 @@ mod tests {
 
     use super::*;
     use rstest::rstest;
+
+    #[rstest]
+    #[case("")]
+    #[case("in")]
+    fn ensure_not_crashing(#[case] input: &'static str) {
+        let source_code = SourceCode::new_test(BabString::new_static(input));
+        let tokens: Vec<Token> = Lexer::new(&source_code).collect();
+        let mut parser = Parser::new(source_code.path().to_path_buf(), &tokens);
+        parser.parse_tree();
+    }
 
     #[rstest]
     #[case(" schrijf(\"Hallo\") ")]
