@@ -121,7 +121,7 @@ impl<'tokens> Parser<'tokens> {
                         self.cursor = reset;
 
                         let expression = self.parse_expression()?;
-                        self.expect_semicolon_after_statement()?;
+                        self.expect_semicolon_after_statement();
                         StatementKind::Expression(expression)
                     }
                 }
@@ -150,7 +150,7 @@ impl<'tokens> Parser<'tokens> {
         }
 
         let source = self.parse_expression()?;
-        self.expect_semicolon_after_statement()?;
+        self.expect_semicolon_after_statement();
 
         Ok(Some(AssignStatement {
             range: FileRange::new(destination.range().start(), source.range().end()),
@@ -313,7 +313,7 @@ impl<'tokens> Parser<'tokens> {
 
         match self.parse_expression() {
             Ok(expression) => {
-                self.expect_semicolon_after_statement()?;
+                self.expect_semicolon_after_statement();
                 Ok(ReturnStatement {
                     keyword_range,
                     expression: Some(expression),
@@ -480,7 +480,7 @@ impl<'tokens> Parser<'tokens> {
         }
 
         let expression = self.parse_expression()?;
-        self.expect_semicolon_after_statement()?;
+        self.expect_semicolon_after_statement();
 
         Ok(VariableStatement {
             range: FileRange::new(name.range().start(), expression.range().end()),
@@ -1205,13 +1205,13 @@ impl<'tokens> Parser<'tokens> {
         _ = self.consume_token();
     }
 
-    fn expect_semicolon_after_statement(&mut self) -> Result<(), ParseError> {
-        let range = self.tokens[self.cursor - 1].range().end().as_zero_range();
+    fn expect_semicolon_after_statement(&mut self) {
+        let range = self.previous_token().range().end().as_zero_range();
         let token = match self.peek_token() {
             Ok(token) => token.clone(),
             Err(ParseError::EndOfFile) => {
                 self.emit_diagnostic(ParseDiagnostic::ExpectedSemicolonAfterStatement { range, token: self.tokens[self.cursor - 1].clone() });
-                return Ok(())
+                return;
             },
         };
 
@@ -1220,8 +1220,6 @@ impl<'tokens> Parser<'tokens> {
         } else {
             _ = self.consume_token();
         }
-
-        Ok(())
     }
 
     fn previous_range(&self) -> FileRange {
