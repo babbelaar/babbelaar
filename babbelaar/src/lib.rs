@@ -5,6 +5,7 @@
 
 mod attribute;
 mod builtin;
+mod constants;
 mod expression;
 mod interpreter;
 mod keyword;
@@ -23,6 +24,7 @@ mod value;
 pub use self::{
     attribute::{Attribute, AttributeArgument, AttributeList},
     builtin::{ArrayMethod, ArrayMethodParameter, ArrayTypeRef, Builtin, BuiltinFunction, BuiltinMethodReference, BuiltinType},
+    constants::Constants,
     expression::*,
     interpreter::Interpreter,
     keyword::Keyword,
