@@ -27,5 +27,9 @@
     "Sjabloonslinger aanmaken": {
         "prefix": ["$"],
         "body": "€"
+    },
+    "Uitbreiding aanmaken": {
+        "prefix": ["uitbreiding", "extensie"],
+        "body": ["uitbreiding ${1:type} {", "\t$0", "}"]
     }
 }
