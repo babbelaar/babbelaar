@@ -9,4 +9,5 @@ pub struct Constants {
 
 impl Constants {
     pub const LANGUAGE_ID: &'static str = "babbelaar";
+    pub const ENV_LIBRARY_C: &'static str = "BABBELAAR_C_BIBLIOTHEEK";
 }

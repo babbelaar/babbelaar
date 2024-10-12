@@ -1,7 +1,9 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use babbelaar::{Attribute, BabString, PrimaryExpression, Value};
+use std::{borrow::Cow, env::var, process::exit};
+
+use babbelaar::{Attribute, BabString, Constants, PrimaryExpression, Value};
 use libloading::Library;
 use log::error;
 
@@ -100,8 +102,27 @@ impl FFIManager {
 }
 
 fn load_libc() -> Library {
-    if cfg!(target_os = "linux") {
-        return unsafe { Library::new("/lib/x86_64-linux-gnu/libc.so.6") }.unwrap();
+    for path in libc_names() {
+        if let Ok(library) = unsafe { Library::new(path.as_ref()) } {
+            return library;
+        }
+    }
+
+    eprintln!("Fout: kon de C-bibliotheek op dit platform niet vinden.");
+    eprintln!("Je kunt de omgevingsvariabele `{}` naar het juist pad zetten en het programma opnieuw uitvoeren.", Constants::ENV_LIBRARY_C);
+
+    exit(1);
+}
+
+fn libc_names() -> Vec<Cow<'static, str>> {
+    let mut name_or_paths: Vec<Cow<'static, str>> = Vec::new();
+
+    if let Ok(path) = var(Constants::ENV_LIBRARY_C) {
+        name_or_paths.push(path.into());
+    }
+
+    if cfg!(target_os = "macos") {
+        name_or_paths.push("/usr/lib/libSystem.B.dylib".into());
     }
 
     if cfg!(target_os = "windows") {
@@ -109,16 +130,13 @@ fn load_libc() -> Library {
 
         // Currently, the libs are specified relative to the DLL include path,
         // Since the `C:\Windows` path may be different on different systems, etc.
-        if let Ok(dll) = unsafe { Library::new("ucrtbase.dll") } {
-            return dll;
-        }
-
-        return unsafe { Library::new("msvcrt.dll") }.unwrap();
+        name_or_paths.push("ucrtbase.dll".into());
+        name_or_paths.push("msvcrt.dll".into());
     }
 
-    if cfg!(target_os = "macos") {
-        return unsafe { Library::new("/usr/lib/libSystem.B.dylib") }.unwrap();
+    if cfg!(target_os = "linux") {
+        name_or_paths.push("/lib/x86_64-linux-gnu/libc.so.6".into());
     }
 
-    panic!("Dit besturingssysteem wordt niet ondersteund!")
+    name_or_paths
 }
