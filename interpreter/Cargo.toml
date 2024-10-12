@@ -16,4 +16,4 @@ clap = { version = "4.5.16", features = ["derive"] }
 colored = "2.1"
 
 [dev-dependencies]
-rstest = "0.22"
+rstest = "0.23"
