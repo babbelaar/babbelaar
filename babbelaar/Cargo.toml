@@ -10,4 +10,4 @@ strum = { version = "0.26", features = ["derive"] }
 log = "0.4"
 
 [dev-dependencies]
-rstest = "0.22"
+rstest = "0.23"
