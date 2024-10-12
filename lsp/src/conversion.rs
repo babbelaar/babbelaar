@@ -93,8 +93,16 @@ impl Converter {
         let column = match self.encoding {
             TextEncoding::Utf8 => column,
             TextEncoding::Utf16 => {
-                let Some(line) = self.source_code.lines().nth(line) else {
-                    panic!("Illegal position given, line index={line} while file {} has {} line(s)", self.source_code.path().display(), self.source_code.lines().count());
+
+                let line = match self.source_code.lines().nth(line) {
+                    Some(line) => line,
+                    None => {
+                        if self.source_code.lines().count() < line {
+                            panic!("Illegal position given, line index={line} while file {} has {} line(s)", self.source_code.path().display(), self.source_code.lines().count());
+                        }
+
+                        ""
+                    }
                 };
 
                 let mut utf8_column = 0;
