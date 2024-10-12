@@ -963,6 +963,11 @@ impl SemanticAnalyzer {
                 } else {
                     "De velden"
                 },
+                verb: if count_fields_left == 1 {
+                    "ontbreekt"
+                } else {
+                    "ontbreken"
+                },
             }));
         }
 
@@ -1225,17 +1230,19 @@ impl SemanticAnalyzer {
 
         for field in &base.fields {
             if field.name.value() == member.value() {
+                let ty = field.ty.clone().resolve_against(&typ);
+
                 if let Some(tracker) = &mut self.context.definition_tracker {
                     tracker.insert(member.range(), SemanticReference {
                         local_name: member.value().clone(),
                         local_kind: SemanticLocalKind::FieldReference,
                         declaration_range: field.name.range(),
-                        typ: field.ty.clone(),
+                        typ: ty.clone(),
                     });
                 }
 
                 return SemanticValue {
-                    ty: field.ty.clone(),
+                    ty,
                     usage: SemanticUsage::Pure(PureValue::FieldReference {
                         declaration: field.name.range(),
                         name: field.name.value().clone(),
@@ -2098,13 +2105,14 @@ pub enum SemanticDiagnosticKind {
     #[error("Pure waarde ongebruikt. Stelling heeft geen gevolg.")]
     UnusedPureValue,
 
-    #[error("`dit` kan uitsluitend gebruikt worden binnen een `structuur`")]
+    #[error("`dit` kan uitsluitend gebruikt worden binnen een werkwijze van een `structuur`")]
     ThisOutsideStructure,
 
-    #[error("{field_word} `{names}` ontbreken een toewijzing")]
+    #[error("{field_word} `{names}` {verb} een toewijzing")]
     MissingFieldInitializers {
         names: String,
         field_word: &'static str,
+        verb: &'static str,
     },
 
     #[error("De naam van de uitheemse werkwijze is meerdere keren geven.")]
@@ -2825,6 +2833,11 @@ impl SemanticType {
             log::error!("Kan generieke parameters niet resolveren met type: {ty:#?}");
             return self;
         };
+
+        if parameters.len() <= generic_index {
+            // Te doen: kan ik vreemde omstandigheden gebeuren.
+            return self;
+        }
 
         parameters[generic_index].clone()
     }

@@ -1,5 +1,6 @@
 structuur Lijst<T> {
     veld inhoud: T[] = nieuw T[0],
+    veld test: T = dit.inhoud[0],
 
     werkwijze lengte() -> g32 {
         bekeer dit.inhoud.lengte();
@@ -33,3 +34,5 @@ lijst.voegToe("Ghi");
 
 stel naald = "Abc";
 schrijf(€"Bevat {lijst.bevat(naald)}");
+
+lijst.test = "Hoi";
