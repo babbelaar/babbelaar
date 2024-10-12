@@ -507,6 +507,20 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
                 );
             }
 
+            Self::ExpectedRightCurlyBracket { token, .. } => {
+                let indent = ctx.contents.indentation_at(token.range().end()).unwrap_or_default().chars().count().saturating_sub(4);
+                let indent = " ".repeat(indent);
+
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: "}" },
+                        vec![
+                            FileEdit::new(token.range().end().as_zero_range(), format!("\n{indent}}}"))
+                        ]
+                    ),
+                );
+            }
+
             Self::ExpectedRightSquareBracketForArrayInitializer { token }
                 | Self::ExpectedRightSquareBracketForArrayQualifier { token }
                 | Self::ExpectedRightSquareBracketForSubscript { token } => {
