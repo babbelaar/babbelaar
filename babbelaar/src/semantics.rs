@@ -230,10 +230,18 @@ impl SemanticAnalyzer {
                 }
             }
             StatementKind::Assignment(assign) => {
+                let source_type = self.analyze_expression(&assign.source).ty;
+
+                self.context.statements_state.push(StatementAnalysisState {
+                    assignment_type: Some(source_type.clone()),
+                    ..Default::default()
+                });
+
                 let destination_type = self.analyze_expression(&assign.destination).ty;
                 self.analyze_assignment_destination(assign.range(), &assign.destination);
-                let source_type = self.analyze_expression(&assign.source).ty;
                 self.analyze_assignment_source_dest(assign, destination_type, source_type);
+
+                self.context.statements_state.pop();
             }
             StatementKind::For(statement) => self.analyze_for_statement(statement),
             StatementKind::Function(function) => self.analyze_function(function, None),
@@ -1241,12 +1249,18 @@ impl SemanticAnalyzer {
             SemanticRelatedMessage::StructureDefinedHere { name: base.name.value().clone() }
         );
 
+        let action = self.context.statements_state.last()
+            .and_then(|x| x.assignment_type.as_ref())
+            .map(|ty| {
+                self.create_action_create_field(&typ, &member, ty.clone())
+            });
+
         let diag = SemanticDiagnostic::new(
             member.range(),
             SemanticDiagnosticKind::InvalidMember { typ, name: member.value().clone() }
         );
 
-        self.diagnostics.push(diag.with_related(struct_hint));
+        self.diagnostics.push(diag.with_related(struct_hint).with_action(actions));
 
         SemanticValue::null()
     }
@@ -2159,6 +2173,11 @@ impl SemanticDiagnosticKind {
     }
 }
 
+#[derive(Default, Debug)]
+struct StatementAnalysisState {
+    assignment_type: Option<SemanticType>,
+}
+
 #[derive(Debug)]
 pub struct SemanticContext {
     pub scope: Vec<SemanticScope>,
@@ -2167,6 +2186,8 @@ pub struct SemanticContext {
     pub definition_tracker: Option<HashMap<FileRange, SemanticReference>>,
     pub declaration_tracker: Option<Vec<SemanticReference>>,
     pub value_type_tracker: Option<HashMap<FileRange, SemanticType>>,
+
+    statements_state: Vec<StatementAnalysisState>,
 }
 
 impl SemanticContext {
@@ -2179,6 +2200,7 @@ impl SemanticContext {
             definition_tracker: Some(HashMap::new()),
             declaration_tracker: Some(Vec::new()),
             value_type_tracker: Some(HashMap::new()),
+            statements_state: Vec::new(),
         }
     }
 
