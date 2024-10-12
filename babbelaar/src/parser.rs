@@ -232,8 +232,11 @@ impl<'tokens> Parser<'tokens> {
 
         let body = if has_body {
             let mut body = Vec::new();
-            loop {
+            let mut is_closed_correctly = false;
+
+            while !self.is_at_end() {
                 if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
+                    is_closed_correctly = true;
                     _ = self.consume_token()?;
                     break;
                 }
@@ -242,6 +245,12 @@ impl<'tokens> Parser<'tokens> {
                     Ok(statement) => body.push(statement),
                     Err(ParseError::EndOfFile) => break,
                 }
+            }
+
+            if !is_closed_correctly {
+                let token = self.tokens.last().unwrap().clone();
+                let range = token.range().end().as_zero_range();
+                self.emit_diagnostic(ParseDiagnostic::ExpectedRightCurlyBracket { token, range, after: "werkwijze" });
             }
 
             Some(body)
@@ -345,9 +354,11 @@ impl<'tokens> Parser<'tokens> {
             methods: Vec::new(),
         };
 
-        loop {
+        let mut is_closed_correctly = false;
+        while !self.is_at_end() {
             if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
                 _ = self.consume_token()?;
+                is_closed_correctly = true;
                 break;
             }
 
@@ -405,6 +416,12 @@ impl<'tokens> Parser<'tokens> {
             if require_comma && self.peek_punctuator() != Some(Punctuator::RightCurlyBracket) {
                 self.emit_diagnostic(ParseDiagnostic::ExpectedCommaAfterStructureMember { token: self.peek_token()?.clone(), location: self.token_end });
             }
+        }
+
+        if !is_closed_correctly {
+            let token = self.tokens.last().unwrap().clone();
+            let range = token.range().end().as_zero_range();
+            self.emit_diagnostic(ParseDiagnostic::ExpectedRightCurlyBracket { token, range, after: "structuur" });
         }
 
         structure.right_curly_range = self.previous_range();
@@ -737,8 +754,10 @@ impl<'tokens> Parser<'tokens> {
         self.expect_left_curly_bracket("reeks van volg-lus")?;
 
         let mut body = Vec::new();
-        loop {
+        let mut is_closed_correctly = false;
+        while !self.is_at_end() {
             if self.peek_token()?.kind == TokenKind::Punctuator(Punctuator::RightCurlyBracket) {
+                is_closed_correctly = true;
                 _ = self.consume_token()?;
                 break;
             }
@@ -747,6 +766,12 @@ impl<'tokens> Parser<'tokens> {
                 Ok(statement) => body.push(statement),
                 Err(error) => self.handle_error(error),
             }
+        }
+
+        if !is_closed_correctly {
+            let token = self.tokens.last().unwrap().clone();
+            let range = token.range().end().as_zero_range();
+            self.emit_diagnostic(ParseDiagnostic::ExpectedRightCurlyBracket { token, range, after: "volg" });
         }
 
         let file_range = FileRange::new(keyword.start(), self.previous_end());
@@ -773,9 +798,12 @@ impl<'tokens> Parser<'tokens> {
         }
 
         let mut body = Vec::new();
-        loop {
+        let mut is_closed_correctly = false;
+
+        while !self.is_at_end() {
             if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
                 _ = self.consume_token()?;
+                is_closed_correctly = true;
                 break;
             }
 
@@ -786,6 +814,12 @@ impl<'tokens> Parser<'tokens> {
                     break;
                 }
             }
+        }
+
+        if !is_closed_correctly {
+            let token = self.tokens.last().unwrap().clone();
+            let range = token.range().end().as_zero_range();
+            self.emit_diagnostic(ParseDiagnostic::ExpectedRightCurlyBracket { token, range, after: "als" });
         }
 
         let range = FileRange::new(start, self.previous_end());
@@ -1475,6 +1509,9 @@ pub enum ParseDiagnostic {
     #[error("Is-teken `=` verwacht tussen naam van stelling en de toewijzing, maar kreeg: {token}")]
     ExpectedEqualsInsideVariable { token: Token },
 
+    #[error("Accolade `}}` verwacht om {after} af te sluiten")]
+    ExpectedRightCurlyBracket { token: Token, after: &'static str, range: FileRange },
+
     #[error("`]` verwacht om opeenvolging af te sluiten")]
     ExpectedRightSquareBracketForArrayInitializer { token: Token },
 
@@ -1565,6 +1602,7 @@ impl ParseDiagnostic {
             Self::ExpectedNameOfVariable { token } => token,
             Self::ExpectedIdentifier { token, .. } => token,
             Self::ExpectedEqualsInsideVariable { token } => token,
+            Self::ExpectedRightCurlyBracket { token,  .. } => token,
             Self::ExpectedRightSquareBracketForArrayInitializer { token } => token,
             Self::ExpectedRightSquareBracketForArrayQualifier { token } => token,
             Self::ExpectedRightSquareBracketForSubscript { token } => token,
@@ -1592,6 +1630,7 @@ impl ParseDiagnostic {
             Self::ExpectedCommaAfterStructureMember { location, .. } => location.as_zero_range(),
             Self::ExpectedSemicolonAfterStatement { range, .. } => *range,
             Self::ExpectedSemicolonOrCurlyBracketForFunction { range, .. } => *range,
+            Self::ExpectedRightCurlyBracket { range, .. } => *range,
             Self::FunctionMustHaveDefinition { range, .. } => *range,
             Self::PostfixMemberOrReferenceExpectedIdentifier { period, .. } => period.range(),
             Self::ResidualTokensInTemplateString { range, .. } => *range,
