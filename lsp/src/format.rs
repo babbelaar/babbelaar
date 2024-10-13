@@ -146,6 +146,7 @@ impl Format for StatementKind {
                 }
                 return;
             }
+            Self::Extension(..) => todo!(),
             Self::Function(statement) => statement.format(f),
             Self::For(statement) => statement.format(f),
             Self::If(statement) => statement.format(f),

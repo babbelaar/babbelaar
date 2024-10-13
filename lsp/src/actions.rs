@@ -542,6 +542,17 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
                 );
             }
 
+            Self::ExpectedExtensionMethodPrefixWerkwijze { token, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::AddKeyword{ keyword: "werkwijze" },
+                        vec![
+                            FileEdit::new(token.begin.as_zero_range(), "werkwijze ")
+                        ]
+                    ),
+                );
+            }
+
             Self::ExpectedStructureMethodPrefixWerkwijze { token } => {
                 ctx.items.push(
                     BabbelaarCodeAction::new(

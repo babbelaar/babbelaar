@@ -421,6 +421,12 @@ pub enum BabbelaarCodeActionType {
         residual_args: usize,
     },
 
+    #[error("Verwijder overbodige generieke parameters")]
+    RemoveExtraneousGenericTypes,
+
+    #[error("Verwijder generieke parameters")]
+    RemoveGenericParameters,
+
     #[error("Verwijder puur statement")]
     RemovePureStatement,
 

@@ -164,12 +164,12 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_extension_statement(&mut self) -> ParseResult<ExtensionStatement> {
-        let type_declarator = self.parse_type_declarator()?;
+        let type_specifier = self.parse_type_specifier();
 
         self.expect_left_curly_bracket("structuurnaam")?;
 
         let mut extension = ExtensionStatement {
-            type_declarator,
+            type_specifier,
             methods: Vec::new(),
         };
 
@@ -516,26 +516,6 @@ impl<'tokens> Parser<'tokens> {
         })
     }
 
-    #[must_use]
-    fn parse_type_declarator(&mut self) -> ParseResult<TypeDeclarator> {
-        let name_token = self.consume_token()?;
-
-        let name = Ranged::new(name_token.range(), match name_token.kind {
-            TokenKind::Identifier(ident) => ident,
-            _ => {
-                self.emit_diagnostic(ParseDiagnostic::ExpectedNameOfStructuur { token: name_token });
-                BabString::empty()
-            }
-        });
-
-        let generic_types = self.parse_type_generic_parameters_declarations();
-
-        Ok(TypeDeclarator {
-            name,
-            generic_types,
-        })
-    }
-
     fn parse_variable_statement(&mut self) -> Result<VariableStatement, ParseError> {
         let name_token = self.consume_token()?;
         let name_range = name_token.range();
@@ -690,9 +670,10 @@ impl<'tokens> Parser<'tokens> {
         Ranged::new(name_token.range(), specifier)
     }
 
-    fn parse_type_generic_parameters_definitions(&mut self) -> Vec<Ranged<Type>> {
+    fn parse_type_generic_parameters_definitions(&mut self) -> Ranged<Vec<Ranged<Type>>> {
+        let start = self.peek_token().map(|x| x.begin).unwrap_or(self.previous_end());
         if self.peek_punctuator() != Some(Punctuator::LessThan) {
-            return Vec::new();
+            return Ranged::new(start.as_zero_range(), Vec::new());
         }
 
         _ = self.consume_token();
@@ -704,7 +685,7 @@ impl<'tokens> Parser<'tokens> {
                 token: self.peek_current_or_last_token(),
             });
 
-            return Vec::new();
+            return Ranged::new(FileRange::new(start, self.previous_end()), Vec::new());
         }
 
         let mut types = Vec::new();
@@ -741,7 +722,7 @@ impl<'tokens> Parser<'tokens> {
             _ = self.consume_token();
         }
 
-        types
+        Ranged::new(FileRange::new(start, self.previous_end()), types)
     }
 
     fn parse_type_generic_parameters_declarations(&mut self) -> Vec<Ranged<BabString>> {
@@ -1520,7 +1501,7 @@ impl<'tokens> Parser<'tokens> {
         let name_range = name.range();
         let specifier = match Builtin::type_by_name(name.value()) {
             Some(builtin) => TypeSpecifier::BuiltIn(Ranged::new(name_range, builtin)),
-            None => TypeSpecifier::Custom { name, type_parameters: Vec::new() },
+            None => TypeSpecifier::Custom { name, type_parameters: Ranged::new(name_range.end().as_zero_range(), Vec::new()) },
         };
 
         Ok(PrimaryExpression::SizedArrayInitializer {

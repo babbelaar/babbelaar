@@ -77,7 +77,7 @@ impl Value {
             Self::MethodReference { .. } => todo!(),
             Self::MethodIdReference { .. } => todo!(),
             Self::Function { .. } => todo!(),
-            Self::Object { structure, .. } => structure.into(),
+            Self::Object { structure, generic_types, .. } => ValueType::Structure(*structure, generic_types.clone()),
         }
     }
 
@@ -138,11 +138,11 @@ impl Display for Value {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ValueType {
     Array(Box<ValueType>),
     Builtin(BuiltinType),
-    Structure(StructureId),
+    Structure(StructureId, HashMap<BabString, ValueType>),
 }
 
 impl From<BuiltinType> for ValueType {
@@ -154,18 +154,6 @@ impl From<BuiltinType> for ValueType {
 impl From<&BuiltinType> for ValueType {
     fn from(value: &BuiltinType) -> Self {
         Self::Builtin(*value)
-    }
-}
-
-impl From<&StructureId> for ValueType {
-    fn from(value: &StructureId) -> Self {
-        Self::Structure(*value)
-    }
-}
-
-impl From<StructureId> for ValueType {
-    fn from(value: StructureId) -> Self {
-        Self::Structure(value)
     }
 }
 
