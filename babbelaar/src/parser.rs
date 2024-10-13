@@ -166,16 +166,17 @@ impl<'tokens> Parser<'tokens> {
     fn parse_extension_statement(&mut self) -> ParseResult<ExtensionStatement> {
         let type_specifier = self.parse_type_specifier();
 
-        self.expect_left_curly_bracket("structuurnaam")?;
+        let left_curly_bracket = self.expect_left_curly_bracket("structuurnaam")?;
 
         let mut extension = ExtensionStatement {
             type_specifier,
             methods: Vec::new(),
+            right_curly_bracket: left_curly_bracket.end().as_zero_range(),
         };
 
         loop {
             if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
-                _ = self.consume_token()?;
+                extension.right_curly_bracket = self.consume_token()?.range();
                 break;
             }
 
