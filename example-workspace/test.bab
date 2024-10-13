@@ -41,11 +41,20 @@
 
 structuur Persoon {
     veld naam: Slinger,
+}
 
+uitbreiding Persoon {
     werkwijze toon() {
-        schrijf(€"Hallo, ik ben {dit.naam}!");
+
+    }
+
+    werkwijze toon2() {
+
     }
 }
 
 stel persoon = nieuw Persoon {naam: "Jan"};
+// persoon.toon();
+
 persoon.toon();
+persoon.toon2();

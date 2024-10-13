@@ -44,6 +44,7 @@ pub struct AssignStatement {
 pub struct ExtensionStatement {
     pub type_specifier: Ranged<TypeSpecifier>,
     pub methods: Vec<Method>,
+    pub right_curly_bracket: FileRange,
 }
 
 #[derive(Clone, Debug)]

@@ -133,6 +133,8 @@ impl SemanticAnalyzer {
         let mut ext = SemanticExtension {
             ty,
             methods: HashMap::new(),
+            range,
+            right_curly_bracket: extension.right_curly_bracket,
         };
 
         self.context.push_extension_scope(extension, range);
@@ -554,6 +556,7 @@ impl SemanticAnalyzer {
             name: structure.name.clone(),
             generic_types: structure.generic_types.clone(),
             left_curly_range: structure.left_curly_range,
+            right_curly_range: structure.right_curly_range,
             fields,
             methods,
         });
@@ -607,6 +610,7 @@ impl SemanticAnalyzer {
     #[must_use]
     fn create_semantic_method(&mut self, method: &Method) -> SemanticMethod {
         SemanticMethod {
+            range: method.range,
             function: self.create_semantic_function(&method.function),
         }
     }
@@ -1410,10 +1414,13 @@ impl SemanticAnalyzer {
                     return value;
                 }
 
+                let args: Vec<SemanticType> = expression.call.arguments.iter().map(|x| self.analyze_expression(x).ty).collect();
+                let create_method_extension_actions = self.create_actions_create_method_extension(&typ, expression, &args);
+
                 self.diagnostics.push(SemanticDiagnostic::new(
                     expression.method_name.range(),
                     SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value().clone()}
-                ));
+                ).with_actions(create_method_extension_actions));
 
                 SemanticValue::null()
             }
@@ -1455,11 +1462,13 @@ impl SemanticAnalyzer {
                     SemanticRelatedMessage::StructureDefinedHere { name: base.name.value().clone() }
                 );
 
-                let create_method_action = self.create_action_create_method(&base, expression);
+                let args: Vec<SemanticType> = expression.call.arguments.iter().map(|x| self.analyze_expression(x).ty).collect();
+                let create_method_action = self.create_action_create_method(&base, expression, &args);
+                let create_method_extension_actions = self.create_actions_create_method_extension(&typ, expression, &args);
                 let diag = SemanticDiagnostic::new(
                     expression.method_name.range(),
                     SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value().clone() }
-                ).with_action(create_method_action);
+                ).with_action(create_method_action).with_actions(create_method_extension_actions);
 
                 self.diagnostics.push(diag.with_related(struct_hint));
 
@@ -1733,18 +1742,17 @@ impl SemanticAnalyzer {
     }
 
     #[must_use]
-    fn create_action_create_method(&mut self, structure: &SemanticStructure, method: &MethodCallExpression) -> BabbelaarCodeAction {
+    fn create_action_create_method(&self, structure: &SemanticStructure, method: &MethodCallExpression, args: &[SemanticType]) -> BabbelaarCodeAction {
         let name = method.method_name.value().clone();
         let (add_location, indent) = self.calculate_new_field_or_method_location(structure);
 
         let mut add_text = format!("\n\n{indent}werkwijze {name}(");
 
-        for (idx, arg) in method.call.arguments.iter().enumerate() {
+        for (idx, typ) in args.iter().enumerate() {
             if idx != 0 {
                 add_text += ", ";
             }
 
-            let typ = self.analyze_expression(arg).ty;
             add_text += &format!("param{idx}: {typ}");
         }
 
@@ -1761,8 +1769,134 @@ impl SemanticAnalyzer {
         )
     }
 
+    #[must_use]
+    fn create_actions_create_method_extension(&self, typ: &SemanticType, method: &MethodCallExpression, args: &[SemanticType]) -> Vec<BabbelaarCodeAction> {
+        let add_to_existing = self.create_actions_create_method_extension_existing_structure(typ, method, args);
+
+        let is_explicitly_new = add_to_existing.is_some();
+        let new = self.create_actions_create_method_extension_new_structure(typ, method, args, is_explicitly_new);
+
+        [add_to_existing, Some(new)].into_iter().flatten().collect()
+    }
+
+    #[must_use]
+    fn create_actions_create_method_extension_new_structure(&self, typ: &SemanticType, method: &MethodCallExpression, args: &[SemanticType], is_explicitly_new: bool) -> BabbelaarCodeAction {
+        let name = method.method_name.value().clone();
+        let location = self.calculate_new_extension_location();
+        let indent = self.indentation_at(location).unwrap_or_default();
+
+        let mut add_text = format!("\n\n{indent}uitbreiding {typ} {{\n{indent}    werkwijze {name}(");
+
+        for (idx, typ) in args.iter().enumerate() {
+            if idx != 0 {
+                add_text += ", ";
+            }
+
+            add_text += &format!("param{idx}: {typ}");
+        }
+
+        add_text += ") {\n\n";
+        add_text += &indent;
+        add_text += "    }\n";
+        add_text += &indent;
+        add_text += "}";
+
+        BabbelaarCodeAction::new(
+            BabbelaarCodeActionType::CreateMethodExtension {
+                name,
+                structure: typ.to_string().into(),
+                is_explicitly_new,
+            },
+            vec![FileEdit::new(location.as_zero_range(), add_text)]
+        )
+    }
+
+    #[must_use]
+    fn create_actions_create_method_extension_existing_structure(&self, typ: &SemanticType, method: &MethodCallExpression, args: &[SemanticType]) -> Option<BabbelaarCodeAction> {
+        let extension = self.find_extension_block_for(typ)?;
+
+        let location = extension.methods.values().map(|x| x.range.end()).max().unwrap_or(extension.right_curly_bracket.start());
+
+        let indent;
+        let new_lines_at_start;
+        let new_lines_at_end;
+        if extension.methods.is_empty() {
+            new_lines_at_start = "";
+            new_lines_at_end = "\n\n";
+            indent = self.indentation_at(location).unwrap_or_default().to_string();
+        } else {
+            new_lines_at_start = "\n\n";
+            new_lines_at_end = "";
+            indent = String::new();
+        }
+
+        let name = method.method_name.value().clone();
+
+        let mut add_text = format!("{new_lines_at_start}{indent}    werkwijze {name}(");
+
+        for (idx, typ) in args.iter().enumerate() {
+            if idx != 0 {
+                add_text += ", ";
+            }
+
+            add_text += &format!("param{idx}: {typ}");
+        }
+
+        add_text += ") {\n\n";
+        add_text += &indent;
+        add_text += "    }";
+        add_text += new_lines_at_end;
+
+        Some(BabbelaarCodeAction::new(
+            BabbelaarCodeActionType::CreateMethodExtension {
+                name,
+                structure: typ.to_string().into(),
+                is_explicitly_new: false,
+            },
+            vec![FileEdit::new(location.as_zero_range(), add_text)]
+        ))
+    }
+
+    fn find_extension_block_for(&self, typ: &SemanticType) -> Option<&SemanticExtension> {
+        for scope in self.context.scope.iter().rev() {
+            for extension in scope.extensions.iter().rev() {
+                if extension.ty == *typ {
+                    return Some(extension);
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn indentation_at(&self, start: FileLocation) -> Option<&str> {
         self.files.get(&start.file_id())?.indentation_at(start)
+    }
+
+    #[must_use]
+    fn calculate_new_extension_location(&self) -> FileLocation {
+        let mut last_structure = None;
+        let mut last_extension = None;
+
+        for scope in self.context.scope.iter().rev() {
+            if let Some(ext) = scope.extensions.last() {
+                last_extension = Some(ext.range);
+            }
+
+            if let Some(structure) = scope.structures.values().map(|x| x.right_curly_range).max() {
+                last_structure = Some(structure);
+            }
+        }
+
+        if let Some(range) = last_extension {
+            return range.end();
+        }
+
+        if let Some(range) = last_structure {
+            return range.end();
+        }
+
+        self.context.scope[1].range.end()
     }
 
     fn calculate_new_field_or_method_location(&self, structure: &SemanticStructure) -> (FileLocation, String) {
@@ -2641,6 +2775,8 @@ impl SemanticScope {
 pub struct SemanticExtension {
     pub ty: SemanticType,
     pub methods: HashMap<BabString, SemanticMethod>,
+    pub range: FileRange,
+    pub right_curly_bracket: FileRange,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -2868,6 +3004,7 @@ pub struct SemanticField {
 
 #[derive(Debug, Clone)]
 pub struct SemanticMethod {
+    pub range: FileRange,
     pub function: SemanticFunction,
 }
 
@@ -2894,6 +3031,7 @@ pub struct SemanticStructure {
     pub name: Ranged<BabString>,
     pub generic_types: Vec<Ranged<BabString>>,
     pub left_curly_range: FileRange,
+    pub right_curly_range: FileRange,
     pub fields: Vec<SemanticField>,
     pub methods: Vec<SemanticMethod>,
 }
