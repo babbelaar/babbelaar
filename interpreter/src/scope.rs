@@ -38,6 +38,10 @@ impl Scope {
             this.variables.insert(BabString::new_static(func.name), Value::Function { name: func.name.to_string(), id });
         }
 
+        for ty in Builtin::TYPES {
+            this.structures.insert(ty.name(), StructureId::from(*ty));
+        }
+
         this
     }
 

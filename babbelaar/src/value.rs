@@ -193,6 +193,15 @@ impl From<&Structure> for StructureId {
     }
 }
 
+impl From<BuiltinType> for StructureId {
+    fn from(value: BuiltinType) -> Self {
+        Self{
+            namespace: 1,
+            id: value as u8 as usize,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MethodId {
     pub structure: StructureId,

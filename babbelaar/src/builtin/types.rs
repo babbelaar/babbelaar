@@ -8,6 +8,7 @@ use crate::{BabString, BuiltinFunction};
 use super::methods::{METHODS_BOOL, METHODS_G32, METHODS_NULL, METHODS_SLINGER, METHODS_TEKEN};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
+#[repr(u8)]
 pub enum BuiltinType {
     Bool,
     G32,
