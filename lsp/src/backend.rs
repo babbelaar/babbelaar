@@ -854,6 +854,9 @@ impl Backend {
         let (reference, source_code) = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
             let pos = params.text_document_position_params.position;
             let location = self.converter(source_code).convert_location(pos);
+            if let Some(reference) = analyzer.find_reference_at(location) {
+                return Ok((Some(reference), source_code.clone()));
+            }
             Ok((analyzer.find_declaration_range_at(location), source_code.clone()))
         }).await?;
 
@@ -861,12 +864,14 @@ impl Backend {
             Some((origin_range, reference)) => {
                 let file_id = reference.declaration_range.file_id();
                 if file_id == FileId::INTERNAL {
+                    log::warn!("Verwijst naar een intern bestand: {reference:#?}");
                     return Ok(None);
                 }
 
                 let target_range = self.converter_for(reference.declaration_range.file_id()).await.convert_file_range(reference.declaration_range);
 
                 let Some(path) = self.context.path_of(file_id).await else {
+                    log::warn!("Bestand is onbekend");
                     return Ok(None);
                 };
 
