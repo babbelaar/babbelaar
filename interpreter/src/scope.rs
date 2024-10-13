@@ -1,17 +1,17 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
-use babbelaar::{BabString, ValueType};
+use babbelaar::{BabString, StructureId, ValueType};
 
-use crate::{Builtin, FunctionId, InterpreterStructure, Value};
+use crate::{Builtin, FunctionId, Value};
 
 #[derive(Default, Debug)]
 pub struct Scope {
     pub parent: Option<Box<Scope>>,
     pub variables: HashMap<BabString, Value>,
-    pub structures: HashMap<BabString, Rc<InterpreterStructure>>,
+    pub structures: HashMap<BabString, StructureId>,
     pub generic_types: HashMap<BabString, ValueType>,
     pub this: Option<Value>,
 }
@@ -36,6 +36,10 @@ impl Scope {
                 id: func_idx,
             };
             this.variables.insert(BabString::new_static(func.name), Value::Function { name: func.name.to_string(), id });
+        }
+
+        for ty in Builtin::TYPES {
+            this.structures.insert(ty.name(), StructureId::from(*ty));
         }
 
         this
@@ -97,6 +101,18 @@ impl Scope {
 
         if let Some(parent) = &self.parent {
             return parent.find_generic_type(name);
+        }
+
+        None
+    }
+
+    pub fn find_structure_id(&self, name: &BabString) -> Option<StructureId> {
+        if let Some(id) = self.structures.get(name) {
+            return Some(*id);
+        }
+
+        if let Some(parent) = self.parent.as_ref() {
+            return parent.find_structure_id(name);
         }
 
         None

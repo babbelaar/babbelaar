@@ -59,6 +59,7 @@ impl ParseTree {
         match &statement.kind {
             StatementKind::Function(..) => self.functions.push(statement),
             StatementKind::Structure(..) => self.structures.push(statement),
+            StatementKind::Extension(..) => self.functions.push(statement),
             _ => self.statements.push(statement),
         }
     }

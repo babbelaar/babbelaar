@@ -1,9 +1,9 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::sync::Arc;
+use std::collections::HashMap;
 
-use babbelaar::{AttributeList, BabString, FunctionStatement, Structure};
+use babbelaar::{AttributeList, BabString, FunctionStatement, MethodId, Structure};
 
 #[derive(Debug)]
 pub struct InterpreterFunction {
@@ -13,8 +13,8 @@ pub struct InterpreterFunction {
 
 #[derive(Debug)]
 pub struct InterpreterStructure {
+    pub method_ids: HashMap<BabString, MethodId>,
     pub structure: Structure,
-    pub methods: Vec<Arc<InterpreterFunction>>,
 }
 
 impl InterpreterStructure {

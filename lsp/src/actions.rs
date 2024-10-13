@@ -216,6 +216,14 @@ impl CodeActionsAnalyzable for Statement {
                 stmt.source.analyze(ctx);
             }
 
+            StatementKind::Extension(ext) => {
+                for method in &ext.methods {
+                    for stmt in method.function.body.as_ref().map(Vec::as_slice).unwrap_or_default() {
+                        stmt.analyze(ctx);
+                    }
+                }
+            }
+
             StatementKind::For(stmt) => {
                 for stmt in &stmt.body {
                     stmt.analyze(ctx);
@@ -529,6 +537,17 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
                         BabbelaarCodeActionType::Insert{ text: "]" },
                         vec![
                             FileEdit::new(token.range().end().as_zero_range(), "]")
+                        ]
+                    ),
+                );
+            }
+
+            Self::ExpectedExtensionMethodPrefixWerkwijze { token, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::AddKeyword{ keyword: "werkwijze" },
+                        vec![
+                            FileEdit::new(token.begin.as_zero_range(), "werkwijze ")
                         ]
                     ),
                 );

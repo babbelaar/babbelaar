@@ -57,5 +57,6 @@ impl Builtin {
         BuiltinType::Bool,
         BuiltinType::G32,
         BuiltinType::Slinger,
+        BuiltinType::Teken,
     ];
 }

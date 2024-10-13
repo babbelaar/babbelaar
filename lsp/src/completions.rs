@@ -181,8 +181,9 @@ impl<'b> CompletionEngine<'b> {
             for token in previous {
                 match token.kind {
                     TokenKind::Keyword(kw @ Keyword::Structuur) => scope_stack.push(kw),
-                    TokenKind::Keyword(kw @ Keyword::Werkwijze) => scope_stack.push(kw),
+                    TokenKind::Keyword(kw @ Keyword::Uitbreiding) => scope_stack.push(kw),
                     TokenKind::Keyword(kw @ Keyword::Volg) => scope_stack.push(kw),
+                    TokenKind::Keyword(kw @ Keyword::Werkwijze) => scope_stack.push(kw),
                     TokenKind::Punctuator(Punctuator::RightCurlyBracket) => {
                         _ = scope_stack.pop();
                     }
@@ -191,7 +192,7 @@ impl<'b> CompletionEngine<'b> {
             }
 
             Ok(Some(match scope_stack.last() {
-                Some(Keyword::Structuur) => CompletionMode::StructureMember(Ranged::new(token.range(), ident.clone())),
+                Some(Keyword::Structuur) |  Some(Keyword::Uitbreiding) => CompletionMode::StructureMember(Ranged::new(token.range(), ident.clone())),
                 _ => CompletionMode::Function((token.range(), ident.to_string())),
             }))
         }).await?;

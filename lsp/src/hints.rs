@@ -87,6 +87,7 @@ impl InlayHintsEngine {
         match &statement.kind {
             StatementKind::Assignment(assignment) => self.visit_assignment(assignment),
             StatementKind::Expression(expression) => self.visit_expression(expression),
+            StatementKind::Extension(extension) => self.visit_extension(extension),
             StatementKind::Function(function) => self.visit_function(function),
             StatementKind::For(for_statement) => self.visit_for_statement(for_statement),
             StatementKind::If(if_statement) => self.visit_if_statement(if_statement),
@@ -176,6 +177,12 @@ impl InlayHintsEngine {
         }
     }
 
+    fn visit_extension(&mut self, extension: &ExtensionStatement) {
+        for method in &extension.methods {
+            self.visit_function(&method.function);
+        }
+    }
+
     fn visit_function(&mut self, function: &FunctionStatement) {
         if let Some(body) = &function.body {
             for statement in body {
@@ -241,8 +248,6 @@ impl InlayHintsEngine {
 
         let Some(tracker) = &self.analyzer.context.value_type_tracker else { return };
         let Some(function) = tracker.get(&expression.lhs.range()) else { return };
-
-        log::info!("FUNC: {function:#?}");
 
         match function {
             SemanticType::Function(func) => {

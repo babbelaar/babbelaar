@@ -6,9 +6,7 @@ use std::path::PathBuf;
 use log::error;
 use strum::AsRefStr;
 
-use crate::{
-    statement::ReturnStatement, AssignStatement, Attribute, AttributeArgument, AttributeList, BabString, BiExpression, BiOperator, Builtin, BuiltinType, Comparison, Expression, Field, FieldInstantiation, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, Method, MethodCallExpression, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Punctuator, RangeExpression, Ranged, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeQualifier, TypeSpecifier, VariableStatement
-};
+use crate::*;
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
@@ -106,6 +104,11 @@ impl<'tokens> Parser<'tokens> {
                 StatementKind::Structure(self.parse_structure_statement()?)
             }
 
+            TokenKind::Keyword(Keyword::Uitbreiding) => {
+                _ = self.consume_token().ok();
+                StatementKind::Extension(self.parse_extension_statement()?)
+            }
+
             TokenKind::Keyword(Keyword::Volg) => {
                 StatementKind::For(self.parse_for_statement()?)
             }
@@ -158,6 +161,62 @@ impl<'tokens> Parser<'tokens> {
             destination,
             source,
         }))
+    }
+
+    fn parse_extension_statement(&mut self) -> ParseResult<ExtensionStatement> {
+        let type_specifier = self.parse_type_specifier();
+
+        let left_curly_bracket = self.expect_left_curly_bracket("structuurnaam")?;
+
+        let mut extension = ExtensionStatement {
+            type_specifier,
+            methods: Vec::new(),
+            right_curly_bracket: left_curly_bracket.end().as_zero_range(),
+        };
+
+        loop {
+            if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
+                extension.right_curly_bracket = self.consume_token()?.range();
+                break;
+            }
+
+            let peeked_token = self.peek_token()?;
+            match peeked_token.kind {
+                TokenKind::Keyword(Keyword::Veld) => {
+                    _ = self.consume_token();
+
+                }
+
+                TokenKind::Keyword(Keyword::Werkwijze) => {
+                    let start = self.consume_token()?.begin;
+
+                    let function = self.parse_function(FunctionParsingContext::Method)?;
+
+                    let range = FileRange::new(start, self.token_end);
+
+                    extension.methods.push(Method {
+                        range,
+                        function,
+                    });
+                }
+
+                TokenKind::Identifier(..) => {
+                    let token = self.consume_token()?;
+                    self.emit_diagnostic(ParseDiagnostic::ExpectedStructureMethodPrefixWerkwijze { token });
+                }
+
+                _ => {
+                    let token = self.consume_token()?;
+                    self.emit_diagnostic(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token });
+                }
+            }
+
+            if self.peek_punctuator() == Some(Punctuator::Comma) {
+                _ = self.consume_token()?;
+            }
+        }
+
+        Ok(extension)
     }
 
     pub fn parse_function(&mut self, ctx: FunctionParsingContext) -> Result<FunctionStatement, ParseError> {
@@ -612,9 +671,10 @@ impl<'tokens> Parser<'tokens> {
         Ranged::new(name_token.range(), specifier)
     }
 
-    fn parse_type_generic_parameters_definitions(&mut self) -> Vec<Ranged<Type>> {
+    fn parse_type_generic_parameters_definitions(&mut self) -> Ranged<Vec<Ranged<Type>>> {
+        let start = self.peek_token().map(|x| x.begin).unwrap_or(self.previous_end());
         if self.peek_punctuator() != Some(Punctuator::LessThan) {
-            return Vec::new();
+            return Ranged::new(start.as_zero_range(), Vec::new());
         }
 
         _ = self.consume_token();
@@ -626,7 +686,7 @@ impl<'tokens> Parser<'tokens> {
                 token: self.peek_current_or_last_token(),
             });
 
-            return Vec::new();
+            return Ranged::new(FileRange::new(start, self.previous_end()), Vec::new());
         }
 
         let mut types = Vec::new();
@@ -663,7 +723,7 @@ impl<'tokens> Parser<'tokens> {
             _ = self.consume_token();
         }
 
-        types
+        Ranged::new(FileRange::new(start, self.previous_end()), types)
     }
 
     fn parse_type_generic_parameters_declarations(&mut self) -> Vec<Ranged<BabString>> {
@@ -1442,7 +1502,7 @@ impl<'tokens> Parser<'tokens> {
         let name_range = name.range();
         let specifier = match Builtin::type_by_name(name.value()) {
             Some(builtin) => TypeSpecifier::BuiltIn(Ranged::new(name_range, builtin)),
-            None => TypeSpecifier::Custom { name, type_parameters: Vec::new() },
+            None => TypeSpecifier::Custom { name, type_parameters: Ranged::new(name_range.end().as_zero_range(), Vec::new()) },
         };
 
         Ok(PrimaryExpression::SizedArrayInitializer {
@@ -1488,6 +1548,9 @@ pub enum ParseDiagnostic {
 
     #[error("Na een structuurlid hoort een komma `;`")]
     ExpectedCommaAfterStructureMember { token: Token, location: FileLocation },
+
+    #[error("Onjuiste uitbreidingswerkwijze, deze hoort te starten met `werkwijze`")]
+    ExpectedExtensionMethodPrefixWerkwijze { token: Token },
 
     #[error("Generieke typenaam verwacht, bijvoorbeeld `T`")]
     ExpectedGenericTypeName { token: Token },
@@ -1592,6 +1655,7 @@ impl ParseDiagnostic {
             Self::ExpectedComma { token, .. } => token,
             Self::ExpectedCommaAfterStructureMember { token, .. } => token,
             Self::ExpectedCommaOrGreaterThanInGenericTypePack { token, .. } => token,
+            Self::ExpectedExtensionMethodPrefixWerkwijze { token, .. } => token,
             Self::ExpectedGenericTypeName { token, .. } => token,
             Self::ExpectedGreaterThanForParameterPack { token, .. } => token,
             Self::ExpectedStructureMethodPrefixWerkwijze { token } => token,

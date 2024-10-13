@@ -31,7 +31,7 @@ pub use self::{
     lexer::{Lexer, LexerError, LexerErrorKind},
     parser::{Parser, ParseDiagnostic, ParseError},
     semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticLocal, SemanticLocalKind, SemanticReference, SemanticScope, SemanticStructure, SemanticType},
-    statement::{AssignStatement, ForIterableKind, ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
+    statement::{AssignStatement, ExtensionStatement, ForIterableKind, ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
     string::{BabString, IntoBabString, Slice},
     structure::{Field, Method, Structure},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},

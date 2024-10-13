@@ -35,7 +35,7 @@ pub enum TypeSpecifier {
     BuiltIn(Ranged<BuiltinType>),
     Custom {
         name: Ranged<BabString>,
-        type_parameters: Vec<Ranged<Type>>,
+        type_parameters: Ranged<Vec<Ranged<Type>>>,
     },
 }
 
@@ -66,6 +66,13 @@ impl Display for TypeSpecifier {
 }
 
 impl TypeSpecifier {
+    pub fn unqualified_name(&self) -> BabString {
+        match self {
+            Self::BuiltIn(builtin) => builtin.name(),
+            Self::Custom { name, .. } => BabString::clone(&name),
+        }
+    }
+
     #[must_use]
     pub fn fully_qualified_name(&self) -> BabString {
         match self {

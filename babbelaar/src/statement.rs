@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{util::FileRange, AttributeList, BabString, Expression, Parameter, RangeExpression, Ranged, Structure, Type};
+use crate::{AttributeList, BabString, Expression, FileRange, Method, Parameter, RangeExpression, Ranged, Structure, Type, TypeSpecifier};
 
 #[derive(Debug, Clone)]
 pub struct Statement {
@@ -14,6 +14,7 @@ pub struct Statement {
 pub enum StatementKind {
     Assignment(Ranged<AssignStatement>),
     Expression(Ranged<Expression>),
+    Extension(ExtensionStatement),
     Function(FunctionStatement),
     For(ForStatement),
     If(IfStatement),
@@ -37,6 +38,13 @@ pub struct AssignStatement {
     pub equals_sign: FileRange,
     pub destination: Ranged<Expression>,
     pub source: Ranged<Expression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExtensionStatement {
+    pub type_specifier: Ranged<TypeSpecifier>,
+    pub methods: Vec<Method>,
+    pub right_curly_bracket: FileRange,
 }
 
 #[derive(Clone, Debug)]
