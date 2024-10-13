@@ -662,7 +662,7 @@ impl Backend {
     }
 
     pub async fn initialized(&self, _: InitializedParams) {
-        info!("Initialized");
+        info!("Babbelaar Taaldienaar is geïnitialiseerd.");
     }
 
     pub async fn did_open(&self, params: DidOpenTextDocumentParams) {

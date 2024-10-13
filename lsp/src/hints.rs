@@ -249,8 +249,6 @@ impl InlayHintsEngine {
         let Some(tracker) = &self.analyzer.context.value_type_tracker else { return };
         let Some(function) = tracker.get(&expression.lhs.range()) else { return };
 
-        log::info!("FUNC: {function:#?}");
-
         match function {
             SemanticType::Function(func) => {
                 for (argument, parameter) in call.arguments.iter().zip(func.parameters.iter()) {
