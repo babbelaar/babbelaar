@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, BabString, Expression, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, BabString, Expression, ExtensionStatement, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenModifier, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -42,6 +42,7 @@ impl Symbolizer {
         match &statement.kind {
             StatementKind::Assignment(statement) => self.add_statement_assign(statement),
             StatementKind::Expression(expression) => self.add_expression(expression),
+            StatementKind::Extension(extension) => self.add_extension(extension),
             StatementKind::For(statement) => self.add_statement_for(statement),
             StatementKind::Function(statement) => self.add_statement_function(statement),
             StatementKind::If(statement) => self.add_statement_if(statement),
@@ -301,6 +302,14 @@ impl Symbolizer {
         }
     }
 
+    fn add_extension(&mut self, extension: &ExtensionStatement) {
+        self.add_type_specifier(&extension.type_specifier);
+
+        for method in &extension.methods {
+            self.add_structure_method(method);
+        }
+    }
+
     fn add_expression_postfix(&mut self, expression: &PostfixExpression) {
         match expression.kind.value() {
             PostfixExpressionKind::Call(..) => {
@@ -346,7 +355,7 @@ impl Symbolizer {
             modifier: LspSymbolModifier::default(),
         });
 
-        for ty in &expression.type_parameters {
+        for ty in expression.type_parameters.value() {
             self.add_type(ty);
         }
 
@@ -362,7 +371,11 @@ impl Symbolizer {
     }
 
     fn add_type(&mut self, ty: &Type) {
-        match ty.specifier.value() {
+        self.add_type_specifier(&ty.specifier);
+    }
+
+    fn add_type_specifier(&mut self, specifier: &TypeSpecifier) {
+        match specifier {
             TypeSpecifier::BuiltIn(bt) => {
                 self.symbols.insert(LspSymbol {
                     name: bt.name().clone(),
@@ -380,7 +393,7 @@ impl Symbolizer {
                     modifier: LspSymbolModifier::default(),
                 });
 
-                for param in type_parameters {
+                for param in type_parameters.value() {
                     self.add_type(param);
                 }
             }

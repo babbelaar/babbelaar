@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{FileRange, AttributeList, BabString, Expression, Method, Parameter, RangeExpression, Ranged, Structure, Type, TypeDeclarator};
+use crate::{AttributeList, BabString, Expression, FileRange, Method, Parameter, RangeExpression, Ranged, Structure, Type, TypeSpecifier};
 
 #[derive(Debug, Clone)]
 pub struct Statement {
@@ -42,7 +42,7 @@ pub struct AssignStatement {
 
 #[derive(Debug, Clone)]
 pub struct ExtensionStatement {
-    pub type_declarator: TypeDeclarator,
+    pub type_specifier: Ranged<TypeSpecifier>,
     pub methods: Vec<Method>,
 }
 

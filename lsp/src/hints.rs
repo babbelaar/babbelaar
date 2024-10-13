@@ -87,6 +87,7 @@ impl InlayHintsEngine {
         match &statement.kind {
             StatementKind::Assignment(assignment) => self.visit_assignment(assignment),
             StatementKind::Expression(expression) => self.visit_expression(expression),
+            StatementKind::Extension(extension) => self.visit_extension(extension),
             StatementKind::Function(function) => self.visit_function(function),
             StatementKind::For(for_statement) => self.visit_for_statement(for_statement),
             StatementKind::If(if_statement) => self.visit_if_statement(if_statement),
@@ -173,6 +174,12 @@ impl InlayHintsEngine {
             PostfixExpressionKind::Subscript(subscript) => {
                 self.visit_expression(&subscript);
             }
+        }
+    }
+
+    fn visit_extension(&mut self, extension: &ExtensionStatement) {
+        for method in &extension.methods {
+            self.visit_function(&method.function);
         }
     }
 

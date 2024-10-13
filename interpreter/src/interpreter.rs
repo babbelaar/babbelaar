@@ -13,10 +13,11 @@ use crate::*;
 pub struct Interpreter<D>
         where D: Debugger {
     functions: HashMap<FunctionId, Arc<InterpreterFunction>>,
-    structures: HashMap<StructureId, Rc<InterpreterStructure>>,
+    structures: HashMap<StructureId, InterpreterStructure>,
     debugger: D,
     scope: Scope,
     ffi: FFIManager,
+    methods: HashMap<MethodId, Arc<InterpreterFunction>>,
 }
 
 impl<D> Interpreter<D>
@@ -28,6 +29,7 @@ impl<D> Interpreter<D>
             scope: Scope::new_top_level(),
             debugger,
             ffi: FFIManager::new(),
+            methods: HashMap::new(),
         }
     }
 
@@ -68,8 +70,22 @@ impl<D> Interpreter<D>
             }
 
             StatementKind::Extension(ext) => {
-                _ = ext;
-                todo!()
+                let structure_id = self.scope.find_structure_id(&ext.type_specifier.fully_qualified_name()).unwrap();
+
+                let structure = self.structures.get_mut(&structure_id).unwrap();
+
+                for method in &ext.methods {
+                    let id = MethodId { structure: structure_id, index: structure.method_ids.len() };
+                    let prev = structure.method_ids.insert(BabString::clone(&method.function.name), id);
+                    debug_assert!(prev.is_none());
+
+                    self.methods.insert(id, Arc::new(InterpreterFunction {
+                        attributes: AttributeList::new(),
+                        function: method.function.clone(),
+                    }));
+                }
+
+                StatementResult::Continue
             }
 
             StatementKind::For(statement) => {
@@ -97,24 +113,33 @@ impl<D> Interpreter<D>
                 StatementResult::Return(value)
             }
 
-            StatementKind::Structure(structure) => {
-                let id = StructureId::from(structure);
+            StatementKind::Structure(ast_structure) => {
+                let id = StructureId::from(ast_structure);
 
-                let structure = Rc::new(InterpreterStructure {
-                    structure: structure.clone(),
-                    methods: structure.methods.iter()
-                        .map(|x| Arc::new(
-                            InterpreterFunction {
-                                attributes: AttributeList::new(),
-                                function: x.function.clone(),
-                            }
-                        ))
-                        .collect()
-                });
+                let mut structure = InterpreterStructure {
+                    structure: ast_structure.clone(),
+                    method_ids: HashMap::new(),
+                };
 
-                let prev = self.structures.insert(id, Rc::clone(&structure));
-                assert!(prev.is_none(), "Illegal double value: {prev:#?} and now: {structure:#?}");
-                self.scope.structures.insert(BabString::clone(structure.name()), structure);
+                for method in &ast_structure.methods {
+                    let func = Arc::new(
+                        InterpreterFunction {
+                            attributes: AttributeList::new(),
+                            function: method.function.clone(),
+                        }
+                    );
+
+                    let id = MethodId { structure: id, index: structure.method_ids.len() };
+                    self.methods.insert(id, func);
+                    structure.method_ids.insert(BabString::clone(&method.function.name), id);
+                }
+
+                let prev = self.scope.structures.insert(BabString::clone(structure.name()), id);
+                debug_assert!(prev.is_none(), "Illegal double value: {prev:#?}");
+
+                let prev = self.structures.insert(id, structure);
+                debug_assert!(prev.is_none(), "Illegal double value: {prev:#?}");
+
                 StatementResult::Continue
             }
 
@@ -207,9 +232,6 @@ impl<D> Interpreter<D>
                         .clone();
 
                 let id = *id;
-                let structure = structure.clone();
-
-                let mut fields = HashMap::new();
 
                 self.scope = std::mem::take(&mut self.scope).push();
 
@@ -218,18 +240,25 @@ impl<D> Interpreter<D>
                     self.scope.generic_types.insert(generic_decl.value().clone(), generic_type);
                 }
 
-                for field in &structure.structure.fields {
-                    let instantiation = instantiation.fields.iter().find(|x| x.name.value() == field.name.value());
+                let fields = structure.structure.fields.iter()
+                    .map(|field| {
+                        let instantiation = instantiation.fields.iter().find(|x| x.name.value() == field.name.value());
 
-                    let expression = if let Some(instantiation) = instantiation {
-                        &instantiation.value
-                    } else {
-                        field.default_value.as_ref().unwrap()
-                    };
+                        let expression = if let Some(instantiation) = instantiation {
+                            &instantiation.value
+                        } else {
+                            field.default_value.as_ref().unwrap()
+                        };
 
-                    let value = self.execute_expression(expression);
-                    fields.insert(field.name.to_string(), value);
-                }
+                        (field.name.to_string(), expression.clone())
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .map(|(name, expression)| {
+                        let value = self.execute_expression(&expression);
+                        (name, value)
+                    })
+                    .collect();
 
                 let generic_types = std::mem::take(&mut self.scope.generic_types);
                 self.scope = std::mem::take(&mut self.scope).pop();
@@ -399,8 +428,7 @@ impl<D> Interpreter<D>
             }
 
             Value::MethodIdReference { lhs, method } => {
-                let structure = self.structures.get(&method.structure).unwrap();
-                let method = Arc::clone(&structure.methods[method.index]);
+                let method = self.methods.get(&method).unwrap().clone();
 
                 self.execute_function(method.clone(), arguments, Some(*lhs))
             }
@@ -528,7 +556,7 @@ impl<D> Interpreter<D>
         return_value
     }
 
-    fn get_method(&self, value: &Value, method_name: &str) -> Option<Value> {
+    fn get_method(&self, value: &Value, method_name: &BabString) -> Option<Value> {
         match value.typ() {
             ValueType::Array(..) => {
                 for method in Builtin::array().methods() {
@@ -552,19 +580,14 @@ impl<D> Interpreter<D>
                 }
             }
 
-            ValueType::Structure(structure_id) => {
+            ValueType::Structure(structure_id, ..) => {
                 let structure = self.structures.get(&structure_id).expect("illegal StructureId");
-                for (index, method) in structure.methods.iter().enumerate() {
-                    if *method.function.name == method_name {
-                        return Some(Value::MethodIdReference {
-                            lhs: Box::new(value.clone()),
-                            method: MethodId {
-                                structure: structure_id,
-                                index,
-                            }
-                        });
-                    }
-                }
+                let method = structure.method_ids.get(method_name)?.clone();
+
+                return Some(Value::MethodIdReference {
+                    lhs: Box::new(value.clone()),
+                    method,
+                });
             }
         }
 

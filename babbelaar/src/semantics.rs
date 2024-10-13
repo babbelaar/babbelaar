@@ -148,6 +148,20 @@ impl SemanticAnalyzer {
                 continue;
             }
 
+            if let SemanticType::Custom { base, .. } = &ext.ty {
+                if let Some(existing) = base.methods.iter().find(|x| x.name() == name) {
+                    let name = name.clone();
+                    self.diagnostics.push(
+                        SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
+                            .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
+                            .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
+                    );
+                    continue;
+                }
+            }
+
+            self.analyze_function(&method.function, Some(ext.ty.clone()));
+
             let method = self.create_semantic_method(method);
             ext.methods.insert(name.clone(), method);
         }
@@ -1185,16 +1199,46 @@ impl SemanticAnalyzer {
     }
 
     #[must_use]
-    fn resolve_type_by_name(&mut self, name: &Ranged<BabString>, params: &[Ranged<Type>], instantiation: Option<&StructureInstantiationExpression>) -> SemanticType {
+    fn resolve_type_by_name(&mut self, name: &Ranged<BabString>, params: &Ranged<Vec<Ranged<Type>>>, instantiation: Option<&StructureInstantiationExpression>) -> SemanticType {
         for scope in self.context.scope.iter().rev() {
             if let Some(generic) = scope.generic_types.get(&name) {
                 return SemanticType::Generic(generic.clone());
             }
 
             if let Some(structure) = scope.structures.get(name.value()) {
+                let structure = Arc::clone(structure);
+
+                let mut parameters = Vec::new();
+                for parameter in params.value() {
+                    parameters.push(self.resolve_type(parameter));
+                }
+
+                if params.len() != 0 && structure.generic_types.len() == 0 {
+                    self.diagnostics.push(
+                        SemanticDiagnostic::new(params.range(), SemanticDiagnosticKind::TypeParametersUnexpected { ty: structure.name.value().clone() })
+                            .with_action(BabbelaarCodeAction::new(BabbelaarCodeActionType::RemoveGenericParameters, [
+                                FileEdit::new(params.range(), String::new())
+                            ].to_vec()))
+                    );
+                } else if params.len() < structure.generic_types.len() {
+                    self.diagnostics.push(
+                        SemanticDiagnostic::new(params.range(), SemanticDiagnosticKind::TooFewGenericTypes { ty: structure.name.value().clone() })
+                    );
+                } else if params.len() > structure.generic_types.len() {
+                    let range = FileRange::new(params[structure.generic_types.len() - 1].range().end(), params.last().unwrap().range().end());
+                    self.diagnostics.push(
+                        SemanticDiagnostic::new(range, SemanticDiagnosticKind::TooManyGenericTypes { ty: structure.name.value().clone() })
+                            .with_action(BabbelaarCodeAction::new(BabbelaarCodeActionType::RemoveExtraneousGenericTypes, [
+                                FileEdit::new(range, String::new())
+                            ].to_vec()))
+                    );
+                }
+
+                parameters.resize(structure.generic_types.len(), SemanticType::null());
+
                 return SemanticType::Custom {
-                    base: Arc::clone(structure),
-                    parameters: params.iter().map(|x| self.resolve_type(x)).collect(),
+                    base: structure,
+                    parameters,
                 };
             }
         }
@@ -1395,6 +1439,41 @@ impl SemanticAnalyzer {
                             ty,
                             usage: method.return_type_usage(),
                         };
+                    }
+                }
+
+                for scope in self.context.scope.iter().rev() {
+                    for ext in &scope.extensions {
+                        if ext.ty != typ {
+                            continue;
+                        }
+
+                        if let Some(method) = ext.methods.get(&expression.method_name) {
+                            let local_reference = SemanticReference {
+                                local_name: method.name().clone(),
+                                local_kind: SemanticLocalKind::Method,
+                                declaration_range: method.function.name.range(),
+                                typ: SemanticType::FunctionReference(FunctionReference::Custom(method.function.clone())), // is this okay?
+                            };
+
+                            if let Some(tracker) = &mut self.context.definition_tracker {
+                                tracker.insert(expression.method_name.range(), local_reference.clone());
+                            }
+
+                            let return_type = method.return_type().resolve_against(&typ);
+                            let usage = method.return_type_usage();
+
+                            self.analyze_function_parameters(method.name().clone(), local_reference, &expression.call, Some(&typ));
+
+                            if return_type.is_null() {
+                                return SemanticValue::null();
+                            }
+
+                            return SemanticValue {
+                                ty: return_type,
+                                usage,
+                            };
+                        }
                     }
                 }
 
@@ -2262,6 +2341,15 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Werkwijzenaam `{name}` bestaat al in structuur `{structure}`")]
     DuplicateMethodNameInExtension { name: BabString, structure: BabString },
+
+    #[error("Bij type `{ty}` waren geen generieke typen verwacht")]
+    TypeParametersUnexpected { ty: BabString },
+
+    #[error("Te weinig generieke parameters meegegeven aan `{ty}`")]
+    TooFewGenericTypes { ty: BabString },
+
+    #[error("Te veel generieke parameters meegegeven aan `{ty}`")]
+    TooManyGenericTypes { ty: BabString },
 }
 
 impl SemanticDiagnosticKind {
