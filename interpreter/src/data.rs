@@ -18,10 +18,6 @@ pub struct InterpreterStructure {
 }
 
 impl InterpreterStructure {
-    pub fn ast(&self) -> &Structure {
-        &self.structure
-    }
-
     #[must_use]
     pub fn name(&self) -> &BabString {
         &self.structure.name

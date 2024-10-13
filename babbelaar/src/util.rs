@@ -404,6 +404,9 @@ pub enum BabbelaarCodeActionType {
     #[error("Maak werkwijze `{name}` aan binnen structuur `{structure}`")]
     CreateMethod { name: BabString, structure: BabString },
 
+    #[error("Breid structuur `{structure}` uit met werkwijze `{name}`")]
+    CreateMethodExtension { name: BabString, structure: BabString },
+
     #[error("Maak werkwijze `{name}` aan")]
     CreateFunction { name: BabString },
 

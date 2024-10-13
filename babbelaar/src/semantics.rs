@@ -1406,6 +1406,10 @@ impl SemanticAnalyzer {
                     }
                 }
 
+                if let Some(value) = self.analyze_method_expression_with_extensions(&typ, expression) {
+                    return value;
+                }
+
                 self.diagnostics.push(SemanticDiagnostic::new(
                     expression.method_name.range(),
                     SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value().clone()}
@@ -1442,39 +1446,8 @@ impl SemanticAnalyzer {
                     }
                 }
 
-                for scope in self.context.scope.iter().rev() {
-                    for ext in &scope.extensions {
-                        if ext.ty != typ {
-                            continue;
-                        }
-
-                        if let Some(method) = ext.methods.get(&expression.method_name) {
-                            let local_reference = SemanticReference {
-                                local_name: method.name().clone(),
-                                local_kind: SemanticLocalKind::Method,
-                                declaration_range: method.function.name.range(),
-                                typ: SemanticType::FunctionReference(FunctionReference::Custom(method.function.clone())), // is this okay?
-                            };
-
-                            if let Some(tracker) = &mut self.context.definition_tracker {
-                                tracker.insert(expression.method_name.range(), local_reference.clone());
-                            }
-
-                            let return_type = method.return_type().resolve_against(&typ);
-                            let usage = method.return_type_usage();
-
-                            self.analyze_function_parameters(method.name().clone(), local_reference, &expression.call, Some(&typ));
-
-                            if return_type.is_null() {
-                                return SemanticValue::null();
-                            }
-
-                            return SemanticValue {
-                                ty: return_type,
-                                usage,
-                            };
-                        }
-                    }
+                if let Some(value) = self.analyze_method_expression_with_extensions(&typ, expression) {
+                    return value;
                 }
 
                 let struct_hint = SemanticRelatedInformation::new(
@@ -1511,6 +1484,45 @@ impl SemanticAnalyzer {
 
             SemanticType::Pointer(..) => todo!(),
         }
+    }
+
+    fn analyze_method_expression_with_extensions(&mut self, typ: &SemanticType, expression: &MethodCallExpression) -> Option<SemanticValue> {
+        for extension in self.context.scope.iter().rev().flat_map(|x| &x.extensions) {
+            if extension.ty != *typ {
+                continue;
+            }
+
+            let Some(method) = extension.methods.get(&expression.method_name) else {
+                continue;
+            };
+
+            let local_reference = SemanticReference {
+                local_name: method.name().clone(),
+                local_kind: SemanticLocalKind::Method,
+                declaration_range: method.function.name.range(),
+                typ: SemanticType::FunctionReference(FunctionReference::Custom(method.function.clone())), // is this okay?
+            };
+
+            if let Some(tracker) = &mut self.context.definition_tracker {
+                tracker.insert(expression.method_name.range(), local_reference.clone());
+            }
+
+            let return_type = method.return_type().resolve_against(typ);
+            let usage = method.return_type_usage();
+
+            self.analyze_function_parameters(method.name().clone(), local_reference, &expression.call, Some(&typ));
+
+            if return_type.is_null() {
+                return Some(SemanticValue::null());
+            }
+
+            return Some(SemanticValue {
+                ty: return_type,
+                usage,
+            });
+        }
+
+        None
     }
 
     fn analyze_attributes_for_statement(&mut self, statement: &Statement) {

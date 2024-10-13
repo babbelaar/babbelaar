@@ -25,7 +25,7 @@ impl<D> Interpreter<D>
     pub fn new(debugger: D) -> Self {
         Self {
             functions: HashMap::new(),
-            structures: HashMap::new(),
+            structures: create_top_level_structures(),
             scope: Scope::new_top_level(),
             debugger,
             ffi: FFIManager::new(),
@@ -578,6 +578,16 @@ impl<D> Interpreter<D>
                         });
                     }
                 }
+
+                let structure_id = StructureId::from(builtin);
+                if let Some(structure) = self.structures.get(&structure_id) {
+                    if let Some(method) = structure.method_ids.get(method_name).copied() {
+                        return Some(Value::MethodIdReference {
+                            lhs: Box::new(value.clone()),
+                            method,
+                        });
+                    }
+                }
             }
 
             ValueType::Structure(structure_id, ..) => {
@@ -663,6 +673,21 @@ impl<D> Interpreter<D>
             index: index as usize,
         }
     }
+}
+
+fn create_top_level_structures() -> HashMap<StructureId, InterpreterStructure> {
+    let mut map = HashMap::new();
+
+    for ty in Builtin::TYPES {
+        let structure = InterpreterStructure {
+            structure: Structure::from_builtin_type(*ty),
+            method_ids: HashMap::new(),
+        };
+
+        map.insert(StructureId::from(*ty), structure);
+    }
+
+    map
 }
 
 impl<D> babbelaar::Interpreter for Interpreter<D>
