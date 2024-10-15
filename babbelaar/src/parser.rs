@@ -1639,7 +1639,7 @@ pub enum ParseDiagnostic {
     #[error("Onverwachte token binnen structuur: `{token}`")]
     UnexpectedTokenInsideStructureInstantiation { token: Token },
 
-    #[error("Functie moet een definitie bevatten")]
+    #[error("Werkwijze moet een definitie bevatten")]
     FunctionMustHaveDefinition { semicolon: Token, range: FileRange },
 }
 

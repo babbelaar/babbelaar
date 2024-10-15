@@ -2408,10 +2408,10 @@ pub enum SemanticDiagnosticKind {
     #[error("Een uitheemse werkwijze vereist een `naam` argument.")]
     AttributeExternRequiresName,
 
-    #[error("Het attribuut `@uitheems` kan alleen gebruikt worden op functies.")]
+    #[error("Het attribuut `@uitheems` kan alleen gebruikt worden op werkwijzen.")]
     AttributeExternOnlyOnFunctions,
 
-    #[error("Het attribuut `@uitheems` kan alleen gebruikt worden op functies zonder lichaam {{ .. }}")]
+    #[error("Het attribuut `@uitheems` kan alleen gebruikt worden op werkwijzen zonder lichaam {{ .. }}")]
     AttributeExternOnlyOnFunctionsWithoutBody,
 
     #[error("De naam van werkwijzeattribuut `@uitheems` moet een slinger zijn.")]
@@ -2423,7 +2423,7 @@ pub enum SemanticDiagnosticKind {
     #[error("Onbekend argument `{name}` is niet toegestaan binnen attribuut `@uitheems`")]
     AttributeExternUnexpectedArgument { name: BabString },
 
-    #[error("Attribuut `@uitheems` kan maar één keer gebruikt worden per functie.")]
+    #[error("Attribuut `@uitheems` kan maar één keer gebruikt worden per werkwijzen.")]
     AttributeExternOnlyOnce,
 
     #[error("De werkwijze genaamd `{name}` is meerdere keren gedefinieerd.")]
@@ -2479,7 +2479,7 @@ pub enum SemanticDiagnosticKind {
     #[error("Attribuut `@{name}` verwacht geen argumenten.")]
     AttributeCannotHaveArguments { name: &'static str },
 
-    #[error("Attribuut `@{name}` kan alleen gebruikt worden op functies die `@uitheems` zijn.")]
+    #[error("Attribuut `@{name}` kan alleen gebruikt worden op werkwijzen die `@uitheems` zijn.")]
     AttributeCanOnlyBeUsedOnExternFunctions { name: &'static str },
 
     #[error("Type `{name}` kan niet uitgebreid worden.")]
