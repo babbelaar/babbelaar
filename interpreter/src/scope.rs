@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{BabString, StructureId, ValueType};
+use babbelaar::{BabString, InterfaceId, StructureId, ValueType};
 
 use crate::{Builtin, FunctionId, Value};
 
@@ -12,6 +12,7 @@ pub struct Scope {
     pub parent: Option<Box<Scope>>,
     pub variables: HashMap<BabString, Value>,
     pub structures: HashMap<BabString, StructureId>,
+    pub interfaces: HashMap<BabString, InterfaceId>,
     pub generic_types: HashMap<BabString, ValueType>,
     pub this: Option<Value>,
 }
@@ -22,6 +23,7 @@ impl Scope {
             parent: None,
             variables: HashMap::new(),
             structures: HashMap::new(),
+            interfaces: HashMap::new(),
             generic_types: HashMap::new(),
             this,
         }
@@ -51,6 +53,7 @@ impl Scope {
             parent: Some(Box::new(self)),
             variables: HashMap::new(),
             structures: HashMap::new(),
+            interfaces: HashMap::new(),
             generic_types: HashMap::new(),
             this,
         }
@@ -61,6 +64,7 @@ impl Scope {
             parent: Some(Box::new(self)),
             variables: HashMap::new(),
             structures: HashMap::new(),
+            interfaces: HashMap::new(),
             generic_types: HashMap::new(),
             this,
         }

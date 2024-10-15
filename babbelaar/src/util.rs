@@ -469,6 +469,9 @@ pub enum BabbelaarCodeActionType {
 
     #[error("Verplaats structuur naar nieuw bestand")]
     MoveStructureToNewFile,
+
+    #[error("Verplaats koppelvlak naar nieuw bestand")]
+    MoveInterfaceToNewFile,
 }
 
 #[derive(Debug, Clone)]

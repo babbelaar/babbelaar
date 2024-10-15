@@ -89,6 +89,11 @@ impl<'tokens> Parser<'tokens> {
                 StatementKind::Return(self.parse_return_statement(range)?)
             }
 
+            TokenKind::Keyword(Keyword::Koppelvlak) => {
+                _ = self.consume_token().ok();
+                StatementKind::Interface(self.parse_interface_statement()?)
+            }
+
             TokenKind::Keyword(Keyword::Werkwijze) => {
                 _ = self.consume_token().ok();
                 StatementKind::Function(self.parse_function(FunctionParsingContext::Function)?)
@@ -350,6 +355,99 @@ impl<'tokens> Parser<'tokens> {
     #[must_use]
     pub const fn is_at_end(&self) -> bool {
         self.cursor >= self.tokens.len()
+    }
+
+    fn parse_interface_statement(&mut self) -> Result<InterfaceStatement, ParseError> {
+        let name_token = self.consume_token()?;
+
+        let name = Ranged::new(name_token.range(), match name_token.kind {
+            TokenKind::Identifier(ident) => ident,
+            _ => {
+                self.emit_diagnostic(ParseDiagnostic::ExpectedNameOfInterface { token: name_token });
+                BabString::empty()
+            }
+        });
+
+        let generic_types = self.parse_type_generic_parameters_declarations();
+
+        let left_curly_range = self.expect_left_curly_bracket("structuurnaam")?;
+
+        let mut interface = InterfaceStatement {
+            name,
+            generic_types,
+            left_curly_range,
+            right_curly_range: left_curly_range,
+            methods: Vec::new(),
+        };
+
+        let mut is_closed_correctly = false;
+        while !self.is_at_end() {
+            if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
+                _ = self.consume_token()?;
+                is_closed_correctly = true;
+                break;
+            }
+
+            let mut require_comma = true;
+
+            let peeked_token = self.peek_token()?;
+            match peeked_token.kind {
+                TokenKind::Keyword(Keyword::Werkwijze) => {
+                    let start = self.consume_token()?.begin;
+
+                    let function = self.parse_function(FunctionParsingContext::Interface)?;
+
+                    let range = FileRange::new(start, self.token_end);
+
+                    interface.methods.push(Method {
+                        range,
+                        function,
+                    });
+
+                    require_comma = false;
+                }
+
+                TokenKind::Identifier(..) => {
+                    let token = self.consume_token()?;
+                    let next_token = self.peek_token();
+                    match next_token.map(|x| &x.kind) {
+                        Ok(TokenKind::Punctuator(Punctuator::Colon)) => {
+                            self.emit_diagnostic(ParseDiagnostic::ExpectedStructureMemberPrefixVeld { token });
+                        }
+                        Ok(TokenKind::Punctuator(Punctuator::LeftParenthesis)) => {
+                            self.emit_diagnostic(ParseDiagnostic::ExpectedStructureMethodPrefixWerkwijze { token });
+                        }
+                        _ => {
+                            self.emit_diagnostic(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token });
+                        }
+                    }
+                }
+
+                _ => {
+                    let token = self.consume_token()?;
+                    self.emit_diagnostic(ParseDiagnostic::UnexpectedTokenAtStartOfStructureMember { token });
+                }
+            }
+
+            if self.peek_punctuator() == Some(Punctuator::Comma) {
+                _ = self.consume_token()?;
+                continue;
+            }
+
+            if require_comma && self.peek_punctuator() != Some(Punctuator::RightCurlyBracket) {
+                self.emit_diagnostic(ParseDiagnostic::ExpectedCommaAfterStructureMember { token: self.peek_token()?.clone(), location: self.token_end });
+            }
+        }
+
+        if !is_closed_correctly {
+            let token = self.tokens.last().unwrap().clone();
+            let range = token.range().end().as_zero_range();
+            self.emit_diagnostic(ParseDiagnostic::ExpectedRightCurlyBracket { token, range, after: "structuur" });
+        }
+
+        interface.right_curly_range = self.previous_range();
+
+        Ok(interface)
     }
 
     fn parse_return_statement(&mut self, keyword_range: FileRange) -> Result<ReturnStatement, ParseError> {
@@ -1564,6 +1662,9 @@ pub enum ParseDiagnostic {
     #[error("Naam van structuurveld verwacht, maar kreeg: {token}")]
     ExpectedNameOfField { token: Token },
 
+    #[error("Naam van `koppelvlak` verwacht, maar kreeg: {token}")]
+    ExpectedNameOfInterface { token: Token },
+
     #[error("Naam van structuur verwacht, maar kreeg: {token}")]
     ExpectedNameOfStructuur { token: Token },
 
@@ -1663,6 +1764,7 @@ impl ParseDiagnostic {
             Self::ExpectedSemicolonOrCurlyBracketForFunction { token, .. } => token,
             Self::ExpectedNameAfterNieuw { token } => token,
             Self::ExpectedNameOfField { token } => token,
+            Self::ExpectedNameOfInterface { token } => token,
             Self::ExpectedNameOfStructuur { token } => token,
             Self::ExpectedNameOfVariable { token } => token,
             Self::ExpectedIdentifier { token, .. } => token,
@@ -1719,6 +1821,7 @@ pub enum ParseError {
 pub enum FunctionParsingContext {
     Function,
     Method,
+    Interface,
 }
 
 impl FunctionParsingContext {

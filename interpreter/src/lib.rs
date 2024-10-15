@@ -16,6 +16,7 @@ mod scope;
 pub use self::{
     data::{
         InterpreterFunction,
+        InterpreterInterface,
         InterpreterStructure,
     },
     debug_adapter::DebugAdapter,

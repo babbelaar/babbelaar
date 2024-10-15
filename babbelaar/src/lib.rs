@@ -33,10 +33,10 @@ pub use self::{
     semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticLocal, SemanticLocalKind, SemanticReference, SemanticScope, SemanticStructure, SemanticType},
     statement::{AssignStatement, ExtensionStatement, ForIterableKind, ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
     string::{BabString, IntoBabString, Slice},
-    structure::{Field, Method, Structure},
+    structure::{Field, InterfaceStatement, Method, Structure},
     token::{Punctuator, TemplateStringToken, Token, TokenKind},
     tree::ParseTree,
     type_::{Parameter, Type, TypeQualifier, TypeSpecifier},
     util::{BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BabbelaarFixKind, DocumentationProvider, FileEdit, FileId, FileLocation, FileRange, LspCompletion, OptionExt, Ranged, SourceCode, StrExt, StrIterExt},
-    value::{FunctionId, MethodId, StructureId, Value, ValueType},
+    value::{FunctionId, MethodId, InterfaceId, StructureId, Value, ValueType},
 };

@@ -28,6 +28,10 @@ structuur Lijst<T> {
     }
 }
 
+koppelvlak Enumerabel<T> {
+    werkwijze bevat(item: T) -> bool;
+}
+
 stel lijst = nieuw Lijst<Slinger> {};
 lijst.voegToe("Abc");
 lijst.voegToe("Ghi");
