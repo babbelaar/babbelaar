@@ -150,6 +150,7 @@ impl Format for StatementKind {
             Self::Function(statement) => statement.format(f),
             Self::For(statement) => statement.format(f),
             Self::If(statement) => statement.format(f),
+            Self::Interface(..) => todo!(),
             Self::Return(statement) => statement.format(f),
             Self::Structure(statement) => statement.format(f),
             Self::Variable(statement) => statement.format(f),

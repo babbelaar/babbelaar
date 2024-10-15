@@ -12,6 +12,15 @@ pub struct Field {
 }
 
 #[derive(Debug, Clone)]
+pub struct InterfaceStatement {
+    pub name: Ranged<BabString>,
+    pub generic_types: Vec<Ranged<BabString>>,
+    pub left_curly_range: FileRange,
+    pub methods: Vec<Method>,
+    pub right_curly_range: FileRange,
+}
+
+#[derive(Debug, Clone)]
 pub struct Method {
     pub range: FileRange,
     pub function: FunctionStatement,

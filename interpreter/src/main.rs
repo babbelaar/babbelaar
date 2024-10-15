@@ -24,6 +24,7 @@ use logger::Logger;
 pub use self::{
     data::{
         InterpreterFunction,
+        InterpreterInterface,
         InterpreterStructure,
     },
     debugger::{

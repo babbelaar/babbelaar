@@ -91,6 +91,7 @@ impl InlayHintsEngine {
             StatementKind::Function(function) => self.visit_function(function),
             StatementKind::For(for_statement) => self.visit_for_statement(for_statement),
             StatementKind::If(if_statement) => self.visit_if_statement(if_statement),
+            StatementKind::Interface(interface) => self.visit_interface_statement(interface),
             StatementKind::Return(return_statement) => self.visit_return_statement(return_statement),
             StatementKind::Structure(structure) => self.visit_structure(structure),
             StatementKind::Variable(variable) => self.visit_variable(variable),
@@ -210,6 +211,12 @@ impl InlayHintsEngine {
 
         for statement in &if_statement.body {
             self.visit_statement(statement);
+        }
+    }
+
+    fn visit_interface_statement(&mut self, interface: &InterfaceStatement) {
+        for method in &interface.methods {
+            self.visit_function(&method.function);
         }
     }
 

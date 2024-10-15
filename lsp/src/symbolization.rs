@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, BabString, Expression, ExtensionStatement, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, BabString, Expression, ExtensionStatement, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, InterfaceStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenModifier, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -46,6 +46,7 @@ impl Symbolizer {
             StatementKind::For(statement) => self.add_statement_for(statement),
             StatementKind::Function(statement) => self.add_statement_function(statement),
             StatementKind::If(statement) => self.add_statement_if(statement),
+            StatementKind::Interface(statement) => self.add_statement_interface(statement),
             StatementKind::Return(statement) => self.add_statement_return(statement),
             StatementKind::Structure(statement) => self.add_statement_structure(statement),
             StatementKind::Variable(statement) => self.add_statement_variable(statement),
@@ -159,6 +160,28 @@ impl Symbolizer {
         }
     }
 
+    fn add_statement_interface(&mut self, interface: &InterfaceStatement) {
+        self.symbols.insert(LspSymbol {
+            name: interface.name.value().clone(),
+            kind: LspTokenType::Class,
+            range: interface.name.range(),
+            modifier: LspSymbolModifier::default(),
+        });
+
+        for ty_param in &interface.generic_types {
+            self.symbols.insert(LspSymbol {
+                name: ty_param.value().clone(),
+                kind: LspTokenType::Class,
+                range: ty_param.range(),
+                modifier: LspSymbolModifier::default(),
+            });
+        }
+
+        for field in &interface.methods {
+            self.add_method(field);
+        }
+    }
+
     fn add_statement_return(&mut self, statement: &ReturnStatement) {
         if let Some(expr) = &statement.expression {
             self.add_expression(expr);
@@ -187,7 +210,7 @@ impl Symbolizer {
         }
 
         for field in &statement.methods {
-            self.add_structure_method(field);
+            self.add_method(field);
         }
     }
 
@@ -213,7 +236,7 @@ impl Symbolizer {
         }
     }
 
-    fn add_structure_method(&mut self, method: &Method) {
+    fn add_method(&mut self, method: &Method) {
         self.add_statement_function(&method.function);
     }
 
@@ -306,7 +329,7 @@ impl Symbolizer {
         self.add_type_specifier(&extension.type_specifier);
 
         for method in &extension.methods {
-            self.add_structure_method(method);
+            self.add_method(method);
         }
     }
 
@@ -519,6 +542,7 @@ pub enum LspTokenType {
     ParameterName,
     Class,
     Property,
+    Interface,
 }
 
 impl LspTokenType {
@@ -558,6 +582,7 @@ impl From<LspTokenType> for SemanticTokenType {
             LspTokenType::ParameterName => SemanticTokenType::PARAMETER,
             LspTokenType::Class => SemanticTokenType::CLASS,
             LspTokenType::Property => SemanticTokenType::PROPERTY,
+            LspTokenType::Interface => SemanticTokenType::INTERFACE,
         }
     }
 }
@@ -582,6 +607,7 @@ impl From<LspTokenType> for SymbolKind {
             LspTokenType::ParameterName => SymbolKind::PROPERTY,
             LspTokenType::Class => SymbolKind::CLASS,
             LspTokenType::Property => SymbolKind::PROPERTY,
+            LspTokenType::Interface => SymbolKind::INTERFACE,
         }
     }
 }

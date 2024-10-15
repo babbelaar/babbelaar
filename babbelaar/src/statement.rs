@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{AttributeList, BabString, Expression, FileRange, Method, Parameter, RangeExpression, Ranged, Structure, Type, TypeSpecifier};
+use crate::{AttributeList, BabString, Expression, FileRange, InterfaceStatement, Method, Parameter, RangeExpression, Ranged, Structure, Type, TypeSpecifier};
 
 #[derive(Debug, Clone)]
 pub struct Statement {
@@ -18,6 +18,7 @@ pub enum StatementKind {
     Function(FunctionStatement),
     For(ForStatement),
     If(IfStatement),
+    Interface(InterfaceStatement),
     Return(ReturnStatement),
     Structure(Structure),
     Variable(VariableStatement),

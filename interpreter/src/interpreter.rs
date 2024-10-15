@@ -14,6 +14,7 @@ pub struct Interpreter<D>
         where D: Debugger {
     functions: HashMap<FunctionId, Arc<InterpreterFunction>>,
     structures: HashMap<StructureId, InterpreterStructure>,
+    interfaces: HashMap<InterfaceId, InterpreterInterface>,
     debugger: D,
     scope: Scope,
     ffi: FFIManager,
@@ -26,6 +27,7 @@ impl<D> Interpreter<D>
         Self {
             functions: HashMap::new(),
             structures: create_top_level_structures(),
+            interfaces: HashMap::new(),
             scope: Scope::new_top_level(),
             debugger,
             ffi: FFIManager::new(),
@@ -75,7 +77,7 @@ impl<D> Interpreter<D>
                 let structure = self.structures.get_mut(&structure_id).unwrap();
 
                 for method in &ext.methods {
-                    let id = MethodId { structure: structure_id, index: structure.method_ids.len() };
+                    let id = MethodId { owner: structure_id.into(), index: structure.method_ids.len() };
                     let prev = structure.method_ids.insert(BabString::clone(&method.function.name), id);
                     debug_assert!(prev.is_none());
 
@@ -106,6 +108,36 @@ impl<D> Interpreter<D>
                 self.execute_if_statement(statement)
             }
 
+            StatementKind::Interface(ast_interface) => {
+                let id = InterfaceId::from(ast_interface);
+
+                let mut interface = InterpreterInterface {
+                    interface: ast_interface.clone(),
+                    method_ids: HashMap::new(),
+                };
+
+                for method in &ast_interface.methods {
+                    let func = Arc::new(
+                        InterpreterFunction {
+                            attributes: AttributeList::new(),
+                            function: method.function.clone(),
+                        }
+                    );
+
+                    let id = MethodId { owner: id.into(), index: interface.method_ids.len() };
+                    self.methods.insert(id, func);
+                    interface.method_ids.insert(BabString::clone(&method.function.name), id);
+                }
+
+                let prev = self.scope.interfaces.insert(BabString::clone(interface.name()), id);
+                debug_assert!(prev.is_none(), "Illegal double value: {prev:#?}");
+
+                let prev = self.interfaces.insert(id, interface);
+                debug_assert!(prev.is_none(), "Illegal double value: {prev:#?}");
+
+                StatementResult::Continue
+            }
+
             StatementKind::Return(statement) => {
                 let value = statement.expression.as_ref()
                     .map(|expr| self.execute_expression(expr));
@@ -129,7 +161,7 @@ impl<D> Interpreter<D>
                         }
                     );
 
-                    let id = MethodId { structure: id, index: structure.method_ids.len() };
+                    let id = MethodId { owner: id.into(), index: structure.method_ids.len() };
                     self.methods.insert(id, func);
                     structure.method_ids.insert(BabString::clone(&method.function.name), id);
                 }

@@ -3,7 +3,7 @@
 
 use std::{borrow::Cow, cell::RefCell, cmp::Ordering, collections::HashMap, fmt::{Display, Write}, hash::{DefaultHasher, Hash, Hasher}, rc::Rc};
 
-use crate::{BabString, BuiltinMethodReference, BuiltinType, Comparison, FunctionStatement, Structure};
+use crate::{BabString, BuiltinMethodReference, BuiltinType, Comparison, FunctionStatement, InterfaceStatement, Structure};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -176,6 +176,24 @@ impl From<&FunctionStatement> for FunctionId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InterfaceId {
+    pub namespace: usize,
+    pub id: usize,
+}
+
+impl From<&InterfaceStatement> for InterfaceId {
+    fn from(value: &InterfaceStatement) -> Self {
+        let mut hasher = DefaultHasher::new();
+        "Interface-".hash(&mut hasher);
+        value.name.value().hash(&mut hasher);
+        Self {
+            namespace: 1,
+            id: hasher.finish() as usize,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StructureId {
     pub namespace: usize,
     pub id: usize,
@@ -204,6 +222,36 @@ impl From<BuiltinType> for StructureId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MethodId {
-    pub structure: StructureId,
+    pub owner: MethodOwnerId,
     pub index: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MethodOwnerId {
+    Interface(InterfaceId),
+    Structure(StructureId),
+}
+
+impl From<InterfaceId> for MethodOwnerId {
+    fn from(value: InterfaceId) -> Self {
+        Self::Interface(value)
+    }
+}
+
+impl From<&InterfaceId> for MethodOwnerId {
+    fn from(value: &InterfaceId) -> Self {
+        Self::Interface(*value)
+    }
+}
+
+impl From<StructureId> for MethodOwnerId {
+    fn from(value: StructureId) -> Self {
+        Self::Structure(value)
+    }
+}
+
+impl From<&StructureId> for MethodOwnerId {
+    fn from(value: &StructureId) -> Self {
+        Self::Structure(*value)
+    }
 }

@@ -13,6 +13,7 @@ pub enum Keyword {
     Bekeer,
     Dit,
     In,
+    Koppelvlak,
     Nieuw,
     Onwaar,
     Reeks,
@@ -43,6 +44,10 @@ impl Keyword {
             Self::Werkwijze => Some(LspCompletion {
                 completion: "werkwijze ${1:naam}() {\n\t$0\n}",
                 inline_detail: "Een nieuwe werkwijze.",
+            }),
+            Self::Koppelvlak => Some(LspCompletion {
+                completion: "koppelvlak ${1:naam} {\n\t$0\n}",
+                inline_detail: "Een nieuw koppelvlak",
             }),
             Self::Nieuw => Some(LspCompletion {
                 completion: "nieuw ${1:structuurnaam} {\n\t${0:velden}\n}",
@@ -108,6 +113,7 @@ Hallo, ik ben John Doe
 ```
 "#,
             Self::In => "Herhaal over een stel waardes met `volg`.",
+            Self::Koppelvlak => "Definieer een nieuw koppelvlak, een soort contract voor structuren.",
             Self::Nieuw => "Maak een nieuw object aan.",
             Self::Onwaar => "Een waarde van het type `booleaan`. Tegenovergestelde van `waar`",
             Self::Reeks => {
