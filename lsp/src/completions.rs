@@ -285,10 +285,6 @@ impl<'b> CompletionEngine<'b> {
                             let new_line = if new_line { "\n" } else { "" };
                             self.completions.push(CompletionItem {
                                 label: field.name.to_string(),
-                                label_details: Some(CompletionItemLabelDetails {
-                                    detail: Some(field.ty.to_string()),
-                                    description: Some(field.ty.to_string()),
-                                }),
                                 filter_text: Some(field.name[idx..].to_string()),
                                 insert_text: Some(format!("{new_line}{}: ${{1:{value_hint}}},$0", field.name.value())),
                                 detail: Some(field.ty.to_string()),
@@ -314,10 +310,7 @@ impl<'b> CompletionEngine<'b> {
                 for (name, local) in &scope.locals {
                     self.completions.push(CompletionItem {
                         label: name.to_string(),
-                        label_details: Some(CompletionItemLabelDetails {
-                            detail: Some(local.typ.to_string()),
-                            description: Some(local.typ.to_string()),
-                        }),
+                        detail: Some(local.typ.to_string()),
                         kind: Some(CompletionItemKind::VARIABLE),
                         documentation: None,
                         ..Default::default()
