@@ -459,10 +459,6 @@ impl<'b> CompletionEngine<'b> {
                 let lsp = keyword.lsp_completion();
                 self.completions.push(CompletionItem {
                     label: keyword.as_ref().to_string(),
-                    label_details: Some(CompletionItemLabelDetails {
-                        detail: Some("Details??".into()),
-                        description: Some("Description??".into()),
-                    }),
                     kind: match keyword {
                         Keyword::Dit => Some(CompletionItemKind::VARIABLE),
                         _ => Some(CompletionItemKind::KEYWORD)
@@ -480,10 +476,6 @@ impl<'b> CompletionEngine<'b> {
             if ty.name().to_lowercase().starts_with(ident) {
                 self.completions.push(CompletionItem {
                     label: ty.name().to_string(),
-                    label_details: Some(CompletionItemLabelDetails {
-                        detail: Some("Details??".into()),
-                        description: Some("Description??".into()),
-                    }),
                     preselect: Some(true),
                     kind: Some(CompletionItemKind::KEYWORD),
                     detail: Some(ty.documentation().to_string()),
