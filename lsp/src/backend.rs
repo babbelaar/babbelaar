@@ -741,12 +741,14 @@ impl Backend {
 
             let Some((_, reference)) = analyzer.find_reference_at(location) else {
                 if let Some((range, ..)) = analyzer.find_declaration_range_at(location) {
-                    return Ok(Some([
-                        DocumentHighlight {
-                            range: converter.convert_file_range(range),
-                            kind: None,
-                        }
-                    ].to_vec()));
+                    if range.file_id() == source_code.file_id() {
+                        return Ok(Some([
+                            DocumentHighlight {
+                                range: converter.convert_file_range(range),
+                                kind: None,
+                            }
+                        ].to_vec()));
+                    }
                 }
 
                 return Ok(Some(Vec::new()));
