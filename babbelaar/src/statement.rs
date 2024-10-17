@@ -43,6 +43,7 @@ pub struct AssignStatement {
 
 #[derive(Debug, Clone)]
 pub struct ExtensionStatement {
+    pub generic_types: Vec<Ranged<BabString>>,
     pub type_specifier: Ranged<TypeSpecifier>,
     pub methods: Vec<Method>,
     pub right_curly_bracket: FileRange,

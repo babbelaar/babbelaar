@@ -131,6 +131,8 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_extension_statement(&mut self, extension: &ExtensionStatement, range: FileRange) {
+        self.context.push_extension_scope(extension, range);
+
         let ty = self.resolve_type_specifier(&extension.type_specifier);
 
         if !ty.can_be_extended() {
@@ -145,7 +147,6 @@ impl SemanticAnalyzer {
             right_curly_bracket: extension.right_curly_bracket,
         };
 
-        self.context.push_extension_scope(extension, range);
         for method in &extension.methods {
             let name = method.function.name.value();
             if let Some(existing) = ext.methods.get(name) {
@@ -2750,15 +2751,24 @@ impl SemanticContext {
     }
 
     fn push_extension_scope(&mut self, extension: &ExtensionStatement, range: FileRange) {
-        _ = extension;
-
         let this = self.scope.last().and_then(|x| x.this.clone());
         let return_type = self.scope.last().and_then(|x| x.return_type.clone());
         self.scope.push(SemanticScope {
             range,
             locals: HashMap::new(),
             structures: HashMap::new(),
-            generic_types: Default::default(), // TODO: this should be implemented, right?
+            generic_types: extension.generic_types
+                .iter()
+                .enumerate()
+                .map(|(index, x)| {
+                    let ty = SemanticGenericType {
+                        index,
+                        name: x.value().clone(),
+                        declaration_range: x.range(),
+                    };
+                    (x.value().clone(), ty)
+                })
+                .collect(),
             this,
             return_type,
             kind: SemanticScopeKind::Structure,

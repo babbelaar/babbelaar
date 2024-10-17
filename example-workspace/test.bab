@@ -21,7 +21,6 @@ structuur Lijst<T> {
             als bestaandItem == item {
                 bekeer waar;
             }
-
         }
 
         bekeer onwaar;
@@ -31,6 +30,11 @@ structuur Lijst<T> {
 koppelvlak Enumerabel<T> {
     werkwijze bevat(item: T) -> bool;
 }
+
+uitbreiding<T> Enumerabel<T> op Lijst<T> {
+
+}
+
 
 stel lijst = nieuw Lijst<Slinger> {};
 lijst.voegToe("Abc");
