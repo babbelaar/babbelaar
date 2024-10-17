@@ -169,11 +169,14 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_extension_statement(&mut self) -> ParseResult<ExtensionStatement> {
+        let generic_types = self.parse_type_generic_parameters_declarations();
+
         let type_specifier = self.parse_type_specifier();
 
         let left_curly_bracket = self.expect_left_curly_bracket("structuurnaam")?;
 
         let mut extension = ExtensionStatement {
+            generic_types,
             type_specifier,
             methods: Vec::new(),
             right_curly_bracket: left_curly_bracket.end().as_zero_range(),

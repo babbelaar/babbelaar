@@ -326,6 +326,15 @@ impl Symbolizer {
     }
 
     fn add_extension(&mut self, extension: &ExtensionStatement) {
+        for ty_param in &extension.generic_types {
+            self.symbols.insert(LspSymbol {
+                name: ty_param.value().clone(),
+                kind: LspTokenType::Class,
+                range: ty_param.range(),
+                modifier: LspSymbolModifier::default(),
+            });
+        }
+
         self.add_type_specifier(&extension.type_specifier);
 
         for method in &extension.methods {
