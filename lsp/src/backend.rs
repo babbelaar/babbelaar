@@ -740,10 +740,15 @@ impl Backend {
             let location = converter.convert_location(params.text_document_position_params.position);
 
             let Some((_, reference)) = analyzer.find_reference_at(location) else {
-                return Ok(Some(Vec::new()));
-            };
+                if let Some((range, ..)) = analyzer.find_declaration_range_at(location) {
+                    return Ok(Some([
+                        DocumentHighlight {
+                            range: converter.convert_file_range(range),
+                            kind: None,
+                        }
+                    ].to_vec()));
+                }
 
-            let Some(references) = analyzer.find_references_of(reference.declaration_range) else {
                 return Ok(Some(Vec::new()));
             };
 
@@ -754,6 +759,10 @@ impl Backend {
                     kind: None,
                 });
             }
+
+            let Some(references) = analyzer.find_references_of(reference.declaration_range) else {
+                return Ok(Some(highlights));
+            };
 
             for reference in references {
                 if reference.file_id() != source_code.file_id() {
