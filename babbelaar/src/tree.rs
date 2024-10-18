@@ -11,6 +11,8 @@ pub struct ParseTree {
     functions: Vec<Statement>,
     statements: Vec<Statement>,
     structures: Vec<Statement>,
+    interfaces: Vec<Statement>,
+    extensions: Vec<Statement>,
 }
 
 impl ParseTree {
@@ -21,6 +23,8 @@ impl ParseTree {
             functions: Vec::new(),
             statements: Vec::new(),
             structures: Vec::new(),
+            interfaces: Vec::new(),
+            extensions: Vec::new(),
         }
     }
 
@@ -49,17 +53,30 @@ impl ParseTree {
         &self.structures
     }
 
+    #[must_use]
+    pub fn interfaces(&self) -> &[Statement] {
+        &self.interfaces
+    }
+
+    #[must_use]
+    pub fn extensions(&self) -> &[Statement] {
+        &self.extensions
+    }
+
     pub fn all(&self) -> impl Iterator<Item = &Statement> {
         self.functions.iter()
             .chain(self.statements.iter())
             .chain(self.structures.iter())
+            .chain(self.interfaces.iter())
+            .chain(self.extensions.iter())
     }
 
     pub fn push(&mut self, statement: Statement) {
         match &statement.kind {
             StatementKind::Function(..) => self.functions.push(statement),
             StatementKind::Structure(..) => self.structures.push(statement),
-            StatementKind::Extension(..) => self.functions.push(statement),
+            StatementKind::Extension(..) => self.extensions.push(statement),
+            StatementKind::Interface(..) => self.interfaces.push(statement),
             _ => self.statements.push(statement),
         }
     }

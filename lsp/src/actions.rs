@@ -488,6 +488,17 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
 
             Self::ExpectedGenericTypeName { .. } => (),
 
+            Self::ExpectedKeywordOp { range, .. } => {
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::Insert{ text: "op" },
+                        vec![
+                            FileEdit::new(range.start().as_zero_range(), " op")
+                        ]
+                    ),
+                );
+            }
+
             Self::ExpectedNameAfterNieuw { .. } => (),
 
             Self::ExpectedNameOfField { .. } => (),
@@ -495,6 +506,8 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
             Self::ExpectedNameOfStructuur { .. } => (),
 
             Self::ExpectedNameOfInterface { .. } => (),
+
+            Self::ExpectedNameOfInterfaceOrType { .. } => (),
 
             Self::ExpectedNameOfVariable { .. } => (),
 

@@ -37,6 +37,8 @@ impl SemanticAnalyzer {
         self.context.announce_file(tree);
 
         self.analyze_statements(tree.structures());
+        self.analyze_statements(tree.interfaces());
+        self.analyze_statements(tree.extensions());
         self.analyze_statements(tree.functions());
     }
 
@@ -140,8 +142,13 @@ impl SemanticAnalyzer {
             return;
         }
 
+        let interface = extension.interface_specifier.as_ref()
+            .and_then(|specifier| self.resolve_interface(specifier));
+
         let mut ext = SemanticExtension {
             ty,
+            interface,
+            generic_types: extension.generic_types.iter().map(|x| x.value().clone()).collect(),
             methods: HashMap::new(),
             range,
             right_curly_bracket: extension.right_curly_bracket,
@@ -149,48 +156,202 @@ impl SemanticAnalyzer {
 
         for method in &extension.methods {
             let name = method.function.name.value();
-            if let Some(existing) = ext.methods.get(name) {
-                let name = name.clone();
-                self.diagnostics.push(
-                    SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
-                        .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
-                        .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
-                );
+
+            let function = self.analyze_function(&method.function, Some(ext.ty.clone()));
+
+            if self.is_invalid_method(&ext, &name, method, function) {
                 continue;
             }
-
-            if let SemanticType::Custom { base, .. } = &ext.ty {
-                if let Some(existing) = base.methods.iter().find(|x| x.name() == name) {
-                    let name = name.clone();
-                    self.diagnostics.push(
-                        SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
-                            .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
-                            .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
-                    );
-                    continue;
-                }
-            }
-
-            self.analyze_function(&method.function, Some(ext.ty.clone()));
 
             let method = self.create_semantic_method(method);
             ext.methods.insert(name.clone(), method);
         }
+
+        if let Some(interface) = &ext.interface {
+            self.analyze_missing_interface_methods(&ext, extension, interface);
+        }
+
         self.context.pop_scope();
 
         let scope = self.context.current();
         scope.extensions.push(ext);
     }
 
-    fn analyze_function(&mut self, function: &FunctionStatement, this: Option<SemanticType>) {
+    /// Returns whether or not this method is invalid.
+    fn is_invalid_method(&mut self, ext: &SemanticExtension, name: &BabString, method: &Method, function: SemanticFunctionAnalysis) -> bool {
+        if let Some(existing) = ext.methods.get(name) {
+            let name = name.clone();
+            self.diagnostics.push(
+                SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
+                    .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
+                    .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
+            );
+            return true;
+        }
+
+        if let Some(interface) = &ext.interface {
+            self.is_invalid_method_in_interface_extension(name, method, interface, function)
+        } else {
+            self.is_invalid_method_in_normal_extension(ext, name, method)
+        }
+    }
+
+    /// Returns whether or not this method is invalid.
+    fn is_invalid_method_in_interface_extension(&mut self, name: &BabString, method: &Method, interface: &SemanticInterface, function: SemanticFunctionAnalysis) -> bool {
+        let Some(expected_method) = interface.methods.iter().find(|x| x.name() == name) else {
+            self.diagnostics.push(
+                SemanticDiagnostic::new(
+                    method.function.name.range(),
+                    SemanticDiagnosticKind::InvalidInterfaceExtensionMethod {
+                        name: name.clone(),
+                        interface: interface.name.value().clone(),
+                    }
+                )
+                .with_related(SemanticRelatedInformation::new(
+                    interface.name.range(),
+                    SemanticRelatedMessage::InterfaceDefinedHere { name: interface.name.value().clone() },
+                ))
+            );
+
+            return true;
+        };
+
+        for (index, (interface_param, actual_param)) in expected_method.function.parameters.iter().zip(&method.function.parameters).enumerate() {
+            let expected_type = self.refine_type(&interface_param.ty);
+            let actual_type = &function.parameters[index];
+            if expected_type != *actual_type {
+                self.diagnostics.push(
+                    SemanticDiagnostic::new(
+                        actual_param.ty.range(),
+                        SemanticDiagnosticKind::InterfaceDeclarationHasDifferentParameters {
+                            expected: expected_type.to_string(),
+                            actual: actual_type.to_string(),
+                        }
+                    )
+                );
+            }
+        }
+
+        let expected_params = expected_method.function.parameters.len();
+        let actual_params = method.function.parameters.len();
+
+        if expected_params < actual_params {
+            self.diagnostics.push(
+                SemanticDiagnostic::new(
+                    FileRange::new(
+                        method.function.parameters[actual_params].name.range().start(),
+                        method.function.parameters.last().unwrap().name.range().start(),
+                    ),
+                    SemanticDiagnosticKind::TooManyParametersForInterfaceMethod {
+                        expected: expected_params,
+                        actual: actual_params,
+                    }
+                )
+            );
+        } else if expected_params > actual_params {
+            self.diagnostics.push(
+                SemanticDiagnostic::new(
+                    FileRange::new(
+                        method.function.parameters[actual_params].name.range().start(),
+                        method.function.parameters.last().unwrap().name.range().start(),
+                    ),
+                    SemanticDiagnosticKind::TooFewParametersForInterfaceMethod {
+                        expected: expected_params,
+                        actual: actual_params,
+                    }
+                )
+            );
+        }
+
+        let return_type = function.return_type.unwrap_or(SemanticType::null());
+        let expected_ty = self.refine_type(&expected_method.function.return_type);
+
+        if return_type != expected_ty {
+            let range = method.function.return_type.as_ref().map(|x| x.range()).unwrap_or(method.function.parameters_right_paren_range);
+
+            let related_our_type = SemanticRelatedInformation::new(return_type.declaration_range(), SemanticRelatedMessage::TypeDefinedHere { typ: return_type.to_string().into() });
+            let related_their_type = SemanticRelatedInformation::new(expected_ty.declaration_range(), SemanticRelatedMessage::TypeDefinedHere { typ: expected_ty.to_string().into() });
+
+            self.diagnostics.push(
+                SemanticDiagnostic::new(
+                    range,
+                    SemanticDiagnosticKind::InterfaceDeclarationHasDifferentReturnType {
+                        expected: expected_method.return_type(),
+                        actual: return_type,
+                    }
+                )
+                .with_related(related_our_type)
+                .with_related(related_their_type)
+            );
+        }
+
+        false
+    }
+
+    /// Returns whether or not this method is invalid.
+    fn is_invalid_method_in_normal_extension(&mut self, ext: &SemanticExtension, name: &BabString, method: &Method) -> bool {
+        if let SemanticType::Custom { base, .. } = &ext.ty {
+            if let Some(existing) = base.methods.iter().find(|x| x.name() == name) {
+                let name = name.clone();
+                self.diagnostics.push(
+                    SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
+                        .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
+                        .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
+                );
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn analyze_missing_interface_methods(&mut self, ext: &SemanticExtension, ast: &ExtensionStatement, interface: &SemanticInterface) {
+        let mut methods = Vec::new();
+
+        for method in &interface.methods {
+            if !ext.methods.contains_key(method.name()) {
+                methods.push(method.name().clone());
+            }
+        }
+
+        if methods.is_empty() {
+            return;
+        }
+
+        let count = methods.len();
+        let mut names = String::new();
+
+        for (idx, method) in methods.iter().enumerate() {
+            if idx != 0 {
+                if idx == count - 1 {
+                    names += " en ";
+                } else {
+                    names += ", ";
+                }
+            }
+
+            names += "`";
+            names += method.as_str();
+            names += "`";
+        }
+
+        self.diagnostics.push(
+            SemanticDiagnostic::new(ast.right_curly_bracket, SemanticDiagnosticKind::MissingMethodsInInterfaceExtension { names, count })
+        );
+    }
+
+    fn analyze_function(&mut self, function: &FunctionStatement, this: Option<SemanticType>) -> SemanticFunctionAnalysis {
         let is_definition = function.body.is_some();
 
         self.context.push_function_scope(function, this);
+
+        let mut analysis = SemanticFunctionAnalysis::default();
 
         let mut params = HashSet::new();
 
         for param in &function.parameters {
             let typ = self.resolve_type(&param.ty);
+            analysis.parameters.push(typ.clone());
 
             if !params.insert(param.name.value().clone()) {
                 self.diagnostics.push(
@@ -237,12 +398,15 @@ impl SemanticAnalyzer {
                 });
             }
 
+            analysis.return_type = Some(typ.clone());
             self.context.current().return_type = Some(Ranged::new(ty.range(), typ));
         }
 
         self.analyze_statements(function.body.as_inner_slice());
 
         self.context.pop_scope();
+
+        analysis
     }
 
     pub fn analyze_statement(&mut self, statement: &Statement) {
@@ -307,7 +471,9 @@ impl SemanticAnalyzer {
                 self.context.statements_state.pop();
             }
             StatementKind::For(statement) => self.analyze_for_statement(statement),
-            StatementKind::Function(function) => self.analyze_function(function, None),
+            StatementKind::Function(function) => {
+                self.analyze_function(function, None);
+            }
             StatementKind::If(statement) => self.analyze_if_statement(statement),
             StatementKind::Interface(..) => (),
             StatementKind::Return(function) => self.analyze_return_statement(function),
@@ -1229,6 +1395,20 @@ impl SemanticAnalyzer {
         &self.diagnostics
     }
 
+    fn resolve_interface(&mut self, specifier: &Ranged<InterfaceSpecifier>) -> Option<Arc<SemanticInterface>> {
+        for scope in self.context.scope.iter().rev() {
+            if let Some(interface) = scope.interfaces.get(&specifier.name) {
+                return Some(Arc::clone(&interface));
+            }
+        }
+
+        let diag = SemanticDiagnostic::new(specifier.name.range(), SemanticDiagnosticKind::UnknownInterface { name: specifier.name.value().clone() });
+
+        self.diagnostics.push(diag);
+
+        None
+    }
+
     #[must_use]
     pub fn resolve_type(&mut self, ty: &Ranged<Type>) -> SemanticType {
         let mut semantic_type = self.resolve_type_specifier(&ty.specifier);
@@ -1250,6 +1430,49 @@ impl SemanticAnalyzer {
             TypeSpecifier::Custom { name, type_parameters } => {
                 self.resolve_type_by_name(name, &type_parameters, None)
             }
+        }
+    }
+
+    /// This re-resolves a type, such that given a generic identifier is
+    /// originally resolved to an generic type, but later the type of the
+    /// generic is known such that the resolved type can now be further
+    /// resolved to that concrete type.
+    fn refine_type(&mut self, ty: &SemanticType) -> SemanticType {
+        match ty {
+            SemanticType::Generic(ty) => {
+                for scope in self.context.scope.iter().rev() {
+                    if let Some(generic) = scope.generic_types.get(&ty.name) {
+                        return SemanticType::Generic(generic.clone());
+                    }
+                }
+
+                SemanticType::Generic(ty.clone())
+            }
+
+            SemanticType::Custom { base, parameters } => {
+                let parameters = parameters.iter().map(|x| self.refine_type(x)).collect();
+                SemanticType::Custom { base: Arc::clone(&base), parameters }
+            }
+
+            SemanticType::Interface { base, parameters } => {
+                let parameters = parameters.iter().map(|x| self.refine_type(x)).collect();
+                SemanticType::Interface { base: Arc::clone(&base), parameters }
+            }
+
+            SemanticType::Array(ty) => {
+                SemanticType::Array(Box::new(self.refine_type(&ty)))
+            }
+
+            SemanticType::IndexReference(ty) => {
+                SemanticType::Array(Box::new(self.refine_type(&ty)))
+            }
+            SemanticType::Pointer(ty) => {
+                SemanticType::Array(Box::new(self.refine_type(&ty)))
+            }
+
+            SemanticType::Builtin(..) => ty.clone(),
+            SemanticType::Function(..) => ty.clone(),
+            SemanticType::FunctionReference(..) => ty.clone(),
         }
     }
 
@@ -1600,7 +1823,7 @@ impl SemanticAnalyzer {
 
     fn analyze_method_expression_with_extensions(&mut self, typ: &SemanticType, expression: &MethodCallExpression) -> Option<SemanticValue> {
         for extension in self.context.scope.iter().rev().flat_map(|x| &x.extensions) {
-            if extension.ty != *typ {
+            if !extension.is_for_type(typ) {
                 continue;
             }
 
@@ -2385,6 +2608,9 @@ pub enum SemanticRelatedMessage {
     #[error("werkwijze `{name}` is hier gedefinieerd")]
     FunctionDefinedHere { name: BabString },
 
+    #[error("koppelvlak `{name}` is hier gedefinieerd")]
+    InterfaceDefinedHere { name: BabString },
+
     #[error("parameter `{name}` is hier gedeclareerd")]
     ParameterDeclaredHere { name: BabString },
 
@@ -2402,9 +2628,13 @@ pub enum SemanticRelatedMessage {
 
     #[error("Bronwaarde is van type `{ty}`")]
     SourceOfType { ty: SemanticType },
+
+    #[error("type `{typ}` is hier gedefinieerd")]
+    TypeDefinedHere { typ: BabString },
 }
 
 #[derive(Debug, Clone, Error, AsRefStr)]
+#[strum(serialize_all = "kebab-case")]
 pub enum SemanticDiagnosticKind {
     #[error("Expressie is geen geldige toewijzing: `{expression:?}`")]
     ExpressionCannotBeUsedAsAssignmentDestination {
@@ -2602,6 +2832,27 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Te veel generieke parameters meegegeven aan `{ty}`")]
     TooManyGenericTypes { ty: BabString },
+
+    #[error("Koppelvlak `{name}` is onbekend")]
+    UnknownInterface { name: BabString },
+
+    #[error("werkwijze{} {names} {}", if *count == 1 { "" } else { "n" }, if *count == 1 { "ontbreekt" } else { "ontbreken" })]
+    MissingMethodsInInterfaceExtension { names: String, count: usize },
+
+    #[error("Koppelvlak `{interface}` heeft geen werkwijze opgesteld met naam `{name}`")]
+    InvalidInterfaceExtensionMethod { name: BabString, interface: BabString },
+
+    #[error("Werkwijze in koppelvlak heeft parameter `{expected}`, maar deze is van type `{actual}`")]
+    InterfaceDeclarationHasDifferentParameters { expected: String, actual: String },
+
+    #[error("Werkwijze in koppelvlak heeft bekeertype `{expected}`, maar deze is van type `{actual}`")]
+    InterfaceDeclarationHasDifferentReturnType { expected: SemanticType, actual: SemanticType },
+
+    #[error("Werkwijze in koppelvlak heeft {expected} parameter{}, maar deze werkwijze heeft {actual} parameter{}", if *expected == 1 { "" } else { "s" }, if *actual == 1 { "" } else { "s" })]
+    TooManyParametersForInterfaceMethod { expected: usize, actual: usize },
+
+    #[error("Werkwijze in koppelvlak heeft {expected} parameter{}, maar deze werkwijze heeft {actual} parameter{}", if *expected == 1 { "" } else { "s" }, if *actual == 1 { "" } else { "s" })]
+    TooFewParametersForInterfaceMethod { expected: usize, actual: usize },
 }
 
 impl SemanticDiagnosticKind {
@@ -2970,9 +3221,48 @@ impl SemanticScope {
 #[derive(Debug, Clone)]
 pub struct SemanticExtension {
     pub ty: SemanticType,
+    pub generic_types: HashSet<BabString>,
+    pub interface: Option<Arc<SemanticInterface>>,
     pub methods: HashMap<BabString, SemanticMethod>,
     pub range: FileRange,
     pub right_curly_bracket: FileRange,
+}
+
+impl SemanticExtension {
+    #[must_use]
+    pub fn is_for_type(&self, typ: &SemanticType) -> bool {
+        let SemanticType::Custom { base: req_base, parameters: req_params } = typ else {
+            return &self.ty == typ;
+        };
+
+        let SemanticType::Custom { base: ext_base, parameters: ext_params } = &self.ty else {
+            return &self.ty == typ;
+        };
+
+        if req_base != ext_base {
+            // TODO: i think this makes things like Lijst<Lijst<T>> not work... we should do generic type erasure for `ext_base` too
+            return false;
+        }
+
+        if req_params.len() != ext_params.len() {
+            return false;
+        }
+
+        for (req_param, ext_param) in req_params.iter().zip(ext_params.iter()) {
+            if req_param == ext_param {
+                continue;
+            }
+
+            if self.generic_types.contains(&ext_param.name()) {
+                continue;
+            }
+
+            log::warn!("Trace: typen {req_param} en {ext_param} komen niet overeen");
+            return false;
+        }
+
+        true
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -3654,4 +3944,10 @@ impl StructureOrInterface for SemanticInterface {
     fn left_curly_range(&self) -> FileRange {
         self.left_curly_range
     }
+}
+
+#[derive(Debug, Default)]
+struct SemanticFunctionAnalysis {
+    parameters: Vec<SemanticType>,
+    return_type: Option<SemanticType>,
 }
