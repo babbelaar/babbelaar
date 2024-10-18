@@ -40,6 +40,14 @@ impl<D> Interpreter<D>
             _ = self.execute_statement(statement);
         }
 
+        for statement in tree.interfaces() {
+            _ = self.execute_statement(statement);
+        }
+
+        for statement in tree.extensions() {
+            _ = self.execute_statement(statement);
+        }
+
         for statement in tree.functions() {
             _ = self.execute_statement(statement);
         }
@@ -72,13 +80,16 @@ impl<D> Interpreter<D>
             }
 
             StatementKind::Extension(ext) => {
-                let structure_id = self.scope.find_structure_id(&ext.type_specifier.fully_qualified_name()).unwrap();
+                let fqn = ext.type_specifier.unqualified_name();
+                let Some(structure_id) = self.scope.find_structure_id(&fqn) else {
+                    panic!("Kon structuur met FQN `{fqn}` niet vinden!");
+                };
 
                 let structure = self.structures.get_mut(&structure_id).unwrap();
 
                 for method in &ext.methods {
                     let id = MethodId { owner: structure_id.into(), index: structure.method_ids.len() };
-                    let prev = structure.method_ids.insert(BabString::clone(&method.function.name), id);
+                    let prev = structure.extension_ids.insert(BabString::clone(&method.function.name), id);
                     debug_assert!(prev.is_none());
 
                     self.methods.insert(id, Arc::new(InterpreterFunction {
@@ -151,6 +162,7 @@ impl<D> Interpreter<D>
                 let mut structure = InterpreterStructure {
                     structure: ast_structure.clone(),
                     method_ids: HashMap::new(),
+                    extension_ids: HashMap::new(),
                 };
 
                 for method in &ast_structure.methods {
@@ -613,7 +625,7 @@ impl<D> Interpreter<D>
 
                 let structure_id = StructureId::from(builtin);
                 if let Some(structure) = self.structures.get(&structure_id) {
-                    if let Some(method) = structure.method_ids.get(method_name).copied() {
+                    if let Some(method) = structure.get_method_by_name(method_name) {
                         return Some(Value::MethodIdReference {
                             lhs: Box::new(value.clone()),
                             method,
@@ -624,7 +636,7 @@ impl<D> Interpreter<D>
 
             ValueType::Structure(structure_id, ..) => {
                 let structure = self.structures.get(&structure_id).expect("illegal StructureId");
-                let method = structure.method_ids.get(method_name)?.clone();
+                let method = structure.get_method_by_name(method_name)?;
 
                 return Some(Value::MethodIdReference {
                     lhs: Box::new(value.clone()),
@@ -714,6 +726,7 @@ fn create_top_level_structures() -> HashMap<StructureId, InterpreterStructure> {
         let structure = InterpreterStructure {
             structure: Structure::from_builtin_type(*ty),
             method_ids: HashMap::new(),
+            extension_ids: HashMap::new(),
         };
 
         map.insert(StructureId::from(*ty), structure);

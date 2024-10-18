@@ -16,6 +16,7 @@ pub enum Keyword {
     Koppelvlak,
     Nieuw,
     Onwaar,
+    Op,
     Reeks,
     Stel,
     Structuur,
@@ -116,6 +117,7 @@ Hallo, ik ben John Doe
             Self::Koppelvlak => "Definieer een nieuw koppelvlak, een soort contract voor structuren.",
             Self::Nieuw => "Maak een nieuw object aan.",
             Self::Onwaar => "Een waarde van het type `booleaan`. Tegenovergestelde van `waar`",
+            Self::Op => "Op welke structuur moet de het koppelvlak uitgebreid worden.",
             Self::Reeks => {
                 r#"Stel een reeks op van getallen.
 ## Voorbeeld

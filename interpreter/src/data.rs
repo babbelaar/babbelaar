@@ -27,7 +27,16 @@ impl InterpreterInterface {
 #[derive(Debug)]
 pub struct InterpreterStructure {
     pub method_ids: HashMap<BabString, MethodId>,
+    pub extension_ids: HashMap<BabString, MethodId>,
     pub structure: Structure,
+}
+
+impl InterpreterStructure {
+    pub fn get_method_by_name(&self, name: &BabString) -> Option<MethodId> {
+        self.method_ids.get(name)
+            .or_else(|| self.extension_ids.get(name))
+            .copied()
+    }
 }
 
 impl InterpreterStructure {

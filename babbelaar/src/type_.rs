@@ -13,6 +13,12 @@ pub struct Parameter {
 }
 
 #[derive(Debug, Clone)]
+pub struct InterfaceSpecifier {
+    pub name: Ranged<BabString>,
+    pub type_parameters: Ranged<Vec<Ranged<Type>>>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Type {
     pub specifier: Ranged<TypeSpecifier>,
     pub qualifiers: Vec<Ranged<TypeQualifier>>,

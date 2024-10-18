@@ -1,10 +1,6 @@
 structuur Lijst<T> {
     veld inhoud: T[] = nieuw T[0],
 
-    werkwijze lengte() -> g32 {
-        bekeer dit.inhoud.lengte();
-    }
-
     werkwijze voegToe(item: T) {
         stel oude = dit.inhoud;
         dit.inhoud = nieuw T[oude.lengte() + 1];
@@ -25,16 +21,26 @@ structuur Lijst<T> {
 
         bekeer onwaar;
     }
+
+    werkwijze lengte() -> g32 {
+        bekeer dit.inhoud.lengte();
+    }
 }
 
 koppelvlak Enumerabel<T> {
-    werkwijze bevat(item: T) -> bool;
+    werkwijze lengte() -> g32;
+    werkwijze krijg(plaats: g32) -> T;
 }
 
 uitbreiding<T> Enumerabel<T> op Lijst<T> {
+    werkwijze lengte() -> g32 {
+        bekeer dit.lengte();
+    }
 
+    werkwijze krijg(plaats: g32) -> T {
+        bekeer dit.inhoud[plaats];
+    }
 }
-
 
 stel lijst = nieuw Lijst<Slinger> {};
 lijst.voegToe("Abc");
@@ -44,5 +50,5 @@ stel naald = "Abc";
 stel b = lijst.bevat(naald);
 schrijf(€"Bevat {b}");
 
-@uitheems(naam: "exit")
-werkwijze exit(a: g32);
+stel s = lijst.lengte();
+schrijf(€"Lengte: {s}");

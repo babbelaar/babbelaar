@@ -171,12 +171,36 @@ impl<'tokens> Parser<'tokens> {
     fn parse_extension_statement(&mut self) -> ParseResult<ExtensionStatement> {
         let generic_types = self.parse_type_generic_parameters_declarations();
 
-        let type_specifier = self.parse_type_specifier();
+        let first_specifier = self.parse_interface_or_type_specifier("koppelvlak of structuur");
+
+        let (type_specifier, interface_specifier) = match self.peek_token().map(|x| &x.kind) {
+            Ok(TokenKind::Keyword(Keyword::Op)) => {
+                _ = self.consume_token();
+                let ty = self.parse_type_specifier();
+                (ty, Some(first_specifier.map(|x| x.to_interface())))
+            }
+
+            Ok(TokenKind::Identifier(..)) => {
+                let token = self.peek_token().unwrap().clone();
+                let range = FileRange::new(self.previous_end(), token.begin);
+                self.emit_diagnostic(ParseDiagnostic::ExpectedKeywordOp {
+                    token,
+                    range,
+                });
+                let ty = self.parse_type_specifier();
+                (ty, Some(first_specifier.map(|x| x.to_interface())))
+            }
+
+            _ => {
+                (first_specifier.map(|x| x.to_type()), None)
+            }
+        };
 
         let left_curly_bracket = self.expect_left_curly_bracket("structuurnaam")?;
 
         let mut extension = ExtensionStatement {
             generic_types,
+            interface_specifier,
             type_specifier,
             methods: Vec::new(),
             right_curly_bracket: left_curly_bracket.end().as_zero_range(),
@@ -743,6 +767,39 @@ impl<'tokens> Parser<'tokens> {
             FileRange::new(start_range.start(), end),
             TypeQualifier::Array,
         )
+    }
+
+    fn parse_interface_or_type_specifier(&mut self, interface_or_type: &'static str) -> Ranged<InterfaceOrTypeSpecifier> {
+        let Ok(name_token) = self.peek_token().cloned() else {
+            let range = self.end_of_file_token.range();
+
+            return Ranged::new(range, InterfaceOrTypeSpecifier {
+                name: Ranged::new(range, BabString::empty()),
+                type_parameters: Ranged::new(range.end().as_zero_range(), Vec::new()),
+            });
+        };
+
+        let TokenKind::Identifier(ref name) = name_token.kind else {
+            let range = name_token.begin.as_zero_range();
+            self.emit_diagnostic(ParseDiagnostic::ExpectedNameOfInterfaceOrType { token: name_token, interface_or_type });
+
+            return Ranged::new(range, InterfaceOrTypeSpecifier {
+                name: Ranged::new(range, BabString::empty()),
+                type_parameters: Ranged::new(range.end().as_zero_range(), Vec::new()),
+            });
+        };
+
+        _ = self.consume_token();
+
+        let name = Ranged::new(name_token.range(), name.clone());
+        let type_parameters = self.parse_type_generic_parameters_definitions();
+
+        let range = FileRange::new(name.range().start(), type_parameters.range().end());
+
+        Ranged::new(range, InterfaceOrTypeSpecifier {
+            name,
+            type_parameters,
+        })
     }
 
     fn parse_type_specifier(&mut self) -> Ranged<TypeSpecifier> {
@@ -1659,6 +1716,9 @@ pub enum ParseDiagnostic {
     #[error("`>` verwacht na generieke parameters")]
     ExpectedGreaterThanForParameterPack { token: Token, location: FileLocation },
 
+    #[error("Sleutelwoord `op` verwacht tussen de naam van het koppelvlak en de type")]
+    ExpectedKeywordOp { token: Token, range: FileRange },
+
     #[error("Naam van structuur verwacht, maar kreeg: {token}")]
     ExpectedNameAfterNieuw { token: Token },
 
@@ -1667,6 +1727,9 @@ pub enum ParseDiagnostic {
 
     #[error("Naam van `koppelvlak` verwacht, maar kreeg: {token}")]
     ExpectedNameOfInterface { token: Token },
+
+    #[error("Naam van {interface_or_type} verwacht, maar kreeg: {token}")]
+    ExpectedNameOfInterfaceOrType { token: Token, interface_or_type: &'static str },
 
     #[error("Naam van structuur verwacht, maar kreeg: {token}")]
     ExpectedNameOfStructuur { token: Token },
@@ -1765,9 +1828,11 @@ impl ParseDiagnostic {
             Self::ExpectedStructureMethodPrefixWerkwijze { token } => token,
             Self::ExpectedSemicolonAfterStatement { token, .. } => token,
             Self::ExpectedSemicolonOrCurlyBracketForFunction { token, .. } => token,
+            Self::ExpectedKeywordOp { token, .. } => token,
             Self::ExpectedNameAfterNieuw { token } => token,
             Self::ExpectedNameOfField { token } => token,
             Self::ExpectedNameOfInterface { token } => token,
+            Self::ExpectedNameOfInterfaceOrType { token, .. } => token,
             Self::ExpectedNameOfStructuur { token } => token,
             Self::ExpectedNameOfVariable { token } => token,
             Self::ExpectedIdentifier { token, .. } => token,
@@ -1798,6 +1863,7 @@ impl ParseDiagnostic {
         match self {
             Self::ExpectedColon { range, .. } => *range,
             Self::ExpectedCommaAfterStructureMember { location, .. } => location.as_zero_range(),
+            Self::ExpectedKeywordOp { range, .. } => *range,
             Self::ExpectedSemicolonAfterStatement { range, .. } => *range,
             Self::ExpectedSemicolonOrCurlyBracketForFunction { range, .. } => *range,
             Self::ExpectedRightCurlyBracket { range, .. } => *range,
@@ -1831,6 +1897,35 @@ impl FunctionParsingContext {
     #[must_use]
     pub const fn require_body(&self) -> bool {
         matches!(self, Self::Method)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct InterfaceOrTypeSpecifier {
+    pub name: Ranged<BabString>,
+    pub type_parameters: Ranged<Vec<Ranged<Type>>>,
+}
+
+impl InterfaceOrTypeSpecifier {
+    #[must_use]
+    fn to_interface(self) -> InterfaceSpecifier {
+        InterfaceSpecifier {
+            name: self.name,
+            type_parameters: self.type_parameters,
+        }
+    }
+
+    #[must_use]
+    fn to_type(self) -> TypeSpecifier {
+        if !self.type_parameters.is_empty() {
+            return TypeSpecifier::Custom { name: self.name, type_parameters: self.type_parameters };
+        }
+
+        if let Some(ty) = Builtin::type_by_name(&self.name) {
+            TypeSpecifier::BuiltIn(Ranged::new(self.name.range(), ty))
+        } else {
+            TypeSpecifier::Custom { name: self.name, type_parameters: self.type_parameters }
+        }
     }
 }
 

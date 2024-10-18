@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, BabString, Expression, ExtensionStatement, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, InterfaceStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, BabString, Expression, ExtensionStatement, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, InterfaceSpecifier, InterfaceStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenModifier, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -335,6 +335,10 @@ impl Symbolizer {
             });
         }
 
+        if let Some(interface) = &extension.interface_specifier {
+            self.add_interface_specifier(interface);
+        }
+
         self.add_type_specifier(&extension.type_specifier);
 
         for method in &extension.methods {
@@ -431,6 +435,19 @@ impl Symbolizer {
             }
         }
 
+    }
+
+    fn add_interface_specifier(&mut self, specifier: &InterfaceSpecifier) {
+        self.symbols.insert(LspSymbol {
+            name: specifier.name.value().clone(),
+            kind: LspTokenType::Class,
+            range: specifier.name.range(),
+            modifier: LspSymbolModifier::default(),
+        });
+
+        for param in specifier.type_parameters.value() {
+            self.add_type(param);
+        }
     }
 }
 
