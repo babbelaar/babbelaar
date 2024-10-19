@@ -3,7 +3,7 @@
 
 use std::{path::PathBuf, sync::{Arc, Mutex}};
 
-use babbelaar::{BabString, Expression, Lexer, ParseTree, Parser, Ranged, SemanticAnalyzer, SemanticDiagnosticSeverity, SourceCode, Token, Value};
+use babbelaar::{BabString, Expression, Lexer, ParseTree, Parser, Ranged, SemanticAnalysisPhase, SemanticAnalyzer, SemanticDiagnosticSeverity, SourceCode, Token, Value};
 use babbelaar_interpreter::{Debugger, Interpreter};
 
 fn parse<'a>(input: &'a SourceCode) -> ParseTree {
@@ -13,8 +13,9 @@ fn parse<'a>(input: &'a SourceCode) -> ParseTree {
     assert!(parser.diagnostics().is_empty(), "Parse errors: {:#?}", parser.diagnostics());
 
     let mut semantics = SemanticAnalyzer::new_single(input);
-    semantics.analyze_tree_phase_1(&tree);
-    semantics.analyze_tree_phase_2(&tree);
+    for phase in SemanticAnalysisPhase::iter() {
+        semantics.analyze_tree(&tree, phase);
+    }
     let diagnostics = semantics.into_diagnostics();
     assert!(diagnostics.iter().find(|x| x.severity() == SemanticDiagnosticSeverity::Error).is_none(), "Diagnostics: {diagnostics:#?}");
 

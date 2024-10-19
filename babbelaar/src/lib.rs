@@ -30,7 +30,7 @@ pub use self::{
     keyword::Keyword,
     lexer::{Lexer, LexerError, LexerErrorKind},
     parser::{Parser, ParseDiagnostic, ParseError},
-    semantics::{SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticLocal, SemanticLocalKind, SemanticReference, SemanticScope, SemanticStructure, SemanticType},
+    semantics::{SemanticAnalysisPhase, SemanticAnalyzer, SemanticDiagnostic, SemanticDiagnosticKind, SemanticDiagnosticSeverity, SemanticLocal, SemanticLocalKind, SemanticReference, SemanticScope, SemanticStructure, SemanticType},
     statement::{AssignStatement, ExtensionStatement, ForIterableKind, ForStatement, FunctionStatement, IfStatement, ReturnStatement, Statement, StatementKind, VariableStatement},
     string::{BabString, IntoBabString, Slice},
     structure::{Field, InterfaceStatement, Method, Structure},
