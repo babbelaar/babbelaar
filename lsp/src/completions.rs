@@ -456,7 +456,6 @@ impl<'b> CompletionEngine<'b> {
                         Keyword::Dit => Some(CompletionItemKind::VARIABLE),
                         _ => Some(CompletionItemKind::KEYWORD)
                     },
-                    preselect: Some(true),
                     insert_text: lsp.map(|x| x.completion.to_string()),
                     detail: lsp.map(|x| x.inline_detail.to_string()),
                     insert_text_format: Some(InsertTextFormat::SNIPPET),
@@ -469,7 +468,6 @@ impl<'b> CompletionEngine<'b> {
             if ty.name().to_lowercase().starts_with(ident) {
                 self.completions.push(CompletionItem {
                     label: ty.name().to_string(),
-                    preselect: Some(true),
                     kind: Some(CompletionItemKind::KEYWORD),
                     detail: Some(ty.documentation().to_string()),
                     insert_text_format: Some(InsertTextFormat::SNIPPET),
