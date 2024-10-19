@@ -5,6 +5,7 @@
 
 mod actions;
 mod backend;
+mod configuration;
 mod context;
 mod commands;
 mod completions;
@@ -30,15 +31,17 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{LanguageServer, LspService, Server};
 
 pub use self::{
-    actions::CodeActionRepository,
+    actions::{CodeActionRepository, CodeActionItem, CodeActionsAnalysisContext, CodeActionsAnalyzable},
     backend::Backend,
     commands::LspCommand,
+    configuration::{LspClientKind, LspConfiguration},
     context::{BabbelaarContext, BabbelaarFile},
     conversion::{UrlExtension, convert_command, Converter, TextEncoding},
     completions::CompletionEngine,
     error::{BabbelaarLspError, BabbelaarLspResult},
     format::Format,
-    symbolization::{LspTokenType, Symbolizer},
+    hints::InlayHintsEngine,
+    symbolization::{LspTokenType, LspSymbolModifier, Symbolizer},
 };
 
 #[tower_lsp::async_trait]
@@ -142,7 +145,7 @@ pub async fn run<I, O>(stdin: I, stdout: O)
         Logger::initialize(client.clone());
         Backend {
             client,
-            client_configuration: Arc::new(RwLock::new(None)),
+            configuration: LspConfiguration::new(),
             context: Arc::new(BabbelaarContext::new()),
             code_actions: Arc::new(RwLock::new(CodeActionRepository::new()))
         }

@@ -550,9 +550,7 @@ async fn check_if_snippets_are_supported_by_the_client(server: &Backend) -> bool
 
 #[must_use]
 async fn check_if_snippets_are_supported_by_the_client_inner(server: &Backend) -> Option<bool> {
-    let caps = server.client_configuration.read().await;
-    let caps = caps.as_ref()?;
-
+    let caps = server.configuration.client().await;
 
     caps.capabilities
         .text_document.as_ref()?
