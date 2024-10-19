@@ -110,9 +110,11 @@ pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
 
     let mut interpreter = Interpreter::new(debugger);
 
-    for (_, tree) in files {
-        interpreter.execute_tree(&tree);
-    }
+    let trees: Vec<ParseTree> = files.into_iter()
+        .map(|(_, tree)| tree)
+        .collect();
+
+    interpreter.execute_trees(&trees);
 }
 
 fn analyze(files: &[(SourceCode, ParseTree)]) {
