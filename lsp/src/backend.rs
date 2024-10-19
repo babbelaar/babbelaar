@@ -19,57 +19,23 @@ use tower_lsp::Client;
 
 use tower_lsp::lsp_types::Uri as Url;
 
-use crate::actions::CodeActionsAnalysisContext;
-use crate::actions::CodeActionsAnalyzable;
-use crate::convert_command;
-use crate::hints::InlayHintsEngine;
-use crate::symbolization::LspSymbolModifier;
-use crate::BabbelaarContext;
-use crate::BabbelaarLspError;
-use crate::CodeActionRepository;
-use crate::Converter;
-use crate::LspCommand;
-use crate::PathBufExt;
-use crate::TextEncoding;
-use crate::UrlExtension;
 use crate::{
+    *,
     BabbelaarLspResult as Result,
-    completions::CompletionEngine,
-    format::Format,
-    symbolization::{LspTokenType, Symbolizer},
 };
 
 #[derive(Debug, Clone)]
 pub struct Backend {
     pub(super) client: Client,
-    pub(super) client_configuration: Arc<RwLock<Option<InitializeParams>>>,
+    pub(super) configuration: LspConfiguration,
     pub(super) context: Arc<BabbelaarContext>,
     pub(super) code_actions: Arc<RwLock<CodeActionRepository>>,
 }
 
 impl Backend {
     #[must_use]
-    fn get_position_encoding(&self) -> TextEncoding {
-        self.get_position_encoding_impl().unwrap_or_default()
-    }
-
-    fn get_position_encoding_impl(&self) -> Option<TextEncoding> {
-        let config = block_in_place(|| {
-            self.client_configuration.blocking_read()
-        });
-        let config = config.as_ref().unwrap();
-        for encoding in config.capabilities.general.as_ref()?.position_encodings.as_ref()? {
-            if *encoding == PositionEncodingKind::UTF8 {
-                return Some(TextEncoding::Utf8);
-            }
-        }
-
-        Some(TextEncoding::Utf16)
-    }
-
-    #[must_use]
     pub fn converter(&self, source_code: &SourceCode) -> Converter {
-        let encoding = self.get_position_encoding();
+        let encoding = self.configuration.position_encoding();
         Converter::new(source_code.clone(), encoding)
     }
 
@@ -120,8 +86,12 @@ impl Backend {
 
     pub async fn collect_lenses(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
         let url = params.text_document.uri.to_string();
-        Ok(Some(vec![
-            CodeLens {
+
+        let mut lenses = Vec::new();
+
+        // The VS Code extension has a run button, so we don't need to add a CodeLens here.
+        if self.configuration.client_kind().await != LspClientKind::VisualStudioCode {
+            lenses.push(CodeLens {
                 range: Range {
                     start: Position {
                         line: 0,
@@ -141,8 +111,10 @@ impl Backend {
                     ]),
                 }),
                 data: None,
-            }
-        ]))
+            });
+        }
+
+        Ok(Some(lenses))
     }
 
     pub async fn lexed_document<F, R>(&self, text_document: &TextDocumentIdentifier, f: F) -> Result<R>
@@ -478,107 +450,6 @@ impl Backend {
         }).await
     }
 
-    fn capabilities(&self) -> ServerCapabilities {
-        ServerCapabilities {
-            text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                TextDocumentSyncKind::FULL,
-            )),
-            completion_provider: Some(CompletionOptions {
-                resolve_provider: Some(false),
-                trigger_characters: Some(vec![".".to_string(), ",".to_string(), "{".to_string(), "@".to_string()]),
-                work_done_progress_options: WorkDoneProgressOptions::default(),
-                completion_item: Some(CompletionOptionsCompletionItem {
-                    label_details_support: Some(true),
-                }),
-                ..Default::default()
-            }),
-            signature_help_provider: Some(SignatureHelpOptions {
-                trigger_characters: Some(vec!["(".into(), ",".into()]),
-                retrigger_characters: Some(vec![",".into()]),
-                work_done_progress_options: WorkDoneProgressOptions::default(),
-            }),
-            hover_provider: Some(true.into()),
-            document_formatting_provider: Some(OneOf::Left(true)),
-            document_highlight_provider: Some(OneOf::Left(true)),
-            document_symbol_provider: Some(OneOf::Left(true)),
-            semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
-                SemanticTokensOptions {
-                    work_done_progress_options: WorkDoneProgressOptions {
-                        work_done_progress: None,
-                    },
-                    legend: SemanticTokensLegend {
-                        token_types: LspTokenType::legend(),
-                        token_modifiers: LspSymbolModifier::legend()
-                    },
-                    range: Some(false),
-                    full: Some(SemanticTokensFullOptions::Bool(true)),
-                }
-            )),
-            code_lens_provider: Some(CodeLensOptions {
-                resolve_provider: Some(true),
-            }),
-            inlay_hint_provider: Some(OneOf::Right(InlayHintServerCapabilities::Options(InlayHintOptions {
-                work_done_progress_options: Default::default(),
-                resolve_provider: Some(false),
-            }))),
-            declaration_provider: Some(DeclarationCapability::Options(DeclarationOptions {
-                work_done_progress_options: WorkDoneProgressOptions {
-                    work_done_progress: None,
-                },
-            })),
-            definition_provider: Some(OneOf::Left(true)),
-            code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
-            rename_provider: Some(OneOf::Left(true)),
-            notebook_document_sync: Some(OneOf::Left(NotebookDocumentSyncOptions {
-                notebook_selector: [
-                    NotebookSelector::ByCells {
-                        notebook: Some(Notebook::String("*".into())),
-                        cells: [
-                            NotebookCellSelector {
-                                language: "babbelaar".into(),
-                            }
-                        ].to_vec(),
-                    }
-                ].to_vec(),
-                save: None,
-            })),
-            workspace: Some(WorkspaceServerCapabilities {
-                workspace_folders: Some(WorkspaceFoldersServerCapabilities {
-                    supported: Some(true),
-                    change_notifications: None,
-                }),
-                file_operations: Some(WorkspaceFileOperationsServerCapabilities {
-                    will_delete: Some(FileOperationRegistrationOptions {
-                        filters: [FileOperationFilter {
-                            scheme: Some("file".into()),
-                            pattern: FileOperationPattern {
-                                glob: "**/*.bab".into(),
-                                matches: None,
-                                options: None,
-                            },
-                        }].to_vec(),
-                    }),
-                    did_delete: Some(FileOperationRegistrationOptions {
-                        filters: [FileOperationFilter {
-                            scheme: Some("file".into()),
-                            pattern: FileOperationPattern {
-                                glob: "**/*.bab".into(),
-                                matches: None,
-                                options: None,
-                            },
-                        }].to_vec(),
-                    }),
-                    ..Default::default()
-                })
-            }),
-            execute_command_provider: Some(ExecuteCommandOptions {
-                commands: LspCommand::names(),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }
-    }
-
     pub async fn on_semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>> {
         self.lexed_document(&params.text_document, |tokens, source_code| {
             let mut symbolizer = Symbolizer::new(params.text_document.uri.clone(), source_code, self.converter(source_code));
@@ -632,7 +503,7 @@ impl Backend {
                 .and_then(|folders| folders.get(0))
                 .map(|workspace_folder| workspace_folder.uri.clone());
 
-        *self.client_configuration.write().await = Some(config);
+        let capabilities = self.configuration.capabilities(config).await;
 
         if let Some(folder) = workspace_folder {
             let path = folder.to_path().unwrap();
@@ -646,11 +517,8 @@ impl Backend {
         }
 
         Ok(InitializeResult {
-            server_info: Some(ServerInfo {
-                name: "Babbelaar Taaldienaar".to_string(),
-                version: Some(env!("CARGO_PKG_VERSION").to_string()),
-            }),
-            capabilities: self.capabilities(),
+            server_info: Some(self.configuration.server_info()),
+            capabilities,
         })
     }
 
@@ -1139,8 +1007,7 @@ impl Backend {
         let path = self.context.path_of(id).await;
         let path = path.as_ref()?.to_string_lossy();
 
-        let config = self.client_configuration.read().await;
-        let config = config.as_ref()?;
+        let config = self.configuration.client().await;
 
         let Some(folders) = &config.workspace_folders else {
             return Some(path.to_string());
