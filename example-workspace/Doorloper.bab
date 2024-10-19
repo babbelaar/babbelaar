@@ -1,0 +1,4 @@
+koppelvlak Doorloper<T> {
+    werkwijze lengte() -> g32;
+    werkwijze krijg(plaats: g32) -> T;
+}
