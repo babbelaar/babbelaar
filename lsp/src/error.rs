@@ -31,6 +31,9 @@ pub enum BabbelaarLspError {
 
     #[error("Interne fout met pad: \"{}\"", path.display())]
     InternalFileRegistrationError { path: PathBuf },
+
+    #[error("Ongeldig commando: \"{name}\"")]
+    InvalidCommand { name: String },
 }
 
 impl From<IoError> for BabbelaarLspError {

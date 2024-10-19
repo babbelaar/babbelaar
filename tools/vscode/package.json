@@ -89,6 +89,16 @@
                 "title": "Babbelaar: Bestand uitvoeren"
             },
             {
+                "command": "babbelaar.stortAbstracteSyntaxisboom",
+                "icon": "$(list-tree)",
+                "title": "Babbelaar: Stort Abstracte Syntaxisboom"
+            },
+            {
+                "command": "babbelaar.stortSemantischeBoom",
+                "icon": "$(list-tree)",
+                "title": "Babbelaar: Stort Semantische Boom"
+            },
+            {
                 "command": "babbelaar.herstarten",
                 "icon": "$(refresh)",
                 "title": "Babbelaar: Taaldienaar herstarten"

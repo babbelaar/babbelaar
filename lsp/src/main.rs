@@ -6,6 +6,7 @@
 mod actions;
 mod backend;
 mod context;
+mod commands;
 mod completions;
 mod conversion;
 mod error;
@@ -21,6 +22,7 @@ use std::{fs::File, io::Write, pin::Pin};
 
 use log::LevelFilter;
 use logger::Logger;
+use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
@@ -30,6 +32,7 @@ use tower_lsp::{LanguageServer, LspService, Server};
 pub use self::{
     actions::CodeActionRepository,
     backend::Backend,
+    commands::LspCommand,
     context::{BabbelaarContext, BabbelaarFile},
     conversion::{UrlExtension, convert_command, Converter, TextEncoding},
     completions::CompletionEngine,
@@ -114,6 +117,10 @@ impl LanguageServer for Backend {
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
         Ok(self.rename(params).await?)
+    }
+
+    async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
+        Ok(self.execute_command(params).await?)
     }
 }
 

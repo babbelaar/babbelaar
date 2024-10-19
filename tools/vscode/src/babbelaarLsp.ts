@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-import { Executable, LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
+import { Command, Executable, ExecuteCommandRequest, LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
 import { BabbelaarContext } from "./babbelaarContext";
 import { ensureLspServer } from "./downloadBabbelaar";
 import { window, workspace } from "vscode";
@@ -11,6 +11,7 @@ let client: LanguageClient;
 const BabbelaarLsp = {
 	startClient,
 	stopClient,
+	sendBabbelaarNotification,
 };
 
 export { BabbelaarLsp };
@@ -50,6 +51,10 @@ async function startClient(context: BabbelaarContext) {
 	client = new LanguageClient("babbelaar-lsp", "Babbelaar Taalondersteuning", serverOptions, clientOptions);
 	client.start();
 	console.log("Client is gestart");
+}
+
+async function sendBabbelaarNotification(method: string, body: any) {
+	await client.sendNotification("experimental/babbelaar/" + method, body);
 }
 
 export async function stopClient() {
