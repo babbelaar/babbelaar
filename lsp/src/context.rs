@@ -27,7 +27,12 @@ impl BabbelaarContext {
 
     pub async fn register_file(&self, source_code: SourceCode) {
         let path = source_code.path().canonicalize().unwrap_or_else(|_| source_code.path().to_path_buf());
-        self.files.insert(path, Arc::new(Mutex::new(BabbelaarFile::new(source_code))));
+        let prev = self.files.insert(path, Arc::new(Mutex::new(BabbelaarFile::new(source_code.clone()))));
+
+        if prev.is_none() {
+            log::info!("Bestand {} is registreert met nummer {:?}", source_code.path().display(), source_code.file_id());
+        }
+
         *self.semantic_analysis.write().await = None;
     }
 
