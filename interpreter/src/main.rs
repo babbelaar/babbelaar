@@ -122,12 +122,10 @@ fn analyze(files: &[(SourceCode, ParseTree)]) {
 
     let mut analyzer = SemanticAnalyzer::new(file_ids);
 
-    for (_, tree) in files {
-        analyzer.analyze_tree_phase_1(tree);
-    }
-
-    for (_, tree) in files {
-        analyzer.analyze_tree_phase_2(tree);
+    for phase in SemanticAnalysisPhase::iter() {
+        for (_, tree) in files {
+            analyzer.analyze_tree(tree, phase);
+        }
     }
 
     let diags = analyzer.into_diagnostics();

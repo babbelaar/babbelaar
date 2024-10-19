@@ -4,7 +4,7 @@
 use std::{collections::{HashMap, HashSet}, fmt::{Display, Write}, sync::Arc};
 
 use log::warn;
-use strum::AsRefStr;
+use strum::{AsRefStr, EnumIter, IntoEnumIterator};
 use thiserror::Error;
 
 use crate::*;
@@ -33,20 +33,28 @@ impl SemanticAnalyzer {
         Self::new(files)
     }
 
-    pub fn analyze_tree_phase_1(&mut self, tree: &ParseTree) {
+    pub fn analyze_tree(&mut self, tree: &ParseTree, phase: SemanticAnalysisPhase) {
         self.context.announce_file(tree);
 
-        self.analyze_statements(tree.structures());
-        self.analyze_statements(tree.interfaces());
-        self.analyze_statements(tree.extensions());
-        self.analyze_statements(tree.functions());
-    }
+        match phase {
+            SemanticAnalysisPhase::Phase1 => {
+                self.analyze_statements(tree.structures());
+                self.analyze_statements(tree.interfaces());
+            }
 
-    pub fn analyze_tree_phase_2(&mut self, tree: &ParseTree) {
-        self.context.announce_file(tree);
+            SemanticAnalysisPhase::Phase2 => {
+                self.analyze_statements(tree.extensions());
+            }
 
-        self.analyze_statements(tree.statements());
-        self.analyze_usages();
+            SemanticAnalysisPhase::Phase3 => {
+                self.analyze_statements(tree.functions());
+            }
+
+            SemanticAnalysisPhase::Phase4 => {
+                self.analyze_statements(tree.statements());
+                self.analyze_usages();
+            }
+        }
     }
 
     fn analyze_statements(&mut self, statements: &[Statement]) {
@@ -3950,4 +3958,18 @@ impl StructureOrInterface for SemanticInterface {
 struct SemanticFunctionAnalysis {
     parameters: Vec<SemanticType>,
     return_type: Option<SemanticType>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, EnumIter)]
+pub enum SemanticAnalysisPhase {
+    Phase1,
+    Phase2,
+    Phase3,
+    Phase4,
+}
+
+impl SemanticAnalysisPhase {
+    pub fn iter() -> impl Iterator<Item = SemanticAnalysisPhase> {
+        <Self as IntoEnumIterator>::iter()
+    }
 }

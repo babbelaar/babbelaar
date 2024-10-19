@@ -5,7 +5,7 @@ use std::{collections::HashMap, path::{Path, PathBuf}, sync::Arc};
 
 use dashmap::DashMap;
 
-use babbelaar::{FileId, Lexer, LexerError, ParseDiagnostic, ParseTree, Parser, SemanticAnalyzer, SourceCode, Token};
+use babbelaar::{FileId, Lexer, LexerError, ParseDiagnostic, ParseTree, Parser, SemanticAnalysisPhase, SemanticAnalyzer, SourceCode, Token};
 use tokio::sync::{Mutex, RwLock};
 use tower_lsp::lsp_types::Uri as Url;
 
@@ -98,18 +98,14 @@ impl BabbelaarContext {
 
         let mut analyzer = SemanticAnalyzer::new(files);
 
-        // Pre-phase
-        for file in self.files.iter() {
-            let mut file = file.lock().await;
-            let tree = file.ensure_parsed().0;
-            analyzer.analyze_tree_phase_1(tree);
+        for phase in SemanticAnalysisPhase::iter() {
+            for file in self.files.iter() {
+                let mut file = file.lock().await;
+                let tree = file.ensure_parsed().0;
+                analyzer.analyze_tree(tree, phase);
+            }
         }
 
-        for file in self.files.iter() {
-            let mut file = file.lock().await;
-            let tree = file.ensure_parsed().0;
-            analyzer.analyze_tree_phase_2(tree);
-        }
 
         let analyzer = Arc::new(analyzer);
         *lock = Some(Arc::clone(&analyzer));

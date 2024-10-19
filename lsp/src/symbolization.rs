@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, BabString, Expression, ExtensionStatement, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, InterfaceSpecifier, InterfaceStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, BabString, Expression, ExtensionStatement, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, InterfaceSpecifier, InterfaceStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalysisPhase, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenModifier, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -28,8 +28,9 @@ impl Symbolizer {
     }
 
     pub fn add_tree(&mut self, tree: &ParseTree) {
-        self.semantic_analyzer.analyze_tree_phase_1(tree);
-        self.semantic_analyzer.analyze_tree_phase_2(tree);
+        for phase in SemanticAnalysisPhase::iter() {
+            self.semantic_analyzer.analyze_tree(tree, phase);
+        }
 
         for statement in tree.all() {
             self.add_statement(statement);
