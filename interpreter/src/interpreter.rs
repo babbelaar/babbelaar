@@ -35,27 +35,37 @@ impl<D> Interpreter<D>
         }
     }
 
-    pub fn execute_tree(&mut self, tree: &ParseTree) {
-        for statement in tree.structures() {
-            _ = self.execute_statement(statement);
+    pub fn execute_trees(&mut self, trees: &[ParseTree]) {
+        for tree in trees {
+            for statement in tree.structures() {
+                _ = self.execute_statement(statement);
+            }
         }
 
-        for statement in tree.interfaces() {
-            _ = self.execute_statement(statement);
+        for tree in trees {
+            for statement in tree.interfaces() {
+                _ = self.execute_statement(statement);
+            }
         }
 
-        for statement in tree.extensions() {
-            _ = self.execute_statement(statement);
+        for tree in trees {
+            for statement in tree.extensions() {
+                _ = self.execute_statement(statement);
+            }
         }
 
-        for statement in tree.functions() {
-            _ = self.execute_statement(statement);
+        for tree in trees {
+            for statement in tree.functions() {
+                _ = self.execute_statement(statement);
+            }
         }
 
-        for statement in tree.statements() {
-            match self.execute_statement(statement) {
-                StatementResult::Continue => continue,
-                StatementResult::Return(..) => break,
+        for tree in trees {
+            for statement in tree.statements() {
+                match self.execute_statement(statement) {
+                    StatementResult::Continue => continue,
+                    StatementResult::Return(..) => break,
+                }
             }
         }
     }
