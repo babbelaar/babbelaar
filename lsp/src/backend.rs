@@ -28,6 +28,7 @@ use crate::BabbelaarContext;
 use crate::BabbelaarLspError;
 use crate::CodeActionRepository;
 use crate::Converter;
+use crate::LspCommand;
 use crate::PathBufExt;
 use crate::TextEncoding;
 use crate::UrlExtension;
@@ -569,6 +570,10 @@ impl Backend {
                     }),
                     ..Default::default()
                 })
+            }),
+            execute_command_provider: Some(ExecuteCommandOptions {
+                commands: LspCommand::names(),
+                ..Default::default()
             }),
             ..Default::default()
         }
@@ -1179,5 +1184,28 @@ impl Backend {
 
             _ => (),
         }
+    }
+
+    pub async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<serde_json::Value>> {
+        let Some(command) = LspCommand::from_str(&params.command) else {
+            return Err(BabbelaarLspError::InvalidCommand { name: params.command });
+        };
+
+        match command {
+            LspCommand::StortAbstracteSyntaxisboom => {
+                self.context.with_all_files(|file| {
+                    let path = file.source_code().path().display().to_string();
+                    log::info!("{path}: {:#?}", file.ensure_parsed());
+                    Ok(())
+                }).await?;
+            }
+
+            LspCommand::StortSemantischeBoom => {
+                let analyzer = self.context.semantic_analysis().await;
+                log::info!("Scoops: {:#?}", analyzer.context.scope);
+            }
+        }
+
+        Ok(None)
     }
 }
