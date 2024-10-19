@@ -649,6 +649,7 @@ impl SemanticAnalyzer {
                 let right_parameter_range = self.context.scope.iter().rev()
                     .filter_map(|x| match &x.kind {
                         SemanticScopeKind::Default => None,
+                        SemanticScopeKind::TopLevel => None,
                         SemanticScopeKind::Structure => None,
                         SemanticScopeKind::Werkwijze => None,
                         SemanticScopeKind::Function { right_parameter_range, .. } => Some(right_parameter_range.clone()),
@@ -693,6 +694,7 @@ impl SemanticAnalyzer {
                 let right_parameter_range = self.context.scope.iter().rev()
                     .filter_map(|x| match &x.kind {
                         SemanticScopeKind::Default => None,
+                        SemanticScopeKind::TopLevel => None,
                         SemanticScopeKind::Structure => None,
                         SemanticScopeKind::Werkwijze => None,
                         SemanticScopeKind::Function { right_parameter_range, .. } => Some(right_parameter_range.clone()),
@@ -1551,13 +1553,13 @@ impl SemanticAnalyzer {
     pub fn scopes_surrounding<F>(&self, location: FileLocation, mut f: F)
             where F: FnMut(&SemanticScope) {
         for scope in &self.context.previous_scopes {
-            if scope.range.contains(location) {
+            if scope.is_location_inside(location) {
                 f(scope);
             }
         }
 
         for scope in &self.context.scope {
-            if scope.range.contains(location) {
+            if scope.is_location_inside(location) {
                 f(scope);
             }
         }
@@ -3216,7 +3218,7 @@ impl SemanticScope {
             this: None,
             return_type: None,
             generic_types: HashMap::new(),
-            kind: SemanticScopeKind::Default,
+            kind: SemanticScopeKind::TopLevel,
             extensions: Vec::new(),
             interfaces: HashMap::new(),
         };
@@ -3230,6 +3232,14 @@ impl SemanticScope {
         }
 
         this
+    }
+
+    #[must_use]
+    pub fn is_location_inside(&self, location: FileLocation) -> bool {
+        match &self.kind {
+            SemanticScopeKind::TopLevel => true,
+            _ => self.range.contains(location),
+        }
     }
 
     #[must_use]
@@ -3294,6 +3304,7 @@ pub enum SemanticScopeKind {
     #[default]
     Default,
 
+    TopLevel,
     Structure,
     Werkwijze,
 
