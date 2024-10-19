@@ -120,13 +120,14 @@ fn analyze(files: &[(SourceCode, ParseTree)]) {
         .map(|(source_code, _)| (source_code.file_id(), source_code.clone()))
         .collect();
 
-    let mut analyzer = SemanticAnalyzer::new(file_ids);
+    let mut analyzer = SemanticAnalyzer::new(file_ids, true);
 
     for phase in SemanticAnalysisPhase::iter() {
         for (_, tree) in files {
             analyzer.analyze_tree(tree, phase);
         }
     }
+    analyzer.finish_analysis();
 
     let diags = analyzer.into_diagnostics();
     let mut has_error = false;

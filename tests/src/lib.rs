@@ -12,10 +12,11 @@ fn parse<'a>(input: &'a SourceCode) -> ParseTree {
     let tree = parser.parse_tree();
     assert!(parser.diagnostics().is_empty(), "Parse errors: {:#?}", parser.diagnostics());
 
-    let mut semantics = SemanticAnalyzer::new_single(input);
+    let mut semantics = SemanticAnalyzer::new_single(input, true);
     for phase in SemanticAnalysisPhase::iter() {
         semantics.analyze_tree(&tree, phase);
     }
+    semantics.finish_analysis();
     let diagnostics = semantics.into_diagnostics();
     assert!(diagnostics.iter().find(|x| x.severity() == SemanticDiagnosticSeverity::Error).is_none(), "Diagnostics: {diagnostics:#?}");
 
