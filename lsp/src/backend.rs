@@ -237,7 +237,7 @@ impl Backend {
             }
 
             let errors = file.parse_diagnostics();
-            let analyzer = SemanticAnalyzer::new(HashMap::new());
+            let analyzer = SemanticAnalyzer::new(HashMap::new(), false);
 
             for err in errors {
                 let range = err.range();

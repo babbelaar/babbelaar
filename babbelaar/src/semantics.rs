@@ -13,24 +13,26 @@ use crate::*;
 pub struct SemanticAnalyzer {
     pub context: SemanticContext,
     files: HashMap<FileId, SourceCode>,
-    diagnostics: Vec<SemanticDiagnostic>,
+    diagnostics: SemanticDiagnosticsList,
+    should_produce_diagnostics: bool,
 }
 
 impl SemanticAnalyzer {
     #[must_use]
-    pub fn new(files: HashMap<FileId, SourceCode>) -> Self {
+    pub fn new(files: HashMap<FileId, SourceCode>, should_produce_diagnostics: bool) -> Self {
         Self {
             context: SemanticContext::new(),
-            diagnostics: Vec::new(),
+            diagnostics: SemanticDiagnosticsList::new(should_produce_diagnostics),
             files,
+            should_produce_diagnostics,
         }
     }
 
     #[must_use]
-    pub fn new_single(source_code: &SourceCode) -> Self {
+    pub fn new_single(source_code: &SourceCode, should_produce_diagnostics: bool) -> Self {
         let mut files = HashMap::new();
         files.insert(source_code.file_id(), source_code.clone());
-        Self::new(files)
+        Self::new(files, should_produce_diagnostics)
     }
 
     pub fn analyze_tree(&mut self, tree: &ParseTree, phase: SemanticAnalysisPhase) {
@@ -52,8 +54,13 @@ impl SemanticAnalyzer {
 
             SemanticAnalysisPhase::Phase4 => {
                 self.analyze_statements(tree.statements());
-                self.analyze_usages();
             }
+        }
+    }
+
+    pub fn finish_analysis(&mut self) {
+        if self.should_produce_diagnostics {
+            self.analyze_usages();
         }
     }
 
@@ -77,7 +84,7 @@ impl SemanticAnalyzer {
         for statement in statements {
             if let StatementKind::Function(function) = &statement.kind {
                 if let Some(other) = self.context.current().get_function_mut(&function.name) {
-                    self.diagnostics.push(
+                    self.diagnostics.create(||
                         SemanticDiagnostic::new(
                             function.name.range(),
                             SemanticDiagnosticKind::DuplicateFunction {
@@ -146,7 +153,7 @@ impl SemanticAnalyzer {
         let ty = self.resolve_type_specifier(&extension.type_specifier);
 
         if !ty.can_be_extended() {
-            self.diagnostics.push(SemanticDiagnostic::new(extension.type_specifier.range(), SemanticDiagnosticKind::TypeCannotBeExtended { name: extension.type_specifier.fully_qualified_name() }));
+            self.diagnostics.create(|| SemanticDiagnostic::new(extension.type_specifier.range(), SemanticDiagnosticKind::TypeCannotBeExtended { name: extension.type_specifier.fully_qualified_name() }));
             return;
         }
 
@@ -189,7 +196,7 @@ impl SemanticAnalyzer {
     fn is_invalid_method(&mut self, ext: &SemanticExtension, name: &BabString, method: &Method, function: SemanticFunctionAnalysis) -> bool {
         if let Some(existing) = ext.methods.get(name) {
             let name = name.clone();
-            self.diagnostics.push(
+            self.diagnostics.create(||
                 SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
                     .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
                     .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
@@ -207,7 +214,7 @@ impl SemanticAnalyzer {
     /// Returns whether or not this method is invalid.
     fn is_invalid_method_in_interface_extension(&mut self, name: &BabString, method: &Method, interface: &SemanticInterface, function: SemanticFunctionAnalysis) -> bool {
         let Some(expected_method) = interface.methods.iter().find(|x| x.name() == name) else {
-            self.diagnostics.push(
+            self.diagnostics.create(||
                 SemanticDiagnostic::new(
                     method.function.name.range(),
                     SemanticDiagnosticKind::InvalidInterfaceExtensionMethod {
@@ -228,7 +235,7 @@ impl SemanticAnalyzer {
             let expected_type = self.refine_type(&interface_param.ty);
             let actual_type = &function.parameters[index];
             if expected_type != *actual_type {
-                self.diagnostics.push(
+                self.diagnostics.create(||
                     SemanticDiagnostic::new(
                         actual_param.ty.range(),
                         SemanticDiagnosticKind::InterfaceDeclarationHasDifferentParameters {
@@ -244,7 +251,7 @@ impl SemanticAnalyzer {
         let actual_params = method.function.parameters.len();
 
         if expected_params < actual_params {
-            self.diagnostics.push(
+            self.diagnostics.create(||
                 SemanticDiagnostic::new(
                     FileRange::new(
                         method.function.parameters[actual_params].name.range().start(),
@@ -257,7 +264,7 @@ impl SemanticAnalyzer {
                 )
             );
         } else if expected_params > actual_params {
-            self.diagnostics.push(
+            self.diagnostics.create(||
                 SemanticDiagnostic::new(
                     FileRange::new(
                         method.function.parameters[actual_params].name.range().start(),
@@ -280,7 +287,7 @@ impl SemanticAnalyzer {
             let related_our_type = SemanticRelatedInformation::new(return_type.declaration_range(), SemanticRelatedMessage::TypeDefinedHere { typ: return_type.to_string().into() });
             let related_their_type = SemanticRelatedInformation::new(expected_ty.declaration_range(), SemanticRelatedMessage::TypeDefinedHere { typ: expected_ty.to_string().into() });
 
-            self.diagnostics.push(
+            self.diagnostics.create(||
                 SemanticDiagnostic::new(
                     range,
                     SemanticDiagnosticKind::InterfaceDeclarationHasDifferentReturnType {
@@ -301,7 +308,7 @@ impl SemanticAnalyzer {
         if let SemanticType::Custom { base, .. } = &ext.ty {
             if let Some(existing) = base.methods.iter().find(|x| x.name() == name) {
                 let name = name.clone();
-                self.diagnostics.push(
+                self.diagnostics.create(||
                     SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
                         .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
                         .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
@@ -343,7 +350,7 @@ impl SemanticAnalyzer {
             names += "`";
         }
 
-        self.diagnostics.push(
+        self.diagnostics.create(||
             SemanticDiagnostic::new(ast.right_curly_bracket, SemanticDiagnosticKind::MissingMethodsInInterfaceExtension { names, count })
         );
     }
@@ -362,7 +369,7 @@ impl SemanticAnalyzer {
             analysis.parameters.push(typ.clone());
 
             if !params.insert(param.name.value().clone()) {
-                self.diagnostics.push(
+                self.diagnostics.create(||
                     SemanticDiagnostic::new(
                         param.name.range(),
                         SemanticDiagnosticKind::DuplicateParameterName {
@@ -458,7 +465,7 @@ impl SemanticAnalyzer {
                         _ => diag,
                     };
 
-                    self.diagnostics.push(diag);
+                    self.diagnostics.create(|| diag);
                 }
             }
             StatementKind::Extension(extension) => {
@@ -505,7 +512,7 @@ impl SemanticAnalyzer {
             _ => (),
         }
 
-        self.diagnostics.push(SemanticDiagnostic::new(
+        self.diagnostics.create(|| SemanticDiagnostic::new(
             range,
             SemanticDiagnosticKind::ExpressionCannotBeUsedAsAssignmentDestination {
                 expression: expression.clone(),
@@ -554,7 +561,7 @@ impl SemanticAnalyzer {
             }
 
             _ => {
-                self.diagnostics.push(
+                self.diagnostics.create(||
                     SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::ExpressionNotIterable)
                         .with_related(SemanticRelatedInformation::new(expression.range(), SemanticRelatedMessage::ExpressionIsOfType { ty: ty.clone() }))
                 );
@@ -577,7 +584,7 @@ impl SemanticAnalyzer {
 
         if ty != SemanticType::Builtin(BuiltinType::G32) {
             let conversion_actions = self.try_create_conversion_actions(&SemanticType::Builtin(BuiltinType::G32), &ty, expression);
-            self.diagnostics.push(
+            self.diagnostics.create(||
                 SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::RangeExpectsInteger { name, ty })
                     .with_actions(conversion_actions)
             );
@@ -605,7 +612,7 @@ impl SemanticAnalyzer {
                 }
 
                 if actual_type.ty != *expected.value() {
-                    self.diagnostics.push(
+                    self.diagnostics.create(||
                         SemanticDiagnostic::new(
                             actual.range(),
                             SemanticDiagnosticKind::ReturnStatementIncompatibleTypes {
@@ -679,7 +686,7 @@ impl SemanticAnalyzer {
                     )
                 );
 
-                self.diagnostics.push(diag);
+                self.diagnostics.create(|| diag);
             }
 
             (None, Some(expected)) => {
@@ -692,7 +699,7 @@ impl SemanticAnalyzer {
                     })
                     .next();
 
-                self.diagnostics.push(
+                self.diagnostics.create(||
                     SemanticDiagnostic::new(
                         statement.keyword_range.end().as_zero_range(),
                         SemanticDiagnosticKind::ReturnStatementExpectedValue {
@@ -747,7 +754,7 @@ impl SemanticAnalyzer {
         let mut names = HashSet::new();
         for method in &interface.methods {
             if !names.insert(method.function.name.value()) {
-                self.diagnostics.push(
+                self.diagnostics.create(||
                     SemanticDiagnostic::new(
                         method.function.name.range(),
                         SemanticDiagnosticKind::DuplicateMethodNameInInterface { name: method.function.name.value().clone(), interface: interface.name.value().clone() },
@@ -795,7 +802,7 @@ impl SemanticAnalyzer {
         let mut names = HashSet::new();
         for field in &semantic_structure.fields {
             if !names.insert(field.name.value()) {
-                self.diagnostics.push(
+                self.diagnostics.create(||
                     SemanticDiagnostic::new(
                         field.name.range(),
                         SemanticDiagnosticKind::DuplicateFieldName { name: field.name.value().clone() },
@@ -815,7 +822,7 @@ impl SemanticAnalyzer {
         let mut names = HashSet::new();
         for method in &structure.methods {
             if !names.insert(method.function.name.value()) {
-                self.diagnostics.push(
+                self.diagnostics.create(||
                     SemanticDiagnostic::new(
                         method.function.name.range(),
                         SemanticDiagnosticKind::DuplicateMethodNameInStructure { name: method.function.name.value().clone(), structure: structure.name.value().clone() },
@@ -887,7 +894,7 @@ impl SemanticAnalyzer {
         let rhs_type = self.analyze_expression(&expression.rhs).ty;
 
         if lhs_type != rhs_type {
-            self.diagnostics.push(SemanticDiagnostic::new(
+            self.diagnostics.create(|| SemanticDiagnostic::new(
                 expression.operator.range(),
                 SemanticDiagnosticKind::IncompatibleTypes {
                     lhs_type: lhs_type.clone(),
@@ -927,7 +934,7 @@ impl SemanticAnalyzer {
 
             let diag = diag.with_action(self.create_action_create_function(function_name, expression));
 
-            self.diagnostics.push(diag);
+            self.diagnostics.create(|| diag);
             return SemanticValue::null();
         };
 
@@ -962,7 +969,7 @@ impl SemanticAnalyzer {
         let arg_count = expression.arguments.len();
 
         if param_count > arg_count {
-            self.diagnostics.push(SemanticDiagnostic::new(
+            self.diagnostics.create(|| SemanticDiagnostic::new(
                 expression.token_right_paren,
                 SemanticDiagnosticKind::TooFewArguments { function_name: function_name.clone(), param_count, arg_count },
             ).with_related(function_hint.clone()));
@@ -1004,7 +1011,7 @@ impl SemanticAnalyzer {
             }
 
 
-            self.diagnostics.push(
+            self.diagnostics.create(||
                 SemanticDiagnostic::new(
                     expression.arguments[param_count].range(),
                     SemanticDiagnosticKind::TooManyArguments { function_name: BabString::new(format!("{function:#?}")), param_count, arg_count },
@@ -1036,7 +1043,7 @@ impl SemanticAnalyzer {
                         SemanticRelatedMessage::ParameterDeclaredHere { name: x.value().clone()}
                     ));
 
-                self.diagnostics.push(SemanticDiagnostic::new(
+                self.diagnostics.create(|| SemanticDiagnostic::new(
                     arg.range(),
                     SemanticDiagnosticKind::IncompatibleArgumentParameterType {
                         argument_type,
@@ -1089,7 +1096,7 @@ impl SemanticAnalyzer {
                 } else {
                     let diag = SemanticDiagnostic::new(range, SemanticDiagnosticKind::ThisOutsideStructure)
                         .with_related(SemanticRelatedInformation::new(scope.range, SemanticRelatedMessage::WerkwijzeNotInsideStructuur));
-                    self.diagnostics.push(diag);
+                    self.diagnostics.create(|| diag);
                     SemanticType::null()
                 }
             }
@@ -1113,7 +1120,7 @@ impl SemanticAnalyzer {
 
             PrimaryExpression::Reference(reference) => {
                 let Some(local) = self.find_local_by_name(|name| name == reference.value()) else {
-                    self.diagnostics.push(SemanticDiagnostic::new(
+                    self.diagnostics.create(|| SemanticDiagnostic::new(
                         reference.range(),
                         SemanticDiagnosticKind::InvalidIdentifierReference { identifier: reference.value().clone() }
                     ));
@@ -1140,7 +1147,7 @@ impl SemanticAnalyzer {
             PrimaryExpression::SizedArrayInitializer { typ, size } => {
                 let size_value = self.analyze_expression(&size);
                 if size_value.ty != SemanticType::Builtin(BuiltinType::G32) {
-                    self.diagnostics.push(SemanticDiagnostic::new(
+                    self.diagnostics.create(|| SemanticDiagnostic::new(
                         size.range(),
                         SemanticDiagnosticKind::SizedArrayInitializerInvalidSize,
                     ));
@@ -1190,7 +1197,7 @@ impl SemanticAnalyzer {
                     if declaration_type != definition_type {
                         let actions = self.try_create_conversion_actions(&declaration_type, &definition_type, &field_instantiation.value);
 
-                        self.diagnostics.push(SemanticDiagnostic::new(
+                        self.diagnostics.create(|| SemanticDiagnostic::new(
                             field_instantiation.value.range(),
                             SemanticDiagnosticKind::IncompatibleFieldTypes {
                                 struct_name: base.name.value().clone(),
@@ -1222,12 +1229,12 @@ impl SemanticAnalyzer {
                             SemanticDiagnosticKind::DuplicateFieldInstantiation { name: name.value().clone()},
                         );
 
-                        self.diagnostics.push(diag.with_related(field_def_hint).with_related(struct_hint.clone()));
+                        self.diagnostics.create(|| diag.with_related(field_def_hint).with_related(struct_hint.clone()));
                     } else {
                         let definition_type = self.analyze_expression(&field_instantiation.value).ty;
                         let create_field_actions = self.create_actions_create_field(&ty, &field_instantiation.name, definition_type);
 
-                        self.diagnostics.push(
+                        self.diagnostics.create(||
                             SemanticDiagnostic::new(
                                 name.range(),
                                 SemanticDiagnosticKind::InvalidFieldInstantiation {
@@ -1253,7 +1260,7 @@ impl SemanticAnalyzer {
                 .map(|(x, _)| x.as_str())
                 .join("`, `");
 
-            self.diagnostics.push(SemanticDiagnostic::new(instantiation.range, SemanticDiagnosticKind::MissingFieldInitializers {
+            self.diagnostics.create(|| SemanticDiagnostic::new(instantiation.range, SemanticDiagnosticKind::MissingFieldInitializers {
                 names,
                 field_word: if count_fields_left == 1 {
                     "Het veld"
@@ -1395,12 +1402,12 @@ impl SemanticAnalyzer {
 
     #[must_use]
     pub fn into_diagnostics(self) -> Vec<SemanticDiagnostic> {
-        self.diagnostics
+        self.diagnostics.to_vec()
     }
 
     #[must_use]
     pub fn diagnostics(&self) -> &[SemanticDiagnostic] {
-        &self.diagnostics
+        self.diagnostics.as_slice()
     }
 
     fn resolve_interface(&mut self, specifier: &Ranged<InterfaceSpecifier>) -> Option<Arc<SemanticInterface>> {
@@ -1412,7 +1419,7 @@ impl SemanticAnalyzer {
 
         let diag = SemanticDiagnostic::new(specifier.name.range(), SemanticDiagnosticKind::UnknownInterface { name: specifier.name.value().clone() });
 
-        self.diagnostics.push(diag);
+        self.diagnostics.create(|| diag);
 
         None
     }
@@ -1500,19 +1507,19 @@ impl SemanticAnalyzer {
                 }
 
                 if params.len() != 0 && structure.generic_types.len() == 0 {
-                    self.diagnostics.push(
+                    self.diagnostics.create(||
                         SemanticDiagnostic::new(params.range(), SemanticDiagnosticKind::TypeParametersUnexpected { ty: structure.name.value().clone() })
                             .with_action(BabbelaarCodeAction::new(BabbelaarCodeActionType::RemoveGenericParameters, [
                                 FileEdit::new(params.range(), String::new())
                             ].to_vec()))
                     );
                 } else if params.len() < structure.generic_types.len() {
-                    self.diagnostics.push(
+                    self.diagnostics.create(||
                         SemanticDiagnostic::new(params.range(), SemanticDiagnosticKind::TooFewGenericTypes { ty: structure.name.value().clone() })
                     );
                 } else if params.len() > structure.generic_types.len() {
                     let range = FileRange::new(params[structure.generic_types.len() - 1].range().end(), params.last().unwrap().range().end());
-                    self.diagnostics.push(
+                    self.diagnostics.create(||
                         SemanticDiagnostic::new(range, SemanticDiagnosticKind::TooManyGenericTypes { ty: structure.name.value().clone() })
                             .with_action(BabbelaarCodeAction::new(BabbelaarCodeActionType::RemoveExtraneousGenericTypes, [
                                 FileEdit::new(range, String::new())
@@ -1529,15 +1536,14 @@ impl SemanticAnalyzer {
             }
         }
 
-        let body = self.build_structure_body_based_on_instantiation(instantiation);
-
-        self.diagnostics.push(
+        self.emit_diagnostic(|this| {
+            let body = this.build_structure_body_based_on_instantiation(instantiation);
             SemanticDiagnostic::new(
                 name.range(),
                 SemanticDiagnosticKind::UnknownType { name: name.value().clone() },
             )
-            .with_actions(self.create_actions_create_structure(name, body))
-        );
+            .with_actions(this.create_actions_create_structure(name, body))
+        });
 
         SemanticType::Builtin(BuiltinType::Null)
     }
@@ -1611,7 +1617,7 @@ impl SemanticAnalyzer {
 
     fn analyze_member_expression(&mut self, typ: SemanticType, member: &Ranged<BabString>) -> SemanticValue {
         let SemanticType::Custom { base, .. } = &typ else {
-            self.diagnostics.push(SemanticDiagnostic::new(
+            self.diagnostics.create(|| SemanticDiagnostic::new(
                 member.range(),
                 SemanticDiagnosticKind::InvalidMember { typ, name: member.value().clone() }
             ));
@@ -1659,7 +1665,7 @@ impl SemanticAnalyzer {
             SemanticDiagnosticKind::InvalidMember { typ, name: member.value().clone() }
         );
 
-        self.diagnostics.push(diag.with_related(struct_hint).with_actions(actions));
+        self.diagnostics.create(|| diag.with_related(struct_hint).with_actions(actions));
 
         SemanticValue::null()
     }
@@ -1676,7 +1682,7 @@ impl SemanticAnalyzer {
                     }
                 }
 
-                self.diagnostics.push(SemanticDiagnostic::new(
+                self.diagnostics.create(|| SemanticDiagnostic::new(
                     expression.method_name.range(),
                     SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value().clone()}
                 ));
@@ -1701,7 +1707,7 @@ impl SemanticAnalyzer {
                 let args: Vec<SemanticType> = expression.call.arguments.iter().map(|x| self.analyze_expression(x).ty).collect();
                 let create_method_extension_actions = self.create_actions_create_method_extension(&typ, expression, &args);
 
-                self.diagnostics.push(SemanticDiagnostic::new(
+                self.diagnostics.create(|| SemanticDiagnostic::new(
                     expression.method_name.range(),
                     SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value().clone()}
                 ).with_actions(create_method_extension_actions));
@@ -1754,13 +1760,13 @@ impl SemanticAnalyzer {
                     SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value().clone() }
                 ).with_action(create_method_action).with_actions(create_method_extension_actions);
 
-                self.diagnostics.push(diag.with_related(struct_hint));
+                self.diagnostics.create(|| diag.with_related(struct_hint));
 
                 SemanticValue::null()
             }
 
             SemanticType::Function(..) | SemanticType::FunctionReference(..) => {
-                self.diagnostics.push(SemanticDiagnostic::new(
+                self.diagnostics.create(|| SemanticDiagnostic::new(
                     expression.method_name.range(),
                     SemanticDiagnosticKind::FunctionCannotHaveMethod { typ, name: expression.method_name.value().clone() }
                 ));
@@ -1818,7 +1824,7 @@ impl SemanticAnalyzer {
                     SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value().clone() }
                 ).with_action(create_method_action).with_actions(create_method_extension_actions);
 
-                self.diagnostics.push(diag.with_related(struct_hint));
+                self.diagnostics.create(|| diag.with_related(struct_hint));
 
                 SemanticValue::null()
             }
@@ -1875,7 +1881,7 @@ impl SemanticAnalyzer {
                 continue;
             }
 
-            self.diagnostics.push(SemanticDiagnostic::new(
+            self.diagnostics.create(|| SemanticDiagnostic::new(
                 attribute.name.range(),
                 SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone(), range: attribute.range() },
             ));
@@ -1888,7 +1894,7 @@ impl SemanticAnalyzer {
                 _ => {
                     _ = function;
 
-                    self.diagnostics.push(SemanticDiagnostic::new(
+                    self.diagnostics.create(|| SemanticDiagnostic::new(
                         attribute.name.range(),
                         SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone(), range: attribute.range() },
                     ));
@@ -1907,7 +1913,7 @@ impl SemanticAnalyzer {
                 BabbelaarCodeActionType::RemoveAttribute { name: attr.name.value().clone() },
                 vec![FileEdit::new(attr.name.range().as_full_line(), "")],
             ));
-            self.diagnostics.push(diag);
+            self.diagnostics.create(|| diag);
             return;
         };
 
@@ -1916,7 +1922,7 @@ impl SemanticAnalyzer {
                 attr.name.range().as_full_line(),
                 SemanticDiagnosticKind::AttributeExternOnlyOnFunctionsWithoutBody,
             );
-            self.diagnostics.push(diag);
+            self.diagnostics.create(|| diag);
         }
 
         let Some(extern_func) = self.attribute_extern_evaluate(attr) else {
@@ -1937,7 +1943,7 @@ impl SemanticAnalyzer {
                 BabbelaarCodeActionType::RemoveAttribute { name: attr.name.value().clone() },
                 vec![FileEdit::new(attr.name.range().as_full_line(), "")],
             ));
-            self.diagnostics.push(diag);
+            self.diagnostics.create(|| diag);
             return;
         }
 
@@ -1953,13 +1959,13 @@ impl SemanticAnalyzer {
                 if name.is_none() {
                     name = Some(&arg.value);
                 } else {
-                    self.diagnostics.push(SemanticDiagnostic::new(
+                    self.diagnostics.create(|| SemanticDiagnostic::new(
                         arg.name.range(),
                         SemanticDiagnosticKind::AttributeExternDuplicateName,
                     ));
                 }
             } else {
-                self.diagnostics.push(SemanticDiagnostic::new(
+                self.diagnostics.create(|| SemanticDiagnostic::new(
                     arg.name.range(),
                     SemanticDiagnosticKind::AttributeExternDuplicateName,
                 ));
@@ -1972,7 +1978,7 @@ impl SemanticAnalyzer {
                 SemanticDiagnosticKind::AttributeExternRequiresName,
             );
             // TODO add action
-            self.diagnostics.push(diag);
+            self.diagnostics.create(|| diag);
             return None;
         };
 
@@ -1981,12 +1987,12 @@ impl SemanticAnalyzer {
                 attr.name.range(),
                 SemanticDiagnosticKind::AttributeExternNameMustBeString,
             );
-            self.diagnostics.push(diag);
+            self.diagnostics.create(|| diag);
             return None;
         };
 
         if name_literal.is_empty() {
-            self.diagnostics.push(SemanticDiagnostic::new(
+            self.diagnostics.create(|| SemanticDiagnostic::new(
                 attr.name.range(),
                 SemanticDiagnosticKind::AttributeExternNameMustBeNonEmpty,
             ));
@@ -2000,7 +2006,7 @@ impl SemanticAnalyzer {
 
     fn analyze_attributes_for_field(&mut self, field: &SemanticField) {
         for attribute in &field.attributes {
-            self.diagnostics.push(SemanticDiagnostic::new(
+            self.diagnostics.create(|| SemanticDiagnostic::new(
                 attribute.name.range(),
                 SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone(), range: attribute.range() },
             ));
@@ -2343,7 +2349,7 @@ impl SemanticAnalyzer {
                 }
 
                 let diag = self.create_diagnostic_unused_local(name, local);
-                self.diagnostics.push(diag);
+                self.diagnostics.create(|| diag);
             }
         }
     }
@@ -2389,7 +2395,7 @@ impl SemanticAnalyzer {
 
     fn analyze_subscript_expression(&mut self, lhs: SemanticType, expression: &Ranged<Expression>, range: FileRange) -> SemanticValue {
         let Some(element_type) = lhs.subscript() else {
-            self.diagnostics.push(
+            self.diagnostics.create(||
                 SemanticDiagnostic::new(range, SemanticDiagnosticKind::CannotSubscriptNonArray { ty: lhs })
             );
             return SemanticValue::null();
@@ -2397,7 +2403,7 @@ impl SemanticAnalyzer {
 
         let index_value = self.analyze_expression(expression);
         if index_value.ty != SemanticType::Builtin(BuiltinType::G32) {
-            self.diagnostics.push(
+            self.diagnostics.create(||
                 SemanticDiagnostic::new(range, SemanticDiagnosticKind::CannotIndexArrayWithNonInteger { ty: index_value.ty })
             );
         }
@@ -2410,11 +2416,11 @@ impl SemanticAnalyzer {
 
     fn analyze_assignment_source_dest(&mut self, assign: &AssignStatement, destination_type: SemanticType, source_type: SemanticType) {
         if source_type != destination_type {
-            self.diagnostics.push(
+            self.emit_diagnostic(|this|
                 SemanticDiagnostic::new(assign.equals_sign, SemanticDiagnosticKind::IncompatibleAssignmentTypes)
                     .with_related(SemanticRelatedInformation::new(assign.destination.range(), SemanticRelatedMessage::DestinationOfType { ty: destination_type.clone() }))
                     .with_related(SemanticRelatedInformation::new(assign.source.range(), SemanticRelatedMessage::SourceOfType { ty: source_type.clone() }))
-                    .with_actions(self.try_create_conversion_actions(&destination_type, &source_type, &assign.source))
+                    .with_actions(this.try_create_conversion_actions(&destination_type, &source_type, &assign.source))
             );
         }
     }
@@ -2475,6 +2481,16 @@ impl SemanticAnalyzer {
         }
 
         body
+    }
+
+    #[inline]
+    fn emit_diagnostic<F: FnOnce(&mut Self) -> SemanticDiagnostic>(&mut self, f: F) {
+        if !self.should_produce_diagnostics {
+            return;
+        }
+
+        let diagnostic = f(self);
+        self.diagnostics.create(|| diagnostic);
     }
 }
 
@@ -3971,5 +3987,37 @@ pub enum SemanticAnalysisPhase {
 impl SemanticAnalysisPhase {
     pub fn iter() -> impl Iterator<Item = SemanticAnalysisPhase> {
         <Self as IntoEnumIterator>::iter()
+    }
+}
+
+#[derive(Default, Debug)]
+struct SemanticDiagnosticsList {
+    contents: Option<Vec<SemanticDiagnostic>>,
+}
+
+impl SemanticDiagnosticsList {
+    fn new(should_produce_diagnostics: bool) -> Self {
+        Self {
+            contents: if should_produce_diagnostics {
+                Some(Vec::new())
+            } else {
+                None
+            }
+        }
+    }
+
+    #[inline]
+    pub fn create<F: FnOnce() -> SemanticDiagnostic>(&mut self, f: F) {
+        let Some(contents) = &mut self.contents else { return };
+
+        contents.push(f());
+    }
+
+    fn to_vec(self) -> Vec<SemanticDiagnostic> {
+        self.contents.unwrap_or_default()
+    }
+
+    fn as_slice(&self) -> &[SemanticDiagnostic] {
+        self.contents.as_ref().map(|x| x.as_slice()).unwrap_or_default()
     }
 }

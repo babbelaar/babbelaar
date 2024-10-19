@@ -85,18 +85,18 @@ impl BabbelaarContext {
     }
 
     pub async fn semantic_analysis(&self) -> Arc<SemanticAnalyzer> {
-        if let Some(analyzer) = self.semantic_analysis.read().await.as_ref() {
+        let mut analysis = self.semantic_analysis.write().await;
+        if let Some(analyzer) = analysis.as_ref() {
             return Arc::clone(&analyzer);
         }
 
-        let mut lock = self.semantic_analysis.write().await;
         let mut files = HashMap::new();
         for file in self.files.iter() {
             let file = file.lock().await;
             files.insert(file.source_code.file_id(), file.source_code.clone());
         }
 
-        let mut analyzer = SemanticAnalyzer::new(files);
+        let mut analyzer = SemanticAnalyzer::new(files, true);
 
         for phase in SemanticAnalysisPhase::iter() {
             for file in self.files.iter() {
@@ -106,9 +106,10 @@ impl BabbelaarContext {
             }
         }
 
+        analyzer.finish_analysis();
 
         let analyzer = Arc::new(analyzer);
-        *lock = Some(Arc::clone(&analyzer));
+        *analysis = Some(Arc::clone(&analyzer));
 
         analyzer
     }

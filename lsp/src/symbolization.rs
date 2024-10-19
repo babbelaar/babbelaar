@@ -23,7 +23,7 @@ impl Symbolizer {
             uri,
             converter,
             symbols: SymbolMap::default(),
-            semantic_analyzer: SemanticAnalyzer::new_single(source_code),
+            semantic_analyzer: SemanticAnalyzer::new_single(source_code, false),
         }
     }
 
