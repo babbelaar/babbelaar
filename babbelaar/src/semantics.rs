@@ -2144,7 +2144,7 @@ impl SemanticAnalyzer {
     #[must_use]
     fn create_actions_create_method_extension_new_structure(&self, typ: &SemanticType, method: &MethodCallExpression, args: &[SemanticType], is_explicitly_new: bool) -> BabbelaarCodeAction {
         let name = method.method_name.value().clone();
-        let location = self.calculate_new_extension_location();
+        let location = self.calculate_new_extension_location(method.method_name.range().file_id());
         let indent = self.indentation_at(location).unwrap_or_default();
 
         let mut add_text = format!("\n\n{indent}uitbreiding {typ} {{\n{indent}    werkwijze {name}(");
@@ -2235,8 +2235,10 @@ impl SemanticAnalyzer {
         self.files.get(&start.file_id())?.indentation_at(start)
     }
 
+    /// The parameter `file_id` is to ensure we can always provide some location,
+    /// even if it's not the most optimal one.
     #[must_use]
-    fn calculate_new_extension_location(&self) -> FileLocation {
+    fn calculate_new_extension_location(&self, file_id: FileId) -> FileLocation {
         let mut last_structure = None;
         let mut last_extension = None;
 
@@ -2258,7 +2260,7 @@ impl SemanticAnalyzer {
             return range.end();
         }
 
-        self.context.scope[1].range.end()
+        FileLocation::new(file_id, 0, 0, 0)
     }
 
     fn calculate_new_field_or_method_location(&self, object: &dyn StructureOrInterface) -> (FileLocation, String) {
