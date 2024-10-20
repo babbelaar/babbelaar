@@ -275,6 +275,7 @@ impl<D> Interpreter<D>
             Expression::BiExpression(expr) => self.execute_bi_expression(expr),
             Expression::Postfix(expr) => self.execute_postfix_expression(expr),
             Expression::Primary(expr) => self.execute_expression_primary(expr),
+            Expression::Unary(expr) => self.execute_expression_unary(expr),
         }
     }
 
@@ -381,6 +382,17 @@ impl<D> Interpreter<D>
                     ty,
                     values: Rc::new(RefCell::new(vec![default_value; size as usize])),
                 }
+            }
+        }
+    }
+
+    fn execute_expression_unary(&mut self, expression: &UnaryExpression) -> Value {
+        let rhs = self.execute_expression(&expression.rhs);
+
+        match expression.kind.value() {
+            UnaryExpressionKind::Negate => match rhs {
+                Value::Integer(integer) => Value::Integer(-integer),
+                _ => panic!("Kan waarde {rhs:?} niet omkeren"),
             }
         }
     }

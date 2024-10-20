@@ -145,7 +145,7 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_assign_statement(&mut self) -> Result<Option<AssignStatement>, ParseError> {
-        let Ok(destination) = self.parse_postfix_expression() else {
+        let Ok(destination) = self.parse_expression() else {
             return Ok(None);
         };
 
@@ -1163,7 +1163,7 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_multiplicative_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
-        self.parse_bi_expression(Self::parse_postfix_expression, &[
+        self.parse_bi_expression(Self::parse_unary_expression, &[
             (Punctuator::Asterisk, BiOperator::Multiply),
             (Punctuator::PercentageSign, BiOperator::Modulo),
             (Punctuator::Solidus, BiOperator::Divide),
@@ -1199,6 +1199,33 @@ impl<'tokens> Parser<'tokens> {
         }
 
         Ok(expr)
+    }
+
+    fn parse_unary_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
+        let mut kinds = Vec::new();
+
+        while let Ok(token) = self.peek_token() {
+            match &token.kind {
+                TokenKind::Punctuator(Punctuator::HyphenMinus) => {
+                    kinds.push(Ranged::new(token.range(), UnaryExpressionKind::Negate));
+                    _ = self.consume_token();
+                }
+
+                _ => break,
+            }
+        }
+
+        let mut expression = self.parse_postfix_expression()?;
+
+        for kind in kinds.into_iter().rev() {
+            let range = FileRange::new(kind.range().start(), expression.range().end());
+            expression = Ranged::new(range, Expression::Unary(UnaryExpression {
+                kind,
+                rhs: Box::new(expression),
+            }));
+        }
+
+        Ok(expression)
     }
 
     fn parse_postfix_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {

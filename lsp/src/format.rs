@@ -6,7 +6,7 @@
 
 use std::fmt::Write;
 
-use babbelaar::{AssignStatement, BiExpression, BuiltinType, Expression, Field, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, BiExpression, BuiltinType, Expression, Field, ForIterableKind, ForStatement, FunctionCallExpression, FunctionStatement, IfStatement, Keyword, MethodCallExpression, OptionExt, Parameter, PostfixExpression, PostfixExpressionKind, PrimaryExpression, ReturnStatement, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, Type, TypeSpecifier, UnaryExpression, UnaryExpressionKind, VariableStatement};
 
 pub struct Formatter {
     buffer: String,
@@ -170,6 +170,7 @@ impl Format for Expression {
             Self::BiExpression(bi) => bi.format(f),
             Self::Postfix(postfix) => postfix.format(f),
             Self::Primary(primary) => primary.format(f),
+            Self::Unary(unary) => unary.format(f),
         }
     }
 }
@@ -434,5 +435,15 @@ impl Format for TemplateStringExpressionPart {
 
             Self::String(s) => f.write_str(s),
         }
+    }
+}
+
+impl Format for UnaryExpression {
+    fn format(&self, f: &mut Formatter) {
+        match self.kind.value() {
+            UnaryExpressionKind::Negate => f.write_char('-'),
+        }
+
+        self.rhs.format(f);
     }
 }

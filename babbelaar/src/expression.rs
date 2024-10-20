@@ -85,6 +85,7 @@ pub enum Expression {
     BiExpression(BiExpression),
     Postfix(PostfixExpression),
     Primary(PrimaryExpression),
+    Unary(UnaryExpression),
 }
 
 impl Display for Expression {
@@ -93,6 +94,7 @@ impl Display for Expression {
             Self::BiExpression(expr) => Display::fmt(expr, f),
             Self::Postfix(expr) => Display::fmt(expr, f),
             Self::Primary(expr) => Display::fmt(expr, f),
+            Self::Unary(expr) => Display::fmt(expr, f),
         }
     }
 }
@@ -138,6 +140,27 @@ pub enum PostfixExpressionKind {
     Member(Ranged<BabString>),
     MethodCall(MethodCallExpression),
     Subscript(Box<Ranged<Expression>>),
+}
+
+#[derive(Debug, Clone)]
+pub struct UnaryExpression {
+    pub kind: Ranged<UnaryExpressionKind>,
+    pub rhs: Box<Ranged<Expression>>,
+}
+
+impl Display for UnaryExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind.value() {
+            UnaryExpressionKind::Negate => f.write_char('-')?,
+        }
+
+        Display::fmt(self.rhs.value(), f)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryExpressionKind {
+    Negate,
 }
 
 #[derive(Clone, Debug)]

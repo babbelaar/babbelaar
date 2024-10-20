@@ -51,6 +51,8 @@ pub use self::{
         RangeExpression,
         StructureInstantiationExpression,
         TemplateStringExpressionPart,
+        UnaryExpression,
+        UnaryExpressionKind,
     },
     interpreter::Interpreter,
     keyword::Keyword,

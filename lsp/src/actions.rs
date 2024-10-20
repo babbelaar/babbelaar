@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarFixKind, BiExpression, Expression, FileEdit, FileId, FileLocation, FileRange, FunctionCallExpression, InterfaceStatement, ParseDiagnostic, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StrExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart};
+use babbelaar::{BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarFixKind, BiExpression, Expression, FileEdit, FileId, FileLocation, FileRange, FunctionCallExpression, InterfaceStatement, ParseDiagnostic, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, SemanticAnalyzer, Statement, StatementKind, StrExt, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, UnaryExpression};
 use tower_lsp::lsp_types::VersionedTextDocumentIdentifier;
 
 use crate::BabbelaarLspError;
@@ -117,6 +117,7 @@ impl CodeActionsAnalyzable for Expression {
             Self::Primary(expr) => expr.analyze(ctx),
             Self::BiExpression(expr) => expr.analyze(ctx),
             Self::Postfix(expr) => expr.analyze(ctx),
+            Self::Unary(expr) => expr.analyze(ctx),
         }
     }
 }
@@ -316,6 +317,13 @@ impl CodeActionsAnalyzable for Structure {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         _ = ctx;
         // TODO
+    }
+}
+impl CodeActionsAnalyzable for UnaryExpression {
+    fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
+        if self.rhs.range().contains(ctx.cursor_range.start()) {
+            self.rhs.analyze(ctx);
+        }
     }
 }
 

@@ -108,6 +108,7 @@ impl InlayHintsEngine {
             Expression::BiExpression(expression) => self.visit_bi_expression(expression),
             Expression::Postfix(expression) => self.visit_postfix_expression(expression),
             Expression::Primary(expression) => self.visit_primary_expression(expression),
+            Expression::Unary(expression) => self.visit_unary_expression(expression),
         }
     }
 
@@ -274,5 +275,9 @@ impl InlayHintsEngine {
 
             _ => (),
         }
+    }
+
+    fn visit_unary_expression(&mut self, expression: &UnaryExpression) {
+        self.visit_expression(&expression.rhs);
     }
 }
