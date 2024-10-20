@@ -122,6 +122,18 @@ impl Scope {
         None
     }
 
+    pub fn find_interface_id(&self, name: &BabString) -> Option<InterfaceId> {
+        if let Some(id) = self.interfaces.get(name) {
+            return Some(*id);
+        }
+
+        if let Some(parent) = self.parent.as_ref() {
+            return parent.find_interface_id(name);
+        }
+
+        None
+    }
+
     pub fn overwrite(&mut self, reference: &BabString, new: Value) -> bool {
         if let Some(value) = self.variables.get_mut(reference) {
             *value = new;

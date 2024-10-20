@@ -38,5 +38,5 @@ pub use self::{
     tree::ParseTree,
     type_::{InterfaceSpecifier, Parameter, Type, TypeQualifier, TypeSpecifier},
     util::{BabbelaarCodeAction, BabbelaarCodeActionType, BabbelaarCommand, BabbelaarFixKind, DocumentationProvider, FileEdit, FileId, FileLocation, FileRange, LspCompletion, OptionExt, Ranged, SourceCode, StrExt, StrIterExt},
-    value::{FunctionId, MethodId, InterfaceId, StructureId, Value, ValueType},
+    value::{ExtensionId, FunctionId, MethodId, MethodOwnerId, InterfaceId, StructureId, Value, ValueType},
 };

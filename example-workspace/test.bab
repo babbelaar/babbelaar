@@ -12,9 +12,6 @@ stel lijst = nieuw Lijst<Slinger> {};
 lijst.voegToe("Abc");
 lijst.voegToe("Ghi");
 
-stel naald = "Abc";
-stel b = lijst.bevat(naald);
-schrijf(€"Bevat {b}");
-
-stel s = lijst.lengte();
-schrijf(€"Lengte: {s}");
+volg i in lijst {
+    schrijf(€"Inhoud: {i}");
+}

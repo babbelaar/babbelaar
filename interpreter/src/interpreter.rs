@@ -15,6 +15,7 @@ pub struct Interpreter<D>
     functions: HashMap<FunctionId, Arc<InterpreterFunction>>,
     structures: HashMap<StructureId, InterpreterStructure>,
     interfaces: HashMap<InterfaceId, InterpreterInterface>,
+    extensions: Vec<InterpreterExtension>,
     debugger: D,
     scope: Scope,
     ffi: FFIManager,
@@ -28,6 +29,7 @@ impl<D> Interpreter<D>
             functions: HashMap::new(),
             structures: create_top_level_structures(),
             interfaces: HashMap::new(),
+            extensions: Vec::new(),
             scope: Scope::new_top_level(),
             debugger,
             ffi: FFIManager::new(),
@@ -97,9 +99,25 @@ impl<D> Interpreter<D>
 
                 let structure = self.structures.get_mut(&structure_id).unwrap();
 
+                let mut extension = InterpreterExtension {
+                    interface: ext.interface_specifier.as_ref().map(|x| self.scope.find_interface_id(&x.name).unwrap()),
+                    methods: HashMap::new(),
+                };
+
+                let extension_id = ExtensionId {
+                    namespace: 2,
+                    id: self.extensions.len(),
+                };
+
+                structure.extension_ids.push(extension_id);
+
                 for method in &ext.methods {
-                    let id = MethodId { owner: structure_id.into(), index: structure.method_ids.len() };
-                    let prev = structure.extension_ids.insert(BabString::clone(&method.function.name), id);
+                    let id = MethodId { owner: extension_id.into(), index: extension.methods.len() };
+
+                    let prev = structure.extension_method_ids.insert(BabString::clone(&method.function.name), id);
+                    debug_assert!(prev.is_none());
+
+                    let prev = extension.methods.insert(BabString::clone(&method.function.name), id);
                     debug_assert!(prev.is_none());
 
                     self.methods.insert(id, Arc::new(InterpreterFunction {
@@ -107,6 +125,8 @@ impl<D> Interpreter<D>
                         function: method.function.clone(),
                     }));
                 }
+
+                self.extensions.push(extension);
 
                 StatementResult::Continue
             }
@@ -172,7 +192,8 @@ impl<D> Interpreter<D>
                 let mut structure = InterpreterStructure {
                     structure: ast_structure.clone(),
                     method_ids: HashMap::new(),
-                    extension_ids: HashMap::new(),
+                    extension_ids: Vec::new(),
+                    extension_method_ids: HashMap::new(),
                 };
 
                 for method in &ast_structure.methods {
@@ -372,10 +393,91 @@ impl<D> Interpreter<D>
     }
 
     fn execute_iterating_for_statement(&mut self, statement: &ForStatement, expression: &Ranged<Expression>) -> StatementResult {
-        let Value::Array { values, .. } = self.execute_expression(expression) else {
-            panic!("Invalid iterable");
+        let expression = self.execute_expression(expression);
+
+        let result = match expression {
+            Value::Array { values, .. } => {
+                self.execute_iterating_for_statement_array(statement, values)
+            }
+
+            Value::Object { ref structure, .. } => {
+                self.execute_iterating_for_statement_doorloper(statement, *structure, expression)
+            }
+
+            _ => {
+                panic!("Invalid iterable");
+            }
         };
 
+        result
+    }
+
+    fn execute_iterating_for_statement_doorloper(&mut self, statement: &ForStatement, structure: StructureId, this: Value) -> StatementResult {
+        let structure = self.structures.get(&structure).expect("Object heeft een ongeldig structuurnummer");
+        let iterable = self.get_doorloper_for_structure(structure);
+
+        let length = self.execute_function(iterable.length, Vec::new(), Some(this.clone()));
+
+        let Value::Integer(length) = length else {
+            panic!("Ongeldige bekeerwaarde voor `Doorloper`-werkwijze `lengte()`: {length:?}");
+        };
+
+        for i in 0..length.max(0) {
+            let arguments = vec![Value::Integer(i)];
+            let value = self.execute_function(Arc::clone(&iterable.get), arguments, Some(this.clone()));
+
+            self.scope = std::mem::take(&mut self.scope).push();
+            self.scope.variables.insert(BabString::clone(&statement.iterator_name), value.clone());
+
+            for statement in &statement.body {
+                if let StatementResult::Return(value) = self.execute_statement(statement) {
+                    return StatementResult::Return(value);
+                }
+            }
+
+            self.scope = std::mem::take(&mut self.scope).pop();
+        }
+
+        StatementResult::Continue
+    }
+
+    fn get_doorloper_for_structure(&self, structure: &InterpreterStructure) -> InterpreterIterable {
+        for extension in &structure.extension_ids {
+            let ext = &self.extensions[extension.id];
+            let Some(interface) = ext.interface else {
+                continue;
+            };
+
+            let Some(interface) = self.interfaces.get(&interface) else {
+                log::warn!("Extensie heeft een ongeldig koppelvlaknummer {interface:?}");
+                continue;
+            };
+
+            if interface.name() != "Doorloper" {
+                continue;
+            }
+
+            let get = ext.methods.get(&BabString::new_static("krijg")).expect("Doorloper-implementatie moet een `krijg`-werkwijze bevatten");
+            let length = ext.methods.get(&BabString::new_static("lengte")).expect("Doorloper-implementatie moet een `lengte`-werkwijze bevatten");
+
+            debug_assert_ne!(get, length, "Deze werkwijzen zouden een andere nummer moeten hebben");
+
+            let get = self.methods.get(get).expect("Ongeldige `Doorloper`-werkwijze `krijg`, heeft een ongeldig werkwijzenummer");
+            let get = Arc::clone(&get);
+
+            let length = self.methods.get(length).expect("Ongeldige `Doorloper`-werkwijze `lengte`, heeft een ongeldig werkwijzenummer");
+            let length = Arc::clone(&length);
+
+            return InterpreterIterable {
+                length,
+                get,
+            };
+        }
+
+        panic!("Structuur heeft geen uitbreiding voor `Doorloper`, maar wordt wel gebruikt in een volg-statement")
+    }
+
+    fn execute_iterating_for_statement_array(&mut self, statement: &ForStatement, values: Rc<RefCell<Vec<Value>>>) -> StatementResult {
         self.scope = std::mem::take(&mut self.scope).push();
         let values = values.borrow().clone();
 
@@ -552,6 +654,8 @@ impl<D> Interpreter<D>
 
         for idx in 0..func.function.parameters.len() {
             let name = BabString::clone(&func.function.parameters[idx].name);
+            debug_assert!(arguments.get(idx).is_some(), "Werkwijze `{}` aangeroepen met {} waarde(s), terwijl hij {} verwacht, dus parameter `{name}` (#{idx}) heeft geen waarde", func.function.name.value(), arguments.len(), func.function.parameters.len());
+
             self.scope.variables.insert(name, arguments[idx].clone());
         }
 
@@ -736,7 +840,8 @@ fn create_top_level_structures() -> HashMap<StructureId, InterpreterStructure> {
         let structure = InterpreterStructure {
             structure: Structure::from_builtin_type(*ty),
             method_ids: HashMap::new(),
-            extension_ids: HashMap::new(),
+            extension_ids: Vec::new(),
+            extension_method_ids: HashMap::new(),
         };
 
         map.insert(StructureId::from(*ty), structure);
@@ -758,4 +863,9 @@ impl babbelaar::Interpreter for InterpreterAdapter {}
 enum StatementResult {
     Continue,
     Return(Option<Value>),
+}
+
+struct InterpreterIterable {
+    length: Arc<InterpreterFunction>,
+    get: Arc<InterpreterFunction>,
 }

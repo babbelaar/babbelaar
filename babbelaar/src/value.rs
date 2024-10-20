@@ -158,6 +158,12 @@ impl From<&BuiltinType> for ValueType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ExtensionId {
+    pub namespace: usize,
+    pub id: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FunctionId {
     pub namespace: usize,
     pub id: usize,
@@ -228,8 +234,15 @@ pub struct MethodId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MethodOwnerId {
+    Extension(ExtensionId),
     Interface(InterfaceId),
     Structure(StructureId),
+}
+
+impl From<ExtensionId> for MethodOwnerId {
+    fn from(value: ExtensionId) -> Self {
+        Self::Extension(value)
+    }
 }
 
 impl From<InterfaceId> for MethodOwnerId {
