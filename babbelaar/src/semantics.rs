@@ -569,17 +569,25 @@ impl SemanticAnalyzer {
                         return parameters[ty_idx].clone();
                     }
                 }
+
+                self.emit_diagnostic(|this| {
+                    SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::ExpressionNotIterable)
+                        .with_related(SemanticRelatedInformation::new(expression.range(), SemanticRelatedMessage::ExpressionIsOfType { ty: ty.clone() }))
+                        .with_action(this.create_actions_extend_structure_with_interface_by_name(&base, expression.range().file_id(), "Doorloper"))
+                });
+
+                return ty;
             }
 
-            _ => ()
+            _ => {
+                self.diagnostics.create(||
+                    SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::ExpressionNotIterableStructure)
+                        .with_related(SemanticRelatedInformation::new(expression.range(), SemanticRelatedMessage::ExpressionIsOfType { ty: ty.clone() }))
+                );
+
+                ty
+            }
         }
-
-        self.diagnostics.create(||
-            SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::ExpressionNotIterable)
-                .with_related(SemanticRelatedInformation::new(expression.range(), SemanticRelatedMessage::ExpressionIsOfType { ty: ty.clone() }))
-        );
-
-        ty
     }
 
     fn analyze_range(&mut self, range: &RangeExpression) {
@@ -2174,6 +2182,76 @@ impl SemanticAnalyzer {
     }
 
     #[must_use]
+    fn create_actions_extend_structure_with_interface_by_name(&self, structure: &SemanticStructure, file_id: FileId, name: &'static str) -> Option<BabbelaarCodeAction> {
+        let interface = self.resolve_interface_by_name(&BabString::new_static(name))?;
+        Some(self.create_actions_extend_structure_with_interface(structure, file_id, &interface))
+    }
+
+    #[must_use]
+    fn create_actions_extend_structure_with_interface(&self, structure: &SemanticStructure, file_id: FileId, interface: &SemanticInterface) -> BabbelaarCodeAction {
+        let location = self.calculate_new_extension_location(file_id);
+        let indent = self.indentation_at(location).unwrap_or_default();
+
+        let mut generics = structure.generic_types.iter().map(|x| x.as_str())
+            .chain(interface.generic_types.iter().map(|x| x.as_str()))
+            .collect::<HashSet<&str>>()
+            .into_iter()
+            .join(", ");
+
+        if !generics.is_empty() {
+            generics = format!("<{generics}>");
+        }
+
+        let mut add_text = format!(
+            "{new_line}{indent}uitbreiding{generics} {interface_name}{generics} op {structure_name}{generics} {{\n",
+            new_line = if location.line() == 0 { "" } else { "\n" },
+            interface_name = interface.name.value(),
+            structure_name = structure.name.value(),
+        );
+
+        for (idx, method) in interface.methods.iter().enumerate() {
+            if idx != 0 {
+                add_text += "\n";
+            }
+
+            add_text += &indent;
+            add_text += "    werkwijze ";
+            add_text += method.name();
+            add_text += "(";
+
+            for (idx, param) in method.function.parameters.iter().enumerate() {
+                if idx != 0 {
+                    add_text += ", ";
+                }
+
+                add_text += &format!("{}: {}", param.name.value(), param.ty.value());
+            }
+
+            add_text += ")";
+
+            let ret = method.return_type();
+            if !ret.is_null() {
+                write!(&mut add_text, " -> {ret}").unwrap();
+            }
+
+            add_text += " {\n\n";
+            add_text += &indent;
+            add_text += "    }\n";
+        }
+
+        add_text += &indent;
+        add_text += "}\n";
+
+        BabbelaarCodeAction::new(
+            BabbelaarCodeActionType::ExtendStructureWithInterface {
+                structure: structure.name.value().clone(),
+                interface: interface.name.value().clone(),
+            },
+            vec![FileEdit::new(location.as_zero_range(), add_text)]
+        )
+    }
+
+    #[must_use]
     fn create_actions_create_method_extension_existing_structure(&self, typ: &SemanticType, method: &MethodCallExpression, args: &[SemanticType]) -> Option<BabbelaarCodeAction> {
         let extension = self.find_extension_block_for(typ)?;
 
@@ -2244,11 +2322,15 @@ impl SemanticAnalyzer {
 
         for scope in self.context.scope.iter().rev() {
             if let Some(ext) = scope.extensions.last() {
-                last_extension = Some(ext.range);
+                if ext.range.file_id() == file_id {
+                    last_extension = Some(ext.range);
+                }
             }
 
             if let Some(structure) = scope.structures.values().map(|x| x.right_curly_range).max() {
-                last_structure = Some(structure);
+                if structure.file_id() == file_id {
+                    last_structure = Some(structure);
+                }
             }
         }
 
@@ -2868,8 +2950,11 @@ pub enum SemanticDiagnosticKind {
     #[error("{name} moet van het type `g32` zijn, maar dit is een `{ty}`")]
     RangeExpectsInteger { name: &'static str, ty: SemanticType },
 
-    #[error("Kan niet itereren over deze expressie, gebruik een opeenvolging of `reeks`.")]
+    #[error("Kan deze waarde niet gebruiken als een doorloper, gebruik een opeenvolging of `reeks`.")]
     ExpressionNotIterable,
+
+    #[error("Deze structuur is niet uitgebreid met het `Doorloper`-koppelvlak. Implementeer dit, gebruik een opeenvolging of `reeks`.")]
+    ExpressionNotIterableStructure,
 
     #[error("Attribuut `@{name}` verwacht geen argumenten.")]
     AttributeCannotHaveArguments { name: &'static str },

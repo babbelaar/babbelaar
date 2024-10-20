@@ -472,6 +472,12 @@ pub enum BabbelaarCodeActionType {
 
     #[error("Verplaats koppelvlak naar nieuw bestand")]
     MoveInterfaceToNewFile,
+
+    #[error("Breid `{structure}` uit met koppelvlak `{interface}`")]
+    ExtendStructureWithInterface {
+        structure: BabString,
+        interface: BabString,
+    },
 }
 
 #[derive(Debug, Clone)]
