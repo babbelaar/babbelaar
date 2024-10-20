@@ -3,7 +3,13 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AttributeList, BabString, FunctionStatement, InterfaceStatement, MethodId, Structure};
+use babbelaar::{AttributeList, BabString, ExtensionId, FunctionStatement, InterfaceId, InterfaceStatement, MethodId, Structure};
+
+#[derive(Debug)]
+pub struct InterpreterExtension {
+    pub interface: Option<InterfaceId>,
+    pub methods: HashMap<BabString, MethodId>,
+}
 
 #[derive(Debug)]
 pub struct InterpreterFunction {
@@ -27,14 +33,15 @@ impl InterpreterInterface {
 #[derive(Debug)]
 pub struct InterpreterStructure {
     pub method_ids: HashMap<BabString, MethodId>,
-    pub extension_ids: HashMap<BabString, MethodId>,
+    pub extension_ids: Vec<ExtensionId>,
+    pub extension_method_ids: HashMap<BabString, MethodId>,
     pub structure: Structure,
 }
 
 impl InterpreterStructure {
     pub fn get_method_by_name(&self, name: &BabString) -> Option<MethodId> {
         self.method_ids.get(name)
-            .or_else(|| self.extension_ids.get(name))
+            .or_else(|| self.extension_method_ids.get(name))
             .copied()
     }
 }

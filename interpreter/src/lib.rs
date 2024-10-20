@@ -15,6 +15,7 @@ mod scope;
 
 pub use self::{
     data::{
+        InterpreterExtension,
         InterpreterFunction,
         InterpreterInterface,
         InterpreterStructure,

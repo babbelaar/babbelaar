@@ -557,17 +557,29 @@ impl SemanticAnalyzer {
     fn analyze_for_statement_iterable_expression(&mut self, expression: &Ranged<Expression>, ty: SemanticType) -> SemanticType {
         match ty {
             SemanticType::Array(item_type) => {
-                item_type.as_ref().clone()
+                return *item_type;
             }
 
-            _ => {
-                self.diagnostics.create(||
-                    SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::ExpressionNotIterable)
-                        .with_related(SemanticRelatedInformation::new(expression.range(), SemanticRelatedMessage::ExpressionIsOfType { ty: ty.clone() }))
-                );
-                ty
+            SemanticType::Custom { ref base, ref parameters } => {
+                if let Some(interface) = self.resolve_interface_by_name(&BabString::new_static("Doorloper")) {
+                    if let Some(extension) = self.get_interface_implementation_for(&ty, &interface) {
+                        let ty_name = interface.generic_types[0].value().clone();
+                        let ty_idx = base.index_of_generic_type(&ty_name).expect("Het vinden van de generieke parameter van `Doorloper`");
+                        _ = extension; // Dit zou gebruikt moeten worden?
+                        return parameters[ty_idx].clone();
+                    }
+                }
             }
+
+            _ => ()
         }
+
+        self.diagnostics.create(||
+            SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::ExpressionNotIterable)
+                .with_related(SemanticRelatedInformation::new(expression.range(), SemanticRelatedMessage::ExpressionIsOfType { ty: ty.clone() }))
+        );
+
+        ty
     }
 
     fn analyze_range(&mut self, range: &RangeExpression) {
@@ -1413,15 +1425,23 @@ impl SemanticAnalyzer {
     }
 
     fn resolve_interface(&mut self, specifier: &Ranged<InterfaceSpecifier>) -> Option<Arc<SemanticInterface>> {
-        for scope in self.context.scope.iter().rev() {
-            if let Some(interface) = scope.interfaces.get(&specifier.name) {
-                return Some(Arc::clone(&interface));
-            }
+        if let Some(interface) = self.resolve_interface_by_name(&specifier.name) {
+            return Some(interface);
         }
 
         let diag = SemanticDiagnostic::new(specifier.name.range(), SemanticDiagnosticKind::UnknownInterface { name: specifier.name.value().clone() });
 
         self.diagnostics.create(|| diag);
+
+        None
+    }
+
+    fn resolve_interface_by_name(&self, name: &BabString) -> Option<Arc<SemanticInterface>> {
+        for scope in self.context.scope.iter().rev() {
+            if let Some(interface) = scope.interfaces.get(&name) {
+                return Some(Arc::clone(&interface));
+            }
+        }
 
         None
     }
@@ -2494,6 +2514,17 @@ impl SemanticAnalyzer {
         let diagnostic = f(self);
         self.diagnostics.create(|| diagnostic);
     }
+
+    #[must_use]
+    fn get_interface_implementation_for(&self, typ: &SemanticType, interface: &SemanticInterface) -> Option<&SemanticExtension> {
+        self.context.scope
+            .iter()
+            .rev()
+            .flat_map(|scope| scope.extensions.iter())
+            .filter(|extension| extension.is_for_type(typ))
+            .filter(|extension| extension.interface.as_ref().is_some_and(|i| i.as_ref() == interface))
+            .next()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -3559,6 +3590,18 @@ pub struct SemanticStructure {
     pub right_curly_range: FileRange,
     pub fields: Vec<SemanticField>,
     pub methods: Vec<SemanticMethod>,
+}
+
+impl SemanticStructure {
+    pub fn index_of_generic_type(&self, name: &BabString) -> Option<usize> {
+        for (idx, generic_name) in self.generic_types.iter().enumerate() {
+            if generic_name.value() == name {
+                return Some(idx);
+            }
+        }
+
+        None
+    }
 }
 
 impl Display for SemanticStructure {

@@ -23,6 +23,7 @@ use logger::Logger;
 
 pub use self::{
     data::{
+        InterpreterExtension,
         InterpreterFunction,
         InterpreterInterface,
         InterpreterStructure,
