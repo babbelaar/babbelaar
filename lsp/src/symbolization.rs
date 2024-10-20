@@ -327,6 +327,10 @@ impl Symbolizer {
             }
 
             Expression::Primary(..) => (),
+
+            Expression::Unary(unary) => {
+                self.add_expression(&unary.rhs);
+            }
         }
     }
 

@@ -138,6 +138,7 @@ impl SemanticAnalyzer {
             Expression::BiExpression(bi) => self.analyze_bi_expression(bi),
             Expression::Postfix(postfix) => self.analyze_postfix_expression(postfix),
             Expression::Primary(primary) => self.analyze_primary_expression(primary, expression.range()),
+            Expression::Unary(unary) => self.analyze_unary_expression(unary),
         };
 
         if let Some(value_type_tracker) = &mut self.context.value_type_tracker {
@@ -1303,6 +1304,27 @@ impl SemanticAnalyzer {
         }
     }
 
+    fn analyze_unary_expression(&mut self, unary: &UnaryExpression) -> SemanticValue {
+        let ty = self.analyze_expression(&unary.rhs).ty;
+
+        let operator_range = unary.kind.range();
+
+        match unary.kind.value() {
+            UnaryExpressionKind::Negate => {
+                if ty != SemanticType::Builtin(BuiltinType::G32) {
+                    self.diagnostics.create(|| {
+                        SemanticDiagnostic::new(operator_range, SemanticDiagnosticKind::CannotNegateNonInteger)
+                    });
+                }
+            }
+        }
+
+        SemanticValue {
+            ty,
+            usage: SemanticUsage::Pure(PureValue::Operator { operator_range }),
+        }
+    }
+
     fn find_local_by_name<'this, P>(&'this mut self, predicate: P) -> Option<&'this SemanticLocal>
             where P: Fn(&str) -> bool {
         for scope in self.context.scope.iter_mut().rev() {
@@ -2448,6 +2470,7 @@ impl SemanticAnalyzer {
             }
             Expression::Primary(PrimaryExpression::TemplateString { .. }) => None,
             Expression::Primary(PrimaryExpression::SizedArrayInitializer { .. }) => None,
+            Expression::Unary(expr) => self.find_canonical_name_for_variable(&expr.rhs),
             Expression::Postfix(..) => None, // TODO
             Expression::BiExpression(..) => None, // TODO
         }
@@ -3012,6 +3035,9 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Werkwijze in koppelvlak heeft {expected} parameter{}, maar deze werkwijze heeft {actual} parameter{}", if *expected == 1 { "" } else { "s" }, if *actual == 1 { "" } else { "s" })]
     TooFewParametersForInterfaceMethod { expected: usize, actual: usize },
+
+    #[error("Kan alleen getallen negatief keren")]
+    CannotNegateNonInteger,
 }
 
 impl SemanticDiagnosticKind {
