@@ -1,28 +1,28 @@
-structuur Lijst<T> {
-    veld inhoud: T[] = nieuw T[0],
+// structuur Lijst<T> {
+//     veld inhoud: T[] = nieuw T[0],
 
-    werkwijze voegToe(item: T) {
-        stel oude = dit.inhoud;
-        dit.inhoud = nieuw T[oude.lengte() + 1];
+//     werkwijze voegToe(item: T) {
+//         stel oude = dit.inhoud;
+//         dit.inhoud = nieuw T[oude.lengte() + 1];
 
-        volg i in reeks(0, oude.lengte()) {
-            dit.inhoud[i] = oude[i];
-        }
+//         volg i in reeks(0, oude.lengte()) {
+//             dit.inhoud[i] = oude[i];
+//         }
 
-        dit.inhoud[oude.lengte()] = item;
-    }
+//         dit.inhoud[oude.lengte()] = item;
+//     }
 
-    werkwijze bevat(item: T) -> bool {
-        volg bestaandItem in dit.inhoud {
-            als bestaandItem == item {
-                bekeer waar;
-            }
-        }
+//     werkwijze bevat(item: T) -> bool {
+//         volg bestaandItem in dit.inhoud {
+//             als bestaandItem == item {
+//                 bekeer waar;
+//             }
+//         }
 
-        bekeer onwaar;
-    }
+//         bekeer onwaar;
+//     }
 
-    werkwijze lengte() -> g32 {
-        bekeer dit.inhoud.lengte();
-    }
-}
+//     werkwijze lengte() -> g32 {
+//         bekeer dit.inhoud.lengte();
+//     }
+// }

@@ -196,6 +196,11 @@ pub enum BiOperator {
     Multiply,
     Divide,
     Modulo,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    LogicalAnd,
+    LogicalOr,
     Comparison(Comparison),
 }
 
@@ -208,6 +213,11 @@ impl BiOperator {
             Self::Multiply => "*",
             Self::Divide => "/",
             Self::Modulo => "%",
+            Self::BitwiseAnd => "&",
+            Self::BitwiseOr => "|",
+            Self::BitwiseXor => "^",
+            Self::LogicalAnd => "&&",
+            Self::LogicalOr => "||",
             Self::Comparison(comp) => comp.as_str(),
         }
     }
