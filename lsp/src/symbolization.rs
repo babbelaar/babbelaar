@@ -89,8 +89,9 @@ impl Symbolizer {
         values.sort_by(|(range_a, _), (range_b, _)| range_a.start().offset().cmp(&range_b.start().offset()));
 
         let values = values.into_iter()
+            .filter(|(range, _)| !range.is_empty())
             .map(|(_, info)| info)
-            .map(|info| info.to_symbol(&self))
+            .filter_map(|info| info.to_symbol(&self))
             .collect();
         DocumentSymbolResponse::Flat(values)
     }
@@ -99,11 +100,14 @@ impl Symbolizer {
         let mut values: Vec<_> = self.symbols.to_vec();
         values.sort_by(|(range_a, _), (range_b, _)| range_a.cmp(range_b));
 
-
         let mut tokens = Vec::new();
         let mut previous_range = FileRange::default();
 
         for (range, symbol) in values {
+            if range.is_empty() {
+                continue;
+            }
+
             tokens.push(symbol.to_semantic(previous_range));
             previous_range = range;
         }
@@ -542,16 +546,20 @@ impl LspSymbol {
     }
 
     #[must_use]
-    fn to_symbol(self, symbolizer: &Symbolizer) -> SymbolInformation {
+    fn to_symbol(self, symbolizer: &Symbolizer) -> Option<SymbolInformation> {
+        if self.name.is_empty() {
+            return None;
+        }
+
         #[allow(deprecated)]
-        SymbolInformation {
+        Some(SymbolInformation {
             name: self.name.to_string(),
             kind: self.kind.into(),
             tags: None,
             deprecated: None,
             location: symbolizer.converter.convert_file_range_to_location(symbolizer.uri.clone(), self.range),
             container_name: None,
-        }
+        })
     }
 }
 
