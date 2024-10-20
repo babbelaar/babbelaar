@@ -296,7 +296,7 @@ impl<'source_code> Lexer<'source_code> {
                 break;
             };
 
-            if !('0'..='9').contains(&c) {
+            if !('0'..='9').contains(&c) && c != 'x' {
                 break;
             }
 
@@ -304,8 +304,15 @@ impl<'source_code> Lexer<'source_code> {
         }
 
         let end = self.current_location();
-        let str = &self.input[begin.offset()..end.offset()];
-        let integer = match str.parse() {
+        let mut str = &self.input[begin.offset()..end.offset()];
+        let mut radix = 10;
+
+        if str.starts_with("0x") {
+            str = &str[2..];
+            radix = 16;
+        }
+
+        let integer = match i64::from_str_radix(str, radix) {
             Ok(int) => int,
             Err(..) => {
                 self.errors.push(LexerError {
