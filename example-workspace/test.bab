@@ -1,17 +1,10 @@
-uitbreiding<T> Doorloper<T> op Lijst<T> {
-    werkwijze lengte() -> g32 {
-        bekeer dit.lengte();
-    }
+stel bestandsnummer = maakBestandAan("./Hallo.txt", bestandsmodus(7, 7, 7));
 
-    werkwijze krijg(plaats: g32) -> T {
-        bekeer dit.inhoud[plaats];
-    }
-}
+schrijf(€"Bestandsnummer is: {bestandsnummer} en de foutcode is {foutbeschrijving()}");
 
-stel lijst = nieuw Lijst<Slinger> {};
-lijst.voegToe("Abc");
-lijst.voegToe("Ghi");
+stel lengte = schrijfNaarBestand(bestandsnummer, "hallo", "hallo".lengte());
+schrijf(€"We hebben {lengte} tekens geschreven!");
 
-volg i in lijst {
-    schrijf(€"Inhoud: {i}");
-}
+sluitBestand(bestandsnummer);
+
+schrijf(€"{2 + 3 * 3 + 2}");

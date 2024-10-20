@@ -51,6 +51,16 @@ pub enum Punctuator {
     LessThan,
     #[strum(serialize = "meer-dan")]
     GreaterThan,
+    #[strum(serialize = "bitgewijs-en")]
+    BitwiseAnd,
+    #[strum(serialize = "bitgewijs-en")]
+    BitwiseOr,
+    #[strum(serialize = "bitgewijs-exclusieve-of")]
+    BitwiseXor,
+    #[strum(serialize = "logische-en")]
+    LogicalAnd,
+    #[strum(serialize = "logische-of")]
+    LogicalOr,
 }
 
 impl Punctuator {
@@ -78,6 +88,11 @@ impl Punctuator {
             Self::Period => ".",
             Self::LessThan => "<",
             Self::GreaterThan => ">",
+            Self::BitwiseAnd => "&",
+            Self::BitwiseOr => "|",
+            Self::BitwiseXor => "^",
+            Self::LogicalAnd => "&&",
+            Self::LogicalOr => "||",
         }
     }
 }

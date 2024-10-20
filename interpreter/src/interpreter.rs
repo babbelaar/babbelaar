@@ -550,6 +550,12 @@ impl<D> Interpreter<D>
             BiOperator::Multiply => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a * b),
             BiOperator::Modulo => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a % b),
             BiOperator::Divide => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a / b),
+            BiOperator::BitwiseAnd => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a & b),
+            BiOperator::BitwiseOr => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a | b),
+            BiOperator::BitwiseXor => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a ^ b),
+
+            BiOperator::LogicalAnd => Value::Bool(lhs == Value::Bool(true) && rhs == Value::Bool(true)),
+            BiOperator::LogicalOr => Value::Bool(lhs == Value::Bool(true) || rhs == Value::Bool(true)),
 
             BiOperator::Comparison(comparison) => {
                 Value::Bool(lhs.compare(&rhs, comparison))

@@ -1,0 +1,68 @@
+@uitheems(naam: "__error")
+werkwijze foutcodeIntern() -> g32*;
+
+werkwijze foutcode() -> g32 {
+    bekeer foutcodeIntern().krijg();
+}
+
+werkwijze foutbeschrijving() -> Slinger {
+    stel code = foutcode();
+
+    als code == 0 {
+        bekeer "Succes";
+    }
+
+    als code == 1 {
+        bekeer "Bestand of map niet gevonden";
+    }
+
+    als code == 2 {
+        bekeer "Toegang geweigerd";
+    }
+
+    als code == 3 {
+        bekeer "Onvoldoende geheugen";
+    }
+
+    als code == 4 {
+        bekeer "Onvoldoende bronnen";
+    }
+
+    als code == 5 {
+        bekeer "Apparaat niet gevonden";
+    }
+
+    als code == 6 {
+        bekeer "Apparaat niet klaar";
+    }
+
+    als code == 7 {
+        bekeer "Apparaatfout";
+    }
+
+    als code == 8 {
+        bekeer "Onvoldoende ruimte";
+    }
+
+    als code == 9 {
+        bekeer "Pad is te lang";
+    }
+
+    als code == 10 {
+        bekeer "Bestandsnaam is te lang";
+    }
+
+    als code == 11 {
+        bekeer "Bestand is een map";
+    }
+
+    als code == 12 {
+        bekeer "Bestand is geen map";
+    }
+
+    als code == 13 {
+        bekeer "Bestand is in gebruik";
+    }
+
+    bekeer €"{code}";
+}

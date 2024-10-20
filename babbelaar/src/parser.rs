@@ -1107,14 +1107,52 @@ impl<'tokens> Parser<'tokens> {
     }
 
     pub fn parse_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
-        self.parse_relational_expression()
+        self.parse_logical_or_expression()
     }
 
-    fn parse_relational_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
-        self.parse_bi_expression(Self::parse_additive_expression, &[
+    fn parse_logical_or_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
+        self.parse_bi_expression(Self::parse_logical_and_expression, &[
+            (Punctuator::LogicalAnd, BiOperator::LogicalAnd),
+        ])
+    }
+
+    fn parse_logical_and_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
+        self.parse_bi_expression(Self::parse_bitwise_or_expression, &[
+            (Punctuator::LogicalOr, BiOperator::LogicalOr),
+        ])
+    }
+
+    fn parse_bitwise_or_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
+        self.parse_bi_expression(Self::parse_bitwise_xor_expression, &[
+            (Punctuator::BitwiseOr, BiOperator::BitwiseOr),
+        ])
+    }
+
+    fn parse_bitwise_xor_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
+        self.parse_bi_expression(Self::parse_bitwise_and_expression, &[
+            (Punctuator::BitwiseXor, BiOperator::BitwiseXor),
+        ])
+    }
+
+    fn parse_bitwise_and_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
+        self.parse_bi_expression(Self::parse_equality_expression, &[
+            (Punctuator::BitwiseAnd, BiOperator::BitwiseAnd),
+        ])
+    }
+
+    fn parse_equality_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
+        self.parse_bi_expression(Self::parse_relational_expression, &[
             (Punctuator::Equals, BiOperator::Comparison(Comparison::Equality)),
             // TODO the rest
         ])
+    }
+
+    fn parse_relational_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
+        self.parse_shift_expression()
+    }
+
+    fn parse_shift_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
+        self.parse_additive_expression()
     }
 
     fn parse_additive_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
