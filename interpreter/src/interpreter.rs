@@ -646,7 +646,13 @@ impl<D> Interpreter<D>
         for attrib in &func.attributes {
             if attrib.name.value() == Attribute::NAME_EXTERN {
                 debug_assert!(this.is_none());
-                return self.ffi.execute(attrib, arguments);
+                let value = self.ffi.execute(attrib, arguments);
+
+                let Some(ty) = &func.function.return_type else {
+                    return Value::Null;
+                };
+
+                return self.ensure_ffi_value_conforms_to_spec(value, ty);
             }
         }
 
@@ -704,7 +710,10 @@ impl<D> Interpreter<D>
             self.scope.generic_types = generic_types.clone();
         }
 
-        let method = self.get_method(&lhs, &expression.method_name).unwrap();
+        let Some(method) = self.get_method(&lhs, &expression.method_name) else {
+            panic!("Type {lhs:?} heeft geen werkwijze genaamd `{}`", expression.method_name.value())
+        };
+
         let return_value = self.execute_function_call(method, &expression.call);
 
         if let Value::Object { .. } = &lhs {
@@ -746,6 +755,18 @@ impl<D> Interpreter<D>
                         });
                     }
                 }
+            }
+
+            ValueType::Pointer(..) => {
+                for method in Builtin::pointer().methods() {
+                    if method.name == method_name {
+                        return Some(Value::MethodReference {
+                            lhs: Box::new(value.clone()),
+                            method: method.into(),
+                        });
+                    }
+                }
+                log::warn!("Werkwijze met naam `{method_name}` binnen wijzer bestaat niet.")
             }
 
             ValueType::Structure(structure_id, ..) => {
@@ -830,6 +851,27 @@ impl<D> Interpreter<D>
             array,
             index: index as usize,
         }
+    }
+
+    fn ensure_ffi_value_conforms_to_spec(&self, value: Value, ty: &Type) -> Value {
+        let mut value = value;
+
+        for qual in &ty.qualifiers {
+            match qual.value() {
+                TypeQualifier::Array => todo!("Opeensommingen kunnen nog niet opgebouwd worden vanuit uitheemse werkwijzen"),
+                TypeQualifier::Pointer => {
+                    let address = match value {
+                        Value::Integer(integer) => integer as usize,
+                        Value::Null => 0 as usize,
+                        _ => todo!("Kan {value:?} geen wijzer maken")
+                    };
+
+                    value = Value::Pointer { address, ty: value.typ() }
+                }
+            }
+        }
+
+        value
     }
 }
 

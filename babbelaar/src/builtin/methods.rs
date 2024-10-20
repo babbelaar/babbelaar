@@ -5,12 +5,13 @@ use std::fmt::Debug;
 
 use crate::{BuiltinFunction, BuiltinType, Interpreter, Value};
 
-use super::{functions::BuiltinFunctionSignature, ArrayMethod, BuiltinFunctionParameter};
+use super::{functions::BuiltinFunctionSignature, PointerMethod, ArrayMethod, BuiltinFunctionParameter};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum BuiltinMethodReference {
     Function(&'static BuiltinFunction),
     Array(&'static ArrayMethod),
+    Pointer(&'static PointerMethod),
 }
 
 impl BuiltinMethodReference {
@@ -18,6 +19,7 @@ impl BuiltinMethodReference {
         match self {
             Self::Function(func) => func.name,
             Self::Array(array) => array.name,
+            Self::Pointer(pointer) => pointer.name,
         }
     }
 
@@ -25,6 +27,7 @@ impl BuiltinMethodReference {
         match self {
             Self::Function(f) => f.function,
             Self::Array(f) => f.function,
+            Self::Pointer(f) => f.function,
         }
     }
 }
@@ -44,6 +47,12 @@ impl From<&'static BuiltinFunction> for BuiltinMethodReference {
 impl From<&'static ArrayMethod> for BuiltinMethodReference {
     fn from(value: &'static ArrayMethod) -> Self {
         Self::Array(value)
+    }
+}
+
+impl From<&'static PointerMethod> for BuiltinMethodReference {
+    fn from(value: &'static PointerMethod) -> Self {
+        Self::Pointer(value)
     }
 }
 

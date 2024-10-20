@@ -41,6 +41,10 @@ pub enum Value {
         fields: Rc<RefCell<HashMap<String, Value>>>,
         generic_types: HashMap<BabString, ValueType>,
     },
+    Pointer {
+        address: usize,
+        ty: ValueType,
+    },
 }
 
 impl Value {
@@ -78,6 +82,7 @@ impl Value {
             Self::MethodIdReference { .. } => todo!(),
             Self::Function { .. } => todo!(),
             Self::Object { structure, generic_types, .. } => ValueType::Structure(*structure, generic_types.clone()),
+            Self::Pointer { ty, .. } => ValueType::Pointer(Box::new(ty.clone())),
         }
     }
 
@@ -134,6 +139,7 @@ impl Display for Value {
             Self::MethodIdReference { .. } => f.write_str("werkwijze"),
             Self::Function { name, .. } => f.write_fmt(format_args!("werkwijze {name}() {{ .. }}")),
             Self::Object { .. } => f.write_str("te-doen(object-waarde-formatteren)"),
+            Self::Pointer { address, .. } => f.write_fmt(format_args!("{address:p}")),
         }
     }
 }
@@ -142,6 +148,7 @@ impl Display for Value {
 pub enum ValueType {
     Array(Box<ValueType>),
     Builtin(BuiltinType),
+    Pointer(Box<ValueType>),
     Structure(StructureId, HashMap<BabString, ValueType>),
 }
 
