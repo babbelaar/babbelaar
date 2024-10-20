@@ -2034,7 +2034,7 @@ impl SemanticAnalyzer {
             } else {
                 self.diagnostics.create(|| SemanticDiagnostic::new(
                     arg.name.range(),
-                    SemanticDiagnosticKind::AttributeExternDuplicateName,
+                    SemanticDiagnosticKind::AttributeExternInvalidArgument,
                 ));
             }
         }
@@ -2919,6 +2919,9 @@ pub enum SemanticDiagnosticKind {
 
     #[error("De naam van de uitheemse werkwijze is meerdere keren geven.")]
     AttributeExternDuplicateName,
+
+    #[error("Onbekende argument voor het @uitheems-attribuut.")]
+    AttributeExternInvalidArgument,
 
     #[error("Een uitheemse werkwijze vereist een `naam` argument.")]
     AttributeExternRequiresName,
