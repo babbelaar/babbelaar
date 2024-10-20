@@ -41,6 +41,7 @@ impl FFIManager {
                 Value::MethodReference { .. } => todo!(),
                 Value::MethodIdReference { .. } => todo!(),
                 Value::Object { .. } => todo!(),
+                Value::Pointer { address, .. } => *address as Primitive,
             })
             .collect();
 

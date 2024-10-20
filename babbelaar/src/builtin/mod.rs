@@ -4,12 +4,14 @@
 mod array;
 mod functions;
 mod methods;
+mod pointer;
 mod types;
 
 pub use self::{
     array::{BuiltinArray, ArrayMethod, ArrayMethodParameter, ArrayTypeRef},
     functions::{BuiltinFunction, BuiltinFunctionParameter},
     methods::BuiltinMethodReference,
+    pointer::{BuiltinPointer, PointerMethod},
     types::BuiltinType,
 };
 
@@ -21,8 +23,14 @@ impl Builtin {
         Self::TYPES.iter().find(|x| x.name() == name).copied()
     }
 
+    #[must_use]
     pub fn array() -> BuiltinArray {
         BuiltinArray
+    }
+
+    #[must_use]
+    pub fn pointer() -> BuiltinPointer {
+        BuiltinPointer
     }
 
     pub const FUNCTIONS: &'static [BuiltinFunction] = &[

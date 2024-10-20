@@ -1509,10 +1509,10 @@ impl SemanticAnalyzer {
             }
 
             SemanticType::IndexReference(ty) => {
-                SemanticType::Array(Box::new(self.refine_type(&ty)))
+                SemanticType::IndexReference(Box::new(self.refine_type(&ty)))
             }
             SemanticType::Pointer(ty) => {
-                SemanticType::Array(Box::new(self.refine_type(&ty)))
+                SemanticType::Pointer(Box::new(self.refine_type(&ty)))
             }
 
             SemanticType::Builtin(..) => ty.clone(),
@@ -1861,7 +1861,23 @@ impl SemanticAnalyzer {
 
             SemanticType::Generic(..) => todo!(),
 
-            SemanticType::Pointer(..) => todo!(),
+            SemanticType::Pointer(ref element_type) => {
+                for method in Builtin::pointer().methods() {
+                    if *expression.method_name == method.name {
+                        return SemanticValue {
+                            ty: method.return_type.resolve(element_type.as_ref().clone()),
+                            usage: if method.must_use { SemanticUsage::Pure(PureValue::ReturnValue) } else { SemanticUsage::Indifferent },
+                        };
+                    }
+                }
+
+                self.diagnostics.create(|| SemanticDiagnostic::new(
+                    expression.method_name.range(),
+                    SemanticDiagnosticKind::InvalidMethod { typ, name: expression.method_name.value().clone()}
+                ));
+
+                SemanticValue::null()
+            }
         }
     }
 
@@ -1978,7 +1994,6 @@ impl SemanticAnalyzer {
         }
 
         func.extern_function = Some(extern_func);
-        func.return_type = Box::new(SemanticType::Builtin(BuiltinType::G32));
     }
 
     fn attribute_extern_evaluate(&mut self, attr: &Attribute) -> Option<SemanticExternFunction> {
@@ -3892,7 +3907,10 @@ impl Display for SemanticType {
                 f.write_char('>')
             }
             Self::Generic(ty) => ty.fmt(f),
-            Self::Pointer(ty) => ty.fmt(f),
+            Self::Pointer(ty) => {
+                ty.fmt(f)?;
+                f.write_char('*')
+            }
         }
     }
 }
