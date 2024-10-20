@@ -161,6 +161,11 @@ impl FileRange {
     pub const fn file_id(&self) -> FileId {
         self.start.file_id()
     }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
 }
 
 impl From<(FileLocation, FileLocation)> for FileRange {
