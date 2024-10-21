@@ -441,6 +441,7 @@ impl Format for TemplateStringExpressionPart {
 impl Format for UnaryExpression {
     fn format(&self, f: &mut Formatter) {
         match self.kind.value() {
+            UnaryExpressionKind::AddressOf => f.write_char('&'),
             UnaryExpressionKind::Negate => f.write_char('-'),
         }
 

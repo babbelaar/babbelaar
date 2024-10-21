@@ -161,6 +161,7 @@ pub struct UnaryExpression {
 impl Display for UnaryExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind.value() {
+            UnaryExpressionKind::AddressOf => f.write_char('&')?,
             UnaryExpressionKind::Negate => f.write_char('-')?,
         }
 
@@ -170,6 +171,7 @@ impl Display for UnaryExpression {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryExpressionKind {
+    AddressOf,
     Negate,
 }
 

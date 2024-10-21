@@ -1084,7 +1084,7 @@ impl SemanticAnalyzer {
                 None => parameter_type,
             };
 
-            if argument_type != parameter_type {
+            if !argument_type.is_compatible_with(&parameter_type) {
                 let param_hint = self.resolve_parameter_name(&function, arg_idx)
                     .map(|x| SemanticRelatedInformation::new(
                         x.range(),
@@ -1344,15 +1344,27 @@ impl SemanticAnalyzer {
 
         let operator_range = unary.kind.range();
 
-        match unary.kind.value() {
+        let ty = match unary.kind.value() {
+            UnaryExpressionKind::AddressOf => {
+                if !matches!(unary.rhs.value(), Expression::Primary(PrimaryExpression::Reference(..))) {
+                    self.diagnostics.create(|| {
+                        SemanticDiagnostic::new(operator_range, SemanticDiagnosticKind::CannotNegateNonInteger)
+                    });
+                }
+
+                SemanticType::Pointer(Box::new(ty))
+            }
+
             UnaryExpressionKind::Negate => {
                 if ty != SemanticType::Builtin(BuiltinType::G32) {
                     self.diagnostics.create(|| {
                         SemanticDiagnostic::new(operator_range, SemanticDiagnosticKind::CannotNegateNonInteger)
                     });
                 }
+
+                ty
             }
-        }
+        };
 
         SemanticValue {
             ty,
@@ -3079,6 +3091,9 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Kan alleen getallen negatief keren")]
     CannotNegateNonInteger,
+
+    #[error("Kan alleen het adres nemen van een lokale variabele")]
+    CannotTakeAddressOfNonIdentifier,
 }
 
 impl SemanticDiagnosticKind {
