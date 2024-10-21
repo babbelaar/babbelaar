@@ -1,10 +1,1 @@
-stel bestandsnummer = maakBestandAan("./Hallo.txt", bestandsmodus(7, 7, 7));
-
-schrijf(€"Bestandsnummer is: {bestandsnummer} en de foutcode is {foutbeschrijving()}");
-
-stel lengte = schrijfNaarBestand(bestandsnummer, "hallo", "hallo".lengte());
-schrijf(€"We hebben {lengte} tekens geschreven!");
-
-sluitBestand(bestandsnummer);
-
-schrijf(€"{2 + 3 * 3 + 2}");
+schrijfTekstNaarBestand("Hallo.txt", "Hallo, wereld!");

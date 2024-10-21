@@ -3,6 +3,8 @@
 
 use std::marker::PhantomData;
 
+use crate::BabString;
+
 pub struct Constants {
     _marker: PhantomData<String>,
 }
@@ -10,4 +12,8 @@ pub struct Constants {
 impl Constants {
     pub const LANGUAGE_ID: &'static str = "babbelaar";
     pub const ENV_LIBRARY_C: &'static str = "BABBELAAR_C_BIBLIOTHEEK";
+
+    /// The discarding identifier `_` can only be used for discarding the result
+    /// of an expression, parameter, etc. and cannot be used for a “get”.
+    pub const DISCARDING_IDENT: BabString = BabString::new_static("_");
 }
