@@ -40,8 +40,17 @@ impl SemanticAnalyzer {
 
         match phase {
             SemanticAnalysisPhase::Phase1 => {
-                self.analyze_statements(tree.structures());
-                self.analyze_statements(tree.interfaces());
+                for statement in tree.structures() {
+                    if let StatementKind::Structure(structure) = &statement.kind {
+                        self.analyze_structure(statement, structure);
+                    }
+                }
+
+                for statement in tree.interfaces() {
+                    if let StatementKind::Interface(interface) = &statement.kind {
+                        self.analyze_interface(statement, interface);
+                    }
+                }
             }
 
             SemanticAnalysisPhase::Phase2 => {
@@ -49,11 +58,17 @@ impl SemanticAnalyzer {
             }
 
             SemanticAnalysisPhase::Phase3 => {
-                self.analyze_statements(tree.functions());
+                for statement in tree.functions() {
+                    if let StatementKind::Function(function) = &statement.kind {
+                        self.analyze_function_declaration(function, statement.range);
+                    }
+                }
             }
 
             SemanticAnalysisPhase::Phase4 => {
-                self.analyze_statements(tree.statements());
+                for statement in tree.all() {
+                    self.analyze_statement(statement);
+                }
             }
         }
     }
@@ -66,71 +81,75 @@ impl SemanticAnalyzer {
 
     fn analyze_statements(&mut self, statements: &[Statement]) {
         for statement in statements {
-            let StatementKind::Structure(structure) = &statement.kind else {
-                continue;
-            };
-
-            self.analyze_structure(statement, structure);
+            if let StatementKind::Structure(structure) = &statement.kind {
+                self.analyze_structure(statement, structure);
+            }
         }
 
         for statement in statements {
-            let StatementKind::Interface(interface) = &statement.kind else {
-                continue;
-            };
-
-            self.analyze_interface(statement, interface);
+            if let StatementKind::Interface(interface) = &statement.kind {
+                self.analyze_interface(statement, interface);
+            }
         }
 
         for statement in statements {
             if let StatementKind::Function(function) = &statement.kind {
-                if let Some(other) = self.context.current().get_function_mut(&function.name) {
-                    self.diagnostics.create(||
-                        SemanticDiagnostic::new(
-                            function.name.range(),
-                            SemanticDiagnosticKind::DuplicateFunction {
-                                name: BabString::clone(&function.name),
-                            })
-                            .with_related(SemanticRelatedInformation::new(
-                                other.name.range(),
-                                SemanticRelatedMessage::FunctionDefinedHere {
-                                    name: BabString::clone(&function.name)
-                                }
-                            ))
-                            .with_action(BabbelaarCodeAction::new_command(function.name.range(), BabbelaarCommand::RenameFunction))
-                    );
-                    continue;
-                }
-
-                let return_type = Box::new(
-                    match &function.return_type {
-                        Some(ty) => self.resolve_type(ty),
-                        None => SemanticType::Builtin(BuiltinType::Null),
-                    }
-                );
-
-                let parameters = function.parameters.iter()
-                    .map(|param| {
-                        let ty = self.resolve_type(&param.ty);
-                        SemanticParameter {
-                            name: param.name.clone(),
-                            ty: Ranged::new(param.ty.range(), ty),
-                        }
-                    })
-                    .collect();
-
-                self.context.push_function(SemanticFunction {
-                    name: function.name.clone(),
-                    parameters,
-                    parameters_right_paren_range: function.parameters_right_paren_range,
-                    extern_function: None,
-                    return_type,
-                }, statement.range);
+                self.analyze_function_declaration(function, statement.range);
             }
         }
 
         for statement in statements {
             self.analyze_statement(statement);
         }
+    }
+
+    /// Analyze a function declaration (signature) without analyzing the statements inside
+    fn analyze_function_declaration(&mut self, function: &FunctionStatement, range: FileRange) {
+        if let Some(other) = self.context.current().get_function_mut(&function.name) {
+            self.diagnostics.create(||
+                SemanticDiagnostic::new(
+                    function.name.range(),
+                    SemanticDiagnosticKind::DuplicateFunction {
+                        name: BabString::clone(&function.name),
+                    })
+                    .with_related(SemanticRelatedInformation::new(
+                        other.name.range(),
+                        SemanticRelatedMessage::FunctionDefinedHere {
+                            name: BabString::clone(&function.name)
+                        }
+                    ))
+                    .with_action(BabbelaarCodeAction::new_command(function.name.range(), BabbelaarCommand::RenameFunction))
+            );
+            return;
+        }
+
+        let return_type = Box::new(
+            match &function.return_type {
+                Some(ty) => self.resolve_type(ty),
+                None => SemanticType::Builtin(BuiltinType::Null),
+            }
+        );
+
+        let parameters = function.parameters.iter()
+            .map(|param| {
+                let ty = self.resolve_type(&param.ty);
+                SemanticParameter {
+                    name: param.name.clone(),
+                    ty: Ranged::new(param.ty.range(), ty),
+                }
+            })
+            .collect();
+
+        self.context.push_function(
+            SemanticFunction {
+                name: function.name.clone(),
+                parameters,
+                parameters_right_paren_range: function.parameters_right_paren_range,
+                extern_function: None,
+                return_type,
+            },
+            range,
+        );
     }
 
     fn analyze_expression(&mut self, expression: &Ranged<Expression>) -> SemanticValue {
