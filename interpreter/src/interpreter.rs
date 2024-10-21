@@ -229,6 +229,10 @@ impl<D> Interpreter<D>
     pub fn execute_assign(&mut self, expression: &Expression, new_value: Value) {
         match expression {
             Expression::Primary(PrimaryExpression::Reference(reference)) => {
+                if reference.value() == &Constants::DISCARDING_IDENT {
+                    return;
+                }
+
                 if let Some(variable) = self.scope.find_mut(reference) {
                     *variable = new_value;
                     return;
