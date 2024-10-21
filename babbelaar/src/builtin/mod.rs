@@ -63,6 +63,8 @@ impl Builtin {
 
     pub const TYPES: &'static [BuiltinType] = &[
         BuiltinType::Bool,
+        BuiltinType::G8,
+        BuiltinType::G16,
         BuiltinType::G32,
         BuiltinType::Slinger,
         BuiltinType::Teken,

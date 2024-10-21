@@ -941,7 +941,7 @@ impl SemanticAnalyzer {
         let lhs_type = self.analyze_expression(&expression.lhs).ty;
         let rhs_type = self.analyze_expression(&expression.rhs).ty;
 
-        if !lhs_type.is_null() && !rhs_type.is_null() && lhs_type != rhs_type {
+        if !lhs_type.is_null() && !rhs_type.is_null() && !lhs_type.is_compatible_with(&rhs_type) {
             self.diagnostics.create(|| SemanticDiagnostic::new(
                 expression.operator.range(),
                 SemanticDiagnosticKind::IncompatibleTypes {
@@ -1252,7 +1252,7 @@ impl SemanticAnalyzer {
                 Some(field) => {
                     let declaration_type = field.ty.clone().resolve_against(&ty);
                     let definition_type = self.analyze_expression(&field_instantiation.value).ty;
-                    if declaration_type != definition_type {
+                    if !declaration_type.is_compatible_with(&definition_type) {
                         let actions = self.try_create_conversion_actions(&declaration_type, &definition_type, &field_instantiation.value);
 
                         self.diagnostics.create(|| SemanticDiagnostic::new(
@@ -3925,6 +3925,25 @@ impl SemanticType {
     #[must_use]
     fn can_be_extended(&self) -> bool {
         !self.is_null()
+    }
+
+    #[must_use]
+    fn is_primitive_number(&self) -> bool {
+        match self {
+            Self::Builtin(BuiltinType::G8) => true,
+            Self::Builtin(BuiltinType::G16) => true,
+            Self::Builtin(BuiltinType::G32) => true,
+            _ => false,
+        }
+    }
+
+    #[must_use]
+    fn is_compatible_with(&self, other: &SemanticType) -> bool {
+        if self == other {
+            return true;
+        }
+
+        self.is_primitive_number() && other.is_primitive_number()
     }
 }
 
