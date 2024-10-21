@@ -480,9 +480,11 @@ impl SemanticAnalyzer {
                     ..Default::default()
                 });
 
-                let destination_type = self.analyze_expression(&assign.destination).ty;
-                self.analyze_assignment_destination(assign.range(), &assign.destination);
-                self.analyze_assignment_source_dest(assign, destination_type, source_type);
+                if assign.destination.value().as_identifier() != Some(&Constants::DISCARDING_IDENT) {
+                    let destination_type = self.analyze_expression(&assign.destination).ty;
+                    self.analyze_assignment_destination(assign.range(), &assign.destination);
+                    self.analyze_assignment_source_dest(assign, destination_type, source_type);
+                }
 
                 self.context.statements_state.pop();
             }
@@ -901,6 +903,10 @@ impl SemanticAnalyzer {
     fn analyze_variable_statement(&mut self, statement: &VariableStatement, stmt: &Statement) {
         let typ = self.analyze_expression(&statement.expression).ty;
 
+        if statement.name.value() == &Constants::DISCARDING_IDENT {
+            return;
+        }
+
         let local = SemanticLocal::new(
             SemanticLocalKind::Variable,
             typ,
@@ -1142,6 +1148,16 @@ impl SemanticAnalyzer {
             }
 
             PrimaryExpression::Reference(reference) => {
+                if reference.value() == &Constants::DISCARDING_IDENT {
+                    self.diagnostics.create(||
+                        SemanticDiagnostic::new(
+                            reference.range(),
+                            SemanticDiagnosticKind::DiscardingIdentifierUsedAsReference,
+                        )
+                    );
+                    return SemanticValue::null();
+                }
+
                 let Some(local) = self.find_local_by_name(|name| name == reference.value()) else {
                     self.diagnostics.create(|| SemanticDiagnostic::new(
                         reference.range(),
@@ -2826,6 +2842,9 @@ pub enum SemanticDiagnosticKind {
     #[error("Kon waarde `{identifier}` niet vinden binnen deze scoop.")]
     InvalidIdentifierReference { identifier: BabString },
 
+    #[error("`_` kan alleen gebruikt worden om een bepaalde waarde weg te gooien.")]
+    DiscardingIdentifierUsedAsReference,
+
     #[error("Te weinig argumenten gegeven aan werkwijze `{function_name}` ({arg_count} gegeven maar {param_count} verwacht)")]
     TooFewArguments {
         function_name: BabString,
@@ -3307,6 +3326,10 @@ impl SemanticContext {
     }
 
     fn push_local(&mut self, name: &Ranged<BabString>, local: SemanticLocal) {
+        if name.value() == &Constants::DISCARDING_IDENT {
+            return;
+        }
+
         if let Some(tracker) = &mut self.declaration_tracker {
             tracker.push(SemanticReference {
                 local_name: name.value().clone(),

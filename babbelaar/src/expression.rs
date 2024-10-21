@@ -88,6 +88,16 @@ pub enum Expression {
     Unary(UnaryExpression),
 }
 
+impl Expression {
+    #[must_use]
+    pub fn as_identifier(&self) -> Option<&BabString> {
+        match self {
+            Self::Primary(PrimaryExpression::Reference(ident)) => Some(ident.value()),
+            _ => None,
+        }
+    }
+}
+
 impl Display for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
