@@ -922,7 +922,7 @@ impl SemanticAnalyzer {
         let lhs_type = self.analyze_expression(&expression.lhs).ty;
         let rhs_type = self.analyze_expression(&expression.rhs).ty;
 
-        if lhs_type != rhs_type {
+        if !lhs_type.is_null() && !rhs_type.is_null() && lhs_type != rhs_type {
             self.diagnostics.create(|| SemanticDiagnostic::new(
                 expression.operator.range(),
                 SemanticDiagnosticKind::IncompatibleTypes {
