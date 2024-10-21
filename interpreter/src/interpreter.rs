@@ -391,12 +391,18 @@ impl<D> Interpreter<D>
     }
 
     fn execute_expression_unary(&mut self, expression: &UnaryExpression) -> Value {
-        let rhs = self.execute_expression(&expression.rhs);
-
         match expression.kind.value() {
-            UnaryExpressionKind::Negate => match rhs {
-                Value::Integer(integer) => Value::Integer(-integer),
-                _ => panic!("Kan waarde {rhs:?} niet omkeren"),
+            UnaryExpressionKind::AddressOf => {
+                todo!()
+            }
+
+            UnaryExpressionKind::Negate => {
+                let rhs = self.execute_expression(&expression.rhs);
+
+                match rhs {
+                    Value::Integer(integer) => Value::Integer(-integer),
+                    _ => panic!("Kan waarde {rhs:?} niet omkeren"),
+                }
             }
         }
     }

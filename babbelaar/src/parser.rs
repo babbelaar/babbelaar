@@ -1206,6 +1206,11 @@ impl<'tokens> Parser<'tokens> {
 
         while let Ok(token) = self.peek_token() {
             match &token.kind {
+                TokenKind::Punctuator(Punctuator::BitwiseAnd) => {
+                    kinds.push(Ranged::new(token.range(), UnaryExpressionKind::AddressOf));
+                    _ = self.consume_token();
+                }
+
                 TokenKind::Punctuator(Punctuator::HyphenMinus) => {
                     kinds.push(Ranged::new(token.range(), UnaryExpressionKind::Negate));
                     _ = self.consume_token();
