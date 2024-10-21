@@ -57,6 +57,8 @@ impl From<&'static PointerMethod> for BuiltinMethodReference {
 }
 
 pub(super) static METHODS_BOOL: &'static [BuiltinFunction] = &[];
+pub(super) static METHODS_G8: &'static [BuiltinFunction] = &[];
+pub(super) static METHODS_G16: &'static [BuiltinFunction] = &[];
 pub(super) static METHODS_G32: &'static [BuiltinFunction] = &[];
 pub(super) static METHODS_NULL: &'static [BuiltinFunction] = &[];
 

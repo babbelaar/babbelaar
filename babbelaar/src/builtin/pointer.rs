@@ -119,6 +119,8 @@ fn pointer_krijg(_: &mut dyn Interpreter, _parameters: Vec<Value>, this: Option<
 
         ValueType::Builtin(ty) => match ty {
             BuiltinType::Bool => Value::Bool(unsafe { *(address as *const bool) }),
+            BuiltinType::G8 => Value::Integer(unsafe { *(address as *const i8) } as i64),
+            BuiltinType::G16 => Value::Integer(unsafe { *(address as *const i16) } as i64),
             BuiltinType::G32 => Value::Integer(unsafe { *(address as *const i32) } as i64),
             BuiltinType::Null => Value::Null,
             BuiltinType::Slinger => {

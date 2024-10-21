@@ -5,12 +5,14 @@ use std::fmt::Display;
 
 use crate::{BabString, BuiltinFunction};
 
-use super::methods::{METHODS_BOOL, METHODS_G32, METHODS_NULL, METHODS_SLINGER, METHODS_TEKEN};
+use super::methods::{METHODS_BOOL, METHODS_G16, METHODS_G32, METHODS_G8, METHODS_NULL, METHODS_SLINGER, METHODS_TEKEN};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 #[repr(u8)]
 pub enum BuiltinType {
     Bool,
+    G8,
+    G16,
     G32,
     Null,
     Slinger,
@@ -22,6 +24,8 @@ impl BuiltinType {
     pub const fn name(&self) -> BabString {
         match self {
             Self::Bool => BabString::new_static("bool"),
+            Self::G8 => BabString::new_static("g8"),
+            Self::G16 => BabString::new_static("g16"),
             Self::G32 => BabString::new_static("g32"),
             Self::Null => BabString::new_static("null"),
             Self::Slinger => BabString::new_static("Slinger"),
@@ -74,6 +78,8 @@ impl BuiltinType {
     pub const fn inline_detail(&self) -> BabString {
         BabString::new_static(match self {
             Self::Bool => "Een schakeling tussen `waar` en `onwaar`.",
+            Self::G8 => "Een geheel getal met 8-bits precisie.",
+            Self::G16 => "Een geheel getal met 16-bits precisie.",
             Self::G32 => "Een geheel getal met 32-bits precisie.",
             Self::Null => "Tijdelijk type, niet gebruiken",
             Self::Slinger => "Een stuk tekst, schrijfbaar met bijvoorbeeld: \"Hallo, slinger!\"",
@@ -85,6 +91,8 @@ impl BuiltinType {
     pub fn methods(&self) -> &'static [BuiltinFunction] {
         match self {
             Self::Bool => METHODS_BOOL,
+            Self::G8 => METHODS_G8,
+            Self::G16 => METHODS_G16,
             Self::G32 => METHODS_G32,
             Self::Null => METHODS_NULL,
             Self::Slinger => METHODS_SLINGER,
