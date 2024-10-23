@@ -2705,6 +2705,15 @@ pub struct SemanticDiagnostic {
     actions: Vec<BabbelaarCodeAction>,
 }
 
+impl Display for SemanticDiagnostic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.kind.fmt(f)
+    }
+}
+
+impl Error for SemanticDiagnostic {
+}
+
 impl SemanticDiagnostic {
     #[must_use]
     pub fn new(range: FileRange, kind: SemanticDiagnosticKind) -> Self {
