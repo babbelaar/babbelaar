@@ -24,6 +24,7 @@ impl ProgramBuilder {
         assert!(!name.is_empty(), "Kan geen lege naam als werkwijzenaam hebben.");
 
         let mut builder = FunctionBuilder {
+            name: name.clone(),
             program: &mut self.program,
             register_allocator: RegisterAllocator::new(),
             argument_registers: Vec::new(),

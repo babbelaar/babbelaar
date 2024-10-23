@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::fmt::Display;
+
 use babbelaar::BabString;
 
 use super::{Function, Immediate};
@@ -55,5 +57,22 @@ impl Program {
     #[must_use]
     pub(crate) fn function(&self, index: usize) -> &Function {
         &self.functions[index]
+    }
+}
+
+impl Display for Program {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "Programma met {} {}",
+            self.functions.len(),
+            if self.functions.len() == 1 { "werkwijze" } else { "werkwijzen" }
+        ))?;
+
+        for function in &self.functions {
+            f.write_str("\n")?;
+            function.fmt(f)?;
+        }
+
+        Ok(())
     }
 }
