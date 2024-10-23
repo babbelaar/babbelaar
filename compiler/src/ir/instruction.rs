@@ -5,7 +5,7 @@ use std::fmt::{Display, Write};
 
 use babbelaar::BabString;
 
-use super::{Immediate, Register};
+use super::{Immediate, Operand, Register};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Label {
@@ -28,11 +28,9 @@ impl Label {
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    Call {
-        name: BabString,
-        arguments: Vec<Register>,
-        ret_val_reg: Register,
-    },
+    //
+    // Loads & stores
+    //
 
     LoadImmediate {
         immediate: Immediate,
@@ -44,24 +42,35 @@ pub enum Instruction {
         destination: Register,
     },
 
+    //
+    // Control Flow
+    //
+
+    Call {
+        name: BabString,
+        arguments: Vec<Register>,
+        ret_val_reg: Register,
+    },
+
     Return {
         value_reg: Option<Register>,
+    },
+
+    //
+    // Math
+    //
+
+    MathOperation {
+        operation: MathOperation,
+        destination: Register,
+        lhs: Operand,
+        rhs: Operand,
     },
 }
 
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instruction::Call { name, arguments, ret_val_reg } => {
-                f.write_fmt(format_args!("RoepAan {ret_val_reg}, {name}"))?;
-                for arg in arguments {
-                    f.write_str(", ")?;
-                    arg.fmt(f)?;
-                }
-
-                Ok(())
-            }
-
             Instruction::LoadImmediate { immediate, destination_reg } => {
                 f.write_str("Laad ")?;
                 destination_reg.fmt(f)?;
@@ -76,6 +85,16 @@ impl Display for Instruction {
                 source.fmt(f)
             }
 
+            Instruction::Call { name, arguments, ret_val_reg } => {
+                f.write_fmt(format_args!("RoepAan {ret_val_reg}, {name}"))?;
+                for arg in arguments {
+                    f.write_str(", ")?;
+                    arg.fmt(f)?;
+                }
+
+                Ok(())
+            }
+
             Instruction::Return { value_reg } => {
                 f.write_str("Bekeer")?;
 
@@ -86,6 +105,43 @@ impl Display for Instruction {
 
                 Ok(())
             }
+
+            Instruction::MathOperation { operation, destination, lhs, rhs } => {
+                operation.fmt(f)?;
+                f.write_char(' ')?;
+
+                destination.fmt(f)?;
+                f.write_str(", ")?;
+
+                lhs.fmt(f)?;
+                f.write_str(", ")?;
+
+                rhs.fmt(f)?;
+
+                Ok(())
+            }
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MathOperation {
+    Add,
+    Subtract,
+}
+
+impl MathOperation {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Add => "TelOp",
+            Self::Subtract => "TrekAf",
+        }
+    }
+}
+
+impl Display for MathOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.name().fmt(f)
     }
 }

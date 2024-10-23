@@ -16,6 +16,7 @@ pub use self::{
     instruction::{
         Instruction,
         Label,
+        MathOperation,
     },
     operand::{
         Immediate,

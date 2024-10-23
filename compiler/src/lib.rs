@@ -14,6 +14,7 @@ pub use self::{
         Immediate,
         Instruction,
         Label,
+        MathOperation,
         Operand,
         Program,
         ProgramBuilder,

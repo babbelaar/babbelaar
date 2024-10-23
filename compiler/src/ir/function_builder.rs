@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use babbelaar::BabString;
 
-use super::{Function, Immediate, Instruction, Program, Register, RegisterAllocator};
+use super::{Function, Immediate, Instruction, Label, MathOperation, Operand, Program, Register, RegisterAllocator};
 
 #[derive(Debug)]
 pub struct FunctionBuilder<'program> {
@@ -15,6 +15,7 @@ pub struct FunctionBuilder<'program> {
     pub(super) argument_registers: Vec<Register>,
     pub(super) instructions: Vec<Instruction>,
     pub(super) locals: HashMap<BabString, Register>,
+    pub(super) labels: Vec<Label>,
 }
 
 impl<'program> FunctionBuilder<'program> {
@@ -61,6 +62,18 @@ impl<'program> FunctionBuilder<'program> {
         reg
     }
 
+    #[must_use]
+    pub fn math(&mut self, operation: MathOperation, lhs: impl Into<Operand>, rhs: impl Into<Operand>) -> Register {
+        let destination = self.register_allocator.next();
+
+        let lhs = lhs.into();
+        let rhs = rhs.into();
+
+        self.instructions.push(Instruction::MathOperation { operation, destination, lhs, rhs });
+
+        destination
+    }
+
     pub fn ret(&mut self) {
         self.instructions.push(Instruction::Return {
             value_reg: None,
@@ -79,6 +92,7 @@ impl<'program> FunctionBuilder<'program> {
             name: self.name,
             argument_registers: self.argument_registers,
             instructions: self.instructions,
+            labels: self.labels,
         }
     }
 }

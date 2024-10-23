@@ -84,3 +84,15 @@ impl Display for Operand {
         }
     }
 }
+
+impl From<Immediate> for Operand {
+    fn from(value: Immediate) -> Self {
+        Self::Immediate(value)
+    }
+}
+
+impl From<Register> for Operand {
+    fn from(value: Register) -> Self {
+        Self::Register(value)
+    }
+}
