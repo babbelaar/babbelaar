@@ -58,6 +58,10 @@ impl Program {
     pub(crate) fn function(&self, index: usize) -> &Function {
         &self.functions[index]
     }
+
+    pub(crate) fn functions_mut(&mut self) -> &mut [Function] {
+        &mut self.functions
+    }
 }
 
 impl Display for Program {

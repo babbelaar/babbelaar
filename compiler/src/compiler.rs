@@ -6,7 +6,7 @@
 
 use babbelaar::*;
 
-use crate::{FunctionBuilder, Immediate, MathOperation, Program, ProgramBuilder, Register};
+use crate::{optimize_program, FunctionBuilder, Immediate, MathOperation, Program, ProgramBuilder, Register};
 
 pub struct Compiler {
     program_builder: ProgramBuilder,
@@ -31,7 +31,9 @@ impl Compiler {
 
     #[must_use]
     pub fn finish(self) -> Program {
-        self.program_builder.build()
+        let mut program = self.program_builder.build();
+        optimize_program(&mut program);
+        program
     }
 
     fn compile_function(&mut self, func: &FunctionStatement) {

@@ -4,6 +4,7 @@
 mod compiler;
 mod interpreter;
 mod ir;
+mod optimization;
 
 pub use self::{
     compiler::Compiler,
@@ -21,5 +22,10 @@ pub use self::{
         Register,
         Structure,
         StructureBuilder,
+    },
+    optimization::{
+        FunctionOptimizer,
+        optimize_function,
+        optimize_program,
     },
 };

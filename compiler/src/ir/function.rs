@@ -8,9 +8,9 @@ use super::{Instruction, Label, Register};
 #[derive(Debug)]
 pub struct Function {
     pub(crate) name: babbelaar::BabString,
-    pub(super) argument_registers: Vec<Register>,
-    pub(super) instructions: Vec<Instruction>,
-    pub(super) labels: Vec<Label>,
+    pub(crate) argument_registers: Vec<Register>,
+    pub(crate) instructions: Vec<Instruction>,
+    pub(crate) labels: Vec<Label>,
 }
 
 impl Function {
