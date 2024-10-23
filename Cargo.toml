@@ -7,8 +7,7 @@ resolver = "2"
 members = [
     "babbelaar",
     "builtin",
-    # Disable the compiler as it requires building LLVM
-    # "compiler",
+    "compiler",
     "interpreter",
     "lsp",
     "tests",
