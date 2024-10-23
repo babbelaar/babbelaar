@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::str::CharIndices;
+use std::{error::Error, fmt::Display, str::CharIndices};
 
 use strum::AsRefStr;
 use thiserror::Error;
@@ -466,6 +466,14 @@ pub struct LexerError {
     pub location: FileLocation,
     pub kind: LexerErrorKind,
 }
+
+impl Display for LexerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.kind.fmt(f)
+    }
+}
+
+impl Error for LexerError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error, AsRefStr)]
 pub enum LexerErrorKind {
