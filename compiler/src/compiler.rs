@@ -6,7 +6,7 @@
 
 use babbelaar::*;
 
-use crate::{FunctionBuilder, Immediate, Program, ProgramBuilder, Register};
+use crate::{FunctionBuilder, Immediate, MathOperation, Program, ProgramBuilder, Register};
 
 pub struct Compiler {
     program_builder: ProgramBuilder,
@@ -198,8 +198,16 @@ impl CompileExpression for Expression {
 
 impl CompileExpression for BiExpression {
     fn compile(&self, builder: &mut FunctionBuilder) -> Register {
-        _ = builder;
-        todo!()
+        let lhs = self.lhs.compile(builder);
+        let rhs = self.rhs.compile(builder);
+
+        let math_operation = match self.operator.value() {
+            BiOperator::Add => MathOperation::Add,
+            BiOperator::Subtract => MathOperation::Subtract,
+            _ => todo!("Ondersteun {:?}", self.operator.value()),
+        };
+
+        builder.math(math_operation, lhs, rhs)
     }
 }
 

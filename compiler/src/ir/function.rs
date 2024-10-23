@@ -3,13 +3,14 @@
 
 use std::fmt::Display;
 
-use super::{Instruction, Register};
+use super::{Instruction, Label, Register};
 
 #[derive(Debug)]
 pub struct Function {
     pub(crate) name: babbelaar::BabString,
     pub(super) argument_registers: Vec<Register>,
     pub(super) instructions: Vec<Instruction>,
+    pub(super) labels: Vec<Label>,
 }
 
 impl Function {

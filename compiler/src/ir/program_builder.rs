@@ -30,6 +30,7 @@ impl ProgramBuilder {
             argument_registers: Vec::new(),
             instructions: Vec::new(),
             locals: HashMap::new(),
+            labels: Vec::new(),
         };
 
         f(&mut builder);
