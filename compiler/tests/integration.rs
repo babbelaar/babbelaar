@@ -17,6 +17,8 @@ fn function_that_returns_two() {
 
     let program = compiler.finish();
 
+    println!("{program}");
+
     let mut interpreter = Interpreter::new(program);
     let value = interpreter.execute_function(&BabString::new_static("twee"), Vec::new());
 

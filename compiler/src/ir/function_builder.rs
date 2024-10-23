@@ -10,6 +10,7 @@ use super::{Function, Immediate, Instruction, Program, Register, RegisterAllocat
 #[derive(Debug)]
 pub struct FunctionBuilder<'program> {
     pub(super) program: &'program mut Program,
+    pub(super) name: BabString,
     pub(super) register_allocator: RegisterAllocator,
     pub(super) argument_registers: Vec<Register>,
     pub(super) instructions: Vec<Instruction>,
@@ -75,6 +76,7 @@ impl<'program> FunctionBuilder<'program> {
     #[must_use]
     pub fn build(self) -> Function {
         Function {
+            name: self.name,
             argument_registers: self.argument_registers,
             instructions: self.instructions,
         }

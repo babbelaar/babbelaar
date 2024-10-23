@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::fmt::{Display, Write};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Immediate {
     Integer8(i8),
@@ -21,9 +23,27 @@ impl Immediate {
     }
 }
 
+impl Display for Immediate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Integer8(val) => val.fmt(f),
+            Self::Integer16(val) => val.fmt(f),
+            Self::Integer32(val) => val.fmt(f),
+            Self::Integer64(val) => val.fmt(f),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Register {
     number: usize,
+}
+
+impl Display for Register {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_char('r')?;
+        self.number.fmt(f)
+    }
 }
 
 #[derive(Debug)]
@@ -54,4 +74,13 @@ impl RegisterAllocator {
 pub enum Operand {
     Immediate(Immediate),
     Register(Register),
+}
+
+impl Display for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Immediate(immediate) => immediate.fmt(f),
+            Self::Register(register) => register.fmt(f),
+        }
+    }
 }
