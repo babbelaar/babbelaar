@@ -144,3 +144,40 @@ pub use self::{
         ValueType,
     },
 };
+
+use std::{
+    collections::HashMap,
+    error::Error,
+    path::PathBuf,
+};
+
+pub fn parse_string_to_tree(text: &str) -> Result<ParseTree, Box<dyn Error>> {
+    let source_code = SourceCode::new(PathBuf::new(), 0, BabString::new(text));
+    let (tokens, errors) = Lexer::new(&source_code).collect_all();
+    if !errors.is_empty() {
+        return Err(Box::new(errors[0].clone()));
+    }
+
+    let mut parser = Parser::new(source_code.path().to_path_buf(), &tokens);
+    let tree = parser.parse_tree();
+
+    let errors =  parser.into_diagnostics();
+    if !errors.is_empty() {
+        return Err(Box::new(errors[0].clone()));
+    }
+
+    let mut files = HashMap::new();
+    files.insert(source_code.file_id(), source_code);
+
+    let mut sema = SemanticAnalyzer::new(files, true);
+    for phase in SemanticAnalysisPhase::iter() {
+        sema.analyze_tree(&tree, phase);
+    }
+
+    let errors = sema.into_diagnostics();
+    if !errors.is_empty() {
+        return Err(Box::new(errors[0].clone()));
+    }
+
+    Ok(tree)
+}
