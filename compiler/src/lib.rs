@@ -1,13 +1,24 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-mod backend;
-mod error;
+mod compiler;
+mod interpreter;
+mod ir;
 
 pub use self::{
-    backend::{
-        CompilerBackend,
-        LlvmContext,
+    compiler::Compiler,
+    interpreter::Interpreter,
+    ir::{
+        Function,
+        FunctionBuilder,
+        Immediate,
+        Instruction,
+        Label,
+        Operand,
+        Program,
+        ProgramBuilder,
+        Register,
+        Structure,
+        StructureBuilder,
     },
-    error::CompileError,
 };
