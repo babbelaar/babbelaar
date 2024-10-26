@@ -15,6 +15,7 @@ pub use self::{
     function_builder::FunctionBuilder,
     instruction::{
         Instruction,
+        JumpCondition,
         Label,
         MathOperation,
     },

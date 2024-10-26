@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use babbelaar::BabString;
 
-use crate::{Immediate, Instruction, Label, MathOperation, Operand, Program, Register};
+use crate::{Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Program, Register};
 
 pub struct Interpreter {
     program: Program,
@@ -137,48 +137,34 @@ impl Interpreter {
                 OperationResult::Jump(location)
             }
 
-            Instruction::JumpIfEqual { location } => {
-                if self.comparison_flags.zero {
-                    OperationResult::Jump(location)
-                } else {
-                    OperationResult::Continue
-                }
-            }
+            Instruction::JumpConditional { condition, location } => {
+                let is_true = match condition {
+                    JumpCondition::Equal => {
+                        self.comparison_flags.zero
+                    }
 
-            Instruction::JumpIfGreater { location } => {
-                if !self.comparison_flags.negative {
-                    OperationResult::Jump(location)
-                } else {
-                    OperationResult::Continue
-                }
-            }
+                    JumpCondition::Greater => {
+                        !self.comparison_flags.negative
+                    }
 
-            Instruction::JumpIfGreaterOrEqual { location } => {
-                if !self.comparison_flags.negative || self.comparison_flags.zero {
-                    OperationResult::Jump(location)
-                } else {
-                    OperationResult::Continue
-                }
-            }
+                    JumpCondition::GreaterOrEqual => {
+                        !self.comparison_flags.negative || self.comparison_flags.zero
+                    }
 
-            Instruction::JumpIfLess { location } => {
-                if self.comparison_flags.negative {
-                    OperationResult::Jump(location)
-                } else {
-                    OperationResult::Continue
-                }
-            }
+                    JumpCondition::Less => {
+                        self.comparison_flags.negative
+                    }
 
-            Instruction::JumpIfLessOrEqual { location } => {
-                if self.comparison_flags.negative || self.comparison_flags.zero {
-                    OperationResult::Jump(location)
-                } else {
-                    OperationResult::Continue
-                }
-            }
+                    JumpCondition::LessOrEqual => {
+                        self.comparison_flags.negative || self.comparison_flags.zero
+                    }
 
-            Instruction::JumpIfNotEqual { location } => {
-                if !self.comparison_flags.zero {
+                    JumpCondition::NotEqual => {
+                        !self.comparison_flags.zero
+                    }
+                };
+
+                if is_true {
                     OperationResult::Jump(location)
                 } else {
                     OperationResult::Continue

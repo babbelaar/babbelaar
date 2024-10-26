@@ -71,33 +71,11 @@ pub enum Instruction {
         location: Label,
     },
 
-    /// Jump only if the comparison was equal
-    JumpIfEqual {
-        location: Label,
-    },
+    /// Jump when the condition is met
+    JumpConditional {
+        condition: JumpCondition,
 
-    /// Jump only if the Comparison lhs was greater than rhs
-    JumpIfGreater {
-        location: Label,
-    },
-
-    /// Jump only if the Comparison lhs was greater than or equal to rhs
-    JumpIfGreaterOrEqual {
-        location: Label,
-    },
-
-    /// Jump only if the Comparison lhs was less than or equal to rhs
-    JumpIfLessOrEqual {
-        location: Label,
-    },
-
-    /// Jump only if the Comparison lhs was less than rhs
-    JumpIfLess {
-        location: Label,
-    },
-
-    /// Jump only if the comparison was not equal
-    JumpIfNotEqual {
+        /// The location to jump to if the condition was met
         location: Label,
     },
 
@@ -163,33 +141,10 @@ impl Display for Instruction {
                 location.fmt(f)
             }
 
-            Instruction::JumpIfEqual { location } => {
-                f.write_str("SpringBijGelijkheid ")?;
-                location.fmt(f)
-            }
-
-            Instruction::JumpIfGreater { location } => {
-                f.write_str("SpringBijGroter ")?;
-                location.fmt(f)
-            }
-
-            Instruction::JumpIfGreaterOrEqual { location } => {
-                f.write_str("SpringBijGroterOfGelijk ")?;
-                location.fmt(f)
-            }
-
-            Instruction::JumpIfLess { location } => {
-                f.write_str("SpringBijKleiner ")?;
-                location.fmt(f)
-            }
-
-            Instruction::JumpIfLessOrEqual { location } => {
-                f.write_str("SpringBijKleinerOfGelijk ")?;
-                location.fmt(f)
-            }
-
-            Instruction::JumpIfNotEqual { location } => {
-                f.write_str("SpringBijOngelijkheid ")?;
+            Instruction::JumpConditional { condition, location } => {
+                f.write_str("SpringBij")?;
+                condition.fmt(f)?;
+                f.write_char(' ')?;
                 location.fmt(f)
             }
 
@@ -221,6 +176,47 @@ impl Display for Instruction {
                 Ok(())
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JumpCondition {
+    /// Jump if lhs == rhs
+    Equal,
+
+    /// Jump if lhs > rhs
+    Greater,
+
+    /// Jump if lhs >= rhs
+    GreaterOrEqual,
+
+    /// Jump if lhs < rhs
+    Less,
+
+    /// Jump if lhs <= rhs
+    LessOrEqual,
+
+    /// Jump if lhs != rhs
+    NotEqual,
+}
+
+impl JumpCondition {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Equal => "Gelijk",
+            Self::Greater => "Groter",
+            Self::GreaterOrEqual => "GroterOfGelijk",
+            Self::Less => "Kleiner",
+            Self::LessOrEqual => "KleinerOfGelijk",
+            Self::NotEqual => "Ongelijk",
+        }
+    }
+}
+
+impl Display for JumpCondition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
     }
 }
 
