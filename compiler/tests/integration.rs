@@ -53,3 +53,19 @@ fn function_with_jump_and_returning_zero() {
 
     assert_eq!(value.map(|x| x.as_i64()), Some(0));
 }
+
+#[test]
+fn function_with_for_statement() {
+    let value = compile_and_interpret("
+    werkwijze volg_i_in_reeks_1_tot_10() -> g32 {
+        volg i in reeks(0, 10) {
+            als i == 10 {
+                bekeer 50;
+            }
+        }
+        bekeer 100;
+    }
+    ", "volg_i_in_reeks_1_tot_10");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(100));
+}

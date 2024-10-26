@@ -124,8 +124,38 @@ impl CompileStatement for FunctionStatement {
 
 impl CompileStatement for ForStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
-        _ = builder;
-        todo!();
+        let after = builder.create_label("na-volg");
+
+        match self.iterable.value() {
+            ForIterableKind::Expression(expression) => {
+                _ = expression;
+                todo!("ondersteun Doorloper-gebaseerde expressies met `volg`");
+            }
+
+            ForIterableKind::Range(range) => {
+                let current_value = range.start.compile(builder).to_register(builder);
+                builder.associate_register_to_local(current_value, self.iterator_name.value());
+
+                let end = range.end.compile(builder).to_register(builder);
+
+                builder.compare(current_value, end);
+                builder.jump_if_greater_or_equal(after);
+
+                let body = builder.create_label_and_link_here("volg-lichaam");
+
+                for statement in &self.body {
+                    statement.compile(builder);
+                }
+
+                builder.increment(current_value);
+
+                builder.compare(current_value, end);
+                builder.jump_if_less(body);
+                // otherwise, fall through to the after the for-statement
+            }
+        }
+
+        builder.link_label_here(after);
     }
 }
 

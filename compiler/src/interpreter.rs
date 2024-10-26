@@ -127,12 +127,50 @@ impl Interpreter {
                 OperationResult::Continue
             }
 
+            Instruction::Increment { register } => {
+                let value = Immediate::Integer64(self.register(&register).as_i64() + 1);
+                self.frame().registers.insert(register, value);
+                OperationResult::Continue
+            }
+
             Instruction::Jump { location } => {
                 OperationResult::Jump(location)
             }
 
             Instruction::JumpIfEqual { location } => {
                 if self.comparison_flags.zero {
+                    OperationResult::Jump(location)
+                } else {
+                    OperationResult::Continue
+                }
+            }
+
+            Instruction::JumpIfGreater { location } => {
+                if !self.comparison_flags.negative {
+                    OperationResult::Jump(location)
+                } else {
+                    OperationResult::Continue
+                }
+            }
+
+            Instruction::JumpIfGreaterOrEqual { location } => {
+                if !self.comparison_flags.negative || self.comparison_flags.zero {
+                    OperationResult::Jump(location)
+                } else {
+                    OperationResult::Continue
+                }
+            }
+
+            Instruction::JumpIfLess { location } => {
+                if self.comparison_flags.negative {
+                    OperationResult::Jump(location)
+                } else {
+                    OperationResult::Continue
+                }
+            }
+
+            Instruction::JumpIfLessOrEqual { location } => {
+                if self.comparison_flags.negative || self.comparison_flags.zero {
                     OperationResult::Jump(location)
                 } else {
                     OperationResult::Continue
