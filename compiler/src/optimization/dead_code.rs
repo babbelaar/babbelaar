@@ -46,6 +46,14 @@ impl DeadStoreEliminator {
     fn analyze_instructions(&mut self, instructions: &[Instruction]) {
         for (index, instruction) in instructions.iter().enumerate() {
             match &instruction {
+                Instruction::Compare { lhs, rhs, .. } => {
+                    self.notice_read(lhs);
+
+                    if let Operand::Register(rhs) = rhs {
+                        self.notice_read(rhs);
+                    }
+                }
+
                 Instruction::Call { ret_val_reg, arguments, .. } => {
                     for arg in arguments {
                         self.notice_read(arg);
@@ -53,6 +61,20 @@ impl DeadStoreEliminator {
 
                     self.notice_write(ret_val_reg, index);
                 }
+
+                Instruction::Jump { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfEqual { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfNotEqual { location } => {
+                    _ = location;
+                }
+
+                Instruction::Label(..) => (),
 
                 Instruction::LoadImmediate { destination_reg, immediate } => {
                     _ = immediate;

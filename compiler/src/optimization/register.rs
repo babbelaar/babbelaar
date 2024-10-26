@@ -20,9 +20,33 @@ impl FunctionOptimizer for RegisterInliner {
                     self.values.remove(ret_val_reg);
                 }
 
+                Instruction::Compare { lhs, rhs } => {
+                    let lhs = lhs.clone();
+
+                    let Operand::Register(register) = rhs else { continue };
+                    let Some(rhs) = self.values.get(register) else { continue };
+                    let rhs = Operand::Immediate(*rhs);
+
+                    *instruction = Instruction::Compare { lhs, rhs };
+                }
+
+                Instruction::Jump { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfEqual { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfNotEqual { location } => {
+                    _ = location;
+                }
+
                 Instruction::LoadImmediate { immediate, destination_reg } => {
                     self.values.insert(destination_reg.clone(), immediate.clone());
                 }
+
+                Instruction::Label(..) => (),
 
                 Instruction::Move { source, destination } => {
                     if let Some(known_value) = self.values.get(source).cloned() {

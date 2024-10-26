@@ -59,6 +59,12 @@ impl Program {
         &self.functions[index]
     }
 
+    #[must_use]
+    pub(crate) fn functions(&self) -> &[Function] {
+        &self.functions
+    }
+
+    #[must_use]
     pub(crate) fn functions_mut(&mut self) -> &mut [Function] {
         &mut self.functions
     }

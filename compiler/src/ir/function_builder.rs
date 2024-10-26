@@ -15,7 +15,9 @@ pub struct FunctionBuilder<'program> {
     pub(super) argument_registers: Vec<Register>,
     pub(super) instructions: Vec<Instruction>,
     pub(super) locals: HashMap<BabString, Register>,
-    pub(super) labels: Vec<Label>,
+    pub(super) label_counter: usize,
+    pub(crate) label_names: HashMap<Label, BabString>,
+    pub(super) label_positions: HashMap<Label, usize>,
 }
 
 impl<'program> FunctionBuilder<'program> {
@@ -29,6 +31,25 @@ impl<'program> FunctionBuilder<'program> {
         });
 
         ret_val_reg
+    }
+
+    pub fn compare(&mut self, lhs: Register, rhs: impl Into<Operand>) {
+        self.instructions.push(Instruction::Compare {
+            lhs,
+            rhs: rhs.into()
+        });
+    }
+
+    pub fn jump(&mut self, location: Label) {
+        self.instructions.push(Instruction::Jump { location });
+    }
+
+    pub fn jump_if_equal(&mut self, location: Label) {
+        self.instructions.push(Instruction::JumpIfEqual { location });
+    }
+
+    pub fn jump_if_not_equal(&mut self, location: Label) {
+        self.instructions.push(Instruction::JumpIfNotEqual { location });
     }
 
     #[must_use]
@@ -87,12 +108,41 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     #[must_use]
+    pub fn create_label(&mut self, name: impl Into<BabString>) -> Label {
+        self.label_counter += 1;
+        let label = Label {
+            id: self.label_counter
+        };
+
+        self.label_names.insert(label, name.into());
+
+        label
+    }
+
+    fn link_label(&mut self, label: Label, offset: usize) {
+        debug_assert_eq!(self.label_positions.get(&label), None, "Cannot link a label twice!");
+        self.label_positions.insert(label, offset);
+        self.instructions.push(Instruction::Label(label));
+    }
+
+    pub fn link_label_here(&mut self, label: Label) {
+        self.link_label(label, self.instructions.len() + 1);
+    }
+
+    #[must_use]
+    pub fn create_label_here(&mut self, name: impl Into<BabString>) -> Label {
+        let label = self.create_label(name);
+        self.link_label_here(label.clone());
+        label
+    }
+
+    #[must_use]
     pub fn build(self) -> Function {
         Function {
             name: self.name,
             argument_registers: self.argument_registers,
             instructions: self.instructions,
-            labels: self.labels,
+            label_names: self.label_names,
         }
     }
 }

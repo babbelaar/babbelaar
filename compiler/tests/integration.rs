@@ -26,7 +26,7 @@ fn function_that_returns_two() {
     }
     ", "twee");
 
-    debug_assert_eq!(value.map(|x| x.as_i64()), Some(2));
+    assert_eq!(value.map(|x| x.as_i64()), Some(2));
 }
 
 #[test]
@@ -37,5 +37,19 @@ fn function_that_adds_two_and_three() {
     }
     ", "twee_plus_drie");
 
-    debug_assert_eq!(value.map(|x| x.as_i64()), Some(5));
+    assert_eq!(value.map(|x| x.as_i64()), Some(5));
+}
+
+#[test]
+fn function_with_jump_and_returning_zero() {
+    let value = compile_and_interpret("
+    werkwijze als_1_is_2_dan_1_anders_0() -> g32 {
+        als 1 == 2 {
+            bekeer 1;
+        }
+        bekeer 0;
+    }
+    ", "als_1_is_2_dan_1_anders_0");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(0));
 }
