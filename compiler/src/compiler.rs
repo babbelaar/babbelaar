@@ -6,7 +6,7 @@
 
 use babbelaar::*;
 
-use crate::{optimize_program, FunctionBuilder, Immediate, MathOperation, Program, ProgramBuilder, Register};
+use crate::{optimize_program, FunctionBuilder, Immediate, MathOperation, Operand, Program, ProgramBuilder, Register};
 
 pub struct Compiler {
     program_builder: ProgramBuilder,
@@ -131,8 +131,31 @@ impl CompileStatement for ForStatement {
 
 impl CompileStatement for IfStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
-        _ = builder;
-        todo!();
+        let after_block = builder.create_label(format!("na-als"));
+        let then_block = builder.create_label(format!("als {}", self.condition.value()));
+
+        let comparison = self.condition.compile(builder).to_comparison(builder);
+
+        match comparison {
+            Comparison::Equality => {
+                builder.jump_if_equal(then_block);
+                builder.jump(after_block);
+            }
+
+            Comparison::Inequality => {
+                builder.jump_if_not_equal(then_block);
+                builder.jump(after_block);
+            }
+
+            _ => todo!(),
+        };
+
+        builder.link_label_here(then_block);
+        for statement in &self.body {
+            statement.compile(builder);
+        }
+
+        builder.link_label_here(after_block);
     }
 }
 
@@ -147,7 +170,7 @@ impl CompileStatement for ReturnStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
         match &self.expression {
             Some(expression) => {
-                let register = expression.compile(builder);
+                let register = expression.compile(builder).to_register(builder);
                 builder.ret_with(register);
             }
 
@@ -173,11 +196,11 @@ impl CompileStatement for VariableStatement {
 }
 
 trait CompileExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> Register;
+    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult;
 }
 
 impl CompileExpression for Expression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> Register {
+    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
         match self {
             Expression::BiExpression(expression) => {
                 expression.compile(builder)
@@ -199,22 +222,33 @@ impl CompileExpression for Expression {
 }
 
 impl CompileExpression for BiExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> Register {
-        let lhs = self.lhs.compile(builder);
-        let rhs = self.rhs.compile(builder);
+    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
+        let lhs = self.lhs.compile(builder).to_register(builder);
+        let rhs = self.rhs.compile(builder).to_register(builder);
 
-        let math_operation = match self.operator.value() {
-            BiOperator::Add => MathOperation::Add,
-            BiOperator::Subtract => MathOperation::Subtract,
-            _ => todo!("Ondersteun {:?}", self.operator.value()),
-        };
+        match self.operator.value() {
+            BiOperator::Math(math) => {
 
-        builder.math(math_operation, lhs, rhs)
+                let math_operation = match math {
+                    MathOperator::Add => MathOperation::Add,
+                    MathOperator::Subtract => MathOperation::Subtract,
+
+                    _ => todo!("Ondersteun {:?}", self.operator.value()),
+                };
+
+                builder.math(math_operation, lhs, rhs).into()
+            }
+
+            BiOperator::Comparison(comparison) => {
+                builder.compare(lhs, rhs);
+                ExpressionResult::Comparison(*comparison)
+            }
+        }
     }
 }
 
 impl CompileExpression for PostfixExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> Register {
+    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
         let lhs = self.lhs.compile(builder);
 
         match self.kind.value() {
@@ -243,18 +277,18 @@ impl CompileExpression for PostfixExpression {
 }
 
 impl CompileExpression for PrimaryExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> Register {
+    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
         match self {
             Self::Boolean(b) => {
-                builder.load_immediate(Immediate::Integer32(*b as i32))
+                builder.load_immediate(Immediate::Integer32(*b as i32)).into()
             }
 
             Self::CharacterLiteral(c) => {
-                builder.load_immediate(Immediate::Integer32(*c as i32))
+                builder.load_immediate(Immediate::Integer32(*c as i32)).into()
             }
 
             Self::IntegerLiteral(i) => {
-                builder.load_immediate(Immediate::Integer64(*i))
+                builder.load_immediate(Immediate::Integer64(*i)).into()
             }
 
             Self::Parenthesized(expression) => {
@@ -262,7 +296,7 @@ impl CompileExpression for PrimaryExpression {
             }
 
             Self::Reference(ranged) => {
-                builder.load_local(ranged.value())
+                builder.load_local(ranged.value()).into()
             }
 
             Self::ReferenceThis => {
@@ -276,7 +310,7 @@ impl CompileExpression for PrimaryExpression {
             }
 
             Self::StringLiteral(literal) => {
-                builder.load_string(&literal)
+                builder.load_string(&literal).into()
             }
 
             Self::StructureInstantiation(expression) => {
@@ -292,15 +326,53 @@ impl CompileExpression for PrimaryExpression {
 }
 
 impl CompileExpression for StructureInstantiationExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> Register {
+    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
         _ = builder;
         todo!()
     }
 }
 
 impl CompileExpression for UnaryExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> Register {
+    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
         _ = builder;
         todo!()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ExpressionResult {
+    Comparison(Comparison),
+    Register(Register),
+}
+
+impl ExpressionResult {
+    #[must_use]
+    fn to_comparison(self, builder: &mut FunctionBuilder<'_>) -> Comparison {
+        match self {
+            Self::Comparison(comparison) => comparison,
+            Self::Register(register) => {
+                // if the value is a register, we want to branch/jump when the value isn't 0 (false)
+                builder.compare(register, Operand::Immediate(Immediate::Integer64(0)));
+                Comparison::Inequality
+            }
+        }
+    }
+
+    #[must_use]
+    fn to_register(self, builder: &mut FunctionBuilder<'_>) -> Register {
+        match self {
+            Self::Comparison(..) => {
+                _ = builder; // Use the builder to load the comparison flags (NZCV / FLAGS) to a register, somehow
+                todo!("Hoe moet ik een Vergelijkresultaat omzetten naar een Register?")
+            }
+
+            Self::Register(reg) => reg,
+        }
+    }
+}
+
+impl From<Register> for ExpressionResult {
+    fn from(value: Register) -> Self {
+        Self::Register(value)
     }
 }

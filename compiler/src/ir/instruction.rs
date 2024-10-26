@@ -7,27 +7,36 @@ use babbelaar::BabString;
 
 use super::{Immediate, Operand, Register};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Label {
-    position: usize,
+    pub(super) id: usize,
 }
 
 impl Display for Label {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Etiket")?;
-        self.position.fmt(f)
+        self.id.fmt(f)
     }
 }
 
 impl Label {
     #[must_use]
-    pub fn position(&self) -> usize {
-        self.position
+    pub fn id(&self) -> usize {
+        self.id
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
+    //
+    // CPU states
+    //
+
+    Compare {
+        lhs: Register,
+        rhs: Operand,
+    },
+
     //
     // Loads & stores
     //
@@ -52,6 +61,23 @@ pub enum Instruction {
         ret_val_reg: Register,
     },
 
+    /// An unconditional jump
+    Jump {
+        location: Label,
+    },
+
+    /// Jump only if the comparison was equal
+    JumpIfEqual {
+        location: Label,
+    },
+
+    /// Jump only if the comparison was not equal
+    JumpIfNotEqual {
+        location: Label,
+    },
+
+    Label(Label),
+
     Return {
         value_reg: Option<Register>,
     },
@@ -71,6 +97,13 @@ pub enum Instruction {
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Instruction::Compare { lhs, rhs } => {
+                f.write_str("Vergelijk ")?;
+                lhs.fmt(f)?;
+                f.write_str(", ")?;
+                rhs.fmt(f)
+            }
+
             Instruction::LoadImmediate { immediate, destination_reg } => {
                 f.write_str("Laad ")?;
                 destination_reg.fmt(f)?;
@@ -94,6 +127,23 @@ impl Display for Instruction {
 
                 Ok(())
             }
+
+            Instruction::Jump { location } => {
+                f.write_str("Spring ")?;
+                location.fmt(f)
+            }
+
+            Instruction::JumpIfEqual { location } => {
+                f.write_str("SpringBijGelijkheid ")?;
+                location.fmt(f)
+            }
+
+            Instruction::JumpIfNotEqual { location } => {
+                f.write_str("SpringBijOngelijkheid ")?;
+                location.fmt(f)
+            }
+
+            Instruction::Label(label) => label.fmt(f),
 
             Instruction::Return { value_reg } => {
                 f.write_str("Bekeer")?;

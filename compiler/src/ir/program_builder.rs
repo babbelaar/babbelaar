@@ -30,7 +30,9 @@ impl ProgramBuilder {
             argument_registers: Vec::new(),
             instructions: Vec::new(),
             locals: HashMap::new(),
-            labels: Vec::new(),
+            label_counter: 0,
+            label_names: HashMap::new(),
+            label_positions: HashMap::new(),
         };
 
         f(&mut builder);

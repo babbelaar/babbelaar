@@ -11,15 +11,20 @@ use crate::{Immediate, Instruction, Label, MathOperation, Operand, Program, Regi
 
 pub struct Interpreter {
     program: Program,
+    comparison_flags: ComparisonFlags,
     stack_frames: Vec<StackFrame>,
+    label_positions: HashMap<(usize, Label), usize>,
 }
 
 impl Interpreter {
     #[must_use]
     pub fn new(program: Program) -> Self {
+        let label_positions = collect_label_positions(&program);
         Self {
             program,
+            comparison_flags: Default::default(),
             stack_frames: Vec::new(),
+            label_positions,
         }
     }
 
@@ -49,7 +54,8 @@ impl Interpreter {
                 }
 
                 OperationResult::Jump(label) => {
-                    self.frame().program_counter = label.position();
+                    let position = self.label_positions.get(&(function_index, label)).unwrap();
+                    self.frame().program_counter = *position;
                 }
 
                 OperationResult::Return(value) => {
@@ -65,10 +71,15 @@ impl Interpreter {
     }
 
     #[must_use]
+    fn register(&mut self, register: &Register) -> Immediate {
+        self.frame().registers.get(register).unwrap().clone()
+    }
+
+    #[must_use]
     fn operand_to_immediate(&mut self, operand: &Operand) -> Immediate {
         match operand {
             Operand::Immediate(immediate) => immediate.clone(),
-            Operand::Register(register) => self.frame().registers.get(register).unwrap().clone(),
+            Operand::Register(register) => self.register(register),
         }
     }
 
@@ -95,6 +106,49 @@ impl Interpreter {
                 OperationResult::Continue
             }
 
+            Instruction::Compare { lhs, rhs } => {
+                let lhs = self.register(&lhs);
+                let rhs = self.operand_to_immediate(&rhs);
+
+                // TODO: honor the size of the immediate (this matters for e.g. carry, overflow)
+                let lhs = lhs.as_i64();
+                let rhs = rhs.as_i64();
+
+                let overflow = lhs.checked_sub(rhs).is_none();
+                let value = lhs.wrapping_sub(rhs);
+
+                self.comparison_flags = ComparisonFlags {
+                    negative: value < 0,
+                    zero: value == 0,
+                    carry: false,
+                    overflow,
+                };
+
+                OperationResult::Continue
+            }
+
+            Instruction::Jump { location } => {
+                OperationResult::Jump(location)
+            }
+
+            Instruction::JumpIfEqual { location } => {
+                if self.comparison_flags.zero {
+                    OperationResult::Jump(location)
+                } else {
+                    OperationResult::Continue
+                }
+            }
+
+            Instruction::JumpIfNotEqual { location } => {
+                if !self.comparison_flags.zero {
+                    OperationResult::Jump(location)
+                } else {
+                    OperationResult::Continue
+                }
+            }
+
+            Instruction::Label(..) => OperationResult::Continue,
+
             Instruction::LoadImmediate { immediate, destination_reg } => {
                 let register = destination_reg.clone();
                 let value = immediate.clone();
@@ -114,8 +168,11 @@ impl Interpreter {
             Instruction::Return { value_reg} => {
                 match value_reg {
                     Some(register) => {
-                        let value = self.frame().registers.get(&register);
-                        OperationResult::Return(Some(value.unwrap().clone()))
+                        let Some(value) = self.frame().registers.get(&register) else {
+                            panic!("Kan niet bekeren met register {register}, want deze heeft geen waarde!");
+                        };
+
+                        OperationResult::Return(Some(value.clone()))
                     }
 
                     None => OperationResult::Return(None)
@@ -162,6 +219,30 @@ enum OperationResult {
     Continue,
     Return(Option<Immediate>),
     Jump(Label),
+}
+
+#[derive(Debug, Clone, Default)]
+#[allow(unused)]
+struct ComparisonFlags {
+    negative: bool,
+    zero: bool,
+    carry: bool,
+    overflow: bool,
+}
+
+#[must_use]
+fn collect_label_positions(program: &Program) -> HashMap<(usize, Label), usize> {
+    let mut map = HashMap::new();
+
+    for (func_id, func) in program.functions().iter().enumerate() {
+        for (position, instruction) in func.instructions().iter().enumerate() {
+            if let Instruction::Label(label) = instruction {
+                map.insert((func_id, *label), position);
+            }
+        }
+    }
+
+    map
 }
 
 #[cfg(test)]
