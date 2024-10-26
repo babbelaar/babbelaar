@@ -226,6 +226,22 @@ impl Display for BiExpression {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum BiOperator {
+    Comparison(Comparison),
+    Math(MathOperator),
+}
+
+impl BiOperator {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Comparison(comp) => comp.as_str(),
+            Self::Math(math) => math.as_str(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MathOperator {
     Add,
     Subtract,
     Multiply,
@@ -236,10 +252,9 @@ pub enum BiOperator {
     BitwiseXor,
     LogicalAnd,
     LogicalOr,
-    Comparison(Comparison),
 }
 
-impl BiOperator {
+impl MathOperator {
     #[must_use]
     pub const fn as_str(&self) -> &'static str {
         match self {
@@ -253,8 +268,13 @@ impl BiOperator {
             Self::BitwiseXor => "^",
             Self::LogicalAnd => "&&",
             Self::LogicalOr => "||",
-            Self::Comparison(comp) => comp.as_str(),
         }
+    }
+}
+
+impl From<MathOperator> for BiOperator {
+    fn from(value: MathOperator) -> Self {
+        Self::Math(value)
     }
 }
 
@@ -266,6 +286,12 @@ pub enum Comparison {
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+}
+
+impl From<Comparison> for BiOperator {
+    fn from(value: Comparison) -> Self {
+        Self::Comparison(value)
+    }
 }
 
 impl Comparison {

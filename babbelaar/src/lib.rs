@@ -44,6 +44,7 @@ pub use self::{
         Expression,
         FieldInstantiation,
         FunctionCallExpression,
+        MathOperator,
         MethodCallExpression,
         PostfixExpression,
         PostfixExpressionKind,

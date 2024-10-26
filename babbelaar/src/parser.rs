@@ -1112,37 +1112,37 @@ impl<'tokens> Parser<'tokens> {
 
     fn parse_logical_or_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
         self.parse_bi_expression(Self::parse_logical_and_expression, &[
-            (Punctuator::LogicalAnd, BiOperator::LogicalAnd),
+            (Punctuator::LogicalAnd, BiOperator::Math(MathOperator::LogicalAnd)),
         ])
     }
 
     fn parse_logical_and_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
         self.parse_bi_expression(Self::parse_bitwise_or_expression, &[
-            (Punctuator::LogicalOr, BiOperator::LogicalOr),
+            (Punctuator::LogicalOr, BiOperator::Math(MathOperator::LogicalOr)),
         ])
     }
 
     fn parse_bitwise_or_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
         self.parse_bi_expression(Self::parse_bitwise_xor_expression, &[
-            (Punctuator::BitwiseOr, BiOperator::BitwiseOr),
+            (Punctuator::BitwiseOr, BiOperator::Math(MathOperator::BitwiseOr)),
         ])
     }
 
     fn parse_bitwise_xor_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
         self.parse_bi_expression(Self::parse_bitwise_and_expression, &[
-            (Punctuator::BitwiseXor, BiOperator::BitwiseXor),
+            (Punctuator::BitwiseXor, BiOperator::Math(MathOperator::BitwiseXor)),
         ])
     }
 
     fn parse_bitwise_and_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
         self.parse_bi_expression(Self::parse_equality_expression, &[
-            (Punctuator::BitwiseAnd, BiOperator::BitwiseAnd),
+            (Punctuator::BitwiseAnd, BiOperator::Math(MathOperator::BitwiseAnd)),
         ])
     }
 
     fn parse_equality_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
         self.parse_bi_expression(Self::parse_relational_expression, &[
-            (Punctuator::Equals, BiOperator::Comparison(Comparison::Equality)),
+            (Punctuator::Equals, Comparison::Equality.into()),
             // TODO the rest
         ])
     }
@@ -1157,16 +1157,16 @@ impl<'tokens> Parser<'tokens> {
 
     fn parse_additive_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
         self.parse_bi_expression(Self::parse_multiplicative_expression, &[
-            (Punctuator::PlusSign, BiOperator::Add),
-            (Punctuator::HyphenMinus, BiOperator::Subtract),
+            (Punctuator::PlusSign, BiOperator::Math(MathOperator::Add)),
+            (Punctuator::HyphenMinus, BiOperator::Math(MathOperator::Subtract)),
         ])
     }
 
     fn parse_multiplicative_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
         self.parse_bi_expression(Self::parse_unary_expression, &[
-            (Punctuator::Asterisk, BiOperator::Multiply),
-            (Punctuator::PercentageSign, BiOperator::Modulo),
-            (Punctuator::Solidus, BiOperator::Divide),
+            (Punctuator::Asterisk, BiOperator::Math(MathOperator::Multiply)),
+            (Punctuator::PercentageSign, BiOperator::Math(MathOperator::Modulo)),
+            (Punctuator::Solidus, BiOperator::Math(MathOperator::Divide)),
         ])
     }
 

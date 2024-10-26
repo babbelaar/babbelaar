@@ -567,17 +567,17 @@ impl<D> Interpreter<D>
         let rhs = self.execute_expression(&expression.rhs);
 
         match *expression.operator {
-            BiOperator::Add => self.execute_expression_add(lhs, rhs),
-            BiOperator::Subtract => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a - b),
-            BiOperator::Multiply => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a * b),
-            BiOperator::Modulo => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a % b),
-            BiOperator::Divide => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a / b),
-            BiOperator::BitwiseAnd => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a & b),
-            BiOperator::BitwiseOr => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a | b),
-            BiOperator::BitwiseXor => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a ^ b),
+            BiOperator::Math(MathOperator::Add) => self.execute_expression_add(lhs, rhs),
+            BiOperator::Math(MathOperator::Subtract) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a - b),
+            BiOperator::Math(MathOperator::Multiply) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a * b),
+            BiOperator::Math(MathOperator::Modulo) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a % b),
+            BiOperator::Math(MathOperator::Divide) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a / b),
+            BiOperator::Math(MathOperator::BitwiseAnd) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a & b),
+            BiOperator::Math(MathOperator::BitwiseOr) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a | b),
+            BiOperator::Math(MathOperator::BitwiseXor) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a ^ b),
 
-            BiOperator::LogicalAnd => Value::Bool(lhs == Value::Bool(true) && rhs == Value::Bool(true)),
-            BiOperator::LogicalOr => Value::Bool(lhs == Value::Bool(true) || rhs == Value::Bool(true)),
+            BiOperator::Math(MathOperator::LogicalAnd) => Value::Bool(lhs == Value::Bool(true) && rhs == Value::Bool(true)),
+            BiOperator::Math(MathOperator::LogicalOr) => Value::Bool(lhs == Value::Bool(true) || rhs == Value::Bool(true)),
 
             BiOperator::Comparison(comparison) => {
                 Value::Bool(lhs.compare(&rhs, comparison))
