@@ -114,6 +114,18 @@ impl Deref for BabString {
     }
 }
 
+impl From<&BabString> for BabString {
+    fn from(value: &BabString) -> Self {
+        value.clone()
+    }
+}
+
+impl From<&'static str> for BabString {
+    fn from(value: &'static str) -> Self {
+        Self::new_static(value)
+    }
+}
+
 impl From<String> for BabString {
     fn from(value: String) -> Self {
         Self::new(value)

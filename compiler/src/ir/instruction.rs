@@ -41,6 +41,11 @@ pub enum Instruction {
     // Loads & stores
     //
 
+    /// Adds `1` to the value of the register.
+    Increment {
+        register: Register,
+    },
+
     LoadImmediate {
         immediate: Immediate,
         destination_reg: Register,
@@ -68,6 +73,26 @@ pub enum Instruction {
 
     /// Jump only if the comparison was equal
     JumpIfEqual {
+        location: Label,
+    },
+
+    /// Jump only if the Comparison lhs was greater than rhs
+    JumpIfGreater {
+        location: Label,
+    },
+
+    /// Jump only if the Comparison lhs was greater than or equal to rhs
+    JumpIfGreaterOrEqual {
+        location: Label,
+    },
+
+    /// Jump only if the Comparison lhs was less than or equal to rhs
+    JumpIfLessOrEqual {
+        location: Label,
+    },
+
+    /// Jump only if the Comparison lhs was less than rhs
+    JumpIfLess {
         location: Label,
     },
 
@@ -128,6 +153,11 @@ impl Display for Instruction {
                 Ok(())
             }
 
+            Instruction::Increment { register } => {
+                f.write_str("Verhoog ")?;
+                register.fmt(f)
+            }
+
             Instruction::Jump { location } => {
                 f.write_str("Spring ")?;
                 location.fmt(f)
@@ -135,6 +165,26 @@ impl Display for Instruction {
 
             Instruction::JumpIfEqual { location } => {
                 f.write_str("SpringBijGelijkheid ")?;
+                location.fmt(f)
+            }
+
+            Instruction::JumpIfGreater { location } => {
+                f.write_str("SpringBijGroter ")?;
+                location.fmt(f)
+            }
+
+            Instruction::JumpIfGreaterOrEqual { location } => {
+                f.write_str("SpringBijGroterOfGelijk ")?;
+                location.fmt(f)
+            }
+
+            Instruction::JumpIfLess { location } => {
+                f.write_str("SpringBijKleiner ")?;
+                location.fmt(f)
+            }
+
+            Instruction::JumpIfLessOrEqual { location } => {
+                f.write_str("SpringBijKleinerOfGelijk ")?;
                 location.fmt(f)
             }
 

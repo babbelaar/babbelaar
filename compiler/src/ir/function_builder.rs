@@ -40,12 +40,32 @@ impl<'program> FunctionBuilder<'program> {
         });
     }
 
+    pub fn increment(&mut self, register: Register) {
+        self.instructions.push(Instruction::Increment { register });
+    }
+
     pub fn jump(&mut self, location: Label) {
         self.instructions.push(Instruction::Jump { location });
     }
 
     pub fn jump_if_equal(&mut self, location: Label) {
         self.instructions.push(Instruction::JumpIfEqual { location });
+    }
+
+    pub fn jump_if_less(&mut self, location: Label) {
+        self.instructions.push(Instruction::JumpIfLess { location });
+    }
+
+    pub fn jump_if_less_or_equal(&mut self, location: Label) {
+        self.instructions.push(Instruction::JumpIfLessOrEqual { location });
+    }
+
+    pub fn jump_if_greater(&mut self, location: Label) {
+        self.instructions.push(Instruction::JumpIfGreater { location });
+    }
+
+    pub fn jump_if_greater_or_equal(&mut self, location: Label) {
+        self.instructions.push(Instruction::JumpIfGreaterOrEqual { location });
     }
 
     pub fn jump_if_not_equal(&mut self, location: Label) {
@@ -62,6 +82,14 @@ impl<'program> FunctionBuilder<'program> {
         });
 
         destination_reg
+    }
+
+    pub fn associate_register_to_local(&mut self, register: Register, local_name: impl Into<BabString>) {
+        let local_name = local_name.into();
+
+        debug_assert_eq!(self.locals.get(&local_name), None, "Lokale had al een waarde!");
+
+        self.locals.insert(local_name, register);
     }
 
     #[must_use]
@@ -130,7 +158,7 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     #[must_use]
-    pub fn create_label_here(&mut self, name: impl Into<BabString>) -> Label {
+    pub fn create_label_and_link_here(&mut self, name: impl Into<BabString>) -> Label {
         let label = self.create_label(name);
         self.link_label_here(label.clone());
         label

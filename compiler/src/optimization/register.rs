@@ -30,11 +30,33 @@ impl FunctionOptimizer for RegisterInliner {
                     *instruction = Instruction::Compare { lhs, rhs };
                 }
 
+                Instruction::Increment { register } => {
+                    if let Some(value) = self.values.get(register) {
+                        self.values.insert(register.clone(), Immediate::Integer64(value.as_i64() + 1));
+                    }
+                }
+
                 Instruction::Jump { location } => {
                     _ = location;
                 }
 
                 Instruction::JumpIfEqual { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfGreater { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfGreaterOrEqual { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfLess { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfLessOrEqual { location } => {
                     _ = location;
                 }
 

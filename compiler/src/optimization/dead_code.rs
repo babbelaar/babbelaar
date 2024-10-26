@@ -62,11 +62,31 @@ impl DeadStoreEliminator {
                     self.notice_write(ret_val_reg, index);
                 }
 
+                Instruction::Increment { register } => {
+                    self.notice_write(register, index);
+                }
+
                 Instruction::Jump { location } => {
                     _ = location;
                 }
 
                 Instruction::JumpIfEqual { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfGreater { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfGreaterOrEqual { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfLess { location } => {
+                    _ = location;
+                }
+
+                Instruction::JumpIfLessOrEqual { location } => {
                     _ = location;
                 }
 
