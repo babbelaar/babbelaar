@@ -38,11 +38,13 @@ impl FunctionOptimizer for RegisterInliner {
 
                 Instruction::Jump { location } => {
                     _ = location;
+                    self.values.clear();
                 }
 
                 Instruction::JumpConditional { condition, location } => {
                     _ = condition;
                     _ = location;
+                    self.values.clear();
                 }
 
                 Instruction::LoadImmediate { immediate, destination_reg } => {
