@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use babbelaar::BabString;
 
-use super::{Function, Immediate, Instruction, Label, MathOperation, Operand, Program, Register, RegisterAllocator};
+use super::{Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Program, Register, RegisterAllocator};
 
 #[derive(Debug)]
 pub struct FunctionBuilder<'program> {
@@ -49,27 +49,33 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     pub fn jump_if_equal(&mut self, location: Label) {
-        self.instructions.push(Instruction::JumpIfEqual { location });
+        let condition = JumpCondition::Equal;
+        self.instructions.push(Instruction::JumpConditional { condition, location });
     }
 
     pub fn jump_if_less(&mut self, location: Label) {
-        self.instructions.push(Instruction::JumpIfLess { location });
+        let condition = JumpCondition::Less;
+        self.instructions.push(Instruction::JumpConditional { condition, location });
     }
 
     pub fn jump_if_less_or_equal(&mut self, location: Label) {
-        self.instructions.push(Instruction::JumpIfLessOrEqual { location });
+        let condition = JumpCondition::LessOrEqual;
+        self.instructions.push(Instruction::JumpConditional { condition, location });
     }
 
     pub fn jump_if_greater(&mut self, location: Label) {
-        self.instructions.push(Instruction::JumpIfGreater { location });
+        let condition = JumpCondition::Greater;
+        self.instructions.push(Instruction::JumpConditional { condition, location });
     }
 
     pub fn jump_if_greater_or_equal(&mut self, location: Label) {
-        self.instructions.push(Instruction::JumpIfGreaterOrEqual { location });
+        let condition = JumpCondition::GreaterOrEqual;
+        self.instructions.push(Instruction::JumpConditional { condition, location });
     }
 
     pub fn jump_if_not_equal(&mut self, location: Label) {
-        self.instructions.push(Instruction::JumpIfNotEqual { location });
+        let condition = JumpCondition::NotEqual;
+        self.instructions.push(Instruction::JumpConditional { condition, location });
     }
 
     #[must_use]

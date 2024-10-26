@@ -70,27 +70,8 @@ impl DeadStoreEliminator {
                     _ = location;
                 }
 
-                Instruction::JumpIfEqual { location } => {
-                    _ = location;
-                }
-
-                Instruction::JumpIfGreater { location } => {
-                    _ = location;
-                }
-
-                Instruction::JumpIfGreaterOrEqual { location } => {
-                    _ = location;
-                }
-
-                Instruction::JumpIfLess { location } => {
-                    _ = location;
-                }
-
-                Instruction::JumpIfLessOrEqual { location } => {
-                    _ = location;
-                }
-
-                Instruction::JumpIfNotEqual { location } => {
+                Instruction::JumpConditional { condition, location } => {
+                    _ = condition;
                     _ = location;
                 }
 

@@ -14,6 +14,7 @@ pub use self::{
         FunctionBuilder,
         Immediate,
         Instruction,
+        JumpCondition,
         Label,
         MathOperation,
         Operand,
