@@ -115,7 +115,7 @@ impl Display for Instruction {
             }
 
             Instruction::Move { source, destination } => {
-                f.write_str("Verplaats")?;
+                f.write_str("Verplaats ")?;
                 destination.fmt(f)?;
                 f.write_str(", ")?;
                 source.fmt(f)
