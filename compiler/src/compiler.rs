@@ -220,8 +220,9 @@ impl CompileStatement for Structure {
 
 impl CompileStatement for VariableStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
-        _ = builder;
-        todo!();
+        let result = self.expression.compile(builder);
+        let register = result.to_register(builder);
+        builder.associate_register_to_local(register, self.name.value());
     }
 }
 

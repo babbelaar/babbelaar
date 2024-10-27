@@ -11,3 +11,4 @@ log = "0.4"
 
 [dev-dependencies]
 rstest = "0.22"
+region = "3"

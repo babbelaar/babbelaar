@@ -68,6 +68,12 @@ impl Program {
     pub(crate) fn functions_mut(&mut self) -> &mut [Function] {
         &mut self.functions
     }
+
+    #[must_use]
+    pub fn function_by_name(&self, name: impl Into<BabString>) -> Option<&Function> {
+        let index = self.function_index_by_symbol(&name.into())?;
+        Some(&self.functions[index])
+    }
 }
 
 impl Display for Program {
