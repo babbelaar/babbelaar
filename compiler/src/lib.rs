@@ -1,12 +1,18 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+mod backend;
 mod compiler;
 mod interpreter;
 mod ir;
 mod optimization;
 
 pub use self::{
+    backend::{
+        AArch64CodeGenerator,
+        CompiledFunction,
+        CompiledObject,
+    },
     compiler::Compiler,
     interpreter::Interpreter,
     ir::{
