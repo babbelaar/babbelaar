@@ -13,16 +13,24 @@ pub struct DeadStoreEliminator {
 
 impl FunctionOptimizer for DeadStoreEliminator {
     fn optimize(&mut self, function: &mut Function) {
-        self.analyze_instructions(function.instructions());
+        loop {
+            *self = Self::default();
 
-        // The instructions that are still in the map are unused, as they would've been removed by a read.
-        for value in self.writing_instructions_per_register.values() {
-            self.instructions_to_remove.push(*value);
-        }
+            self.analyze_instructions(function.instructions());
 
-        self.instructions_to_remove.sort();
-        for removal_index in self.instructions_to_remove.iter().rev() {
-            function.instructions.remove(*removal_index);
+            // The instructions that are still in the map are unused, as they would've been removed by a read.
+            for value in self.writing_instructions_per_register.values() {
+                self.instructions_to_remove.push(*value);
+            }
+
+            if self.instructions_to_remove.is_empty() {
+                break;
+            }
+
+            self.instructions_to_remove.sort();
+            for removal_index in self.instructions_to_remove.iter().rev() {
+                function.instructions.remove(*removal_index);
+            }
         }
     }
 }
@@ -110,6 +118,36 @@ impl DeadStoreEliminator {
                 Instruction::Return { value_reg } => {
                     if let Some(return_value) = value_reg {
                         self.notice_read(return_value);
+                    }
+                }
+
+                Instruction::StackAlloc { dst, size } => {
+                    self.notice_write(dst, index);
+                    _ = size;
+                }
+
+                Instruction::LoadPtr { destination, base_ptr, offset, typ: size } => {
+                    _ = size;
+
+                    self.notice_write(destination, index);
+                    self.notice_read(base_ptr);
+
+                    if let Operand::Register(offset) = offset {
+                        self.notice_read(offset);
+                    }
+                }
+
+                Instruction::StorePtr { base_ptr, offset, value, typ: size } => {
+                    _ = size;
+
+                    self.notice_write(base_ptr, index);
+
+                    if let Operand::Register(offset) = offset {
+                        self.notice_read(offset);
+                    }
+
+                    if let Operand::Register(value) = value {
+                        self.notice_read(value);
                     }
                 }
             }

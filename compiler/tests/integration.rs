@@ -69,3 +69,24 @@ fn function_with_for_statement() {
 
     assert_eq!(value.map(|x| x.as_i64()), Some(100));
 }
+
+#[test]
+fn structure_and_using_function() {
+    let value = compile_and_interpret("
+    structuur Nummertjes {
+        veld geboortejaar: g32,
+        veld huidigJaar: g32,
+    }
+
+    werkwijze gebruik_nummertjes() -> g32 {
+        stel nummertjes = nieuw Nummertjes {
+            geboortejaar: 1980,
+            huidigJaar: 2024,
+        };
+
+        bekeer nummertjes.huidigJaar - nummertjes.geboortejaar;
+    }
+    ", "gebruik_nummertjes");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(44));
+}

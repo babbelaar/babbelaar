@@ -5,6 +5,7 @@ mod backend;
 mod compiler;
 mod interpreter;
 mod ir;
+mod memory;
 mod optimization;
 
 pub use self::{
@@ -24,11 +25,16 @@ pub use self::{
         Label,
         MathOperation,
         Operand,
+        PrimitiveType,
         Program,
         ProgramBuilder,
         Register,
-        Structure,
-        StructureBuilder,
+    },
+    memory::{
+        FieldLayout,
+        StructureLayout,
+        TypeId,
+        TypeManager,
     },
     optimization::{
         FunctionOptimizer,

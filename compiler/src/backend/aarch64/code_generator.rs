@@ -108,6 +108,26 @@ impl AArch64CodeGenerator {
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
                 }
             }
+
+            Instruction::StackAlloc { dst, size } => {
+                _ = dst;
+                _ = size;
+                todo!()
+            }
+
+            Instruction::LoadPtr { destination, base_ptr, offset, typ } => {
+                _ = destination;
+                _ = base_ptr;
+                _ = offset;
+                _ = typ;
+            }
+
+            Instruction::StorePtr { base_ptr, offset, value, typ } => {
+                _ = base_ptr;
+                _ = offset;
+                _ = value;
+                _ = typ;
+            }
         }
     }
 

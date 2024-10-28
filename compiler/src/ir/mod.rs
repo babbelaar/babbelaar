@@ -7,8 +7,6 @@ mod instruction;
 mod operand;
 mod program;
 mod program_builder;
-mod structure;
-mod structure_builder;
 
 pub use self::{
     function::Function,
@@ -18,6 +16,7 @@ pub use self::{
         JumpCondition,
         Label,
         MathOperation,
+        PrimitiveType,
     },
     operand::{
         Immediate,
@@ -27,6 +26,4 @@ pub use self::{
     },
     program::Program,
     program_builder::ProgramBuilder,
-    structure::Structure,
-    structure_builder::StructureBuilder,
 };

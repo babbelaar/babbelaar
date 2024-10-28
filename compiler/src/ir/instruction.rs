@@ -95,6 +95,29 @@ pub enum Instruction {
         lhs: Operand,
         rhs: Operand,
     },
+
+    //
+    // Stack Allocation
+    //
+
+    StackAlloc {
+        dst: Register,
+        size: usize,
+    },
+
+    LoadPtr {
+        destination: Register,
+        base_ptr: Register,
+        offset: Operand,
+        typ: PrimitiveType,
+    },
+
+    StorePtr {
+        base_ptr: Register,
+        offset: Operand,
+        value: Operand,
+        typ: PrimitiveType,
+    },
 }
 
 impl Display for Instruction {
@@ -175,6 +198,18 @@ impl Display for Instruction {
 
                 Ok(())
             }
+
+            Instruction::StackAlloc { dst, size } => {
+                f.write_fmt(format_args!("StapelAllocatie {dst}, #{size}"))
+            }
+
+            Instruction::LoadPtr { destination, base_ptr, offset, typ } => {
+                f.write_fmt(format_args!("HaalOp {destination}, {base_ptr} + {offset} ({typ} bytes)"))
+            }
+
+            Instruction::StorePtr { base_ptr, offset, value, typ } => {
+                f.write_fmt(format_args!("SlaOp {base_ptr} + {offset}, {value} ({typ} bytes)"))
+            }
         }
     }
 }
@@ -239,5 +274,37 @@ impl MathOperation {
 impl Display for MathOperation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.name().fmt(f)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PrimitiveType {
+    signed: bool,
+    bytes: usize,
+}
+
+impl PrimitiveType {
+    #[must_use]
+    pub fn new(bytes: usize, signed: bool) -> Self {
+        Self {
+            signed,
+            bytes,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_signed(&self) -> bool {
+        self.signed
+    }
+
+    #[must_use]
+    pub const fn bytes(&self) -> usize {
+        self.bytes
+    }
+}
+
+impl Display for PrimitiveType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
     }
 }
