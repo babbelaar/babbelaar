@@ -95,6 +95,27 @@ impl FunctionOptimizer for RegisterInliner {
                 Instruction::Return { .. } => {
 
                 }
+
+                Instruction::StackAlloc { dst, size } => {
+                    _ = size;
+                    self.values.remove(dst);
+                }
+
+                Instruction::LoadPtr { destination, base_ptr, offset, typ: size } => {
+                    self.values.remove(destination);
+                    // TODO: add known values
+                    _ = base_ptr;
+                    _ = offset;
+                    _ = size;
+                }
+
+                Instruction::StorePtr { base_ptr, offset, value, typ: size } => {
+                    self.values.remove(base_ptr);
+                    // TODO: add known values
+                    _ = offset;
+                    _ = value;
+                    _ = size;
+                }
             }
         }
     }

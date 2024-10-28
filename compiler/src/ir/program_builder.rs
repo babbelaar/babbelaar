@@ -3,13 +3,16 @@
 
 use std::collections::HashMap;
 
-use babbelaar::BabString;
+use babbelaar::{BabString, Structure};
+
+use crate::TypeManager;
 
 use super::{FunctionBuilder, Program, RegisterAllocator};
 
 #[derive(Debug)]
 pub struct ProgramBuilder {
-    program: Program,
+    pub(super) program: Program,
+    pub(super) type_manager: TypeManager,
 }
 
 impl ProgramBuilder {
@@ -17,6 +20,7 @@ impl ProgramBuilder {
     pub fn new() -> Self {
         Self {
             program: Program::new(),
+            type_manager: TypeManager::new(),
         }
     }
 
@@ -25,7 +29,7 @@ impl ProgramBuilder {
 
         let mut builder = FunctionBuilder {
             name: name.clone(),
-            program: &mut self.program,
+            program_builder: self,
             register_allocator: RegisterAllocator::new(),
             argument_registers: Vec::new(),
             instructions: Vec::new(),
@@ -44,5 +48,9 @@ impl ProgramBuilder {
     #[must_use]
     pub fn build(self) -> Program {
         self.program
+    }
+
+    pub fn add_structure(&mut self, structure: &Structure)  {
+        self.type_manager.add_structure(structure);
     }
 }

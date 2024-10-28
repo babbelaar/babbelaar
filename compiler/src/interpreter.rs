@@ -215,6 +215,89 @@ impl Interpreter {
                 self.frame().registers.insert(destination, value);
                 OperationResult::Continue
             }
+
+            Instruction::StackAlloc { dst, size } => {
+                self.frame().stack.extend(std::iter::repeat_n(0, size));
+
+                let ptr = self.frame().stack.as_ptr() as i64 - size as i64;
+                self.frame().registers.insert(dst, Immediate::Integer64(ptr));
+
+                OperationResult::Continue
+            }
+
+            Instruction::LoadPtr { destination, base_ptr, offset, typ } => {
+                let base_ptr = self.register(&base_ptr).as_i64();
+                let offset = self.operand_to_immediate(&offset).as_i64();
+
+                match typ.bytes() {
+                    1 => {
+                        let ptr = (base_ptr + offset) as *const i8;
+                        let value = unsafe { ptr.read() } as i8;
+
+                        self.frame().registers.insert(destination, Immediate::Integer8(value));
+                    }
+
+                    2 => {
+                        let ptr = (base_ptr + offset) as *const i16;
+                        let value = unsafe { ptr.read() } as i16;
+
+                        self.frame().registers.insert(destination, Immediate::Integer16(value));
+                    }
+
+                    4 => {
+                        let ptr = (base_ptr + offset) as *const i32;
+                        let value = unsafe { ptr.read() } as i32;
+
+                        self.frame().registers.insert(destination, Immediate::Integer32(value));
+                    }
+
+                    8 => {
+                        let ptr = (base_ptr + offset) as *const i64;
+                        let value = unsafe { ptr.read() } as i64;
+
+                        self.frame().registers.insert(destination, Immediate::Integer64(value));
+                    }
+
+                    _ => todo!("Primitieve grootten van {} bytes zijn niet ondersteund!", typ.bytes())
+                }
+
+                OperationResult::Continue
+            }
+
+            Instruction::StorePtr { base_ptr, offset, value, typ } => {
+                let base_ptr = self.register(&base_ptr).as_i64();
+                let offset = self.operand_to_immediate(&offset).as_i64();
+
+                match typ.bytes() {
+                    1 => {
+                        let ptr = (base_ptr + offset) as *mut i8;
+                        let value = self.operand_to_immediate(&value).as_i8();
+                        unsafe { ptr.write(value as _) };
+                    }
+
+                    2 => {
+                        let ptr = (base_ptr + offset) as *mut i16;
+                        let value = self.operand_to_immediate(&value).as_i16();
+                        unsafe { ptr.write(value as _) };
+                    }
+
+                    4 => {
+                        let ptr = (base_ptr + offset) as *mut i32;
+                        let value = self.operand_to_immediate(&value).as_i32();
+                        unsafe { ptr.write(value as _) };
+                    }
+
+                    8 => {
+                        let ptr = (base_ptr + offset) as *mut i64;
+                        let value = self.operand_to_immediate(&value).as_i64();
+                        unsafe { ptr.write(value as _) };
+                    }
+
+                    _ => todo!("Primitieve grootten van {} bytes zijn niet ondersteund!", typ.bytes())
+                }
+
+                OperationResult::Continue
+            }
         }
     }
 
@@ -226,6 +309,7 @@ impl Interpreter {
 struct StackFrame {
     registers: HashMap<Register, Immediate>,
     program_counter: usize,
+    stack: Vec<u8>,
 }
 
 impl StackFrame {
@@ -234,6 +318,7 @@ impl StackFrame {
         Self {
             registers: HashMap::new(),
             program_counter: 0,
+            stack: Vec::new(),
         }
     }
 }

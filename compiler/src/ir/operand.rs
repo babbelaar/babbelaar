@@ -13,6 +13,36 @@ pub enum Immediate {
 
 impl Immediate {
     #[must_use]
+    pub const fn as_i8(&self) -> i8 {
+        match self {
+            Self::Integer8(i) => *i,
+            Self::Integer16(i) => *i as i8,
+            Self::Integer32(i) => *i as i8,
+            Self::Integer64(i) => *i as i8,
+        }
+    }
+
+    #[must_use]
+    pub const fn as_i16(&self) -> i16 {
+        match self {
+            Self::Integer8(i) => *i as i16,
+            Self::Integer16(i) => *i,
+            Self::Integer32(i) => *i as i16,
+            Self::Integer64(i) => *i as i16,
+        }
+    }
+
+    #[must_use]
+    pub const fn as_i32(&self) -> i32 {
+        match self {
+            Self::Integer8(i) => *i as i32,
+            Self::Integer16(i) => *i as i32,
+            Self::Integer32(i) => *i,
+            Self::Integer64(i) => *i as i32,
+        }
+    }
+
+    #[must_use]
     pub const fn as_i64(&self) -> i64 {
         match self {
             Self::Integer8(i) => *i as i64,

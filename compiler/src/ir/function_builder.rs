@@ -5,16 +5,18 @@ use std::collections::HashMap;
 
 use babbelaar::BabString;
 
-use super::{Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Program, Register, RegisterAllocator};
+use crate::{StructureLayout, TypeId};
+
+use super::{Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, PrimitiveType, ProgramBuilder, Register, RegisterAllocator};
 
 #[derive(Debug)]
 pub struct FunctionBuilder<'program> {
-    pub(super) program: &'program mut Program,
+    pub(super) program_builder: &'program mut ProgramBuilder,
     pub(super) name: BabString,
     pub(super) register_allocator: RegisterAllocator,
     pub(super) argument_registers: Vec<Register>,
     pub(super) instructions: Vec<Instruction>,
-    pub(super) locals: HashMap<BabString, Register>,
+    pub(super) locals: HashMap<BabString, FunctionLocal>,
     pub(super) label_counter: usize,
     pub(crate) label_names: HashMap<Label, BabString>,
     pub(super) label_positions: HashMap<Label, usize>,
@@ -90,31 +92,36 @@ impl<'program> FunctionBuilder<'program> {
         destination_reg
     }
 
-    pub fn associate_register_to_local(&mut self, register: Register, local_name: impl Into<BabString>) {
+    pub fn associate_register_to_local(&mut self, register: Register, local_name: impl Into<BabString>, type_id: TypeId) {
         let local_name = local_name.into();
 
         debug_assert_eq!(self.locals.get(&local_name), None, "Lokale had al een waarde!");
 
-        self.locals.insert(local_name, register);
+        self.locals.insert(local_name, FunctionLocal {
+            register,
+            type_id,
+        });
     }
 
     #[must_use]
     pub fn load_string(&mut self, string: &str) -> Register {
-        let immediate = self.program.add_string(string);
+        let immediate = self.program_builder.program.add_string(string);
         self.load_immediate(immediate)
     }
 
     #[must_use]
-    pub fn load_local(&mut self, name: &BabString) -> Register {
-        let source_reg = *self.locals.get(name).expect("Local name is not valid");
+    pub fn load_local(&mut self, name: &BabString) -> (TypeId, Register) {
+        let src = *self.locals.get(name).expect("Local name is not valid");
+
+        let source = src.register;
         let reg = self.register_allocator.next();
 
         self.instructions.push(Instruction::Move {
-            source: source_reg,
+            source,
             destination: reg,
         });
 
-        reg
+        (src.type_id, reg)
     }
 
     #[must_use]
@@ -179,6 +186,51 @@ impl<'program> FunctionBuilder<'program> {
             label_names: self.label_names,
         }
     }
+
+    /// Allocate a structure on the stack, and returns a Register containing the pointer to
+    /// the start of that block.
+    #[must_use]
+    pub fn allocate_structure(&mut self, name: &BabString) -> (&StructureLayout, Register) {
+        let layout = self.program_builder.type_manager.layout_of(name);
+        let size = layout.size();
+
+        let dst = self.register_allocator.next();
+
+        self.instructions.push(Instruction::StackAlloc {
+            dst,
+            size,
+        });
+
+        (layout, dst)
+    }
+
+    /// Stores a value at the `base_ptr` offset by `offset`.
+    pub fn store_ptr(&mut self, base_ptr: Register, offset: Operand, value: impl Into<Operand>, typ: PrimitiveType) {
+        self.instructions.push(Instruction::StorePtr {
+            base_ptr,
+            offset,
+            value: value.into(),
+            typ,
+        });
+    }
+
+    #[must_use]
+    pub fn load_ptr(&mut self, base_ptr: Register, offset: impl Into<Operand>, typ: PrimitiveType) -> Register {
+        let destination = self.register_allocator.next();
+
+        self.instructions.push(Instruction::LoadPtr {
+            destination,
+            base_ptr,
+            offset: offset.into(),
+            typ,
+        });
+
+        destination
+    }
+
+    pub fn layout_of(&self, ty: TypeId) -> &StructureLayout {
+        self.program_builder.type_manager.layout(ty)
+    }
 }
 
 #[cfg(test)]
@@ -196,4 +248,10 @@ mod tests {
             });
     }
 
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FunctionLocal {
+    register: Register,
+    type_id: TypeId,
 }

@@ -4,9 +4,11 @@
 //! The compiler class takes a [`ParseTree`] as input, turns it into IR, runs
 //! the optimizer, and generates machine code.
 
+use std::rc::Rc;
+
 use babbelaar::*;
 
-use crate::{optimize_program, FunctionBuilder, Immediate, MathOperation, Operand, Program, ProgramBuilder, Register};
+use crate::{optimize_program, FunctionBuilder, Immediate, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId};
 
 pub struct Compiler {
     program_builder: ProgramBuilder,
@@ -20,6 +22,21 @@ impl Compiler {
     }
 
     pub fn compile_trees(&mut self, trees: &[ParseTree]) {
+        self.layout_structures(trees);
+        self.compile_functions(trees);
+    }
+
+    fn layout_structures(&mut self, trees: &[ParseTree]) {
+        for statement in trees.iter().flat_map(|t| t.structures()) {
+            let StatementKind::Structure(structure) = &statement.kind else {
+                panic!();
+            };
+
+            self.program_builder.add_structure(structure);
+        }
+    }
+
+    fn compile_functions(&mut self, trees: &[ParseTree]) {
         for statement in trees.iter().flat_map(|t| t.functions()) {
             let StatementKind::Function(func) = &statement.kind else {
                 panic!();
@@ -91,7 +108,7 @@ impl CompileStatement for Statement {
             }
 
             StatementKind::Structure(statement) => {
-                statement.compile(builder);
+                _ = statement;
             }
 
             StatementKind::Variable(statement) => {
@@ -133,10 +150,11 @@ impl CompileStatement for ForStatement {
             }
 
             ForIterableKind::Range(range) => {
-                let current_value = range.start.compile(builder).to_register(builder);
-                builder.associate_register_to_local(current_value, self.iterator_name.value());
+                let (current_value, ty) = range.start.compile(builder).to_readable_and_type(builder);
 
-                let end = range.end.compile(builder).to_register(builder);
+                builder.associate_register_to_local(current_value, self.iterator_name.value(), ty);
+
+                let end = range.end.compile(builder).to_readable(builder);
 
                 builder.compare(current_value, end);
                 builder.jump_if_greater_or_equal(after);
@@ -200,7 +218,7 @@ impl CompileStatement for ReturnStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
         match &self.expression {
             Some(expression) => {
-                let register = expression.compile(builder).to_register(builder);
+                let register = expression.compile(builder).to_readable(builder);
                 builder.ret_with(register);
             }
 
@@ -211,18 +229,10 @@ impl CompileStatement for ReturnStatement {
     }
 }
 
-impl CompileStatement for Structure {
-    fn compile(&self, builder: &mut FunctionBuilder) {
-        _ = builder;
-        todo!();
-    }
-}
-
 impl CompileStatement for VariableStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
-        let result = self.expression.compile(builder);
-        let register = result.to_register(builder);
-        builder.associate_register_to_local(register, self.name.value());
+        let (register, ty) = self.expression.compile(builder).to_readable_and_type(builder);
+        builder.associate_register_to_local(register, self.name.value(), ty);
     }
 }
 
@@ -254,8 +264,8 @@ impl CompileExpression for Expression {
 
 impl CompileExpression for BiExpression {
     fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
-        let lhs = self.lhs.compile(builder).to_register(builder);
-        let rhs = self.rhs.compile(builder).to_register(builder);
+        let lhs = self.lhs.compile(builder).to_readable(builder);
+        let rhs = self.rhs.compile(builder).to_readable(builder);
 
         match self.operator.value() {
             BiOperator::Math(math) => {
@@ -272,7 +282,7 @@ impl CompileExpression for BiExpression {
 
             BiOperator::Comparison(comparison) => {
                 builder.compare(lhs, rhs);
-                ExpressionResult::Comparison(*comparison)
+                comparison.into()
             }
         }
     }
@@ -290,8 +300,14 @@ impl CompileExpression for PostfixExpression {
             }
 
             PostfixExpressionKind::Member(member) => {
-                _ = member;
-                todo!()
+                let (base_ptr, ty) = lhs.to_readable_and_type(builder);
+
+                let field = builder.layout_of(ty).field(&member);
+                let offset = field.offset() as isize;
+                let field_type = field.type_id();
+                let primitive_typ = field.primitive_type();
+
+                ExpressionResult::pointer(base_ptr, offset, field_type, primitive_typ)
             }
 
             PostfixExpressionKind::MethodCall(call) => {
@@ -358,8 +374,40 @@ impl CompileExpression for PrimaryExpression {
 
 impl CompileExpression for StructureInstantiationExpression {
     fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
-        _ = builder;
-        todo!()
+        let (layout, register) = builder.allocate_structure(self.name.value());
+
+        let ty = layout.type_id().clone();
+
+        let default_values: Vec<(usize, PrimitiveType, Rc<Expression>)> = layout
+            .fields()
+            .iter()
+            .filter_map(|field| {
+                let offset = field.offset();
+                let typ = field.primitive_type();
+                let default_value_expression = Rc::clone(field.default_value_expression()?);
+                Some((offset, typ, default_value_expression))
+            })
+            .collect();
+
+        let fields: Vec<(usize, PrimitiveType, &FieldInstantiation)> = self.fields
+            .iter()
+            .map(|field| {
+                let layout = layout.field(&field.name);
+                (layout.offset(), layout.primitive_type(), field)
+            })
+            .collect();
+
+        for (offset, typ, expression) in default_values {
+            let value = expression.compile(builder).to_readable(builder);
+            builder.store_ptr(register, Operand::Immediate(Immediate::Integer64(offset as _)), value, typ);
+        }
+
+        for (offset, typ,field) in fields {
+            let value = field.value.compile(builder).to_readable(builder);
+            builder.store_ptr(register, Operand::Immediate(Immediate::Integer64(offset as _)), value, typ);
+        }
+
+        ExpressionResult::typed(register, ty)
     }
 }
 
@@ -370,13 +418,95 @@ impl CompileExpression for UnaryExpression {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum ExpressionResult {
-    Comparison(Comparison),
-    Register(Register),
+#[derive(Debug, Clone)]
+struct ExpressionResult {
+    kind: ExpressionResultKind,
+    type_id: TypeId,
 }
 
 impl ExpressionResult {
+    #[must_use]
+    pub fn typed(register: Register, type_id: TypeId) -> Self {
+        Self {
+            kind: ExpressionResultKind::Register(register),
+            type_id,
+        }
+    }
+
+    #[must_use]
+    pub fn pointer(base_ptr: Register, offset: isize, type_id: TypeId, typ: PrimitiveType) -> Self {
+        Self {
+            kind: ExpressionResultKind::PointerRegister { base_ptr, offset, typ },
+            type_id,
+        }
+    }
+
+    #[must_use]
+    pub fn to_comparison(self, builder: &mut FunctionBuilder) -> Comparison {
+        self.kind.to_comparison(builder)
+    }
+
+    #[must_use]
+    pub fn to_readable(self, builder: &mut FunctionBuilder) -> Register {
+        self.kind.to_readable(builder)
+    }
+
+    #[must_use]
+    pub fn to_readable_and_type(self, builder: &mut FunctionBuilder) -> (Register, TypeId) {
+        (self.kind.to_readable(builder), self.type_id)
+    }
+}
+
+impl From<Comparison> for ExpressionResult {
+    fn from(value: Comparison) -> Self {
+        Self {
+            kind: ExpressionResultKind::Comparison(value),
+            type_id: TypeId::G32,
+        }
+    }
+}
+
+impl From<&Comparison> for ExpressionResult {
+    fn from(value: &Comparison) -> Self {
+        Self {
+            kind: ExpressionResultKind::Comparison(*value),
+            type_id: TypeId::G32,
+        }
+    }
+}
+
+impl From<Register> for ExpressionResult {
+    fn from(value: Register) -> Self {
+        Self {
+            kind: ExpressionResultKind::Register(value),
+            type_id: TypeId::G32,
+        }
+    }
+}
+
+impl From<&Register> for ExpressionResult {
+    fn from(value: &Register) -> Self {
+        Self {
+            kind: ExpressionResultKind::Register(*value),
+            type_id: TypeId::G32,
+        }
+    }
+}
+
+impl From<(TypeId, Register)> for ExpressionResult {
+    fn from(value: (TypeId, Register)) -> Self {
+        Self::typed(value.1, value.0)
+    }
+}
+
+#[derive(Debug, Clone)]
+enum ExpressionResultKind {
+    Comparison(Comparison),
+    Register(Register),
+    PointerRegister { base_ptr: Register, offset: isize, typ: PrimitiveType },
+}
+
+impl ExpressionResultKind {
     #[must_use]
     fn to_comparison(self, builder: &mut FunctionBuilder<'_>) -> Comparison {
         match self {
@@ -386,11 +516,17 @@ impl ExpressionResult {
                 builder.compare(register, Operand::Immediate(Immediate::Integer64(0)));
                 Comparison::Inequality
             }
+            Self::PointerRegister { base_ptr, offset, typ } => {
+                // if the value is a register, we want to branch/jump when the value isn't 0 (false)
+                let register = builder.load_ptr(base_ptr, Immediate::Integer64(offset as _), typ);
+                builder.compare(register, Operand::Immediate(Immediate::Integer64(0)));
+                Comparison::Inequality
+            }
         }
     }
 
     #[must_use]
-    fn to_register(self, builder: &mut FunctionBuilder<'_>) -> Register {
+    fn to_readable(self, builder: &mut FunctionBuilder<'_>) -> Register {
         match self {
             Self::Comparison(..) => {
                 _ = builder; // Use the builder to load the comparison flags (NZCV / FLAGS) to a register, somehow
@@ -398,12 +534,10 @@ impl ExpressionResult {
             }
 
             Self::Register(reg) => reg,
-        }
-    }
-}
 
-impl From<Register> for ExpressionResult {
-    fn from(value: Register) -> Self {
-        Self::Register(value)
+            Self::PointerRegister { base_ptr, offset, typ } => {
+                builder.load_ptr(base_ptr, Immediate::Integer64(offset as _), typ)
+            }
+        }
     }
 }
