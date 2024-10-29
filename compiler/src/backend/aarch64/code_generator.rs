@@ -5,19 +5,25 @@ use std::collections::HashMap;
 
 use crate::{CompiledFunction, Function, Instruction, Label, MathOperation, Operand, Register};
 
-use super::{ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2};
+use super::{ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode};
+
+const SPACE_NEEDED_FOR_FP_AND_LR: usize = 2 * 8;
 
 #[derive(Debug, Clone, Default)]
 pub struct AArch64CodeGenerator {
     instructions: Vec<ArmInstruction>,
     label_offsets: HashMap<Label, usize>,
     simple_register_strategy: HashMap<Register, ArmRegister>,
+    stack_size: usize,
+    space_used_on_stack: usize,
 }
 
 impl AArch64CodeGenerator {
     #[must_use]
     pub fn compile(function: &Function) -> CompiledFunction {
         let mut this = Self::default();
+
+        this.add_prologue(function.instructions());
 
         for instruction in function.instructions() {
             this.add_instruction(instruction);
@@ -91,6 +97,8 @@ impl AArch64CodeGenerator {
             }
 
             Instruction::Return { value_reg } => {
+                self.add_epilogue();
+
                 if let Some(value_reg) = value_reg {
                     let value_reg = self.allocate_register(value_reg);
                     if value_reg != ArmRegister::X0 {
@@ -110,23 +118,67 @@ impl AArch64CodeGenerator {
             }
 
             Instruction::StackAlloc { dst, size } => {
-                _ = dst;
-                _ = size;
-                todo!()
+                let dst = self.allocate_register(dst);
+
+                self.instructions.push(ArmInstruction::AddImmediate {
+                    dst,
+                    src: ArmRegister::SP,
+                    imm12: self.space_used_on_stack as _,
+                    shift: false,
+                });
+
+                self.space_used_on_stack += size;
+                debug_assert!(self.space_used_on_stack <= self.stack_size);
             }
 
             Instruction::LoadPtr { destination, base_ptr, offset, typ } => {
-                _ = destination;
-                _ = base_ptr;
-                _ = offset;
-                _ = typ;
+                let is_64_bit = match typ.bytes() {
+                    4 => false,
+                    8 => true,
+                    _ => todo!("We ondersteunen alleen 4 en 8 byte Laad ARM-instructies")
+                };
+
+                let Operand::Immediate(offset) = offset else {
+                    todo!("ondersteun register offset {offset}")
+                };
+
+                let dst = self.allocate_register(destination);
+                let base_ptr = self.allocate_register(base_ptr);
+
+                self.instructions.push(ArmInstruction::LdrImmediate {
+                    is_64_bit,
+                    mode: ArmUnsignedAddressingMode::UnsignedOffset,
+                    dst,
+                    base_ptr,
+                    offset: offset.as_i16(),
+                });
             }
 
             Instruction::StorePtr { base_ptr, offset, value, typ } => {
-                _ = base_ptr;
-                _ = offset;
-                _ = value;
-                _ = typ;
+                let is_64_bit = match typ.bytes() {
+                    4 => false,
+                    8 => true,
+                    _ => todo!("We ondersteunen alleen 4 en 8 byte Laad ARM-instructies")
+                };
+
+                let Operand::Immediate(offset) = offset else {
+                    todo!("ondersteun register offset {offset}")
+                };
+
+                let base_ptr = self.allocate_register(base_ptr);
+
+                let Operand::Register(src) = value else {
+                    todo!("Ondersteun immediate SlaOp-instructie");
+                };
+                let src = self.allocate_register(src);
+
+                self.instructions.push(ArmInstruction::StrImmediate {
+                    is_64_bit,
+                    mode: ArmUnsignedAddressingMode::UnsignedOffset,
+                    src,
+                    base_ptr,
+                    offset: offset.as_i16(),
+                });
             }
         }
     }
@@ -190,17 +242,63 @@ impl AArch64CodeGenerator {
         }
     }
 
-    fn add_instruction_sub(&self, dst: ArmRegister, lhs: &Operand, rhs: &Operand) {
-        _ = dst;
-        _ = lhs;
-        _ = rhs;
-        todo!("ondersteun SUB")
+    fn add_instruction_sub(&mut self, dst: ArmRegister, lhs: &Operand, rhs: &Operand) {
+        match (lhs, rhs) {
+            (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
+                let imm16 = lhs.as_i64() + rhs.as_i64();
+                debug_assert!(imm16 < (1 << 16));
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: dst,
+                    imm16: imm16 as _,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Register(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+                let rhs = self.allocate_register(rhs);
+                self.instructions.push(ArmInstruction::SubRegister {
+                    is_64_bit: true,
+                    dst,
+                    lhs,
+                    rhs,
+                    shift: 0,
+                    shift_mode: ArmShift2::default(),
+                });
+            }
+
+            (Operand::Immediate(lhs), Operand::Register(rhs)) => {
+                let src = self.allocate_register(rhs);
+
+                let imm12 = (-lhs.as_i64()) as _;
+                debug_assert!(imm12 < (1 << 12));
+
+                self.instructions.push(ArmInstruction::AddImmediate {
+                    dst,
+                    src,
+                    imm12,
+                    shift: false,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+                let rhs_imm12 = rhs.as_i64() as _;
+                debug_assert!(rhs_imm12 < (1 << 12));
+                self.instructions.push(ArmInstruction::SubImmediate {
+                    dst,
+                    lhs,
+                    rhs_imm12,
+                });
+            }
+        }
     }
 
     /// TODO: this is just a really basic register allocator
     #[must_use]
     fn allocate_register(&mut self, register: &Register) -> ArmRegister {
         let number = self.simple_register_strategy.len() as _;
+        debug_assert!(number < 13, "Regular General-purpose Registers exhausted");
+
         let next_register = ArmRegister { number };
 
         *self.simple_register_strategy.entry(*register)
@@ -230,5 +328,56 @@ impl AArch64CodeGenerator {
             })
             .flat_map(u32::to_ne_bytes)
             .collect()
+    }
+
+    fn add_prologue(&mut self, instructions: &[Instruction]) {
+        // begin with space for Frame Pointer and Link Register
+        self.stack_size = SPACE_NEEDED_FOR_FP_AND_LR;
+
+        // ignoring possible optimizations, count up the needed stack size when the StackAlloc instruction is used.
+        for instruction in instructions {
+            if let Instruction::StackAlloc { dst, size } = instruction {
+                _ = dst; // we don't encode this here
+                self.stack_size += size;
+            }
+        }
+
+        // ensure the stack is 16-byte aligned
+        self.stack_size = self.stack_size.next_multiple_of(16);
+
+        assert!(self.stack_size < (1 << 12));
+
+        self.instructions.push(ArmInstruction::SubImmediate {
+            dst: ArmRegister::SP,
+            lhs: ArmRegister::SP,
+            rhs_imm12: self.stack_size as _,
+        });
+
+        self.instructions.push(ArmInstruction::Stp {
+            is_64_bit: true,
+            mode: ArmSignedAddressingMode::SignedOffset,
+            dst: ArmRegister::SP,
+            offset: (self.stack_size - SPACE_NEEDED_FOR_FP_AND_LR) as _,
+            first: ArmRegister::FP,
+            second: ArmRegister::LR,
+        });
+    }
+
+    fn add_epilogue(&mut self) {
+        self.instructions.push(ArmInstruction::Ldp {
+            is_64_bit: true,
+            mode: ArmSignedAddressingMode::SignedOffset,
+            src: ArmRegister::SP,
+            offset: (self.stack_size - SPACE_NEEDED_FOR_FP_AND_LR) as _,
+            first: ArmRegister::FP,
+            second: ArmRegister::LR,
+        });
+
+        self.instructions.push(ArmInstruction::AddImmediate {
+            dst: ArmRegister::SP,
+            src: ArmRegister::SP,
+            imm12: self.stack_size as _,
+            shift: false,
+        });
     }
 }
