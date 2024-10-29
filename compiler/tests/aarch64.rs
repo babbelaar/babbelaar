@@ -10,6 +10,7 @@ use core::slice;
 
 use babbelaar::parse_string_to_tree;
 use babbelaar_compiler::{AArch64CodeGenerator, Compiler};
+use signal_hook::{consts::SIGBUS, iterator::Signals};
 
 #[test]
 fn function_that_returns_0() {
@@ -76,6 +77,26 @@ fn function_with_for_statement() {
     assert_eq!(value, 100);
 }
 
+#[test]
+fn structure_and_using_function() {
+    let value = compile_and_execute("gebruik_nummertjes", "
+    structuur Nummertjes {
+        veld geboortejaar: g32,
+        veld huidigJaar: g32,
+    }
+
+    werkwijze gebruik_nummertjes() -> g32 {
+        stel nummertjes = nieuw Nummertjes {
+            geboortejaar: 1980,
+            huidigJaar: 2024,
+        };
+
+        bekeer nummertjes.huidigJaar - nummertjes.geboortejaar;
+    }
+    ");
+
+    assert_eq!(value, 44);
+}
 
 //
 //
@@ -97,6 +118,15 @@ fn compile_and_execute(function: &'static str, code: &str) -> isize {
 
     let byte_code = function.byte_code();
     let region = allocate_executable_region(byte_code);
+
+    let mut signals = Signals::new(&[SIGBUS]).unwrap();
+
+    std::thread::spawn(move || {
+        for sig in signals.forever() {
+            println!("Received signal {:?}", sig);
+        }
+    });
+
     execute_code(&region)
 }
 

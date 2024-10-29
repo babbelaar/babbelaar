@@ -10,12 +10,30 @@ pub struct ArmRegister {
 
 impl ArmRegister {
     pub const X0: Self = Self { number: 0 };
+    pub const X8: Self = Self { number: 8 };
     pub const X30: Self = Self { number: 30 };
+
+    /// Frame Pointer
+    pub const FP: Self = Self { number: 29 };
+
+    /// Link Register
+    pub const LR: Self = Self { number: 30 };
+
+    /// Stack Pointer
+    pub const SP: Self = Self { number: 31 };
 }
 
 impl Display for ArmRegister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("x")?;
-        self.number.fmt(f)
+        match *self {
+            Self::FP => f.write_str("fp"),
+            Self::LR => f.write_str("lr"),
+            Self::SP => f.write_str("sp"),
+
+            _ => {
+                f.write_str("x")?;
+                self.number.fmt(f)
+            }
+        }
     }
 }
