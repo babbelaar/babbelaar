@@ -31,8 +31,8 @@ pub fn optimize_program(program: &mut Program) {
 }
 
 pub fn optimize_function(function: &mut Function) {
-    // run_optimization::<RegisterInliner>(function);
-    // run_optimization::<DeadStoreEliminator>(function);
+    run_optimization::<RegisterInliner>(function);
+    run_optimization::<DeadStoreEliminator>(function);
 }
 
 fn run_optimization<O: FunctionOptimizer>(function: &mut Function) {

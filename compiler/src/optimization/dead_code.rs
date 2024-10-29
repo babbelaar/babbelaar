@@ -40,6 +40,10 @@ impl DeadStoreEliminator {
         self.writing_instructions_per_register.remove(register);
     }
 
+    fn notice_non_removable_write(&mut self, register: &Register) {
+        self.writing_instructions_per_register.remove(register);
+    }
+
     fn notice_write(&mut self, register: &Register, index: usize) {
         // All instructions that simply load values to this register, and those aren't actually being read,
         // are useless, since we override that value now anyways.
@@ -140,7 +144,7 @@ impl DeadStoreEliminator {
                 Instruction::StorePtr { base_ptr, offset, value, typ: size } => {
                     _ = size;
 
-                    self.notice_write(base_ptr, index);
+                    self.notice_non_removable_write(base_ptr);
 
                     if let Operand::Register(offset) = offset {
                         self.notice_read(offset);
