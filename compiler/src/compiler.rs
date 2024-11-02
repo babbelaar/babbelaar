@@ -10,6 +10,7 @@ use babbelaar::*;
 
 use crate::{optimize_program, FunctionBuilder, Immediate, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId};
 
+#[derive(Debug)]
 pub struct Compiler {
     program_builder: ProgramBuilder,
 }

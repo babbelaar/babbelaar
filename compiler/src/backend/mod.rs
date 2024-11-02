@@ -5,6 +5,8 @@ mod aarch64;
 mod object;
 mod register_allocation;
 
+use crate::Function;
+
 pub use self::{
     aarch64::AArch64CodeGenerator,
     object::{
@@ -16,3 +18,8 @@ pub use self::{
         RegisterAllocator,
     }
 };
+
+pub trait CodeGenerator {
+    #[must_use]
+    fn compile(function: &Function) -> CompiledFunction;
+}
