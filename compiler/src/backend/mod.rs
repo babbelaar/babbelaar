@@ -3,6 +3,7 @@
 
 mod aarch64;
 mod object;
+mod register_allocation;
 
 pub use self::{
     aarch64::AArch64CodeGenerator,
@@ -10,4 +11,8 @@ pub use self::{
         CompiledFunction,
         CompiledObject,
     },
+    register_allocation::{
+        AllocatableRegister,
+        RegisterAllocator,
+    }
 };

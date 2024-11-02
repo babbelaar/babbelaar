@@ -3,17 +3,17 @@
 
 use std::collections::HashMap;
 
-use crate::{CompiledFunction, Function, Instruction, Label, MathOperation, Operand, Register};
+use crate::{backend::RegisterAllocator, CompiledFunction, Function, Instruction, Label, MathOperation, Operand, Register};
 
 use super::{ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode};
 
 const SPACE_NEEDED_FOR_FP_AND_LR: usize = 2 * 8;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct AArch64CodeGenerator {
     instructions: Vec<ArmInstruction>,
     label_offsets: HashMap<Label, usize>,
-    simple_register_strategy: HashMap<Register, ArmRegister>,
+    register_allocator: RegisterAllocator<ArmRegister>,
     stack_size: usize,
     space_used_on_stack: usize,
 }
@@ -21,7 +21,13 @@ pub struct AArch64CodeGenerator {
 impl AArch64CodeGenerator {
     #[must_use]
     pub fn compile(function: &Function) -> CompiledFunction {
-        let mut this = Self::default();
+        let mut this = Self {
+            instructions: Vec::new(),
+            label_offsets: HashMap::new(),
+            register_allocator: RegisterAllocator::new(function),
+            stack_size: 0,
+            space_used_on_stack: 0,
+        };
 
         this.add_prologue(function.instructions());
 
@@ -62,8 +68,7 @@ impl AArch64CodeGenerator {
             }
 
             Instruction::LoadImmediate { immediate, destination_reg } => {
-                let arm_register = ArmRegister { number: self.simple_register_strategy.len() as _ };
-                self.simple_register_strategy.insert(*destination_reg, arm_register);
+                let arm_register = self.allocate_register(destination_reg);
                 self.instructions.push(ArmInstruction::MovZ { register: arm_register, imm16: immediate.as_i64() as _ });
             }
 
@@ -293,16 +298,15 @@ impl AArch64CodeGenerator {
         }
     }
 
-    /// TODO: this is just a really basic register allocator
     #[must_use]
     fn allocate_register(&mut self, register: &Register) -> ArmRegister {
-        let number = self.simple_register_strategy.len() as _;
-        debug_assert!(number < 13, "Regular General-purpose Registers exhausted");
-
-        let next_register = ArmRegister { number };
-
-        *self.simple_register_strategy.entry(*register)
-            .or_insert(next_register)
+        match self.register_allocator.get_mapping(register) {
+            Some(register) => register,
+            None => {
+                // TODO: allocate on the stack in this case.
+                panic!("Er is geen ARM-register beschikbaar voor IR-register {register}!");
+            }
+        }
     }
 
     fn dump_instructions(&self) {
