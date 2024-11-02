@@ -7,10 +7,13 @@ mod interpreter;
 mod ir;
 mod memory;
 mod optimization;
+mod pipeline;
+mod types;
 
 pub use self::{
     backend::{
         AArch64CodeGenerator,
+        CodeGenerator,
         CompiledFunction,
         CompiledObject,
     },
@@ -40,5 +43,15 @@ pub use self::{
         FunctionOptimizer,
         optimize_function,
         optimize_program,
+    },
+    pipeline::{
+        LinkerError,
+        Pipeline,
+    },
+    types::{
+        Architecture,
+        Environment,
+        OperatingSystem,
+        Platform,
     },
 };

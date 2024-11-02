@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crate::{backend::RegisterAllocator, CompiledFunction, Function, Instruction, Label, MathOperation, Operand, Register};
+use crate::{backend::RegisterAllocator, CodeGenerator, CompiledFunction, Function, Instruction, Label, MathOperation, Operand, Register};
 
 use super::{ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode};
 
@@ -53,7 +53,7 @@ impl AArch64CodeGenerator {
         }
     }
 
-    pub fn add_instruction(&mut self, instruction: &Instruction) {
+    fn add_instruction(&mut self, instruction: &Instruction) {
         match instruction {
             Instruction::Compare { lhs, rhs } => {
                 self.add_instruction_cmp(lhs, rhs);
@@ -383,5 +383,11 @@ impl AArch64CodeGenerator {
             imm12: self.stack_size as _,
             shift: false,
         });
+    }
+}
+
+impl CodeGenerator for AArch64CodeGenerator {
+    fn compile(function: &Function) -> CompiledFunction {
+        Self::compile(function)
     }
 }

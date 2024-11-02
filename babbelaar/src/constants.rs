@@ -16,4 +16,6 @@ impl Constants {
     /// The discarding identifier `_` can only be used for discarding the result
     /// of an expression, parameter, etc. and cannot be used for a “get”.
     pub const DISCARDING_IDENT: BabString = BabString::new_static("_");
+
+    pub const OBJECT_FILE_EXTENSION: &'static str = "bab-voorwerp";
 }
