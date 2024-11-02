@@ -3,11 +3,14 @@
 
 use std::fmt::Display;
 
+use crate::backend::AllocatableRegister;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArmRegister {
     pub(super) number: u8,
 }
 
+#[allow(unused)]
 impl ArmRegister {
     pub const X0: Self = Self { number: 0 };
     pub const X8: Self = Self { number: 8 };
@@ -21,6 +24,24 @@ impl ArmRegister {
 
     /// Stack Pointer
     pub const SP: Self = Self { number: 31 };
+}
+
+impl AllocatableRegister for ArmRegister {
+    fn return_register() -> Self {
+        Self::X0
+    }
+
+    fn count() -> usize {
+        12
+    }
+
+    fn nth(n: usize) -> Self {
+        debug_assert!(n < Self::count());
+
+        Self {
+            number: n as _,
+        }
+    }
 }
 
 impl Display for ArmRegister {
