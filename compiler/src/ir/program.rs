@@ -60,7 +60,7 @@ impl Program {
     }
 
     #[must_use]
-    pub(crate) fn functions(&self) -> &[Function] {
+    pub fn functions(&self) -> &[Function] {
         &self.functions
     }
 

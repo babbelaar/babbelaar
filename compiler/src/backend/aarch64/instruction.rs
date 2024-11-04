@@ -38,6 +38,11 @@ pub enum ArmInstruction {
         location: ArmBranchLocation,
     },
 
+    /// Branch with link
+    Bl {
+        offset: i32,
+    },
+
     CmpImmediate {
         register: ArmRegister,
         value: u16,
@@ -177,6 +182,15 @@ impl ArmInstruction {
                 instruction |= cond as u8 as u32;
                 instruction |= take_bits(pc_relative_offset as u32, 19) << 5;
 
+                instruction
+            }
+
+            Self::Bl { offset } => {
+                debug_assert!(offset < (1 << 26));
+                debug_assert!(offset > -(1 << 26));
+
+                let mut instruction = 0x94000000;
+                instruction |= (offset as u32) & 0x3FFFFFF;
                 instruction
             }
 
@@ -469,6 +483,10 @@ impl Display for ArmInstruction {
 
             Self::BCond { cond, location } => {
                 f.write_fmt(format_args!("b.{cond} {location}"))
+            }
+
+            Self::Bl { offset } => {
+                f.write_fmt(format_args!("b {offset}"))
             }
 
             Self::CmpImmediate { register, value } => {

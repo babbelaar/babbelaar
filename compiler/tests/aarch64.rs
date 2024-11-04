@@ -7,9 +7,10 @@
 #![cfg(target_arch = "aarch64")]
 
 use core::slice;
+use std::collections::HashMap;
 
-use babbelaar::parse_string_to_tree;
-use babbelaar_compiler::{AArch64CodeGenerator, Compiler};
+use babbelaar::{parse_string_to_tree, BabString};
+use babbelaar_compiler::{AArch64CodeGenerator, Compiler, Program};
 use signal_hook::{consts::SIGBUS, iterator::Signals};
 
 #[test]
@@ -98,6 +99,21 @@ fn structure_and_using_function() {
     assert_eq!(value, 44);
 }
 
+#[test]
+fn two_functions() {
+    let value = compile_and_execute("stuurGetalDoor", "
+    werkwijze krijgGetal() -> g32 {
+        bekeer 8;
+    }
+
+    werkwijze stuurGetalDoor() -> g32 {
+        bekeer krijgGetal();
+    }
+    ");
+
+    assert_eq!(value, 8);
+}
+
 //
 //
 // Helper code
@@ -113,11 +129,9 @@ fn compile_and_execute(function: &'static str, code: &str) -> isize {
     let program = compiler.finish();
     println!("{program}");
 
-    let function = program.function_by_name(function).unwrap();
-    let function = AArch64CodeGenerator::compile(function);
 
-    let byte_code = function.byte_code();
-    let region = allocate_executable_region(byte_code);
+    let (byte_code, offset) = compile_ir_to_arm_and_link(&program, function);
+    let region = allocate_executable_region(&byte_code);
 
     let mut signals = Signals::new(&[SIGBUS]).unwrap();
 
@@ -127,7 +141,38 @@ fn compile_and_execute(function: &'static str, code: &str) -> isize {
         }
     });
 
-    execute_code(&region)
+    execute_code(&region, offset)
+}
+
+fn compile_ir_to_arm_and_link(program: &Program, target: &str) -> (Vec<u8>, usize) {
+    let mut offsets = HashMap::new();
+    let mut data = Vec::new();
+    let mut links = Vec::new();
+
+    for function in program.functions() {
+        let function = AArch64CodeGenerator::compile(function);
+        let offset = data.len();
+        println!("{} is at {offset} or 0x{offset}", function.name());
+        offsets.insert(function.name().clone(), offset);
+
+        for link in function.link_locations() {
+            links.push((offset, link.clone()));
+        }
+
+        data.extend_from_slice(function.byte_code());
+    }
+
+    for (base_offset, link) in links {
+        let subroutine_offset = *offsets.get(link.name()).unwrap();
+
+        let base_offset = base_offset + link.offset();
+        let offset = (subroutine_offset as i32 - base_offset as i32) / 4;
+        let instruction = 0x94000000 + (offset as u32 & 0x3FFFFFF);
+        data[base_offset..base_offset+4].copy_from_slice(&instruction.to_ne_bytes());
+    }
+
+    let target = *offsets.get(&BabString::from(target.to_string())).unwrap();
+    (data, target)
 }
 
 fn allocate_executable_region(code: &[u8]) -> region::Allocation {
@@ -167,10 +212,11 @@ fn copy_to_region(region: &mut region::Allocation, src: &[u8]) {
     (&mut slice[0..src.len()]).copy_from_slice(src);
 }
 
-fn execute_code(region: &region::Allocation) -> isize {
+fn execute_code(region: &region::Allocation, offset: usize) -> isize {
     type MainFn = extern "C" fn() -> isize;
 
     let ptr = region.as_ptr::<()>();
+    let ptr = unsafe { (ptr as *const u8).offset(offset as _) };
     let func: MainFn = unsafe { std::mem::transmute(ptr) };
 
     (func)()
