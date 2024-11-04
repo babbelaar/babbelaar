@@ -24,6 +24,7 @@ impl Compiler {
 
     pub fn compile_trees(&mut self, trees: &[ParseTree]) {
         self.layout_structures(trees);
+        self.compile_methods(trees);
         self.compile_functions(trees);
     }
 
@@ -43,7 +44,20 @@ impl Compiler {
                 panic!();
             };
 
-            self.compile_function(func);
+            self.compile_function(func, func.name.value().clone());
+        }
+    }
+
+    fn compile_methods(&mut self, trees: &[ParseTree]) {
+        for statement in trees.iter().flat_map(|t| t.structures()) {
+            let StatementKind::Structure(structure) = &statement.kind else {
+                panic!();
+            };
+
+            for method in &structure.methods {
+                let name = create_mangled_method_name(structure.name.value(), method.function.name.value());
+                self.compile_function(&method.function, name);
+            }
         }
     }
 
@@ -54,12 +68,12 @@ impl Compiler {
         program
     }
 
-    fn compile_function(&mut self, func: &FunctionStatement) {
+    fn compile_function(&mut self, func: &FunctionStatement, name: BabString) {
         let Some(body) = &func.body else {
             return;
         };
 
-        self.program_builder.build_function(func.name.value().clone(),|builder| {
+        self.program_builder.build_function(name, |builder| {
             for statement in body {
                 statement.compile(builder);
             }
@@ -67,6 +81,13 @@ impl Compiler {
             builder.ret();
         });
     }
+}
+
+#[must_use]
+fn create_mangled_method_name(structure: &BabString, method: &BabString) -> BabString {
+    BabString::new(
+        format!("{structure}__{method}")
+    )
 }
 
 trait CompileStatement {
@@ -293,9 +314,7 @@ impl CompileExpression for PostfixExpression {
     fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
         match self.kind.value() {
             PostfixExpressionKind::Call(call) => {
-                let arguments: Vec<Register> = call.arguments.iter()
-                    .map(|x| x.compile(builder).to_readable(builder))
-                    .collect();
+                let arguments = call.arguments.compile(builder);
 
                 match self.lhs.value() {
                     Expression::Primary(PrimaryExpression::Reference(reference)) => {
@@ -319,9 +338,16 @@ impl CompileExpression for PostfixExpression {
                 ExpressionResult::pointer(base_ptr, offset, field_type, primitive_typ)
             }
 
-            PostfixExpressionKind::MethodCall(call) => {
-                _ = call;
-                todo!()
+            PostfixExpressionKind::MethodCall(method) => {
+                let lhs = self.lhs.compile(builder);
+                let arguments = method.call.arguments.compile(builder);
+
+                let name = create_mangled_method_name(
+                    builder.layout_of(lhs.type_id).name(),
+                    &method.method_name
+                );
+
+                builder.call(name, arguments).into()
             }
 
             PostfixExpressionKind::Subscript(subscript) => {
@@ -548,5 +574,21 @@ impl ExpressionResultKind {
                 builder.load_ptr(base_ptr, Immediate::Integer64(offset as _), typ)
             }
         }
+    }
+}
+
+trait CompileSome {
+    type Output;
+
+    fn compile(&self, builder: &mut FunctionBuilder) -> Self::Output;
+}
+
+impl CompileSome for Vec<Ranged<Expression>> {
+    type Output = Vec<Register>;
+
+    fn compile(&self, builder: &mut FunctionBuilder) -> Self::Output {
+        self.iter()
+            .map(|x| x.compile(builder).to_readable(builder))
+            .collect()
     }
 }

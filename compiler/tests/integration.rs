@@ -1,11 +1,23 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use babbelaar::{parse_string_to_tree, BabString};
+use babbelaar::{parse_string_to_tree, BabString, ParseDiagnostic};
 use babbelaar_compiler::{Compiler, Immediate, Interpreter};
 
 fn compile_and_interpret(code: &str, function: &'static str) -> Option<Immediate> {
-    let tree = parse_string_to_tree(code).unwrap();
+    let tree = match parse_string_to_tree(code) {
+        Ok(tree) => tree,
+        Err(e) => {
+            eprintln!("Fout:");
+            eprintln!("    {e}");
+
+            if let Ok(err) = e.downcast::<ParseDiagnostic>() {
+                let location = err.range().start();
+                eprintln!("Op regel {}, kolom {}", location.line(), location.column());
+            }
+            panic!("Gegeven code gaf een fout terug")
+        }
+    };
 
     let mut compiler = Compiler::new();
     compiler.compile_trees(&[tree]);
@@ -104,4 +116,22 @@ fn two_functions() {
     ", "stuurGetalDoor");
 
     assert_eq!(value.map(|x| x.as_i64()), Some(8));
+}
+
+#[test]
+fn method_call() {
+    let value = compile_and_interpret("
+    structuur MijnGeavanceerdeStructuur {
+        werkwijze krijgGetal() -> g32 {
+            bekeer 3;
+        }
+    }
+
+    werkwijze gebruikStructuur() -> g32 {
+        stel a = nieuw MijnGeavanceerdeStructuur {};
+        bekeer a.krijgGetal();
+    }
+    ", "gebruikStructuur");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(3));
 }

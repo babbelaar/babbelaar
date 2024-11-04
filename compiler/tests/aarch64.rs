@@ -114,6 +114,24 @@ fn two_functions() {
     assert_eq!(value, 8);
 }
 
+#[test]
+fn method_call() {
+    let value = compile_and_execute("gebruikStructuur", "
+    structuur MijnGeavanceerdeStructuur {
+        werkwijze krijgGetal() -> g32 {
+            bekeer 3;
+        }
+    }
+
+    werkwijze gebruikStructuur() -> g32 {
+        stel a = nieuw MijnGeavanceerdeStructuur {};
+        bekeer a.krijgGetal();
+    }
+    ");
+
+    assert_eq!(value, 3);
+}
+
 //
 //
 // Helper code
