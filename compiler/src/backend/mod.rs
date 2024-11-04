@@ -2,6 +2,7 @@
 // All Rights Reserved.
 
 mod aarch64;
+mod link;
 mod object;
 mod register_allocation;
 
@@ -9,6 +10,10 @@ use crate::Function;
 
 pub use self::{
     aarch64::AArch64CodeGenerator,
+    link::{
+        FunctionLink,
+        FunctionLinkMethod,
+    },
     object::{
         CompiledFunction,
         CompiledObject,

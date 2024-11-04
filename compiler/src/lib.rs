@@ -13,9 +13,13 @@ mod types;
 pub use self::{
     backend::{
         AArch64CodeGenerator,
+        AllocatableRegister,
         CodeGenerator,
         CompiledFunction,
         CompiledObject,
+        FunctionLink,
+        FunctionLinkMethod,
+        RegisterAllocator,
     },
     compiler::Compiler,
     interpreter::Interpreter,

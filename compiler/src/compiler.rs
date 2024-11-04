@@ -291,16 +291,24 @@ impl CompileExpression for BiExpression {
 
 impl CompileExpression for PostfixExpression {
     fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
-        let lhs = self.lhs.compile(builder);
-
         match self.kind.value() {
             PostfixExpressionKind::Call(call) => {
-                _ = lhs;
-                _ = call;
-                todo!()
+                let arguments: Vec<Register> = call.arguments.iter()
+                    .map(|x| x.compile(builder).to_readable(builder))
+                    .collect();
+
+                match self.lhs.value() {
+                    Expression::Primary(PrimaryExpression::Reference(reference)) => {
+                        builder.call(reference.value().clone(), arguments).into()
+                    }
+
+                    _ => todo!("Ondersteun aanroepexpressies met linkerzijde: {:#?}", self.lhs)
+                }
             }
 
             PostfixExpressionKind::Member(member) => {
+                let lhs = self.lhs.compile(builder);
+
                 let (base_ptr, ty) = lhs.to_readable_and_type(builder);
 
                 let field = builder.layout_of(ty).field(&member);

@@ -1,9 +1,9 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, mem::take};
 
-use crate::{backend::RegisterAllocator, CodeGenerator, CompiledFunction, Function, Instruction, Label, MathOperation, Operand, Register};
+use crate::{CodeGenerator, CompiledFunction, Function, FunctionLink, FunctionLinkMethod, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator};
 
 use super::{ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode};
 
@@ -16,6 +16,7 @@ pub struct AArch64CodeGenerator {
     register_allocator: RegisterAllocator<ArmRegister>,
     stack_size: usize,
     space_used_on_stack: usize,
+    link_locations: Vec<FunctionLink>,
 }
 
 impl AArch64CodeGenerator {
@@ -27,6 +28,7 @@ impl AArch64CodeGenerator {
             register_allocator: RegisterAllocator::new(function),
             stack_size: 0,
             space_used_on_stack: 0,
+            link_locations: Vec::new(),
         };
 
         this.add_prologue(function.instructions());
@@ -36,6 +38,8 @@ impl AArch64CodeGenerator {
         }
 
         this.dump_instructions();
+
+        let link_locations = take(&mut this.link_locations);
 
         let byte_code = this.to_byte_code();
         print!("Bytecode:");
@@ -50,6 +54,7 @@ impl AArch64CodeGenerator {
         CompiledFunction {
             name: function.name.clone(),
             byte_code,
+            link_locations,
         }
     }
 
@@ -80,10 +85,36 @@ impl AArch64CodeGenerator {
             }
 
             Instruction::Call { name, arguments, ret_val_reg } => {
-                _ = name;
-                _ = arguments;
-                _ = ret_val_reg;
-                todo!()
+                debug_assert!(arguments.len() < (1 << 8));
+
+                for (idx, arg) in arguments.iter().enumerate() {
+                    let reg = self.allocate_register(arg);
+
+                    if reg.number != idx as u8 {
+                        self.instructions.push(ArmInstruction::MovRegister64 {
+                            dst: ArmRegister { number: idx as _ },
+                            src: reg,
+                        });
+                    }
+                }
+
+                self.link_locations.push(FunctionLink {
+                    name: name.clone(),
+                    offset: self.instructions.len() * 4,
+                    method: FunctionLinkMethod::AArch64BranchLink,
+                });
+
+                self.instructions.push(ArmInstruction::Bl {
+                    offset: 0,
+                });
+
+                let ret_val_reg = self.allocate_register(ret_val_reg);
+                if ret_val_reg != ArmRegister::X0 {
+                    self.instructions.push(ArmInstruction::MovRegister64 {
+                        dst: ret_val_reg,
+                        src: ArmRegister::X0,
+                    });
+                }
             }
 
             Instruction::Jump { location } => {

@@ -90,3 +90,18 @@ fn structure_and_using_function() {
 
     assert_eq!(value.map(|x| x.as_i64()), Some(44));
 }
+
+#[test]
+fn two_functions() {
+    let value = compile_and_interpret("
+    werkwijze krijgGetal() -> g32 {
+        bekeer 8;
+    }
+
+    werkwijze stuurGetalDoor() -> g32 {
+        bekeer krijgGetal();
+    }
+    ", "stuurGetalDoor");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(8));
+}

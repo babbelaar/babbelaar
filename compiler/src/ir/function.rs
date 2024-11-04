@@ -17,6 +17,11 @@ pub struct Function {
 
 impl Function {
     #[must_use]
+    pub fn name(&self) -> &BabString {
+        &self.name
+    }
+
+    #[must_use]
     pub fn argument_registers(&self) -> &[Register] {
         &self.argument_registers
     }
