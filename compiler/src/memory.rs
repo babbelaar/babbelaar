@@ -66,6 +66,11 @@ pub struct StructureLayout {
 
 impl StructureLayout {
     #[must_use]
+    pub fn name(&self) -> &BabString {
+        &self.name
+    }
+
+    #[must_use]
     pub const fn size(&self) -> usize {
         self.size
     }
