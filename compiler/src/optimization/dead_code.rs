@@ -25,8 +25,6 @@ impl FunctionOptimizer for DeadCodeEliminator {
                 continue;
             }
 
-            println!("Index {index} is unreachable");
-
             function.instructions.remove(index);
         }
     }

@@ -49,14 +49,14 @@ impl AArch64CodeGenerator {
         let link_locations = take(&mut this.link_locations);
 
         let byte_code = this.to_byte_code();
-        print!("Bytecode:");
+        print!("Bytecode: ");
         for x in &byte_code {
             if *x < 0x10 {
                 print!("0");
             }
             print!("{x:X} ");
         }
-        println!();
+        println!("\n");
 
         CompiledFunction {
             name: function.name.clone(),
@@ -362,6 +362,8 @@ impl AArch64CodeGenerator {
 
             println!("    {instruction}");
         }
+
+        println!();
     }
 
     #[must_use]
