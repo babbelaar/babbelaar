@@ -40,7 +40,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
     fn allocate(&mut self, function: &Function) {
         let analysis = LifeAnalysis::analyze(function.argument_registers(), function.instructions());
-        // analysis.dump_result();
+        analysis.dump_result();
 
         // TODO: reintroduce this sometime, could be a cool optimization :)
         // if let Some(return_register) = analysis.find_only_return_register() {
@@ -67,7 +67,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
             for (reg, lifetime) in &registers {
                 if !lifetime.is_active_at(index) {
                     if let Some(mapped) = currently_mapped.remove(reg) {
-                        currently_available.push_back(mapped);
+                        currently_available.push_front(mapped);
                     }
 
                     continue;
@@ -78,8 +78,14 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                     continue;
                 }
 
+                let register_available_after_this_instruction = registers.iter()
+                    .filter(|(_, lifetime)| lifetime.last_use() == index)
+                    .filter_map(|(reg, _)| currently_mapped.get(reg))
+                    .next()
+                    .copied();
+
                 // Check if there is a register available, otherwise we should spill
-                let Some(available_register) = currently_available.pop_front() else {
+                let Some(available_register) = register_available_after_this_instruction.or_else(|| currently_available.pop_front()) else {
                     self.mappings.insert(*reg, None);
                     continue;
                 };
