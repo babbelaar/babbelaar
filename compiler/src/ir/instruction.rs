@@ -12,6 +12,14 @@ pub struct Label {
     pub(super) id: usize,
 }
 
+#[cfg(test)]
+impl Label {
+    #[must_use]
+    pub fn new(id: usize) -> Self {
+        Self { id }
+    }
+}
+
 impl Display for Label {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Etiket")?;
@@ -26,7 +34,7 @@ impl Label {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     //
     // CPU states

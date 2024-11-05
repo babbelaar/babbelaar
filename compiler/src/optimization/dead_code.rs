@@ -3,7 +3,80 @@
 
 use std::collections::HashMap;
 
-use crate::{Function, FunctionOptimizer, Instruction, Operand, Register};
+use crate::{types::Graph, Function, FunctionOptimizer, Instruction, Label, Operand, Register};
+
+#[derive(Debug, Default)]
+pub struct DeadCodeEliminator {
+    control_flow_graph: Graph<usize>,
+}
+
+impl FunctionOptimizer for DeadCodeEliminator {
+    fn optimize(&mut self, function: &mut Function) {
+        for instruction_index in 0..function.instructions().len() {
+            self.control_flow_graph.add_node(instruction_index);
+        }
+
+        self.control_flow_graph.add_edge(0, 0);
+
+        self.visit_section(function.instructions(), 0);
+
+        for index in (0..function.instructions().len()).rev() {
+            if self.control_flow_graph.has_edges_to(&index) {
+                continue;
+            }
+
+            println!("Index {index} is unreachable");
+
+            function.instructions.remove(index);
+        }
+    }
+}
+
+impl DeadCodeEliminator {
+    fn position_of_label(&mut self, instructions: &[Instruction], label: &Label) -> usize {
+        for (index, instruction) in instructions.iter().enumerate() {
+            if let Instruction::Label(l) = instruction {
+                if l == label {
+                    return index;
+                }
+            }
+        }
+
+        panic!("Illegal label {label:?}")
+    }
+
+    fn visit_section(&mut self, instructions: &[Instruction], mut index: usize) {
+        while index < instructions.len() {
+            match &instructions[index] {
+                Instruction::Jump { location } => {
+                    let position = self.position_of_label(instructions, location);
+                    self.visit_section(instructions, position);
+                    self.control_flow_graph.add_edge(index, position);
+                    return;
+                }
+
+                Instruction::JumpConditional { location, .. } => {
+                    let position = self.position_of_label(instructions, location);
+                    self.visit_section(instructions, position);
+                    self.control_flow_graph.add_edge(index, position);
+                }
+
+                Instruction::Return { .. } => {
+                    return;
+                }
+
+                _ => (),
+            }
+
+            let next = index + 1;
+            if next < instructions.len() {
+                self.control_flow_graph.add_edge(index, next);
+            }
+
+            index += 1;
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct DeadStoreEliminator {
@@ -156,5 +229,76 @@ impl DeadStoreEliminator {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use babbelaar::BabString;
+
+    use crate::Immediate;
+
+    use super::*;
+    use rstest::rstest;
+    use pretty_assertions::assert_eq;
+
+    #[rstest]
+    #[case(&[], &[])]
+    #[case(
+        &[
+            Instruction::Return { value_reg: None }
+        ],
+        &[
+            Instruction::Return { value_reg: None }
+        ]
+    )]
+    #[case(
+        &[
+            Instruction::LoadImmediate { immediate: Immediate::Integer8(12), destination_reg: Register::new(1) },
+            Instruction::Return { value_reg: None }
+        ],
+        &[
+            Instruction::LoadImmediate { immediate: Immediate::Integer8(12), destination_reg: Register::new(1) },
+            Instruction::Return { value_reg: None }
+        ]
+    )]
+    #[case(
+        &[
+            Instruction::LoadImmediate { immediate: Immediate::Integer8(12), destination_reg: Register::new(1) },
+            Instruction::Return { value_reg: Some(Register::new(1)) },
+            Instruction::Return { value_reg: None }
+        ],
+        &[
+            Instruction::LoadImmediate { immediate: Immediate::Integer8(12), destination_reg: Register::new(1) },
+            Instruction::Return { value_reg: Some(Register::new(1)) }
+        ]
+    )]
+    #[case(
+        &[
+            Instruction::Jump { location: Label::new(8) },
+            Instruction::LoadImmediate { immediate: Immediate::Integer8(7), destination_reg: Register::new(2) },
+            Instruction::Return { value_reg: Some(Register::new(7)) },
+            Instruction::Label(Label::new(8)),
+            Instruction::LoadImmediate { immediate: Immediate::Integer16(1541), destination_reg: Register::new(9) },
+            Instruction::Return { value_reg: Some(Register::new(9)) },
+        ],
+        &[
+            Instruction::Jump { location: Label::new(8) },
+            Instruction::Label(Label::new(8)),
+            Instruction::LoadImmediate { immediate: Immediate::Integer16(1541), destination_reg: Register::new(9) },
+            Instruction::Return { value_reg: Some(Register::new(9)) },
+        ]
+    )]
+    fn dead_code_eliminator(#[case] input_instructions: &[Instruction], #[case] expected_output_instructions: &[Instruction]) {
+        let mut function = Function {
+            name: BabString::new_static("testfunctie"),
+            argument_registers: Vec::new(),
+            instructions: input_instructions.to_vec(),
+            label_names: HashMap::new(),
+        };
+
+        DeadCodeEliminator::default().optimize(&mut function);
+
+        assert_eq!(function.instructions(), expected_output_instructions);
     }
 }
