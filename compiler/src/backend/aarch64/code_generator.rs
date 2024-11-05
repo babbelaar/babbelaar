@@ -88,7 +88,9 @@ impl AArch64CodeGenerator {
                 let dst = self.allocate_register(destination);
                 let src = self.allocate_register(source);
 
-                self.instructions.push(ArmInstruction::MovRegister64 { dst, src });
+                if dst != src {
+                    self.instructions.push(ArmInstruction::MovRegister64 { dst, src });
+                }
             }
 
             Instruction::Call { name, arguments, ret_val_reg } => {
