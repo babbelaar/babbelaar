@@ -135,3 +135,25 @@ fn method_call() {
 
     assert_eq!(value.map(|x| x.as_i64()), Some(3));
 }
+
+#[test]
+fn method_call_with_this() {
+    let value = compile_and_interpret("
+    structuur MijnStructuurMetGetal {
+        veld getal: g32,
+
+        werkwijze gebruikGetal() -> g32 {
+            bekeer dit.getal + 3;
+        }
+    }
+
+    werkwijze gebruikStructuurMetGetal() -> g32 {
+        stel a = nieuw MijnStructuurMetGetal {
+            getal: 5,
+        };
+        bekeer a.gebruikGetal();
+    }
+    ", "gebruikStructuurMetGetal");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(8));
+}

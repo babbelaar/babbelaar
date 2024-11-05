@@ -5,7 +5,43 @@ use std::{collections::HashMap, fmt::Display};
 
 use babbelaar::BabString;
 
+use crate::TypeId;
+
 use super::{Instruction, Label, Register};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArgumentName {
+    This,
+    Name(BabString),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArgumentList {
+    items: Vec<(ArgumentName, TypeId)>,
+}
+
+impl ArgumentList {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            items: Vec::new(),
+        }
+    }
+
+    pub fn add(&mut self, name: impl Into<BabString>, ty: TypeId) {
+        let name = name.into();
+        self.items.push((ArgumentName::Name(name), ty));
+    }
+
+    pub fn add_this(&mut self, ty: TypeId) {
+        self.items.push((ArgumentName::This, ty));
+    }
+
+    #[must_use]
+    pub fn iter(&self) -> impl Iterator<Item = &(ArgumentName, TypeId)> {
+        self.items.iter()
+    }
+}
 
 #[derive(Debug)]
 pub struct Function {

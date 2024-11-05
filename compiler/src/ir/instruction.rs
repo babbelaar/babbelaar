@@ -255,7 +255,7 @@ impl Display for JumpCondition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MathOperation {
     Add,
     Subtract,

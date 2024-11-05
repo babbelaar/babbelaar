@@ -39,20 +39,29 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
     }
 
     fn allocate(&mut self, function: &Function) {
-        let analysis = LifeAnalysis::analyze(function.instructions());
+        let analysis = LifeAnalysis::analyze(function.argument_registers(), function.instructions());
         // analysis.dump_result();
 
-        if let Some(return_register) = analysis.find_only_return_register() {
-            self.mappings.insert(return_register, Some(R::return_register()));
-        }
+        // TODO: reintroduce this sometime, could be a cool optimization :)
+        // if let Some(return_register) = analysis.find_only_return_register() {
+        //     self.mappings.insert(return_register, Some(R::return_register()));
+        // }
 
         let registers: Vec<(IrRegister, RegisterLifetime)> = analysis.into_sorted_vec();
 
         let mut currently_mapped = HashMap::new();
 
-        let mut currently_available = (0..R::count())
+        let mut currently_available = R::callee_saved_range()
+            .chain(R::caller_saved_range())
             .map(R::nth)
             .collect::<VecDeque<R>>();
+
+        for (idx, register) in function.argument_registers().iter().enumerate() {
+            let reg = R::nth(idx);
+
+            currently_mapped.insert(register, reg);
+            self.mappings.insert(*register, Some(reg));
+        }
 
         for (index, _) in function.instructions().iter().enumerate() {
             for (reg, lifetime) in &registers {
@@ -80,7 +89,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
             }
         }
 
-        // self.dump_mappings();
+        self.dump_mappings();
     }
 
     #[allow(unused)]

@@ -9,7 +9,11 @@ mod program;
 mod program_builder;
 
 pub use self::{
-    function::Function,
+    function::{
+        ArgumentName,
+        ArgumentList,
+        Function,
+    },
     function_builder::FunctionBuilder,
     instruction::{
         Instruction,

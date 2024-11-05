@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::Display;
+use std::{fmt::Display, ops::RangeInclusive};
 
 use crate::backend::AllocatableRegister;
 
@@ -32,7 +32,7 @@ impl AllocatableRegister for ArmRegister {
     }
 
     fn count() -> usize {
-        12
+        31
     }
 
     fn nth(n: usize) -> Self {
@@ -41,6 +41,18 @@ impl AllocatableRegister for ArmRegister {
         Self {
             number: n as _,
         }
+    }
+
+    fn number(&self) -> usize {
+        self.number as _
+    }
+
+    fn callee_saved_range() -> RangeInclusive<usize> {
+        19..=28
+    }
+
+    fn caller_saved_range() -> RangeInclusive<usize> {
+        0..=15
     }
 }
 

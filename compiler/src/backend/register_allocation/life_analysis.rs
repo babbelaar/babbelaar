@@ -14,8 +14,10 @@ pub struct LifeAnalysis {
 
 impl LifeAnalysis {
     #[must_use]
-    pub fn analyze(instructions: &[Instruction]) -> LifeAnalysisResult {
+    pub fn analyze(argument_registers: &[IrRegister], instructions: &[Instruction]) -> LifeAnalysisResult {
         let mut this = Self::default();
+
+        this.add_argument_registers(argument_registers);
 
         for (index, instruction) in instructions.iter().enumerate() {
             this.add_instruction(index, instruction);
@@ -112,6 +114,12 @@ impl LifeAnalysis {
     fn try_add_lifetime(&mut self, operand: &Operand, index: usize) {
         if let Operand::Register(register) = operand {
             self.add_lifetime(register, index);
+        }
+    }
+
+    fn add_argument_registers(&mut self, argument_registers: &[IrRegister]) {
+        for register in argument_registers {
+            self.add_lifetime(register, 0);
         }
     }
 }
