@@ -46,7 +46,7 @@ impl FunctionLink {
             FunctionLinkMethod::AArch64BranchLink => {
                 let offset = offset / 4;
 
-                let instruction = ArmInstruction::Bl { offset: offset as i32 }
+                let instruction = ArmInstruction::Bl { offset: offset as i32, symbol_name: BabString::empty() }
                     .encode(0, &HashMap::new());
                 code[0..4].copy_from_slice(&instruction.to_ne_bytes());
             }

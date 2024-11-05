@@ -114,6 +114,7 @@ impl AArch64CodeGenerator {
                 });
 
                 self.instructions.push(ArmInstruction::Bl {
+                    symbol_name: name.clone(),
                     offset: 0,
                 });
 
