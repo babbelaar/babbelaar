@@ -4,6 +4,8 @@
 mod dead_code;
 mod register;
 
+use dead_code::DeadCodeEliminator;
+
 use self::{
     dead_code::DeadStoreEliminator,
     register::RegisterInliner,
@@ -33,6 +35,7 @@ pub fn optimize_program(program: &mut Program) {
 pub fn optimize_function(function: &mut Function) {
     run_optimization::<RegisterInliner>(function);
     run_optimization::<DeadStoreEliminator>(function);
+    run_optimization::<DeadCodeEliminator>(function);
 }
 
 fn run_optimization<O: FunctionOptimizer>(function: &mut Function) {

@@ -69,6 +69,14 @@ pub struct Register {
     number: usize,
 }
 
+#[cfg(test)]
+impl Register {
+    #[must_use]
+    pub fn new(number: usize) -> Self {
+        Self { number }
+    }
+}
+
 impl Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_char('r')?;

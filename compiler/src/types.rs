@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::collections::HashSet;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Architecture {
     AArch64,
@@ -112,4 +114,62 @@ impl From<Endianness> for object::Endianness {
             Endianness::Little => object::Endianness::Little,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Graph<N: Eq> {
+    nodes: Vec<N>,
+    edges: HashSet<GraphEdge>
+}
+
+impl<N: Eq> Graph<N> {
+    pub fn add_node(&mut self, node: N) {
+        _ = self.add_or_get_node(node);
+    }
+
+    #[must_use]
+    fn add_or_get_node(&mut self, node: N) -> usize {
+        if let Some(pos) = self.nodes.iter().position(|n| *n == node) {
+            pos
+        } else {
+            let idx = self.nodes.len();
+            self.nodes.push(node);
+            idx
+        }
+    }
+
+    pub fn add_edge(&mut self, from: N, to: N) {
+        let from = self.add_or_get_node(from);
+        let to = self.add_or_get_node(to);
+        self.edges.insert(GraphEdge {
+            from,
+            to,
+        });
+    }
+
+    #[must_use]
+    pub fn has_edges_to(&self, node: &N) -> bool {
+        let Some(pos) = self.nodes.iter().position(|n| n == node) else {
+            return false;
+        };
+
+        self.edges.iter()
+            .find(|x| x.to == pos)
+            .is_some()
+    }
+}
+
+impl<N: Eq> Default for Graph<N> {
+    fn default() -> Self {
+        Self {
+            nodes: Default::default(),
+            edges: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct GraphEdge {
+    from: usize,
+    to: usize,
 }
