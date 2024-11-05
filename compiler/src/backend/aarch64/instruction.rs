@@ -501,15 +501,15 @@ impl Display for ArmInstruction {
                 _ = is_64_bit;
                 match mode {
                     ArmSignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("ldp {first}, {second}, {src}, #{offset}"))
+                        f.write_fmt(format_args!("ldp {first}, {second}, {src}, #0x{offset:x}"))
                     }
 
                     ArmSignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("ldp {first}, {second}, [{src}, #{offset}]!"))
+                        f.write_fmt(format_args!("ldp {first}, {second}, [{src}, #0x{offset:x}]!"))
                     }
 
                     ArmSignedAddressingMode::SignedOffset => {
-                        f.write_fmt(format_args!("ldp {first}, {second}, [{src}, #{offset}]"))
+                        f.write_fmt(format_args!("ldp {first}, {second}, [{src}, #0x{offset:x}]"))
                     }
                 }
             }
@@ -518,15 +518,15 @@ impl Display for ArmInstruction {
                 _ = is_64_bit;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("ldr {dst}, {base_ptr}, #{offset}"))
+                        f.write_fmt(format_args!("ldr {dst}, {base_ptr}, #0x{offset:x}"))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("ldr {dst}, [{base_ptr}, #{offset}]!"))
+                        f.write_fmt(format_args!("ldr {dst}, [{base_ptr}, #0x{offset:x}]!"))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("ldr {dst}, [{base_ptr}, #{offset}]"))
+                        f.write_fmt(format_args!("ldr {dst}, [{base_ptr}, #0x{offset:x}]"))
                     }
                 }
             }
@@ -553,15 +553,15 @@ impl Display for ArmInstruction {
                 _ = is_64_bit;
                 match mode {
                     ArmSignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("stp {first}, {second}, {dst}, #{offset}"))
+                        f.write_fmt(format_args!("stp {first}, {second}, {dst}, #0x{offset:x}"))
                     }
 
                     ArmSignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #{offset}]!"))
+                        f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #0x{offset:x}]!"))
                     }
 
                     ArmSignedAddressingMode::SignedOffset => {
-                        f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #{offset}]"))
+                        f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #0x{offset:x}]"))
                     }
                 }
             }
@@ -570,15 +570,15 @@ impl Display for ArmInstruction {
                 _ = is_64_bit;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("str {src}, {base_ptr}, #{offset}"))
+                        f.write_fmt(format_args!("str {src}, {base_ptr}, #0x{offset:x}"))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("str {src}, [{base_ptr}, #{offset}]!"))
+                        f.write_fmt(format_args!("str {src}, [{base_ptr}, #0x{offset:x}]!"))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("str {src}, [{base_ptr}, #{offset}]"))
+                        f.write_fmt(format_args!("str {src}, [{base_ptr}, #0x{offset:x}]"))
                     }
                 }
             }
