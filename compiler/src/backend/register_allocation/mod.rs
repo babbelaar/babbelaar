@@ -108,5 +108,6 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                 println!("    IR {virtual_reg} is spilled");
             }
         }
+        println!();
     }
 }

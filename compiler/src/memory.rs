@@ -245,7 +245,6 @@ impl TypeManager {
     }
 
     fn add_type(&mut self, layout: StructureLayout) {
-        println!("Registered type \"{}\" with id {:?}", layout.name, layout.type_id);
         self.type_names.insert(layout.name.clone(), layout.type_id.index);
         self.types.insert(layout.type_id.index, layout);
     }

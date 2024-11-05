@@ -1,33 +1,33 @@
-// stel OPTIE_ALLEEN_SCHRIJVEN = 0x001;
-// stel OPTIE_AANMAKEN = 0x200;
+// // stel OPTIE_ALLEEN_SCHRIJVEN = 0x001;
+// // stel OPTIE_AANMAKEN = 0x200;
 
-// @uitheems(naam: "open")
-// werkwijze open(pad: Slinger, vlaggen: g32, modus: g32) -> g32;
+// // @uitheems(naam: "open")
+// // werkwijze open(pad: Slinger, vlaggen: g32, modus: g32) -> g32;
 
-@uitheems(naam: "creat")
-werkwijze maakBestandAan(pad: Slinger, modus: g32) -> g32;
+// @uitheems(naam: "creat")
+// werkwijze maakBestandAan(pad: Slinger, modus: g32) -> g32;
 
-@uitheems(naam: "write")
-werkwijze schrijfNaarBestand(bestandsnummer: g32, buffer: Slinger, lengte: g32) -> g32;
+// @uitheems(naam: "write")
+// werkwijze schrijfNaarBestand(bestandsnummer: g32, buffer: Slinger, lengte: g32) -> g32;
 
-@uitheems(naam: "close")
-werkwijze sluitBestand(bestandsnummer: g32);
+// @uitheems(naam: "close")
+// werkwijze sluitBestand(bestandsnummer: g32);
 
-werkwijze bestandsmodus(gebruiker: g32, groep: g32, andere: g32) -> g32 {
-    stel waarde = gebruiker * 64 + groep * 8 + andere;
-    schrijf(€"Bestandsmodus {gebruiker}{groep}{andere} is: {waarde}");
-    bekeer waarde;
-}
+// werkwijze bestandsmodus(gebruiker: g32, groep: g32, andere: g32) -> g32 {
+//     stel waarde = gebruiker * 64 + groep * 8 + andere;
+//     schrijf(€"Bestandsmodus {gebruiker}{groep}{andere} is: {waarde}");
+//     bekeer waarde;
+// }
 
-werkwijze schrijfTekstNaarBestand(bestandspad: Slinger, tekst: Slinger) {
-    stel bestandsnummer = maakBestandAan(bestandspad, bestandsmodus(6, 6, 4));
+// werkwijze schrijfTekstNaarBestand(bestandspad: Slinger, tekst: Slinger) {
+//     stel bestandsnummer = maakBestandAan(bestandspad, bestandsmodus(6, 6, 4));
 
-    als bestandsnummer == -1 {
-        schrijf(€"Fout bij het aanmaken van bestand {bestandspad}: {foutbeschrijving()}");
-        bekeer;
-    }
+//     als bestandsnummer == -1 {
+//         schrijf(€"Fout bij het aanmaken van bestand {bestandspad}: {foutbeschrijving()}");
+//         bekeer;
+//     }
 
-    _ = schrijfNaarBestand(bestandsnummer, tekst, tekst.lengte());
+//     _ = schrijfNaarBestand(bestandsnummer, tekst, tekst.lengte());
 
-    sluitBestand(bestandsnummer);
-}
+//     sluitBestand(bestandsnummer);
+// }

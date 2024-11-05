@@ -1,0 +1,19 @@
+// werkwijze startServerOpPoort(poort: g16) -> g32 {
+//     stel AF_INET = 2;
+//     stel SOCK_STREAM = 1;
+
+//     stel sock = socket(AF_INET, SOCK_STREAM, 0);
+
+//     als sock == -1 {
+//         schrijf(€"Fout bij het aanmaken van socket: {foutbeschrijving()}");
+//         bekeer sock;
+//     }
+
+//     stel adres = nieuw Socketadres {
+//         familie: AF_INET,
+//         poort: poort * 256,
+//         adres: 0,
+//     };
+
+//     _ = binden(sock, &adres, 16);
+// }
