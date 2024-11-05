@@ -192,7 +192,6 @@ fn compile_ir_to_arm_and_link(program: &Program, target: &str) -> (Vec<u8>, usiz
     for function in program.functions() {
         let function = AArch64CodeGenerator::compile(function);
         let offset = data.len();
-        println!("{} is at {offset} or 0x{offset}", function.name());
         offsets.insert(function.name().clone(), offset);
 
         for link in function.link_locations() {
