@@ -85,6 +85,8 @@ fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let dir = TempDir::new().unwrap().panic_on_cleanup_error();
 
     let executable = create_single_object_executable(code, &dir);
+    println!("Running executable {}", executable.display());
+    dir.leak();
     let exit_status = run(executable).unwrap();
 
     let mut result = ProgramResult {

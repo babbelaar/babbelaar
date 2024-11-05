@@ -165,19 +165,12 @@ impl AArch64CodeGenerator {
             Instruction::StackAlloc { dst, size } => {
                 let dst = self.allocate_register(dst);
 
-                if self.space_used_on_stack == 0 {
-                    self.instructions.push(ArmInstruction::MovRegister64 {
-                        dst,
-                        src: ArmRegister::SP,
-                    });
-                } else {
-                    self.instructions.push(ArmInstruction::AddImmediate {
-                        dst,
-                        src: ArmRegister::SP,
-                        imm12: self.space_used_on_stack as _,
-                        shift: false,
-                    });
-                }
+                self.instructions.push(ArmInstruction::AddImmediate {
+                    dst,
+                    src: ArmRegister::SP,
+                    imm12: self.space_used_on_stack as _,
+                    shift: false,
+                });
 
                 self.space_used_on_stack += size;
                 debug_assert!(self.space_used_on_stack <= self.stack_size);
