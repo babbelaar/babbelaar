@@ -542,7 +542,7 @@ impl Display for ArmInstruction {
             }
 
             Self::MovZ { register, imm16 } => {
-                f.write_fmt(format_args!("movz {register}, #{imm16}"))
+                f.write_fmt(format_args!("mov {register}, #{imm16}"))
             }
 
             Self::Ret => {
