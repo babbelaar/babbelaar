@@ -10,6 +10,7 @@ mod addressing_mode;
 mod branch_location;
 mod code_generator;
 mod condition_code;
+mod function_characteristics;
 mod instruction;
 mod register;
 
@@ -21,6 +22,7 @@ pub use self::{
     branch_location::ArmBranchLocation,
     code_generator::AArch64CodeGenerator,
     condition_code::ArmConditionCode,
+    function_characteristics::AArch64FunctionCharacteristics,
     instruction::{
         ArmInstruction,
         ArmShift2,

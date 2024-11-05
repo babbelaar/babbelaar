@@ -3,14 +3,18 @@
 
 use std::{collections::HashMap, mem::take};
 
+use babbelaar::BabString;
+
 use crate::{CodeGenerator, CompiledFunction, Function, FunctionLink, FunctionLinkMethod, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator};
 
-use super::{ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode};
+use super::{AArch64FunctionCharacteristics, ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode};
 
 const SPACE_NEEDED_FOR_FP_AND_LR: usize = 2 * 8;
 
 #[derive(Debug)]
 pub struct AArch64CodeGenerator {
+    function_name: BabString,
+    characteristics: AArch64FunctionCharacteristics,
     instructions: Vec<ArmInstruction>,
     label_offsets: HashMap<Label, usize>,
     register_allocator: RegisterAllocator<ArmRegister>,
@@ -22,7 +26,10 @@ pub struct AArch64CodeGenerator {
 impl AArch64CodeGenerator {
     #[must_use]
     pub fn compile(function: &Function) -> CompiledFunction {
+        let characteristics = AArch64FunctionCharacteristics::analyze(function);
         let mut this = Self {
+            function_name: function.name().clone(),
+            characteristics,
             instructions: Vec::new(),
             label_offsets: HashMap::new(),
             register_allocator: RegisterAllocator::new(function),
@@ -341,7 +348,7 @@ impl AArch64CodeGenerator {
     }
 
     fn dump_instructions(&self) {
-        println!("AArch64-instructies:");
+        println!("AArch64-instructies voor {}:", self.function_name);
 
         for (offset, instruction) in self.instructions.iter().enumerate() {
             for (label, label_offset) in &self.label_offsets {
@@ -367,7 +374,11 @@ impl AArch64CodeGenerator {
 
     fn add_prologue(&mut self, instructions: &[Instruction]) {
         // begin with space for Frame Pointer and Link Register
-        self.stack_size = SPACE_NEEDED_FOR_FP_AND_LR;
+        self.stack_size = 0;
+
+        if !self.characteristics.is_leaf_function() {
+            self.stack_size += SPACE_NEEDED_FOR_FP_AND_LR;
+        }
 
         // ignoring possible optimizations, count up the needed stack size when the StackAlloc instruction is used.
         for instruction in instructions {
@@ -382,38 +393,46 @@ impl AArch64CodeGenerator {
 
         assert!(self.stack_size < (1 << 12));
 
-        self.instructions.push(ArmInstruction::SubImmediate {
-            dst: ArmRegister::SP,
-            lhs: ArmRegister::SP,
-            rhs_imm12: self.stack_size as _,
-        });
+        if self.stack_size != 0 {
+            self.instructions.push(ArmInstruction::SubImmediate {
+                dst: ArmRegister::SP,
+                lhs: ArmRegister::SP,
+                rhs_imm12: self.stack_size as _,
+            });
+        }
 
-        self.instructions.push(ArmInstruction::Stp {
-            is_64_bit: true,
-            mode: ArmSignedAddressingMode::SignedOffset,
-            dst: ArmRegister::SP,
-            offset: (self.stack_size - SPACE_NEEDED_FOR_FP_AND_LR) as _,
-            first: ArmRegister::FP,
-            second: ArmRegister::LR,
-        });
-    }
+        if !self.characteristics.is_leaf_function() {
+            self.instructions.push(ArmInstruction::Stp {
+                is_64_bit: true,
+                mode: ArmSignedAddressingMode::SignedOffset,
+                dst: ArmRegister::SP,
+                offset: (self.stack_size - SPACE_NEEDED_FOR_FP_AND_LR) as _,
+                first: ArmRegister::FP,
+                second: ArmRegister::LR,
+            });
+        }
+}
 
     fn add_epilogue(&mut self) {
-        self.instructions.push(ArmInstruction::Ldp {
-            is_64_bit: true,
-            mode: ArmSignedAddressingMode::SignedOffset,
-            src: ArmRegister::SP,
-            offset: (self.stack_size - SPACE_NEEDED_FOR_FP_AND_LR) as _,
-            first: ArmRegister::FP,
-            second: ArmRegister::LR,
-        });
+        if !self.characteristics.is_leaf_function() {
+            self.instructions.push(ArmInstruction::Ldp {
+                is_64_bit: true,
+                mode: ArmSignedAddressingMode::SignedOffset,
+                src: ArmRegister::SP,
+                offset: (self.stack_size - SPACE_NEEDED_FOR_FP_AND_LR) as _,
+                first: ArmRegister::FP,
+                second: ArmRegister::LR,
+            });
+        }
 
-        self.instructions.push(ArmInstruction::AddImmediate {
-            dst: ArmRegister::SP,
-            src: ArmRegister::SP,
-            imm12: self.stack_size as _,
-            shift: false,
-        });
+        if self.stack_size != 0 {
+            self.instructions.push(ArmInstruction::AddImmediate {
+                dst: ArmRegister::SP,
+                src: ArmRegister::SP,
+                imm12: self.stack_size as _,
+                shift: false,
+            });
+        }
     }
 }
 
