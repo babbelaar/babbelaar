@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::{Debug, Display};
+use std::{fmt::{Debug, Display}, ops::RangeInclusive};
 
 pub trait AllocatableRegister: Debug + Display + Clone + Copy + PartialEq + Eq {
     /// Return what register is the return value for this architecture / platform (e.g. x0 on ARM64).
@@ -13,5 +13,14 @@ pub trait AllocatableRegister: Debug + Display + Clone + Copy + PartialEq + Eq {
     fn count() -> usize;
 
     #[must_use]
+    fn callee_saved_range() -> RangeInclusive<usize>;
+
+    #[must_use]
+    fn caller_saved_range() -> RangeInclusive<usize>;
+
+    #[must_use]
     fn nth(n: usize) -> Self;
+
+    #[must_use]
+    fn number(&self) -> usize;
 }

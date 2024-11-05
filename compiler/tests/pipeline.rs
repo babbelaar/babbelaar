@@ -58,6 +58,29 @@ fn method_call() {
     assert_eq!(result.exit_code, Some(3));
 }
 
+#[test]
+fn method_call_with_this() {
+    let result = create_and_run_single_object_executable("
+    structuur MijnStructuurMetGetal {
+        veld getal: g32,
+
+        werkwijze gebruikGetal() -> g32 {
+            bekeer dit.getal + 2;
+        }
+    }
+
+    werkwijze hoofd() -> g32 {
+        stel a = nieuw MijnStructuurMetGetal {
+            getal: 5,
+        };
+        bekeer a.gebruikGetal();
+    }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(7));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let dir = TempDir::new().unwrap().panic_on_cleanup_error();
 

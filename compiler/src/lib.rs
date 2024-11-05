@@ -24,6 +24,7 @@ pub use self::{
     compiler::Compiler,
     interpreter::Interpreter,
     ir::{
+        ArgumentList,
         Function,
         FunctionBuilder,
         Immediate,

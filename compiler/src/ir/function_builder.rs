@@ -14,6 +14,7 @@ pub struct FunctionBuilder<'program> {
     pub(super) program_builder: &'program mut ProgramBuilder,
     pub(super) name: BabString,
     pub(super) register_allocator: RegisterAllocator,
+    pub(super) this: Option<(TypeId, Register)>,
     pub(super) argument_registers: Vec<Register>,
     pub(super) instructions: Vec<Instruction>,
     pub(super) locals: HashMap<BabString, FunctionLocal>,
@@ -228,8 +229,14 @@ impl<'program> FunctionBuilder<'program> {
         destination
     }
 
+    #[must_use]
     pub fn layout_of(&self, ty: TypeId) -> &StructureLayout {
         self.program_builder.type_manager.layout(ty)
+    }
+
+    #[must_use]
+    pub fn load_this(&self) -> Option<(TypeId, Register)> {
+        self.this.clone()
     }
 }
 
@@ -238,12 +245,12 @@ mod tests {
 
     use babbelaar::BabString;
 
-    use crate::ProgramBuilder;
+    use crate::{ArgumentList, ProgramBuilder};
 
     #[test]
     fn test_empty_function() {
         ProgramBuilder::new()
-            .build_function(BabString::new("Hallo"), |builder| {
+            .build_function(BabString::new("Hallo"), ArgumentList::new(), |builder| {
                 _ = builder;
             });
     }
@@ -252,6 +259,6 @@ mod tests {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FunctionLocal {
-    register: Register,
-    type_id: TypeId,
+    pub(super) register: Register,
+    pub(super) type_id: TypeId,
 }

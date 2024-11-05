@@ -358,7 +358,7 @@ fn collect_label_positions(program: &Program) -> HashMap<(usize, Label), usize> 
 mod tests {
     use babbelaar::BabString;
 
-    use crate::{Immediate, ProgramBuilder};
+    use crate::{ArgumentList, Immediate, ProgramBuilder};
 
     use super::Interpreter;
 
@@ -367,7 +367,7 @@ mod tests {
         let function_name = BabString::new_static("func1");
 
         let mut program = ProgramBuilder::new();
-        program.build_function(function_name.clone(), |f| {
+        program.build_function(function_name.clone(), ArgumentList::new(), |f| {
             f.ret();
         });
         let program = program.build();
@@ -383,7 +383,7 @@ mod tests {
         let function_name = BabString::new_static("func1");
 
         let mut program = ProgramBuilder::new();
-        program.build_function(function_name.clone(), |f| {
+        program.build_function(function_name.clone(), ArgumentList::new(), |f| {
             let value = f.load_immediate(Immediate::Integer32(1234));
             f.ret_with(value);
         });

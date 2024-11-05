@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use babbelaar::*;
 
-use crate::{optimize_program, FunctionBuilder, Immediate, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId};
+use crate::{optimize_program, ArgumentList, FunctionBuilder, Immediate, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId};
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -44,7 +44,7 @@ impl Compiler {
                 panic!();
             };
 
-            self.compile_function(func, func.name.value().clone());
+            self.compile_function(func, func.name.value().clone(), CallingConvention::Regular);
         }
     }
 
@@ -54,9 +54,13 @@ impl Compiler {
                 panic!();
             };
 
+            let type_id = self.program_builder.type_id_for_structure(structure.name.value());
+
             for method in &structure.methods {
                 let name = create_mangled_method_name(structure.name.value(), method.function.name.value());
-                self.compile_function(&method.function, name);
+                self.compile_function(&method.function, name, CallingConvention::Method {
+                    this: type_id,
+                });
             }
         }
     }
@@ -68,12 +72,26 @@ impl Compiler {
         program
     }
 
-    fn compile_function(&mut self, func: &FunctionStatement, name: BabString) {
+    fn compile_function(&mut self, func: &FunctionStatement, name: BabString, call_convention: CallingConvention) {
         let Some(body) = &func.body else {
             return;
         };
 
-        self.program_builder.build_function(name, |builder| {
+        let mut arguments = ArgumentList::new();
+
+        match call_convention {
+            CallingConvention::Regular => (),
+            CallingConvention::Method { this } => {
+                arguments.add_this(this);
+            }
+        }
+
+        for parameter in &func.parameters {
+            let type_id = self.program_builder.type_id_for_structure(&parameter.ty.specifier.unqualified_name());
+            arguments.add(parameter.name.value(), type_id);
+        }
+
+        self.program_builder.build_function(name, arguments, |builder| {
             for statement in body {
                 statement.compile(builder);
             }
@@ -340,10 +358,13 @@ impl CompileExpression for PostfixExpression {
 
             PostfixExpressionKind::MethodCall(method) => {
                 let lhs = self.lhs.compile(builder);
-                let arguments = method.call.arguments.compile(builder);
+                let struct_ty = lhs.type_id;
+
+                let mut arguments = method.call.arguments.compile(builder);
+                arguments.insert(0, lhs.to_readable(builder));
 
                 let name = create_mangled_method_name(
-                    builder.layout_of(lhs.type_id).name(),
+                    builder.layout_of(struct_ty).name(),
                     &method.method_name
                 );
 
@@ -382,7 +403,7 @@ impl CompileExpression for PrimaryExpression {
             }
 
             Self::ReferenceThis => {
-                todo!()
+                builder.load_this().expect("`dit` is niet gebruikt binnen methode??").into()
             }
 
             Self::SizedArrayInitializer { typ, size } => {
@@ -591,4 +612,12 @@ impl CompileSome for Vec<Ranged<Expression>> {
             .map(|x| x.compile(builder).to_readable(builder))
             .collect()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CallingConvention {
+    Regular,
+    Method {
+        this: TypeId,
+    },
 }

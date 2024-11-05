@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use babbelaar::{BabString, Structure};
 
-use crate::TypeManager;
+use crate::{ir::{function_builder::FunctionLocal, ArgumentName}, ArgumentList, TypeId, TypeManager};
 
 use super::{FunctionBuilder, Program, RegisterAllocator};
 
@@ -24,7 +24,7 @@ impl ProgramBuilder {
         }
     }
 
-    pub fn build_function<F: FnOnce(&mut FunctionBuilder)>(&mut self, name: BabString, f: F) {
+    pub fn build_function<F: FnOnce(&mut FunctionBuilder)>(&mut self, name: BabString, arguments: ArgumentList, f: F) {
         assert!(!name.is_empty(), "Kan geen lege naam als werkwijzenaam hebben.");
 
         let mut builder = FunctionBuilder {
@@ -32,12 +32,32 @@ impl ProgramBuilder {
             program_builder: self,
             register_allocator: RegisterAllocator::new(),
             argument_registers: Vec::new(),
+            this: None,
             instructions: Vec::new(),
             locals: HashMap::new(),
             label_counter: 0,
             label_names: HashMap::new(),
             label_positions: HashMap::new(),
         };
+
+        for (name, type_id) in arguments.iter().cloned() {
+            let register = builder.register_allocator.next();
+            builder.argument_registers.push(register);
+
+            match name {
+                ArgumentName::Name(name) => {
+                    builder.locals.insert(name, FunctionLocal {
+                        register,
+                        type_id,
+                    });
+                }
+
+                ArgumentName::This => {
+                    debug_assert_eq!(builder.this, None);
+                    builder.this = Some((type_id, register));
+                }
+            }
+        }
 
         f(&mut builder);
 
@@ -52,5 +72,10 @@ impl ProgramBuilder {
 
     pub fn add_structure(&mut self, structure: &Structure)  {
         self.type_manager.add_structure(structure);
+    }
+
+    #[must_use]
+    pub fn type_id_for_structure(&self, name: &BabString) -> TypeId {
+        self.type_manager.layout_of(name).type_id().clone()
     }
 }

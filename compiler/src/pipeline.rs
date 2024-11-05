@@ -27,6 +27,7 @@ impl Pipeline {
         compiler.compile_trees(trees);
 
         let program = compiler.finish();
+        println!("Program: {program}");
 
         for function in program.functions() {
             self.code_gen(function);
