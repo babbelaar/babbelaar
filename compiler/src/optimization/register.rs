@@ -67,8 +67,23 @@ impl FunctionOptimizer for RegisterInliner {
                 }
 
                 Instruction::MathOperation { operation, destination, lhs, rhs } => {
-                    let Some(lhs) = self.resolve_operand_to_immediate(lhs) else { continue };
-                    let Some(rhs) = self.resolve_operand_to_immediate(rhs) else { continue };
+                    let (lhs, rhs) = match (self.resolve_operand_to_immediate(lhs), self.resolve_operand_to_immediate(rhs)) {
+                        (Some(lhs), Some(rhs)) => (lhs, rhs),
+
+                        (_, _) => {
+                            let lhs = self.try_inline_operand(lhs);
+                            let rhs = self.try_inline_operand(rhs);
+                            let operation = *operation;
+                            let destination = *destination;
+                            *instruction = Instruction::MathOperation {
+                                operation,
+                                destination,
+                                lhs,
+                                rhs,
+                            };
+                            continue;
+                        }
+                    };
 
                     // TODO: is it necessary to honor the bit size of the
                     //       integer (wrapping at that boundary), or would
@@ -127,6 +142,15 @@ impl RegisterInliner {
         match operand {
             Operand::Immediate(immediate) => Some(immediate.clone()),
             Operand::Register(register) => self.values.get(register).cloned(),
+        }
+    }
+
+    #[must_use]
+    fn try_inline_operand(&self, operand: &Operand) -> Operand {
+        if let Some(immediate) = self.resolve_operand_to_immediate(operand) {
+            Operand::Immediate(immediate)
+        } else {
+            operand.clone()
         }
     }
 }
