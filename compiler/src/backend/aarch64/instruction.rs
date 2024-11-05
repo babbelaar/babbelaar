@@ -3,6 +3,8 @@
 
 use std::{collections::HashMap, fmt::Display};
 
+use babbelaar::BabString;
+
 use crate::Label;
 
 use super::{
@@ -11,7 +13,7 @@ use super::{
     ArmRegister, ArmSignedAddressingMode, ArmUnsignedAddressingMode,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum ArmInstruction {
     /// It can be in place if src == dst, but it doesn't have to be
     AddImmediate {
@@ -41,6 +43,7 @@ pub enum ArmInstruction {
     /// Branch with link
     Bl {
         offset: i32,
+        symbol_name: BabString,
     },
 
     CmpImmediate {
@@ -185,7 +188,9 @@ impl ArmInstruction {
                 instruction
             }
 
-            Self::Bl { offset } => {
+            Self::Bl { offset, symbol_name } => {
+                _ = symbol_name;
+
                 debug_assert!(offset < (1 << 26));
                 debug_assert!(offset > -(1 << 26));
 
@@ -485,8 +490,8 @@ impl Display for ArmInstruction {
                 f.write_fmt(format_args!("b.{cond} {location}"))
             }
 
-            Self::Bl { offset } => {
-                f.write_fmt(format_args!("b {offset}"))
+            Self::Bl { symbol_name, offset } => {
+                f.write_fmt(format_args!("bl {offset}   ({symbol_name})"))
             }
 
             Self::CmpImmediate { register, value } => {
