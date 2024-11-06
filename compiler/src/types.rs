@@ -138,13 +138,13 @@ impl<N: Eq> Graph<N> {
         }
     }
 
-    pub fn add_edge(&mut self, from: N, to: N) {
+    pub fn add_edge(&mut self, from: N, to: N) -> bool {
         let from = self.add_or_get_node(from);
         let to = self.add_or_get_node(to);
         self.edges.insert(GraphEdge {
             from,
             to,
-        });
+        })
     }
 
     #[must_use]
