@@ -48,15 +48,17 @@ impl DeadCodeEliminator {
             match &instructions[index] {
                 Instruction::Jump { location } => {
                     let position = self.position_of_label(instructions, location);
-                    self.visit_section(instructions, position);
-                    self.control_flow_graph.add_edge(index, position);
+                    if self.control_flow_graph.add_edge(index, position) {
+                        self.visit_section(instructions, position);
+                    }
                     return;
                 }
 
                 Instruction::JumpConditional { location, .. } => {
                     let position = self.position_of_label(instructions, location);
-                    self.visit_section(instructions, position);
-                    self.control_flow_graph.add_edge(index, position);
+                    if !self.control_flow_graph.add_edge(index, position) {
+                        self.visit_section(instructions, position);
+                    }
                 }
 
                 Instruction::Return { .. } => {
