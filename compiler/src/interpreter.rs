@@ -12,6 +12,7 @@ use crate::{Immediate, Instruction, JumpCondition, Label, MathOperation, Operand
 pub struct Interpreter {
     program: Program,
     comparison_flags: ComparisonFlags,
+    stack: Vec<u8>,
     stack_frames: Vec<StackFrame>,
     label_positions: HashMap<(usize, Label), usize>,
 }
@@ -23,6 +24,7 @@ impl Interpreter {
         Self {
             program,
             comparison_flags: Default::default(),
+            stack: Vec::new(),
             stack_frames: Vec::new(),
             label_positions,
         }
@@ -37,10 +39,10 @@ impl Interpreter {
     fn execute_function_by_index(&mut self, function_index: usize, arguments: Vec<Immediate>) -> Option<Immediate> {
         let func = self.program.function(function_index);
 
-        let mut frame = StackFrame::new();
+        let mut frame = StackFrame::new(self.stack.len());
 
         for (reg, value) in func.argument_registers().iter().zip(arguments.into_iter()) {
-            frame.registers.insert(*reg, value);
+            frame.set_register(*reg, value);
         }
 
         self.stack_frames.push(frame);
@@ -65,7 +67,9 @@ impl Interpreter {
             }
         }
 
-        _ = self.stack_frames.pop();
+        let frame = self.stack_frames.pop().unwrap();
+        assert!(self.stack.len() >= frame.stack_offset);
+        self.stack.resize(frame.stack_offset, 0);
 
         return_value
     }
@@ -100,7 +104,7 @@ impl Interpreter {
                 let return_value = self.execute_function_by_index(function_index, arguments);
 
                 if let Some(return_value) = return_value {
-                    self.frame().registers.insert(ret_val_reg, return_value);
+                    self.frame().set_register(ret_val_reg, return_value);
                 }
 
                 OperationResult::Continue
@@ -129,7 +133,7 @@ impl Interpreter {
 
             Instruction::Increment { register } => {
                 let value = Immediate::Integer64(self.register(&register).as_i64() + 1);
-                self.frame().registers.insert(register, value);
+                self.frame().set_register(register, value);
                 OperationResult::Continue
             }
 
@@ -177,14 +181,14 @@ impl Interpreter {
                 let register = destination_reg.clone();
                 let value = immediate.clone();
 
-                self.frame().registers.insert(register, value);
+                self.frame().set_register(register, value);
 
                 OperationResult::Continue
             }
 
             Instruction::Move { source, destination } => {
                 let value = self.frame().registers.get(&source).unwrap().clone();
-                self.frame().registers.insert(destination, value);
+                self.frame().set_register(destination, value);
 
                 OperationResult::Continue
             }
@@ -212,15 +216,15 @@ impl Interpreter {
                     MathOperation::Subtract => Immediate::Integer64(lhs.as_i64() - rhs.as_i64()),
                 };
 
-                self.frame().registers.insert(destination, value);
+                self.frame().set_register(destination, value);
                 OperationResult::Continue
             }
 
             Instruction::StackAlloc { dst, size } => {
-                self.frame().stack.extend(std::iter::repeat_n(0, size));
+                let offset = self.stack.len();
+                self.stack.extend(std::iter::repeat_n(0, size));
 
-                let ptr = self.frame().stack.as_ptr() as i64 - size as i64;
-                self.frame().registers.insert(dst, Immediate::Integer64(ptr));
+                self.frame().set_register(dst, Immediate::Integer64(offset as _));
 
                 OperationResult::Continue
             }
@@ -229,33 +233,35 @@ impl Interpreter {
                 let base_ptr = self.register(&base_ptr).as_i64();
                 let offset = self.operand_to_immediate(&offset).as_i64();
 
+                let ptr = self.stack.as_ptr() as i64 + base_ptr + offset;
+
                 match typ.bytes() {
                     1 => {
-                        let ptr = (base_ptr + offset) as *const i8;
+                        let ptr = ptr as *const i8;
                         let value = unsafe { ptr.read() } as i8;
 
-                        self.frame().registers.insert(destination, Immediate::Integer8(value));
+                        self.frame().set_register(destination, Immediate::Integer8(value));
                     }
 
                     2 => {
-                        let ptr = (base_ptr + offset) as *const i16;
+                        let ptr = ptr as *const i16;
                         let value = unsafe { ptr.read() } as i16;
 
-                        self.frame().registers.insert(destination, Immediate::Integer16(value));
+                        self.frame().set_register(destination, Immediate::Integer16(value));
                     }
 
                     4 => {
-                        let ptr = (base_ptr + offset) as *const i32;
+                        let ptr = ptr as *const i32;
                         let value = unsafe { ptr.read() } as i32;
 
-                        self.frame().registers.insert(destination, Immediate::Integer32(value));
+                        self.frame().set_register(destination, Immediate::Integer32(value));
                     }
 
                     8 => {
-                        let ptr = (base_ptr + offset) as *const i64;
+                        let ptr = ptr as *const i64;
                         let value = unsafe { ptr.read() } as i64;
 
-                        self.frame().registers.insert(destination, Immediate::Integer64(value));
+                        self.frame().set_register(destination, Immediate::Integer64(value));
                     }
 
                     _ => todo!("Primitieve grootten van {} bytes zijn niet ondersteund!", typ.bytes())
@@ -268,27 +274,29 @@ impl Interpreter {
                 let base_ptr = self.register(&base_ptr).as_i64();
                 let offset = self.operand_to_immediate(&offset).as_i64();
 
+                let ptr = self.stack.as_ptr() as i64 + base_ptr + offset;
+
                 match typ.bytes() {
                     1 => {
-                        let ptr = (base_ptr + offset) as *mut i8;
+                        let ptr = ptr as *mut i8;
                         let value = self.operand_to_immediate(&value).as_i8();
                         unsafe { ptr.write(value as _) };
                     }
 
                     2 => {
-                        let ptr = (base_ptr + offset) as *mut i16;
+                        let ptr = ptr as *mut i16;
                         let value = self.operand_to_immediate(&value).as_i16();
                         unsafe { ptr.write(value as _) };
                     }
 
                     4 => {
-                        let ptr = (base_ptr + offset) as *mut i32;
+                        let ptr = ptr as *mut i32;
                         let value = self.operand_to_immediate(&value).as_i32();
                         unsafe { ptr.write(value as _) };
                     }
 
                     8 => {
-                        let ptr = (base_ptr + offset) as *mut i64;
+                        let ptr = ptr as *mut i64;
                         let value = self.operand_to_immediate(&value).as_i64();
                         unsafe { ptr.write(value as _) };
                     }
@@ -309,17 +317,22 @@ impl Interpreter {
 struct StackFrame {
     registers: HashMap<Register, Immediate>,
     program_counter: usize,
-    stack: Vec<u8>,
+    stack_offset: usize,
 }
 
 impl StackFrame {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(stack_offset: usize) -> Self {
         Self {
             registers: HashMap::new(),
             program_counter: 0,
-            stack: Vec::new(),
+            stack_offset,
         }
+    }
+
+    #[inline]
+    fn set_register(&mut self, register: Register, value: Immediate) {
+        self.registers.insert(register, value);
     }
 }
 
