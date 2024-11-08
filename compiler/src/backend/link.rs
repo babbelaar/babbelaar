@@ -44,7 +44,7 @@ impl FunctionLink {
 
         match self.method {
             FunctionLinkMethod::AArch64BranchLink => {
-                let offset = offset / 4;
+                let offset = (offset / 4) - 1;
 
                 let instruction = ArmInstruction::Bl { offset: offset as i32, symbol_name: BabString::empty() }
                     .encode(0, &HashMap::new());
