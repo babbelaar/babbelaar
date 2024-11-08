@@ -5,7 +5,7 @@ use std::{collections::HashMap, mem::take};
 
 use babbelaar::BabString;
 
-use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, FunctionLink, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator};
+use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, FunctionLink, Immediate, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator};
 
 use super::{Amd64Instruction, Amd64Register};
 
@@ -75,17 +75,28 @@ impl Amd64CodeGenerator {
             }
 
             Instruction::LoadImmediate { immediate, destination_reg } => {
-                // let arm_register = self.allocate_register(destination_reg);
-                // self.instructions.push(ArmInstruction::MovZ { register: arm_register, imm16: immediate.as_i64() as _ });
+                let dst = self.allocate_register(destination_reg);
+                match immediate {
+                    Immediate::Integer8(..) | Immediate::Integer16(..) | Immediate::Integer32(..) => {
+                        self.instructions.push(Amd64Instruction::MovReg32Imm32 {
+                            dst,
+                            src: immediate.as_i32(),
+                        });
+                    }
+
+                    Immediate::Integer64(qword) => {
+                        todo!("Support mov64 (value is 0x{qword:x})")
+                    }
+                }
             }
 
             Instruction::Move { source, destination } => {
-                // let dst = self.allocate_register(destination);
-                // let src = self.allocate_register(source);
+                let dst = self.allocate_register(destination);
+                let src = self.allocate_register(source);
 
-                // if dst != src {
-                //     self.instructions.push(ArmInstruction::MovRegister64 { dst, src });
-                // }
+                if dst != src {
+                    self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src });
+                }
             }
 
             Instruction::Call { name, arguments, ret_val_reg } => {
@@ -123,8 +134,8 @@ impl Amd64CodeGenerator {
             }
 
             Instruction::Jump { location } => {
-                // let location = ArmBranchLocation::Label(*location);
-                // self.instructions.push(ArmInstruction::B { location });
+                let location = *location;
+                self.instructions.push(Amd64Instruction::Jmp { location });
             }
 
             Instruction::JumpConditional { condition, location } => {
@@ -257,7 +268,8 @@ impl Amd64CodeGenerator {
     fn to_byte_code(&self) -> Vec<u8> {
         let mut output = Vec::new();
         for instruction in &self.instructions {
-            instruction.encode(&mut output);
+            let offset = output.len();
+            instruction.encode(&mut output, offset, &self.label_offsets);
         }
         output
     }

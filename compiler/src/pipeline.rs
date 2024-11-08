@@ -5,7 +5,7 @@ use std::{error::Error, fmt::Display, io::Read, mem::replace, path::{Path, PathB
 
 use babbelaar::{Constants, ParseTree};
 
-use crate::{AArch64CodeGenerator, CompiledObject, Compiler, Function, Platform};
+use crate::{backend::Amd64CodeGenerator, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, Platform};
 
 #[derive(Debug)]
 pub struct Pipeline {
@@ -35,7 +35,15 @@ impl Pipeline {
     }
 
     fn code_gen(&mut self, function: &Function) {
-        let function = AArch64CodeGenerator::compile(function);
+        let function = match self.object.platform().architecture() {
+            Architecture::AArch64 => {
+                AArch64CodeGenerator::compile(function)
+            }
+
+            Architecture::X86_64 => {
+                Amd64CodeGenerator::compile(function)
+            }
+        };
         self.object.add_function(function);
     }
 
