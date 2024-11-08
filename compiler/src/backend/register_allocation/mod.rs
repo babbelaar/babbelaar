@@ -51,13 +51,13 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
         let mut currently_mapped = HashMap::new();
 
-        let mut currently_available = R::callee_saved_range()
-            .chain(R::caller_saved_range())
-            .map(R::nth)
+        let mut currently_available = R::callee_saved_registers().iter()
+            .chain(R::caller_saved_registers().iter())
+            .copied()
             .collect::<VecDeque<R>>();
 
         for (idx, register) in function.argument_registers().iter().enumerate() {
-            let reg = R::nth(idx);
+            let reg = R::argument_nth(idx);
 
             currently_mapped.insert(register, reg);
             self.mappings.insert(*register, Some(reg));
