@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{fmt::Display, ops::RangeInclusive};
+use std::fmt::Display;
 
 use crate::backend::AllocatableRegister;
 
@@ -35,7 +35,7 @@ impl AllocatableRegister for ArmRegister {
         31
     }
 
-    fn nth(n: usize) -> Self {
+    fn argument_nth(n: usize) -> Self {
         debug_assert!(n < Self::count());
 
         Self {
@@ -43,16 +43,42 @@ impl AllocatableRegister for ArmRegister {
         }
     }
 
-    fn number(&self) -> usize {
-        self.number as _
+    fn callee_saved_registers() -> &'static [ArmRegister] {
+        const REGISTERS: &'static [ArmRegister] = &[
+            ArmRegister { number: 19 },
+            ArmRegister { number: 20 },
+            ArmRegister { number: 21 },
+            ArmRegister { number: 22 },
+            ArmRegister { number: 23 },
+            ArmRegister { number: 24 },
+            ArmRegister { number: 25 },
+            ArmRegister { number: 26 },
+            ArmRegister { number: 27 },
+            ArmRegister { number: 28 },
+        ];
+        REGISTERS
     }
 
-    fn callee_saved_range() -> RangeInclusive<usize> {
-        19..=28
-    }
-
-    fn caller_saved_range() -> RangeInclusive<usize> {
-        0..=15
+    fn caller_saved_registers() -> &'static [ArmRegister] {
+        const REGISTERS: &'static [ArmRegister] = &[
+            ArmRegister { number: 0 },
+            ArmRegister { number: 1 },
+            ArmRegister { number: 2 },
+            ArmRegister { number: 3 },
+            ArmRegister { number: 4 },
+            ArmRegister { number: 5 },
+            ArmRegister { number: 6 },
+            ArmRegister { number: 7 },
+            ArmRegister { number: 8 },
+            ArmRegister { number: 9 },
+            ArmRegister { number: 10 },
+            ArmRegister { number: 11 },
+            ArmRegister { number: 12 },
+            ArmRegister { number: 13 },
+            ArmRegister { number: 14 },
+            ArmRegister { number: 15 },
+        ];
+        REGISTERS
     }
 }
 
