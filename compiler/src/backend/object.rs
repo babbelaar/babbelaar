@@ -151,3 +151,41 @@ impl CompiledObject {
         self.platform().architecture().endianness().into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use temp_dir::TempDir;
+
+    use crate::{backend::aarch64::{ArmInstruction, ArmRegister}, Architecture, Environment, FunctionLinkMethod};
+
+    use super::*;
+
+    #[test]
+    fn aarch64_link_test() {
+        let mut object = CompiledObject::new(Platform::new(Architecture::AArch64, Environment::Darwin, OperatingSystem::MacOs));
+
+        object.add_function(CompiledFunction {
+            name: BabString::new_static("a"),
+            byte_code: ArmInstruction::Ret.encode(0, &HashMap::new()).to_le_bytes().to_vec(),
+            link_locations: Vec::new(),
+        });
+        object.add_function(CompiledFunction {
+            name: BabString::new_static("b"),
+            byte_code: [
+                ArmInstruction::MovZ { register: ArmRegister::X0, imm16: 100 }.encode(0, &HashMap::new()).to_le_bytes(),
+                ArmInstruction::Bl { offset: 0, symbol_name: BabString::new_static("a") }.encode(0, &HashMap::new()).to_le_bytes(),
+            ].into_iter().flatten().collect(),
+            link_locations: [
+                FunctionLink {
+                    name: BabString::new_static("a"),
+                    offset: 4,
+                    method: FunctionLinkMethod::AArch64BranchLink,
+                }
+            ].to_vec(),
+        });
+
+        let dir = TempDir::new().unwrap();
+
+        object.write_to(&dir.child("test")).unwrap();
+    }
+}
