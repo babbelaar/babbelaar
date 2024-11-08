@@ -5,7 +5,7 @@ use std::{collections::HashMap, mem::take};
 
 use babbelaar::BabString;
 
-use crate::{AllocatableRegister, CompiledFunction, Function, FunctionLink, Instruction, Label, Operand, Register, RegisterAllocator};
+use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, FunctionLink, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator};
 
 use super::{Amd64Instruction, Amd64Register};
 
@@ -143,7 +143,10 @@ impl Amd64CodeGenerator {
                 if let Some(value_reg) = value_reg {
                     let value_reg = self.allocate_register(value_reg);
                     if value_reg != Amd64Register::return_register() {
-                        self.instructions.push(Amd64Instruction);
+                        self.instructions.push(Amd64Instruction::MovReg64Reg64 {
+                            dst: Amd64Register::return_register(),
+                            src: value_reg,
+                        });
                     }
                 }
                 self.instructions.push(Amd64Instruction::ReturnNear);
@@ -161,12 +164,7 @@ impl Amd64CodeGenerator {
             Instruction::StackAlloc { dst, size } => {
                 let dst = self.allocate_register(dst);
 
-                self.instructions.push(ArmInstruction::AddImmediate {
-                    dst,
-                    src: ArmRegister::SP,
-                    imm12: self.space_used_on_stack as _,
-                    shift: false,
-                });
+                todo!("ADD imm to RSP for putting the pointer");
 
                 self.space_used_on_stack += size;
                 debug_assert!(self.space_used_on_stack <= self.stack_size);
@@ -186,13 +184,14 @@ impl Amd64CodeGenerator {
                 let dst = self.allocate_register(destination);
                 let base_ptr = self.allocate_register(base_ptr);
 
-                self.instructions.push(ArmInstruction::LdrImmediate {
-                    is_64_bit,
-                    mode: ArmUnsignedAddressingMode::UnsignedOffset,
-                    dst,
-                    base_ptr,
-                    offset: offset.as_i16(),
-                });
+                // self.instructions.push(ArmInstruction::LdrImmediate {
+                //     is_64_bit,
+                //     mode: ArmUnsignedAddressingMode::UnsignedOffset,
+                //     dst,
+                //     base_ptr,
+                //     offset: offset.as_i16(),
+                // });
+                todo!("Add LDR-equivalent on AMD64")
             }
 
             Instruction::StorePtr { base_ptr, offset, value, typ } => {
@@ -213,19 +212,14 @@ impl Amd64CodeGenerator {
                 };
                 let src = self.allocate_register(src);
 
-                self.instructions.push(ArmInstruction::StrImmediate {
-                    is_64_bit,
-                    mode: ArmUnsignedAddressingMode::UnsignedOffset,
-                    src,
-                    base_ptr,
-                    offset: offset.as_i16(),
-                });
+                todo!("Add STR equivalent on AMD64");
             }
         }
     }
 
     fn add_prologue(&mut self, instructions: &[Instruction]) {
-        todo!()
+        _ = instructions;
+        // TODO
     }
 
     #[must_use]
@@ -240,7 +234,7 @@ impl Amd64CodeGenerator {
     }
 
     fn add_epilogue(&mut self) {
-        todo!()
+        // TODO
     }
 
     fn dump_instructions(&self) {
@@ -259,7 +253,51 @@ impl Amd64CodeGenerator {
         println!();
     }
 
+    #[must_use]
     fn to_byte_code(&self) -> Vec<u8> {
+        let mut output = Vec::new();
+        for instruction in &self.instructions {
+            instruction.encode(&mut output);
+        }
+        output
+    }
+
+    fn add_instruction_add(&self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
         todo!()
     }
+
+    fn add_instruction_sub(&self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
+        todo!()
+    }
+}
+
+impl CodeGenerator for Amd64CodeGenerator {
+    fn compile(function: &Function) -> CompiledFunction {
+        Self::compile(function)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+    use pretty_assertions::assert_eq;
+
+    #[rstest]
+    #[case(
+        Instruction::Return { value_reg: None },
+        &[0xc3]
+    )]
+    fn single_instruction_codegen(#[case] input: Instruction, #[case] expected_bytecode: &[u8]) {
+        let function = Function {
+            name: BabString::new_static("testFunctie"),
+            argument_registers: Vec::new(),
+            instructions: vec![input],
+            label_names: HashMap::new(),
+        };
+
+        let actual_bytecode = Amd64CodeGenerator::compile(&function).byte_code;
+        assert_eq!(actual_bytecode, expected_bytecode);
+    }
+
 }

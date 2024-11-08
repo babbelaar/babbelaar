@@ -26,7 +26,7 @@ pub enum Amd64Instruction {
 }
 
 impl Amd64Instruction {
-    pub fn encode(&mut self, output: &mut Vec<u8>) {
+    pub fn encode(&self, output: &mut Vec<u8>) {
         match self {
             Self::MovReg32Reg32 { dst, src } => {
                 output.push(0x89);
