@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="nl-NL">
+<head>
+    <meta charset="utf-8" />
+    <title>Babbelaar Speeltuin</title>
+    <style>
+        :root {
+            --editor-bg: white;
+            --editor-fg: black;
+        }
+        html {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        main {
+            display: grid;
+            grid-template-areas: "title-code title-output" "code output";
+            justify-content: stretch;
+            align-content: stretch;
+            gap: 1rem;
+            width: 100%;
+            height: 100%;
+        }
+
+        main > div {
+            border: 1px solid black;
+            border-radius: .2rem;
+            width: 100%;
+            height: 100%;
+        }
+
+        .code {
+            border: 1px solid black;
+            grid-area: code;
+            width: 100%;
+            height: 300px;
+            position: relative;
+        }
+
+        output {
+            border: 1px solid black;
+            grid-area: output;
+            width: 100%;
+            white-space: pre;
+        }
+
+        .title-code {
+            grid-area: "title-code";
+        }
+
+        .title-output {
+            grid-area: "title-output";
+        }
+
+/* Please see the article */
+
+#editing, #highlighting {
+/* Both elements need the same text and space styling so they are directly on top of each other */
+margin: 10px;
+padding: 10px;
+border: 0;
+width: calc(100% - 32px);
+height: 150px;
+}
+#editing, #highlighting, #highlighting * {
+/* Also add text styles to highlighing tokens */
+font-size: 15pt;
+font-family: monospace;
+line-height: 1.5;
+tab-size: 2;
+}
+
+
+#editing, #highlighting {
+/* In the same place */
+position: absolute;
+top: 0;
+left: 0;
+}
+
+
+/* Move the textarea in front of the result */
+
+#editing {
+z-index: 1;
+}
+#highlighting {
+z-index: 0;
+}
+
+
+/* Make textarea almost completely transparent */
+
+#editing {
+color: transparent;
+background: transparent;
+caret-color: var(--editor-fg); /* Or choose your favourite color */
+}
+
+/* Can be scrolled */
+#editing, #highlighting {
+overflow: auto;
+white-space: pre;
+}
+
+/* No resize on textarea */
+#editing {
+resize: none;
+}
+
+/* Paragraphs; First Image */
+* {
+font-family: "Fira Code", monospace;
+}
+p code {
+border-radius: 2px;
+background-color: #eee;
+color: #111;
+}
+
+
+/* Syntax Highlighting from prism.js starts below, partly modified: */
+
+/* PrismJS 1.23.0
+https://prismjs.com/download.html#themes=prism-funky&languages=markup */
+/**
+* prism.js Funky theme
+* Based on “Polyfilling the gaps” talk slides http://lea.verou.me/polyfilling-the-gaps/
+* @author Lea Verou
+*/
+
+code[class*="language-"],
+pre[class*="language-"] {
+font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+font-size: 1em;
+text-align: left;
+white-space: pre;
+word-spacing: normal;
+word-break: normal;
+word-wrap: normal;
+line-height: 1.5;
+
+-moz-tab-size: 4;
+-o-tab-size: 4;
+tab-size: 4;
+
+-webkit-hyphens: none;
+-moz-hyphens: none;
+-ms-hyphens: none;
+hyphens: none;
+}
+
+/* Code blocks */
+pre[class*="language-"] {
+padding: .4em .8em;
+margin: .5em 0;
+overflow: auto;
+/* background: url('data:image/svg+xml;charset=utf-8,<svg%20version%3D"1.1"%20xmlns%3D"http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg"%20width%3D"100"%20height%3D"100"%20fill%3D"rgba(0%2C0%2C0%2C.2)">%0D%0A<polygon%20points%3D"0%2C50%2050%2C0%200%2C0"%20%2F>%0D%0A<polygon%20points%3D"0%2C100%2050%2C100%20100%2C50%20100%2C0"%20%2F>%0D%0A<%2Fsvg>');
+background-size: 1em 1em; - WebCoder49*/
+background: var(--editor-bg); /* - WebCoder49 */
+}
+
+code[class*="language-"] {
+background: var(--editor-bg);
+color: var(--editor-fg);
+box-shadow: -.3em 0 0 .3em var(--editor-bg), .3em 0 0 .3em var(--editor-bg);
+}
+
+/* Inline code */
+:not(pre) > code[class*="language-"] {
+padding: .2em;
+border-radius: .3em;
+box-shadow: none;
+white-space: normal;
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+color: #aaa;
+}
+
+.token.punctuation {
+color: #999;
+}
+
+.token.namespace {
+opacity: .7;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol {
+color: #0cf;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin {
+color: yellow;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.token.variable,
+.token.inserted {
+color: yellowgreen;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+color: deeppink;
+}
+
+.token.regex,
+.token.important {
+color: orange;
+}
+
+.token.important,
+.token.bold {
+font-weight: bold;
+}
+.token.italic {
+font-style: italic;
+}
+
+.token.entity {
+cursor: help;
+}
+
+.token.deleted {
+color: red;
+}
+
+/* Plugin styles: Diff Highlight */
+pre.diff-highlight.diff-highlight > code .token.deleted:not(.prefix),
+pre > code.diff-highlight.diff-highlight .token.deleted:not(.prefix) {
+background-color: rgba(255, 0, 0, .3);
+display: inline;
+}
+
+pre.diff-highlight.diff-highlight > code .token.inserted:not(.prefix),
+pre > code.diff-highlight.diff-highlight .token.inserted:not(.prefix) {
+background-color: rgba(0, 255, 128, .3);
+display: inline;
+}
+    </style>
+</head>
+<body>
+    <h1>Babbelaar</h1>
+    <main>
+        <h2 class="title-code">Code</h2>
+        <h2 class="title-output">Uitvoer</h2>
+        <div class="code" style="height: 200px">
+            <textarea id="editing" onkeydown="check_tab(this, event);">werkwijze hoofd() -> g32 {
+    bekeer 1;
+}</textarea>
+            <pre id="highlighting" aria-hidden="true"><code class="language-bab" id="highlighting-content"></code></pre>
+    </div>
+        <output>...</output>
+    </main>
+    <script type="module">
+        function debounce(func, timeout = 300){
+            let timer;
+            return (...args) => {
+                clearTimeout(timer);
+                timer = setTimeout(() => { func.apply(this, args); }, timeout);
+            };
+        }
+
+        const textArea = document.querySelector("textarea");
+        const highlightContainer = document.getElementById("highlighting");
+        const highlightCode = document.getElementById("highlighting-content");
+        updateCodeText();
+
+        const output = document.querySelector("output");
+
+        import init, { compile_to_ir } from "../playground-api/pkg/playground_api.js";
+
+        const compile = debounce(() => {
+            const compileResult = compile_to_ir(textArea.value);
+            console.log(compileResult);
+
+            const program = compileResult.program;
+
+            const isError = compileResult.errors.length !== 0;
+            output.classList.toggle("error", isError);
+
+            if (isError) {
+                output.textContent = compileResult.errors;
+            } else {
+                output.textContent = program;
+            }
+        });
+
+        init().then(() => {
+            compile();
+            textArea.addEventListener("input", () => {
+                output.textContent = "...";
+                compile();
+            });
+        });
+
+        textArea.addEventListener("input", updateCodeText);
+
+        textArea.addEventListener("scroll", () => {
+            highlightContainer.scrollTop = textArea.scrollTop;
+            highlightContainer.scrollLeft = textArea.scrollLeft;
+        });
+
+        function updateCodeText() {
+            let text = textArea.value;
+            text = doHighlight(text);
+            text = text.replace(new RegExp("&", "g"), "&").replace(new RegExp("<", "g"), "<");
+            highlightCode.innerHTML = text;
+        }
+
+        const KEYWORDS = ["werkwijze", "bekeer"];
+
+        function doHighlight(text) {
+
+            text = text.replace("\r\n", "<br>");
+            return text;
+        }
+    </script>
+    <script>
+        function check_tab(element, event) {
+            let code = element.value;
+            if(event.key == "Tab") {
+                /* Tab key pressed */
+                event.preventDefault(); // stop normal
+                let before_tab = code.slice(0, element.selectionStart); // text before tab
+                let after_tab = code.slice(element.selectionEnd, element.value.length); // text after tab
+                let cursor_pos = element.selectionStart + 1; // where cursor moves after tab - moving forward by 1 char to after tab
+                element.value = before_tab + "\t" + after_tab; // add tab char
+                // move cursor
+                element.selectionStart = cursor_pos;
+                element.selectionEnd = cursor_pos;
+                update(element.value); // Update text to include indent
+            }
+        }
+    </script>
+</body>
+</html>

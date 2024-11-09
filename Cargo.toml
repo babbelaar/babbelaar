@@ -9,7 +9,7 @@ members = [
     "builtin",
     "compiler",
     "interpreter",
-    "lsp",
+    "lsp", "playground-api",
     "tests",
 ]
 default-members = ["interpreter"]

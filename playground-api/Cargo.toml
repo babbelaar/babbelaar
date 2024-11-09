@@ -1,0 +1,12 @@
+[package]
+name = "playground-api"
+edition.workspace = true
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+babbelaar = { path = "../babbelaar" }
+babbelaar-compiler = { path = "../compiler" }
