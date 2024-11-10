@@ -160,8 +160,10 @@ impl CompileStatement for Statement {
 
 impl CompileStatement for AssignStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
-        _ = builder;
-        todo!();
+        let destination = self.destination.compile(builder).to_readable(builder);
+        println!("Dest {} is at {destination}", self.source.value());
+        let source = self.source.compile(builder).to_readable(builder);
+        builder.move_register(destination, source);
     }
 }
 
