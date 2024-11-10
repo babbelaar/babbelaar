@@ -102,6 +102,9 @@ impl FunctionOptimizer for DeadStoreEliminator {
 
             self.instructions_to_remove.sort();
             for removal_index in self.instructions_to_remove.iter().rev() {
+                if !self.can_remove_instruction(&function.instructions[*removal_index]) {
+                    continue;
+                }
                 function.instructions.remove(*removal_index);
             }
         }
@@ -123,8 +126,16 @@ impl DeadStoreEliminator {
 
         let previous_writes_without_a_read = self.writing_instructions_per_register.insert(register.clone(), index);
 
-        if let Some(useless_instructions) = previous_writes_without_a_read {
-            self.instructions_to_remove.push(useless_instructions);
+        if let Some(useless_instruction) = previous_writes_without_a_read {
+            self.instructions_to_remove.push(useless_instruction);
+        }
+    }
+
+    fn notice_unavoidable_write(&mut self, register: &Register) {
+        let previous_writes_without_a_read = self.writing_instructions_per_register.remove(register);
+
+        if let Some(useless_instruction) = previous_writes_without_a_read {
+            self.instructions_to_remove.push(useless_instruction);
         }
     }
 
@@ -144,7 +155,7 @@ impl DeadStoreEliminator {
                         self.notice_read(arg);
                     }
 
-                    self.notice_write(ret_val_reg, index);
+                    self.notice_unavoidable_write(ret_val_reg);
                 }
 
                 Instruction::Increment { register } => {
@@ -228,6 +239,14 @@ impl DeadStoreEliminator {
                     }
                 }
             }
+        }
+    }
+
+    #[must_use]
+    fn can_remove_instruction(&self, instruction: &Instruction) -> bool {
+        match instruction {
+            Instruction::Call { .. } => false,
+            _ => true,
         }
     }
 }
