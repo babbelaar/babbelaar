@@ -157,3 +157,25 @@ fn method_call_with_this() {
 
     assert_eq!(value.map(|x| x.as_i64()), Some(8));
 }
+
+#[test]
+fn assignment_statement() {
+    let value = compile_and_interpret("
+    werkwijze gebruikLokaleWaarde(_getal: g32) -> g32 {
+        bekeer _getal + 1;
+    }
+
+    werkwijze gebruikToewijzingsstelling() -> g32 {
+        stel getal = 10;
+        stel x = gebruikLokaleWaarde(getal);
+
+        getal = getal + 50;
+        x = x + gebruikLokaleWaarde(getal);
+
+        bekeer x;
+    }
+
+    ", "gebruikToewijzingsstelling");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(72));
+}
