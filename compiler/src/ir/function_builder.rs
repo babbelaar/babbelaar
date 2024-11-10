@@ -230,6 +230,10 @@ impl<'program> FunctionBuilder<'program> {
     pub fn load_this(&self) -> Option<(TypeId, Register)> {
         self.this.clone()
     }
+
+    pub fn move_register(&mut self, destination: Register, source: Register) {
+        self.instructions.push(Instruction::Move { source, destination });
+    }
 }
 
 #[cfg(test)]
