@@ -114,15 +114,7 @@ impl<'program> FunctionBuilder<'program> {
     pub fn load_local(&mut self, name: &BabString) -> (TypeId, Register) {
         let src = *self.locals.get(name).expect("Local name is not valid");
 
-        let source = src.register;
-        let reg = self.register_allocator.next();
-
-        self.instructions.push(Instruction::Move {
-            source,
-            destination: reg,
-        });
-
-        (src.type_id, reg)
+        (src.type_id, src.register)
     }
 
     #[must_use]
