@@ -261,13 +261,35 @@ impl Amd64CodeGenerator {
         println!();
     }
 
+    // TODO: I hate this, but we don't know the size of the future instruction since they are variable length, meaning we can't just do it all in one go
     #[must_use]
     fn to_byte_code(&self) -> Vec<u8> {
+        let mut offsets = Vec::new();
+        let mut relink_labels = Vec::new();
+
         let mut output = Vec::new();
         for instruction in &self.instructions {
             let offset = output.len();
+            offsets.push(offset);
+
             instruction.encode(&mut output, offset, &self.label_offsets);
+
+            if instruction.uses_label_offsets() {
+                relink_labels.push((offset, instruction));
+            }
         }
+
+        let mut actual_label_offsets = HashMap::new();
+        for (label, idx) in &self.label_offsets {
+            actual_label_offsets.insert(*label, offsets[*idx]);
+        }
+
+        for (offset, instruction) in relink_labels {
+            let mut buf = Vec::new();
+            instruction.encode(&mut buf, offset, &actual_label_offsets);
+            output[offset..(offset + buf.len())].copy_from_slice(&buf);
+        }
+
         output
     }
 

@@ -40,6 +40,25 @@ fn simple_call_other_than_returns_100() {
 }
 
 #[test]
+fn return_8_if_5_is_equal_to_5() {
+    let result = create_and_run_single_object_executable("
+        werkwijze hoofd() -> g32 {
+            als 5 == 5 {
+                stel c = 9;
+                bekeer 8;
+            }
+
+            stel a = 4;
+            stel b = 4;
+            bekeer a;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(8));
+}
+
+#[test]
 fn method_call() {
     let result = create_and_run_single_object_executable("
         structuur MijnGeavanceerdeStructuur {
