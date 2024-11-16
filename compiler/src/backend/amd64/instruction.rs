@@ -58,8 +58,7 @@ impl Amd64Instruction {
             }
 
             Self::MovReg32Imm32 { dst, src } => {
-                assert_eq!(dst.mod_rm_bits(), 0); // TODO: encode this into the opcode
-                output.push(0xb8);
+                output.push(0xb8 + dst.mod_rm_bits());
                 output.extend_from_slice(&src.to_le_bytes());
             }
 
