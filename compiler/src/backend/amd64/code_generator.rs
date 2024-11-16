@@ -5,7 +5,7 @@ use std::{collections::HashMap, mem::take};
 
 use babbelaar::BabString;
 
-use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, FunctionLink, Immediate, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator};
+use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, FunctionLink, FunctionLinkMethod, Immediate, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator};
 
 use super::{Amd64Instruction, Amd64Register};
 
@@ -100,37 +100,37 @@ impl Amd64CodeGenerator {
             }
 
             Instruction::Call { name, arguments, ret_val_reg } => {
-                // debug_assert!(arguments.len() < (1 << 8));
+                debug_assert!(arguments.len() < (1 << 8));
 
-                // for (idx, arg) in arguments.iter().enumerate() {
-                //     let reg = self.allocate_register(arg);
+                for (idx, arg) in arguments.iter().enumerate() {
+                    let current_reg = self.allocate_register(arg);
+                    let actual_reg = Amd64Register::argument_nth(idx);
 
-                //     if reg.number != idx as u8 {
-                //         self.instructions.push(ArmInstruction::MovRegister64 {
-                //             dst: ArmRegister { number: idx as _ },
-                //             src: reg,
-                //         });
-                //     }
-                // }
+                    if current_reg != actual_reg {
+                        self.instructions.push(Amd64Instruction::MovReg64Reg64 {
+                            dst: actual_reg,
+                            src: current_reg,
+                        });
+                    }
+                }
 
-                // self.link_locations.push(FunctionLink {
-                //     name: name.clone(),
-                //     offset: self.instructions.len() * 4,
-                //     method: FunctionLinkMethod::AArch64BranchLink,
-                // });
+                self.link_locations.push(FunctionLink {
+                    name: name.clone(),
+                    offset: self.instructions.len(),
+                    method: FunctionLinkMethod::Amd64CallNearRelative,
+                });
 
-                // self.instructions.push(ArmInstruction::Bl {
-                //     symbol_name: name.clone(),
-                //     offset: 0,
-                // });
+                self.instructions.push(Amd64Instruction::CallNearRelative {
+                    symbol_name: name.clone(),
+                });
 
-                // let ret_val_reg = self.allocate_register(ret_val_reg);
-                // if ret_val_reg != ArmRegister::X0 {
-                //     self.instructions.push(ArmInstruction::MovRegister64 {
-                //         dst: ret_val_reg,
-                //         src: ArmRegister::X0,
-                //     });
-                // }
+                let ret_val_reg = self.allocate_register(ret_val_reg);
+                if ret_val_reg != Amd64Register::return_register() {
+                    self.instructions.push(Amd64Instruction::MovReg64Reg64 {
+                        dst: ret_val_reg,
+                        src: Amd64Register::return_register(),
+                    });
+                }
             }
 
             Instruction::Jump { location } => {

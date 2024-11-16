@@ -3,6 +3,8 @@
 
 use std::{collections::HashMap, fmt::Display, i32};
 
+use babbelaar::BabString;
+
 use crate::Label;
 
 use super::register::Amd64Register;
@@ -21,6 +23,8 @@ use super::register::Amd64Register;
 /// | /r            | Indicates that the ModR/M byte of the instruction contains a register operand and an r/m operand.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Amd64Instruction {
+    CallNearRelative { symbol_name: BabString },
+
     Jmp { location: Label },
 
     MovReg32Imm32 { dst: Amd64Register, src: i32 },
@@ -33,6 +37,13 @@ pub enum Amd64Instruction {
 impl Amd64Instruction {
     pub fn encode(&self, output: &mut Vec<u8>, offset: usize, label_offsets: &HashMap<Label, usize>) {
         match self {
+            Self::CallNearRelative { symbol_name } => {
+                _ = symbol_name;
+
+                output.push(0xe8);
+                output.extend_from_slice(&0u32.to_le_bytes());
+            }
+
             Self::Jmp { location } => {
                 let offset = {
                     let destination = *label_offsets.get(&location).unwrap() as isize;
@@ -81,6 +92,10 @@ impl Amd64Instruction {
 impl Display for Amd64Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::CallNearRelative { symbol_name } => {
+                f.write_fmt(format_args!("call {symbol_name}"))
+            }
+
             Self::Jmp { location } => {
                 f.write_fmt(format_args!("jmp {location}"))
             }
