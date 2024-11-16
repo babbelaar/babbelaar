@@ -25,6 +25,7 @@ use super::register::Amd64Register;
 pub enum Amd64Instruction {
     CallNearRelative { symbol_name: BabString },
 
+    Inc32 { reg: Amd64Register },
     Jmp { location: Label },
 
     MovReg32Imm32 { dst: Amd64Register, src: i32 },
@@ -42,6 +43,11 @@ impl Amd64Instruction {
 
                 output.push(0xe8);
                 output.extend_from_slice(&0u32.to_le_bytes());
+            }
+
+            Self::Inc32 { reg } => {
+                output.push(0xff);
+                output.push(mod_rm_byte_reg(*reg));
             }
 
             Self::Jmp { location } => {
@@ -96,6 +102,11 @@ impl Display for Amd64Instruction {
                 f.write_fmt(format_args!("call {symbol_name}"))
             }
 
+            Self::Inc32 { reg } => {
+                f.write_str("inc ")?;
+                f.write_str(reg.name32())
+            }
+
             Self::Jmp { location } => {
                 f.write_fmt(format_args!("jmp {location}"))
             }
@@ -128,10 +139,46 @@ const fn register_extension(reg_64: bool, r: bool, x: bool, b: bool) -> u8 {
 }
 
 #[must_use]
+fn mod_rm_byte_reg(dst: Amd64Register) -> u8 {
+    let mut byte = 0b11_000_000;
+    byte |= dst.mod_rm_bits();
+
+    byte
+}
+
+#[must_use]
 fn mod_rm_byte_reg_reg(dst: Amd64Register, src: Amd64Register) -> u8 {
     let mut byte = 0b11_000_000;
     byte |= src.mod_rm_bits() << 3;
     byte |= dst.mod_rm_bits();
 
     byte
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(
+        Amd64Instruction::Inc32 { reg: Amd64Register::Rax },
+        [
+            0xff,
+            0xc0,
+        ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::Inc32 { reg: Amd64Register::Rdx },
+        [
+            0xff,
+            0xc2,
+        ].to_vec(),
+    )]
+    fn check_encoding(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
+        let mut actual = Vec::new();
+        input.encode(&mut actual, 0, &HashMap::new());
+
+        assert_eq!(actual, expected);
+    }
 }
