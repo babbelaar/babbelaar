@@ -25,7 +25,10 @@ use super::register::Amd64Register;
 pub enum Amd64Instruction {
     CallNearRelative { symbol_name: BabString },
 
+    CmpReg32Reg32 { lhs: Amd64Register, rhs: Amd64Register },
+
     Inc32 { reg: Amd64Register },
+
     Jmp { location: Label },
 
     MovReg32Imm32 { dst: Amd64Register, src: i32 },
@@ -36,6 +39,11 @@ pub enum Amd64Instruction {
 }
 
 impl Amd64Instruction {
+    #[must_use]
+    pub fn uses_label_offsets(&self) -> bool {
+        matches!(self, Self::Jmp { .. })
+    }
+
     pub fn encode(&self, output: &mut Vec<u8>, offset: usize, label_offsets: &HashMap<Label, usize>) {
         match self {
             Self::CallNearRelative { symbol_name } => {
@@ -43,6 +51,11 @@ impl Amd64Instruction {
 
                 output.push(0xe8);
                 output.extend_from_slice(&0u32.to_le_bytes());
+            }
+
+            Self::CmpReg32Reg32 { lhs, rhs } => {
+                output.push(0x39);
+                output.push(mod_rm_byte_reg_reg(*lhs, *rhs));
             }
 
             Self::Inc32 { reg } => {
@@ -54,7 +67,7 @@ impl Amd64Instruction {
                 let offset = {
                     let destination = *label_offsets.get(&location).unwrap() as isize;
                     let offset = offset as isize;
-                    (destination - offset) as i64
+                    (destination - offset - 2) as i64
                 };
 
                 if let Ok(offset) = i8::try_from(offset) {
@@ -63,10 +76,12 @@ impl Amd64Instruction {
                     return;
                 }
 
+                let offset = offset - 3;
+
                 // Note: 16-bit jump is not supported on 64-bit mode
 
                 if let Ok(offset) = i32::try_from(offset) {
-                    output.push(0xEb);
+                    output.push(0xE9);
                     output.extend(&offset.to_le_bytes());
                 }
 
@@ -102,6 +117,13 @@ impl Display for Amd64Instruction {
                 f.write_fmt(format_args!("call {symbol_name}"))
             }
 
+            Self::CmpReg32Reg32 { lhs, rhs } => {
+                f.write_str("inc ")?;
+                f.write_str(lhs.name32())?;
+                f.write_str(", ")?;
+                f.write_str(rhs.name32())
+            }
+
             Self::Inc32 { reg } => {
                 f.write_str("inc ")?;
                 f.write_str(reg.name32())
@@ -116,11 +138,11 @@ impl Display for Amd64Instruction {
             }
 
             Self::MovReg32Reg32 { dst, src } => {
-                f.write_fmt(format_args!("mov {}, {}", dst.name64(), src.name64()))
+                f.write_fmt(format_args!("mov {}, {}", dst.name32(), src.name32()))
             }
 
             Self::MovReg64Reg64 { dst, src } => {
-                f.write_fmt(format_args!("mov {}, {}", dst.name32(), src.name32()))
+                f.write_fmt(format_args!("mov {}, {}", dst.name64(), src.name64()))
             }
 
             Self::ReturnNear => f.write_str("ret"),
