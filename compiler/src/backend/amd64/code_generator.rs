@@ -76,7 +76,7 @@ impl Amd64CodeGenerator {
 
             Instruction::LoadImmediate { immediate, destination_reg } => {
                 let dst = self.allocate_register(destination_reg);
-                match immediate {
+                match immediate.shrink_if_possible() {
                     Immediate::Integer8(..) | Immediate::Integer16(..) | Immediate::Integer32(..) => {
                         self.instructions.push(Amd64Instruction::MovReg32Imm32 {
                             dst,
