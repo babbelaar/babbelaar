@@ -7,6 +7,7 @@ mod interpreter;
 mod ir;
 mod memory;
 mod optimization;
+mod os;
 mod pipeline;
 mod types;
 
@@ -58,5 +59,6 @@ pub use self::{
         Environment,
         OperatingSystem,
         Platform,
+        WindowsVersion,
     },
 };

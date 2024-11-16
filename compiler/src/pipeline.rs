@@ -1,11 +1,11 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{error::Error, fmt::Display, io::Read, mem::replace, path::{Path, PathBuf}, process::{Command, Stdio}};
+use std::{error::Error, fmt::Display, mem::replace, path::{Path, PathBuf}};
 
-use babbelaar::{Constants, ParseTree};
+use babbelaar::ParseTree;
 
-use crate::{backend::Amd64CodeGenerator, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, Platform};
+use crate::{backend::Amd64CodeGenerator, os::{macos::MacOsLdLinker, windows::WindowsLinkLinker}, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, OperatingSystem, Platform};
 
 #[derive(Debug)]
 pub struct Pipeline {
@@ -49,7 +49,9 @@ impl Pipeline {
 
     pub fn create_object(&mut self, directory: &Path, name: &str) -> Result<(), Box<dyn Error>> {
         let mut path = directory.to_path_buf();
-        path.push(format!("{name}.{}", Constants::OBJECT_FILE_EXTENSION));
+        path.push(format!("{name}.{}", self.object.platform().operating_system().object_extension()));
+
+        println!("Path: {}", path.display());
 
         let obj = CompiledObject::new(self.object.platform().clone());
         let obj = replace(&mut self.object, obj);
@@ -60,34 +62,34 @@ impl Pipeline {
         Ok(())
     }
 
-    /// TODO: this is solely macOS-specific
     pub fn link_to_executable(&mut self, directory: &Path, name: &str) -> Result<PathBuf, Box<dyn Error>> {
         let mut path = directory.to_path_buf();
 
         let ext = self.object.platform().operating_system().executable_extension();
         path.push(format!("{name}{ext}"));
 
-        let mut command = Command::new("ld");
+        match self.object.platform().operating_system() {
+            OperatingSystem::Linux => todo!(),
 
-        command.stderr(Stdio::piped());
+            OperatingSystem::MacOs => {
+                let mut linker = MacOsLdLinker::new(&path);
 
-        for object_path in &self.paths_to_objects {
-            command.arg(object_path);
-        }
+                for path in &self.paths_to_objects {
+                    linker.add_object(path);
+                }
 
-        command.arg("-o");
-        command.arg(&path);
+                linker.run()?;
+            }
 
-        command.arg("-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib");
-        command.arg("-lSystem");
+            OperatingSystem::Windows => {
+                let mut linker = WindowsLinkLinker::new(self.object.platform().clone(), &path);
 
-        let mut process = command.spawn()?;
-        let exit_status = process.wait()?;
+                for path in &self.paths_to_objects {
+                    linker.add_object(path);
+                }
 
-        if !exit_status.success() {
-            let mut description = String::new();
-            _ = process.stderr.unwrap().read_to_string(&mut description);
-            return Err(LinkerError::UnexpectedError(description).into());
+                linker.run()?;
+            }
         }
 
         Ok(path)

@@ -1,12 +1,29 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{collections::HashMap, error::Error, fs::File, path::Path};
+use std::{collections::HashMap, error::Error, fs::File, io::Write, path::Path, time::SystemTime};
 
-use babbelaar::BabString;
-use object::{write::{Object, Relocation, StandardSection, Symbol, SymbolSection}, SymbolFlags, SymbolKind, SymbolScope};
+use babbelaar::{BabString, StrIterExt};
+use object::{
+    pe::{IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE, IMAGE_SUBSYSTEM_WINDOWS_CUI},
+    write::{
+        pe::{
+            NtHeaders,
+            SectionRange,
+            Writer as PeWriter,
+        },
+        Object,
+        Relocation,
+        StandardSection,
+        Symbol,
+        SymbolSection,
+    },
+    SymbolFlags,
+    SymbolKind,
+    SymbolScope,
+};
 
-use crate::{OperatingSystem, Platform};
+use crate::{OperatingSystem, Platform, WindowsVersion};
 
 use super::FunctionLink;
 
@@ -75,6 +92,15 @@ impl CompiledObject {
     }
 
     pub fn write_to(self, path: &Path) -> Result<(), Box<dyn Error>> {
+        // match self.platform.operating_system() {
+        //     OperatingSystem::Linux => self.write_using_unified_api(path),
+        //     OperatingSystem::MacOs => self.write_using_unified_api(path),
+        //     OperatingSystem::Windows => self.write_using_pe_api(path),
+        // }
+        self.write_using_unified_api(path)
+    }
+
+    fn write_using_unified_api(self, path: &Path) -> Result<(), Box<dyn Error>> {
         let mut obj = Object::new(self.object_format(), self.object_architecture(), self.object_endian());
 
         let code_section = obj.add_subsection(StandardSection::Text, b"main");
@@ -135,11 +161,81 @@ impl CompiledObject {
         obj.write_stream(File::create(path)?)
     }
 
+    fn write_using_pe_api(self, path: &Path) -> Result<(), Box<dyn Error>> {
+        let section_alignment = 4096; // equal to the page size
+        let file_alignment = 512; // default value according to MSDN
+
+        //
+        // Set up
+        //
+
+        let data_directory_num = 0;
+        let image_base = 0x10000000;
+
+        let mut buffer = Vec::new();
+        let mut writer = PeWriter::new(self.platform.architecture().is_64_bit(), section_alignment, file_alignment, &mut buffer);
+
+        //
+        // Prepare
+        //
+
+        writer.reserve_dos_header_and_stub();
+        writer.reserve_nt_headers(data_directory_num);
+
+        let mut sections = Vec::new();
+        let (text_section, address_of_entry_point) = self.create_pe_text_section(&mut writer);
+        sections.push(text_section);
+
+        writer.reserve_section_headers(sections.len() as _);
+
+        //
+        // Write
+        //
+
+        writer.write_dos_header_and_stub()?;
+        writer.write_nt_headers(self.pe_nt_headers(address_of_entry_point, image_base));
+
+        writer.write_section_headers();
+        for section in sections {
+            writer.write_section(section.range.file_offset, &section.data);
+        }
+
+        writer.write_reloc_section();
+
+        drop(writer);
+        File::create(path)?.write_all(&mut buffer)?;
+        Ok(())
+    }
+
+    #[must_use]
+    fn create_pe_text_section(&self, writer: &mut PeWriter) -> (PeSection, u32) {
+        let mut address_of_entry_point = 0;
+
+        let mut section = PeSection {
+            data: Vec::new(),
+            range: Default::default(),
+        };
+
+        for function in &self.functions {
+            if function.final_name() == "main" {
+                address_of_entry_point = section.data.len() as u32;
+            }
+
+            section.data.extend(function.byte_code());
+        }
+
+        section.range = writer.reserve_text_section(section.data.len() as _);
+
+        address_of_entry_point += section.range.file_offset;
+
+        (section, address_of_entry_point)
+    }
+
     fn object_format(&self) -> object::BinaryFormat {
         match self.platform.operating_system() {
             OperatingSystem::Linux => object::BinaryFormat::Elf,
             OperatingSystem::MacOs => object::BinaryFormat::MachO,
-            OperatingSystem::Windows => object::BinaryFormat::Pe,
+            OperatingSystem::Windows => object::BinaryFormat::Coff,
         }
     }
 
@@ -150,6 +246,36 @@ impl CompiledObject {
     fn object_endian(&self) -> object::Endianness {
         self.platform().architecture().endianness().into()
     }
+
+    #[must_use]
+    fn pe_nt_headers(&self, address_of_entry_point: u32, image_base: u64) -> NtHeaders {
+        NtHeaders {
+            machine: self.platform.architecture().windows_machine_type(),
+            time_date_stamp: (SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()) as u32,
+            characteristics: 0,
+            major_linker_version: 1,
+            minor_linker_version: 0,
+            address_of_entry_point,
+            image_base,
+            major_operating_system_version: WindowsVersion::WINDOWS_VISTA.major(),
+            minor_operating_system_version: WindowsVersion::WINDOWS_VISTA.minor(),
+            major_image_version: 0,
+            minor_image_version: 0,
+            major_subsystem_version: WindowsVersion::WINDOWS_XP_64_BIT_EDITION.major(),
+            minor_subsystem_version: WindowsVersion::WINDOWS_XP_64_BIT_EDITION.minor(),
+            subsystem: IMAGE_SUBSYSTEM_WINDOWS_CUI,
+            dll_characteristics: IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE,
+            size_of_stack_reserve: 0x1000000,
+            size_of_stack_commit: 0x1000,
+            size_of_heap_reserve: 0x100000,
+            size_of_heap_commit: 0x1000,
+        }
+    }
+}
+
+struct PeSection {
+    data: Vec<u8>,
+    range: SectionRange,
 }
 
 #[cfg(test)]

@@ -83,10 +83,11 @@ fn method_call_with_this() {
 
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let dir = TempDir::new().unwrap().panic_on_cleanup_error();
-
-    let executable = create_single_object_executable(code, &dir);
-    println!("Running executable {}", executable.display());
+    let directory = dir.path().to_path_buf();
     dir.leak();
+
+    let executable = create_single_object_executable(code, &directory);
+    println!("Running executable {}", executable.display());
     let exit_status = run(executable).unwrap();
 
     let mut result = ProgramResult {
@@ -103,14 +104,14 @@ fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     result
 }
 
-fn create_single_object_executable(code: &str, dir: &TempDir) -> std::path::PathBuf {
+fn create_single_object_executable(code: &str, directory: &Path) -> std::path::PathBuf {
     let tree = parse_string_to_tree(code).unwrap();
 
     let mut pipeline = Pipeline::new(Platform::host_platform());
     pipeline.compile_trees(&[tree]);
-    pipeline.create_object(dir.path(), "BabBestand").unwrap();
+    pipeline.create_object(directory, "BabBestand").unwrap();
 
-    let executable = pipeline.link_to_executable(dir.path(), "BabUitvoerbare").unwrap();
+    let executable = pipeline.link_to_executable(directory, "BabUitvoerbare").unwrap();
     executable
 }
 
