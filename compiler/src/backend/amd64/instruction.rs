@@ -25,6 +25,8 @@ use super::register::Amd64Register;
 pub enum Amd64Instruction {
     CallNearRelative { symbol_name: BabString },
 
+    CmpReg32Imm8 { lhs: Amd64Register, rhs: i8 },
+    CmpReg32Imm32 { lhs: Amd64Register, rhs: i32 },
     CmpReg32Reg32 { lhs: Amd64Register, rhs: Amd64Register },
 
     Inc32 { reg: Amd64Register },
@@ -51,6 +53,18 @@ impl Amd64Instruction {
 
                 output.push(0xe8);
                 output.extend_from_slice(&0u32.to_le_bytes());
+            }
+
+            Self::CmpReg32Imm8 { lhs, rhs } => {
+                output.push(0x83);
+                output.push(mod_rm_byte_extra_op(7, *lhs));
+                output.push(*rhs as u8);
+            }
+
+            Self::CmpReg32Imm32 { lhs, rhs } => {
+                output.push(0x81);
+                output.push(mod_rm_byte_extra_op(7, *lhs));
+                output.extend_from_slice(&rhs.to_le_bytes());
             }
 
             Self::CmpReg32Reg32 { lhs, rhs } => {
@@ -117,8 +131,16 @@ impl Display for Amd64Instruction {
                 f.write_fmt(format_args!("call {symbol_name}"))
             }
 
+            Self::CmpReg32Imm8 { lhs, rhs } => {
+                f.write_fmt(format_args!("cmp {}, 0x{:x}", lhs.name32(), rhs))
+            }
+
+            Self::CmpReg32Imm32 { lhs, rhs } => {
+                f.write_fmt(format_args!("cmp {}, 0x{:x}", lhs.name32(), rhs))
+            }
+
             Self::CmpReg32Reg32 { lhs, rhs } => {
-                f.write_str("inc ")?;
+                f.write_str("cmp ")?;
                 f.write_str(lhs.name32())?;
                 f.write_str(", ")?;
                 f.write_str(rhs.name32())
@@ -177,6 +199,16 @@ fn mod_rm_byte_reg_reg(dst: Amd64Register, src: Amd64Register) -> u8 {
     byte
 }
 
+/// Extra op meaning the number after the slash (e.g. /7 is 7)
+#[must_use]
+fn mod_rm_byte_extra_op(rm: u8, reg: Amd64Register) -> u8 {
+    let mut byte = 0b11_000_000;
+    byte |= rm << 3;
+    byte |= reg.mod_rm_bits();
+
+    byte
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,6 +228,14 @@ mod tests {
             0xff,
             0xc2,
         ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::CmpReg32Imm32 { lhs: Amd64Register::Rdx, rhs: 300 },
+        [ 0x81, 0xfa, 0x2c, 0x01, 0x00, 0x00 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::CmpReg32Imm8 { lhs: Amd64Register::Rax, rhs: 1 },
+        [ 0x83, 0xf8, 0x01 ].to_vec(),
     )]
     fn check_encoding(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();

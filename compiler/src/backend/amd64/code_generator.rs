@@ -63,7 +63,35 @@ impl Amd64CodeGenerator {
     fn add_instruction(&mut self, instruction: &Instruction) {
         match instruction {
             Instruction::Compare { lhs, rhs } => {
-                // self.add_instruction_cmp(lhs, rhs);
+                let lhs = self.allocate_register(lhs);
+
+                match rhs {
+                    Operand::Immediate(immediate) => {
+                        match immediate.shrink_if_possible() {
+                            Immediate::Integer8(rhs) => {
+                                self.instructions.push(Amd64Instruction::CmpReg32Imm8 {
+                                    lhs,
+                                    rhs,
+                                });
+                            }
+
+                            Immediate::Integer16(..) | Immediate::Integer32(..) => {
+                                self.instructions.push(Amd64Instruction::CmpReg32Imm32 {
+                                    lhs,
+                                    rhs: immediate.as_i32(),
+                                });
+                            }
+
+                            Immediate::Integer64(..) => todo!(),
+                        }
+                    }
+
+                    Operand::Register(register) => {
+                        let rhs = self.allocate_register(register);
+
+                        self.instructions.push(Amd64Instruction::CmpReg32Reg32 { lhs, rhs });
+                    }
+                }
             }
 
             Instruction::Increment { register } => {
