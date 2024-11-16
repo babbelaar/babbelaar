@@ -12,7 +12,6 @@ use std::collections::HashMap;
 
 use babbelaar::{parse_string_to_tree, BabString};
 use babbelaar_compiler::{AArch64CodeGenerator, Compiler, Program};
-use signal_hook::{consts::SIGBUS, iterator::Signals};
 
 #[test]
 fn function_that_returns_0() {
@@ -174,13 +173,17 @@ fn compile_and_execute(function: &'static str, code: &str) -> isize {
     let (byte_code, offset) = compile_ir_to_arm_and_link(&program, function);
     let region = allocate_executable_region(&byte_code);
 
-    let mut signals = Signals::new(&[SIGBUS]).unwrap();
+    #[cfg(unix)]
+    {
+        use signal_hook::{consts::SIGBUS, iterator::Signals};
+        let mut signals = Signals::new(&[SIGBUS]).unwrap();
 
-    std::thread::spawn(move || {
-        for sig in signals.forever() {
-            println!("Received signal {:?}", sig);
-        }
-    });
+        std::thread::spawn(move || {
+            for sig in signals.forever() {
+                println!("Received signal {:?}", sig);
+            }
+        });
+    }
 
     execute_code(&region, offset)
 }
