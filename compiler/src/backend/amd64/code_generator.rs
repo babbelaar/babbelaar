@@ -67,11 +67,8 @@ impl Amd64CodeGenerator {
             }
 
             Instruction::Increment { register } => {
-                // let dst = self.allocate_register(register);
-                // let src = dst;
-                // let imm12 = 1;
-                // let shift = false;
-                // self.instructions.push(ArmInstruction::AddImmediate { dst, src, imm12, shift });
+                let reg = self.allocate_register(register);
+                self.instructions.push(Amd64Instruction::Inc32 { reg });
             }
 
             Instruction::LoadImmediate { immediate, destination_reg } => {
