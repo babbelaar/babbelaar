@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, error::Error, fs::File, io::Write, path::Path, time::SystemTime};
 
-use babbelaar::{BabString, StrIterExt};
+use babbelaar::BabString;
 use object::{
     pe::{IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE, IMAGE_SUBSYSTEM_WINDOWS_CUI},
     write::{

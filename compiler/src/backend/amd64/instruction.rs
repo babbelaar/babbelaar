@@ -32,6 +32,10 @@ pub enum Amd64Instruction {
     Inc32 { reg: Amd64Register },
 
     Jmp { location: Label },
+    /// Jump if not equal (short = 8-bit offset)
+    JneShort { location: Label },
+    /// Jump if equal (short = 8-bit offset)
+    JeShort { location: Label },
 
     MovReg32Imm32 { dst: Amd64Register, src: i32 },
     MovReg32Reg32 { dst: Amd64Register, src: Amd64Register },
@@ -43,7 +47,12 @@ pub enum Amd64Instruction {
 impl Amd64Instruction {
     #[must_use]
     pub fn uses_label_offsets(&self) -> bool {
-        matches!(self, Self::Jmp { .. })
+        match self {
+            Self::Jmp { .. } => true,
+            Self::JeShort { .. } => true,
+            Self::JneShort { .. } => true,
+            _ => false,
+        }
     }
 
     pub fn encode(&self, output: &mut Vec<u8>, offset: usize, label_offsets: &HashMap<Label, usize>) {
@@ -103,6 +112,36 @@ impl Amd64Instruction {
                 todo!("Very far jump, to be implemented, but is this realistically ever needed in a function?")
             }
 
+            Self::JeShort { location } => {
+                let offset = {
+                    let destination = *label_offsets.get(&location).unwrap() as isize;
+                    let offset = offset as isize;
+                    (destination - offset - 2) as i64
+                };
+
+                let Ok(offset) = i8::try_from(offset) else {
+                    panic!("JeShort past niet, we willen 0x{offset:x}");
+                };
+
+                output.push(0x74);
+                output.push(offset as u8);
+            }
+
+            Self::JneShort { location } => {
+                let offset = {
+                    let destination = *label_offsets.get(&location).unwrap() as isize;
+                    let offset = offset as isize;
+                    (destination - offset - 2) as i64
+                };
+
+                let Ok(offset) = i8::try_from(offset) else {
+                    panic!("JneShort past niet, we willen 0x{offset:x}");
+                };
+
+                output.push(0x75);
+                output.push(offset as u8);
+            }
+
             Self::MovReg32Imm32 { dst, src } => {
                 output.push(0xb8 + dst.mod_rm_bits());
                 output.extend_from_slice(&src.to_le_bytes());
@@ -153,6 +192,14 @@ impl Display for Amd64Instruction {
 
             Self::Jmp { location } => {
                 f.write_fmt(format_args!("jmp {location}"))
+            }
+
+            Self::JeShort { location } => {
+                f.write_fmt(format_args!("je {location}"))
+            }
+
+            Self::JneShort { location } => {
+                f.write_fmt(format_args!("jne {location}"))
             }
 
             Self::MovReg32Imm32 { dst, src } => {
