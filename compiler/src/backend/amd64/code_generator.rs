@@ -5,7 +5,7 @@ use std::{collections::HashMap, mem::take};
 
 use babbelaar::BabString;
 
-use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, FunctionLink, FunctionLinkMethod, Immediate, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator};
+use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, FunctionLink, FunctionLinkMethod, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Register, RegisterAllocator};
 
 use super::{Amd64Instruction, Amd64Register};
 
@@ -164,9 +164,18 @@ impl Amd64CodeGenerator {
             }
 
             Instruction::JumpConditional { condition, location } => {
-                // let cond = ArmConditionCode::from(*condition);
-                // let location = ArmBranchLocation::Label(*location);
-                // self.instructions.push(ArmInstruction::BCond { cond, location });
+                let location = *location;
+                match condition {
+                    JumpCondition::Equal => {
+                        self.instructions.push(Amd64Instruction::JeShort { location });
+                    }
+
+                    JumpCondition::NotEqual => {
+                        self.instructions.push(Amd64Instruction::JneShort { location });
+                    }
+
+                    _ => todo!("Ondersteun conditie {condition} voor Spring-locatie {location}"),
+                }
             }
 
             Instruction::Label(label) => {
