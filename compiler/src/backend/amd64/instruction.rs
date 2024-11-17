@@ -44,6 +44,9 @@ pub enum Amd64Instruction {
     MovReg32Reg32 { dst: Amd64Register, src: Amd64Register },
     MovReg64Reg64 { dst: Amd64Register, src: Amd64Register },
 
+    PopReg64 { reg: Amd64Register },
+    PushReg64 { reg: Amd64Register },
+
     ReturnNear,
 
     SubReg32Imm8 { dst: Amd64Register, src: i8 },
@@ -175,6 +178,14 @@ impl Amd64Instruction {
                 output.push(mod_rm_byte_reg_reg(*dst, *src));
             }
 
+            Self::PopReg64 { reg } => {
+                output.push(0x58 + reg.mod_rm_bits());
+            }
+
+            Self::PushReg64 { reg } => {
+                output.push(0x50 + reg.mod_rm_bits());
+            }
+
             Self::ReturnNear => output.push(0xc3),
 
             Self::SubReg32Imm8 { dst, src } => {
@@ -248,6 +259,14 @@ impl Display for Amd64Instruction {
 
             Self::MovReg64Reg64 { dst, src } => {
                 f.write_fmt(format_args!("mov {}, {}", dst.name64(), src.name64()))
+            }
+
+            Self::PopReg64 { reg } => {
+                f.write_fmt(format_args!("pop {}", reg.name64()))
+            }
+
+            Self::PushReg64 { reg } => {
+                f.write_fmt(format_args!("push {}", reg.name64()))
             }
 
             Self::ReturnNear => f.write_str("ret"),

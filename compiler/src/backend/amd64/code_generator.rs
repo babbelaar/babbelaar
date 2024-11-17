@@ -7,11 +7,12 @@ use babbelaar::BabString;
 
 use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, FunctionLink, FunctionLinkMethod, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Register, RegisterAllocator};
 
-use super::{Amd64Instruction, Amd64Register};
+use super::{Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
 
 #[derive(Debug)]
 pub struct Amd64CodeGenerator {
     function_name: BabString,
+    characteristics: Amd64FunctionCharacteristics,
     instructions: Vec<Amd64Instruction>,
     label_offsets: HashMap<Label, usize>,
     register_allocator: RegisterAllocator<Amd64Register>,
@@ -23,8 +24,10 @@ pub struct Amd64CodeGenerator {
 impl Amd64CodeGenerator {
     #[must_use]
     pub fn compile(function: &Function) -> CompiledFunction {
+        let characteristics = Amd64FunctionCharacteristics::analyze(function);
         let mut this = Self {
             function_name: function.name().clone(),
+            characteristics,
             instructions: Vec::new(),
             label_offsets: HashMap::new(),
             register_allocator: RegisterAllocator::new(function),
@@ -41,8 +44,6 @@ impl Amd64CodeGenerator {
 
         this.dump_instructions();
 
-        let link_locations = take(&mut this.link_locations);
-
         let byte_code = this.to_byte_code();
         print!("Bytecode: ");
         for x in &byte_code {
@@ -52,6 +53,8 @@ impl Amd64CodeGenerator {
             print!("{x:X} ");
         }
         println!("\n");
+
+        let link_locations = take(&mut this.link_locations);
 
         CompiledFunction {
             name: function.name.clone(),
@@ -139,12 +142,6 @@ impl Amd64CodeGenerator {
                     }
                 }
 
-                self.link_locations.push(FunctionLink {
-                    name: name.clone(),
-                    offset: self.instructions.len(),
-                    method: FunctionLinkMethod::Amd64CallNearRelative,
-                });
-
                 self.instructions.push(Amd64Instruction::CallNearRelative {
                     symbol_name: name.clone(),
                 });
@@ -183,8 +180,6 @@ impl Amd64CodeGenerator {
             }
 
             Instruction::Return { value_reg } => {
-                self.add_epilogue();
-
                 if let Some(value_reg) = value_reg {
                     let value_reg = self.allocate_register(value_reg);
                     if value_reg != Amd64Register::return_register() {
@@ -194,6 +189,8 @@ impl Amd64CodeGenerator {
                         });
                     }
                 }
+
+                self.add_epilogue();
                 self.instructions.push(Amd64Instruction::ReturnNear);
             }
 
@@ -263,8 +260,39 @@ impl Amd64CodeGenerator {
     }
 
     fn add_prologue(&mut self, instructions: &[Instruction]) {
-        _ = instructions;
-        // TODO
+        self.stack_size = 0;
+
+        for instruction in instructions {
+            if let Instruction::StackAlloc { size, .. } = instruction {
+                self.stack_size += *size;
+            }
+        }
+
+        if self.stack_size == 0 {
+            if self.characteristics.is_leaf_function() {
+                return;
+            }
+
+            self.instructions.push(Amd64Instruction::PushReg64 { reg: Amd64Register::Rbp });
+            self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: Amd64Register::Rbp, src: Amd64Register::Rsp });
+            return;
+        }
+
+        todo!()
+    }
+
+    fn add_epilogue(&mut self) {
+        if self.stack_size == 0 {
+            if self.characteristics.is_leaf_function() {
+                return;
+            }
+
+            self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: Amd64Register::Rsp, src: Amd64Register::Rbp });
+            self.instructions.push(Amd64Instruction::PopReg64 { reg: Amd64Register::Rbp });
+            return;
+        }
+
+        todo!()
     }
 
     #[must_use]
@@ -276,10 +304,6 @@ impl Amd64CodeGenerator {
                 panic!("Er is geen AMD64-register beschikbaar voor IR-register {register}!");
             }
         }
-    }
-
-    fn add_epilogue(&mut self) {
-        // TODO
     }
 
     fn dump_instructions(&self) {
@@ -300,7 +324,7 @@ impl Amd64CodeGenerator {
 
     // TODO: I hate this, but we don't know the size of the future instruction since they are variable length, meaning we can't just do it all in one go
     #[must_use]
-    fn to_byte_code(&self) -> Vec<u8> {
+    fn to_byte_code(&mut self) -> Vec<u8> {
         let mut offsets = Vec::new();
         let mut relink_labels = Vec::new();
 
@@ -313,6 +337,14 @@ impl Amd64CodeGenerator {
 
             if instruction.uses_label_offsets() {
                 relink_labels.push((offset, instruction));
+            }
+
+            if let Amd64Instruction::CallNearRelative { symbol_name, .. } = instruction {
+                self.link_locations.push(FunctionLink {
+                    name: symbol_name.clone(),
+                    offset,
+                    method: FunctionLinkMethod::Amd64CallNearRelative,
+                });
             }
         }
 
