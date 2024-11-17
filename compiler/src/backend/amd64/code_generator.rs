@@ -204,57 +204,67 @@ impl Amd64CodeGenerator {
             }
 
             Instruction::StackAlloc { dst, size } => {
+                let offset = self.space_used_on_stack;
+                self.space_used_on_stack += size;
+
                 let dst = self.allocate_register(dst);
 
-                todo!("ADD imm to RSP for putting the pointer");
-
-                self.space_used_on_stack += size;
-                debug_assert!(self.space_used_on_stack <= self.stack_size);
+                if offset == 0 {
+                    self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src: Amd64Register::Rsp });
+                } else {
+                    self.instructions.push(Amd64Instruction::LeaReg64FromReg64Off8 { dst, base: Amd64Register::Rsp, offset: offset.try_into().unwrap() });
+                }
             }
 
             Instruction::LoadPtr { destination, base_ptr, offset, typ } => {
-                let is_64_bit = match typ.bytes() {
-                    4 => false,
-                    8 => true,
-                    _ => todo!("We ondersteunen alleen 4 en 8 byte Laad ARM-instructies")
-                };
-
-                let Operand::Immediate(offset) = offset else {
-                    todo!("ondersteun register offset {offset}")
-                };
-
                 let dst = self.allocate_register(destination);
-                let base_ptr = self.allocate_register(base_ptr);
+                let base = self.allocate_register(base_ptr);
 
-                // self.instructions.push(ArmInstruction::LdrImmediate {
-                //     is_64_bit,
-                //     mode: ArmUnsignedAddressingMode::UnsignedOffset,
-                //     dst,
-                //     base_ptr,
-                //     offset: offset.as_i16(),
-                // });
-                todo!("Add LDR-equivalent on AMD64")
+                match (offset.shrink_if_possible(), typ.bytes()) {
+                    (Operand::Immediate(Immediate::Integer8(offset)), 4) => {
+                        if offset == 0 {
+                            self.instructions.push(Amd64Instruction::MovReg32FromPtrReg64 { dst, base });
+                        } else {
+                            self.instructions.push(Amd64Instruction::MovReg32FromPtrReg64Off8 { dst, base, offset });
+                        }
+                    }
+
+                    (Operand::Immediate(Immediate::Integer8(offset)), 8) => {
+                        if offset == 0 {
+                            self.instructions.push(Amd64Instruction::MovReg64FromPtrReg64 { dst, base });
+                        } else {
+                            self.instructions.push(Amd64Instruction::MovReg64FromPtrReg64Off8 { dst, base, offset });
+                        }
+                    }
+
+                    _ => todo!("Ondersteun register-offset {offset} met typegrootte {}", typ.bytes()),
+                }
             }
 
             Instruction::StorePtr { base_ptr, offset, value, typ } => {
-                let is_64_bit = match typ.bytes() {
-                    4 => false,
-                    8 => true,
-                    _ => todo!("We ondersteunen alleen 4 en 8 byte Laad ARM-instructies")
-                };
+                let base = self.allocate_register(base_ptr);
 
-                let Operand::Immediate(offset) = offset else {
-                    todo!("ondersteun register offset {offset}")
-                };
+                match (value, offset.shrink_if_possible(), typ.bytes()) {
+                    (Operand::Register(src), Operand::Immediate(Immediate::Integer8(offset)), 4) => {
+                        let src = self.allocate_register(src);
+                        if offset == 0 {
+                            self.instructions.push(Amd64Instruction::MovReg32ToPtrReg64 { base, src });
+                        } else {
+                            self.instructions.push(Amd64Instruction::MovReg32ToPtrReg64Off8 { base, offset, src });
+                        }
+                    }
 
-                let base_ptr = self.allocate_register(base_ptr);
+                    (Operand::Register(src), Operand::Immediate(Immediate::Integer8(offset)), 8) => {
+                        let src = self.allocate_register(src);
+                        if offset == 0 {
+                            self.instructions.push(Amd64Instruction::MovReg64ToPtrReg64 { base, src });
+                        } else {
+                            self.instructions.push(Amd64Instruction::MovReg64ToPtrReg64Off8 { base, offset, src });
+                        }
+                    }
 
-                let Operand::Register(src) = value else {
-                    todo!("Ondersteun immediate SlaOp-instructie");
-                };
-                let src = self.allocate_register(src);
-
-                todo!("Add STR equivalent on AMD64");
+                    _ => todo!("Ondersteun register-offset {offset} met typegrootte {}", typ.bytes()),
+                }
             }
         }
     }
@@ -268,31 +278,28 @@ impl Amd64CodeGenerator {
             }
         }
 
-        if self.stack_size == 0 {
-            if self.characteristics.is_leaf_function() {
-                return;
-            }
-
-            self.instructions.push(Amd64Instruction::PushReg64 { reg: Amd64Register::Rbp });
-            self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: Amd64Register::Rbp, src: Amd64Register::Rsp });
+        if self.stack_size == 0 && self.characteristics.is_leaf_function() {
+            // Omit frame pointer
             return;
         }
 
-        todo!()
+        self.instructions.push(Amd64Instruction::PushReg64 { reg: Amd64Register::Rbp });
+        self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: Amd64Register::Rbp, src: Amd64Register::Rsp });
+
+        if self.stack_size == 0 {
+            return;
+        }
+
+        self.instructions.push(Amd64Instruction::SubReg64Imm8 { dst: Amd64Register::Rsp, src: self.stack_size.try_into().unwrap() });
     }
 
     fn add_epilogue(&mut self) {
-        if self.stack_size == 0 {
-            if self.characteristics.is_leaf_function() {
-                return;
-            }
-
-            self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: Amd64Register::Rsp, src: Amd64Register::Rbp });
-            self.instructions.push(Amd64Instruction::PopReg64 { reg: Amd64Register::Rbp });
+        if self.stack_size == 0 && self.characteristics.is_leaf_function() {
             return;
         }
 
-        todo!()
+        self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: Amd64Register::Rsp, src: Amd64Register::Rbp });
+        self.instructions.push(Amd64Instruction::PopReg64 { reg: Amd64Register::Rbp });
     }
 
     #[must_use]
@@ -369,6 +376,11 @@ impl Amd64CodeGenerator {
 
                 if lhs != dst {
                     self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
+
+                    if let Immediate::Integer8(i8) = rhs {
+                        self.instructions.push(Amd64Instruction::LeaReg32FromReg32Off8 { dst, base: lhs, offset: *i8 });
+                        return;
+                    }
                 }
 
                 match rhs.shrink_if_possible() {
