@@ -133,6 +133,16 @@ pub enum Operand {
     Register(Register),
 }
 
+impl Operand {
+    #[must_use]
+    pub fn shrink_if_possible(&self) -> Self {
+        match self {
+            Self::Immediate(immediate) => Self::Immediate(immediate.shrink_if_possible()),
+            Self::Register(reg) => Self::Register(*reg),
+        }
+    }
+}
+
 impl Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

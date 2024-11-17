@@ -40,6 +40,38 @@ pub enum Amd64Instruction {
     /// Jump if equal (short = 8-bit offset)
     JeShort { location: Label },
 
+    LeaReg32FromReg32 {
+        dst: Amd64Register,
+        base: Amd64Register,
+    },
+
+    LeaReg32FromReg32Off8 {
+        dst: Amd64Register,
+        base: Amd64Register,
+        offset: i8,
+    },
+
+    LeaReg64FromReg64 {
+        dst: Amd64Register,
+        base: Amd64Register,
+    },
+
+    LeaReg64FromReg64Off8 {
+        dst: Amd64Register,
+        base: Amd64Register,
+        offset: i8,
+    },
+
+    MovReg32FromPtrReg64 { dst: Amd64Register, base: Amd64Register },
+    MovReg32FromPtrReg64Off8 { dst: Amd64Register, base: Amd64Register, offset: i8 },
+    MovReg64FromPtrReg64 { dst: Amd64Register, base: Amd64Register },
+    MovReg64FromPtrReg64Off8 { dst: Amd64Register, base: Amd64Register, offset: i8 },
+
+    MovReg32ToPtrReg64 { base: Amd64Register, src: Amd64Register },
+    MovReg32ToPtrReg64Off8 { base: Amd64Register, offset: i8, src: Amd64Register },
+    MovReg64ToPtrReg64 { base: Amd64Register, src: Amd64Register },
+    MovReg64ToPtrReg64Off8 { base: Amd64Register, offset: i8, src: Amd64Register },
+
     MovReg32Imm32 { dst: Amd64Register, src: i32 },
     MovReg32Reg32 { dst: Amd64Register, src: Amd64Register },
     MovReg64Reg64 { dst: Amd64Register, src: Amd64Register },
@@ -50,6 +82,7 @@ pub enum Amd64Instruction {
     ReturnNear,
 
     SubReg32Imm8 { dst: Amd64Register, src: i8 },
+    SubReg64Imm8 { dst: Amd64Register, src: i8 },
     SubReg32Reg32 { dst: Amd64Register, src: Amd64Register },
 }
 
@@ -162,6 +195,78 @@ impl Amd64Instruction {
                 output.push(offset as u8);
             }
 
+            Self::LeaReg32FromReg32 { dst, base } => {
+                output.push(0x8d);
+                output.push(mod_rm_no_displacement(*dst, *base));
+            }
+
+            Self::LeaReg32FromReg32Off8 { dst, base, offset } => {
+                output.push(0x8d);
+                output.push(mod_rm_8_bit_displacement(*dst, *base));
+                output.push(*offset as u8);
+            }
+
+            Self::LeaReg64FromReg64 { dst, base } => {
+                output.push(register_extension(true, false, false, false));
+                output.push(0x8d);
+                output.push(mod_rm_no_displacement(*dst, *base));
+            }
+
+            Self::LeaReg64FromReg64Off8 { dst, base, offset } => {
+                output.push(register_extension(true, false, false, false));
+                output.push(0x8d);
+                output.push(mod_rm_8_bit_displacement(*dst, *base));
+                output.push(*offset as u8);
+            }
+
+            Self::MovReg32FromPtrReg64 { dst, base } => {
+                output.push(0x8b);
+                output.push(mod_rm_no_displacement(*dst, *base));
+            }
+
+            Self::MovReg32FromPtrReg64Off8 { dst, base, offset } => {
+                output.push(0x8b);
+                output.push(mod_rm_8_bit_displacement(*dst, *base));
+                output.push(*offset as u8);
+            }
+
+            Self::MovReg64FromPtrReg64 { dst, base } => {
+                output.push(register_extension(true, false, false, false));
+                output.push(0x8b);
+                output.push(mod_rm_no_displacement(*dst, *base));
+            }
+
+            Self::MovReg64FromPtrReg64Off8 { dst, base, offset } => {
+                output.push(register_extension(true, false, false, false));
+                output.push(0x8b);
+                output.push(mod_rm_8_bit_displacement(*dst, *base));
+                output.push(*offset as u8);
+            }
+
+            Self::MovReg32ToPtrReg64 { base, src } => {
+                output.push(0x89);
+                output.push(mod_rm_no_displacement(*src, *base));
+            }
+
+            Self::MovReg32ToPtrReg64Off8 { base, offset, src } => {
+                output.push(0x89);
+                output.push(mod_rm_8_bit_displacement(*src, *base));
+                output.push(*offset as u8);
+            }
+
+            Self::MovReg64ToPtrReg64 { base, src } => {
+                output.push(register_extension(true, false, false, false));
+                output.push(0x8b);
+                output.push(mod_rm_8_bit_displacement(*src, *base));
+            }
+
+            Self::MovReg64ToPtrReg64Off8 { base, offset, src } => {
+                output.push(register_extension(true, false, false, false));
+                output.push(0x8b);
+                output.push(mod_rm_8_bit_displacement(*src, *base));
+                output.push(*offset as u8);
+            }
+
             Self::MovReg32Imm32 { dst, src } => {
                 output.push(0xb8 + dst.mod_rm_bits());
                 output.extend_from_slice(&src.to_le_bytes());
@@ -189,6 +294,13 @@ impl Amd64Instruction {
             Self::ReturnNear => output.push(0xc3),
 
             Self::SubReg32Imm8 { dst, src } => {
+                output.push(0x83);
+                output.push(mod_rm_byte_extra_op(5, *dst));
+                output.push(*src as u8);
+            }
+
+            Self::SubReg64Imm8 { dst, src } => {
+                output.push(register_extension(true, false, false, false));
                 output.push(0x83);
                 output.push(mod_rm_byte_extra_op(5, *dst));
                 output.push(*src as u8);
@@ -249,8 +361,56 @@ impl Display for Amd64Instruction {
                 f.write_fmt(format_args!("jne {location}"))
             }
 
+            Self::LeaReg32FromReg32 { dst, base } => {
+                f.write_fmt(format_args!("lea {}, [{}]", dst.name32(), base.name32()))
+            }
+
+            Self::LeaReg32FromReg32Off8 { dst, base, offset } => {
+                f.write_fmt(format_args!("lea {}, [{} + 0x{offset:x}]", dst.name32(), base.name32()))
+            }
+
+            Self::LeaReg64FromReg64 { dst, base } => {
+                f.write_fmt(format_args!("lea {}, [{}]", dst.name64(), base.name64()))
+            }
+
+            Self::LeaReg64FromReg64Off8 { dst, base, offset } => {
+                f.write_fmt(format_args!("lea {}, [{} + 0x{offset:x}]", dst.name64(), base.name64()))
+            }
+
+            Self::MovReg32FromPtrReg64 { dst, base } => {
+                f.write_fmt(format_args!("mov {}, [{}]", dst.name32(), base.name64()))
+            }
+
+            Self::MovReg32FromPtrReg64Off8 { dst, base, offset } => {
+                f.write_fmt(format_args!("mov {}, [{} + 0x{offset:x}]", dst.name32(), base.name64()))
+            }
+
+            Self::MovReg64FromPtrReg64 { dst, base } => {
+                f.write_fmt(format_args!("mov {}, [{}]", dst.name64(), base.name64()))
+            }
+
+            Self::MovReg64FromPtrReg64Off8 { dst, base, offset } => {
+                f.write_fmt(format_args!("mov {}, [{} + 0x{offset:x}]", dst.name64(), base.name64()))
+            }
+
+            Self::MovReg32ToPtrReg64 { base, src } => {
+                f.write_fmt(format_args!("mov [{}], {}", base.name64(), src.name32()))
+            }
+
+            Self::MovReg32ToPtrReg64Off8 { base, offset, src } => {
+                f.write_fmt(format_args!("mov [{} + 0x{offset:x}], {}", base.name64(), src.name32()))
+            }
+
+            Self::MovReg64ToPtrReg64 { base, src } => {
+                f.write_fmt(format_args!("mov [{}], {}", base.name64(), src.name64()))
+            }
+
+            Self::MovReg64ToPtrReg64Off8 { base, offset, src } => {
+                f.write_fmt(format_args!("mov [{} + 0x{offset:x}], {}", base.name64(), src.name64()))
+            }
+
             Self::MovReg32Imm32 { dst, src } => {
-                f.write_fmt(format_args!("mov {dst}, 0x{src:x}"))
+                f.write_fmt(format_args!("mov {}, 0x{src:x}", dst.name32()))
             }
 
             Self::MovReg32Reg32 { dst, src } => {
@@ -273,6 +433,10 @@ impl Display for Amd64Instruction {
 
             Self::SubReg32Imm8 { dst, src } => {
                 f.write_fmt(format_args!("sub {}, 0x{src:x}", dst.name32()))
+            }
+
+            Self::SubReg64Imm8 { dst, src } => {
+                f.write_fmt(format_args!("sub {}, 0x{src:x}", dst.name64()))
             }
 
             Self::SubReg32Reg32 { dst, src } => {
@@ -319,10 +483,31 @@ fn mod_rm_byte_extra_op(rm: u8, reg: Amd64Register) -> u8 {
     byte
 }
 
+#[must_use]
+fn mod_rm_8_bit_displacement(dst: Amd64Register, src: Amd64Register) -> u8 {
+    let mut byte = 0b01_000_000;
+
+    byte |= dst.mod_rm_bits() << 3;
+    byte |= src.mod_rm_bits();
+
+    byte
+}
+
+#[must_use]
+fn mod_rm_no_displacement(dst: Amd64Register, src: Amd64Register) -> u8 {
+    let mut byte = 0b00_000_000;
+
+    byte |= dst.mod_rm_bits() << 3;
+    byte |= src.mod_rm_bits();
+
+    byte
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use rstest::rstest;
+    use pretty_assertions::assert_eq;
 
     #[rstest]
     #[case(
@@ -368,5 +553,41 @@ mod tests {
         input.encode(&mut actual, 0, &HashMap::new());
 
         assert_eq!(actual, expected);
+    }
+
+    #[rstest]
+    #[case(
+        Amd64Instruction::LeaReg32FromReg32 { dst: Amd64Register::Rax, base: Amd64Register::Rbx },
+        [ 0x8d, 0x03 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::LeaReg32FromReg32Off8 { dst: Amd64Register::Rax, base: Amd64Register::Rbx, offset: 0x10 },
+        [ 0x8d, 0x43, 0x10 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::LeaReg64FromReg64 { dst: Amd64Register::Rax, base: Amd64Register::Rbx },
+        [ 0x48, 0x8d, 0x03 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::LeaReg64FromReg64Off8 { dst: Amd64Register::Rax, base: Amd64Register::Rbp, offset: -4 },
+        [ 0x48, 0x8d, 0x45, 0xfc ].to_vec(),
+    )]
+    fn check_encoding_lea(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
+        let mut actual = Vec::new();
+        input.encode(&mut actual, 0, &HashMap::new());
+
+        assert_eq!(actual, expected, "actual wasn't the expected");
+    }
+
+    #[rstest]
+    #[case(
+        Amd64Instruction::MovReg32ToPtrReg64 { base: Amd64Register::Rcx, src: Amd64Register::Rax },
+        [ 0x81, 0x01 ].to_vec(),
+    )]
+    fn check_encoding_mov_deref(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
+        let mut actual = Vec::new();
+        input.encode(&mut actual, 0, &HashMap::new());
+
+        assert_eq!(actual, expected, "actual wasn't the expected! Instruction was: {input}");
     }
 }
