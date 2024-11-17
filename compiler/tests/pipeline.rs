@@ -34,6 +34,20 @@ fn simple_return_1_plus_2() {
 }
 
 #[test]
+fn simple_return_8_minus_6() {
+    let result = create_and_run_single_object_executable("
+        werkwijze acht() -> g32 { bekeer 8; }
+
+        werkwijze hoofd() -> g32 {
+            bekeer acht() - 6;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(2));
+}
+
+#[test]
 fn simple_call_other_than_returns_100() {
     let result = create_and_run_single_object_executable("
         werkwijze a() -> g32 {
