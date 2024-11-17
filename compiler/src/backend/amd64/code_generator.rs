@@ -363,8 +363,37 @@ impl Amd64CodeGenerator {
         }
     }
 
-    fn add_instruction_sub(&self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
-        todo!()
+    fn add_instruction_sub(&mut self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
+        match (lhs, rhs) {
+            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+
+                if lhs != dst {
+                    self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
+                }
+
+                match rhs.shrink_if_possible() {
+                    Immediate::Integer8(i8) => {
+                        self.instructions.push(Amd64Instruction::SubReg32Imm8 { dst, src: i8 })
+                    }
+
+                    unsupported => todo!("Support SUB rhs {unsupported:?}"),
+                }
+            }
+
+            (Operand::Register(lhs), Operand::Register(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+                let rhs = self.allocate_register(rhs);
+
+                if lhs != dst {
+                    self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
+                }
+
+                self.instructions.push(Amd64Instruction::SubReg32Reg32 { dst, src: rhs })
+            }
+
+            _ => todo!("Support sub of {lhs}, {rhs}"),
+        }
     }
 }
 

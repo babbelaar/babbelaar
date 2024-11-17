@@ -45,6 +45,9 @@ pub enum Amd64Instruction {
     MovReg64Reg64 { dst: Amd64Register, src: Amd64Register },
 
     ReturnNear,
+
+    SubReg32Imm8 { dst: Amd64Register, src: i8 },
+    SubReg32Reg32 { dst: Amd64Register, src: Amd64Register },
 }
 
 impl Amd64Instruction {
@@ -173,6 +176,17 @@ impl Amd64Instruction {
             }
 
             Self::ReturnNear => output.push(0xc3),
+
+            Self::SubReg32Imm8 { dst, src } => {
+                output.push(0x83);
+                output.push(mod_rm_byte_extra_op(5, *dst));
+                output.push(*src as u8);
+            }
+
+            Self::SubReg32Reg32 { dst, src } => {
+                output.push(0x29);
+                output.push(mod_rm_byte_reg_reg(*dst, *src))
+            }
         }
     }
 }
@@ -237,6 +251,14 @@ impl Display for Amd64Instruction {
             }
 
             Self::ReturnNear => f.write_str("ret"),
+
+            Self::SubReg32Imm8 { dst, src } => {
+                f.write_fmt(format_args!("sub {}, 0x{src:x}", dst.name32()))
+            }
+
+            Self::SubReg32Reg32 { dst, src } => {
+                f.write_fmt(format_args!("sub {}, {}", dst.name32(), src.name32()))
+            }
         }
     }
 }
@@ -313,6 +335,14 @@ mod tests {
     #[case(
         Amd64Instruction::AddReg32Imm8 { dst: Amd64Register::Rax, src: 10 },
         [ 0x83, 0xc0, 0x0a ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::SubReg32Imm8 { dst: Amd64Register::Rax, src: 10 },
+        [ 0x83, 0xe8, 0x0a ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::SubReg32Reg32 { dst: Amd64Register::Rax, src: Amd64Register::Rsi },
+        [ 0x29, 0xf0 ].to_vec(),
     )]
     fn check_encoding(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
