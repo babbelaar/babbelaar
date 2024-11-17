@@ -143,6 +143,31 @@ fn method_call_with_this() {
     assert_eq!(result.exit_code, Some(7));
 }
 
+#[test]
+fn method_call_with_this_and_two_fields() {
+    let result = create_and_run_single_object_executable("
+    structuur MijnStructuurMetTweeGetallen {
+        veld a: g32,
+        veld b: g32,
+
+        werkwijze gebruikGetal() -> g32 {
+            bekeer dit.a + dit.b + 2;
+        }
+    }
+
+    werkwijze hoofd() -> g32 {
+        stel paar = nieuw MijnStructuurMetTweeGetallen {
+            a: 0,
+            b: 9,
+        };
+        bekeer paar.gebruikGetal();
+    }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(11));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let dir = TempDir::new().unwrap().panic_on_cleanup_error();
     let directory = dir.path().to_path_buf();

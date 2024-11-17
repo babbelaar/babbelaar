@@ -67,6 +67,9 @@ pub enum Amd64Instruction {
     MovReg64FromPtrReg64 { dst: Amd64Register, base: Amd64Register },
     MovReg64FromPtrReg64Off8 { dst: Amd64Register, base: Amd64Register, offset: i8 },
 
+    MovImm32ToPtrReg64 { base: Amd64Register, src: i32 },
+    MovImm32ToPtrReg64Off8 { base: Amd64Register, offset: i8, src: i32 },
+
     MovReg32ToPtrReg64 { base: Amd64Register, src: Amd64Register },
     MovReg32ToPtrReg64Off8 { base: Amd64Register, offset: i8, src: Amd64Register },
     MovReg64ToPtrReg64 { base: Amd64Register, src: Amd64Register },
@@ -243,6 +246,19 @@ impl Amd64Instruction {
                 output.push(*offset as u8);
             }
 
+            Self::MovImm32ToPtrReg64 { base, src } => {
+                output.push(0xc7);
+                output.push(base.mod_rm_bits());
+                output.extend_from_slice(&src.to_le_bytes());
+            }
+
+            Self::MovImm32ToPtrReg64Off8 { base, offset, src } => {
+                output.push(0xc7);
+                output.push(mod_rm_8_bit_displacement_single(*base));
+                output.push(*offset as u8);
+                output.extend_from_slice(&src.to_le_bytes());
+            }
+
             Self::MovReg32ToPtrReg64 { base, src } => {
                 output.push(0x89);
                 output.push(mod_rm_no_displacement(*src, *base));
@@ -393,6 +409,14 @@ impl Display for Amd64Instruction {
                 f.write_fmt(format_args!("mov {}, [{} + 0x{offset:x}]", dst.name64(), base.name64()))
             }
 
+            Self::MovImm32ToPtrReg64 { base, src } => {
+                f.write_fmt(format_args!("mov [{}], 0x{src:x}", base.name64()))
+            }
+
+            Self::MovImm32ToPtrReg64Off8 { base, offset, src } => {
+                f.write_fmt(format_args!("mov [{} + 0x{offset:x}], 0x{src:x}", base.name64()))
+            }
+
             Self::MovReg32ToPtrReg64 { base, src } => {
                 f.write_fmt(format_args!("mov [{}], {}", base.name64(), src.name32()))
             }
@@ -494,6 +518,15 @@ fn mod_rm_8_bit_displacement(dst: Amd64Register, src: Amd64Register) -> u8 {
 }
 
 #[must_use]
+fn mod_rm_8_bit_displacement_single(reg: Amd64Register) -> u8 {
+    let mut byte = 0b01_000_000;
+
+    byte |= reg.mod_rm_bits();
+
+    byte
+}
+
+#[must_use]
 fn mod_rm_no_displacement(dst: Amd64Register, src: Amd64Register) -> u8 {
     let mut byte = 0b00_000_000;
 
@@ -583,6 +616,14 @@ mod tests {
     #[case(
         Amd64Instruction::MovReg32ToPtrReg64 { base: Amd64Register::Rcx, src: Amd64Register::Rax },
         [ 0x81, 0x01 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::MovImm32ToPtrReg64 { base: Amd64Register::Rdi, src: 8 },
+        [ 0xc7, 0x07, 0x08, 0x00, 0x00, 0x00 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::MovImm32ToPtrReg64Off8 { base: Amd64Register::Rdi, offset: 4, src: 62 },
+        [ 0xc7, 0x47, 0x04, 62, 0x00, 0x00, 0x00 ].to_vec(),
     )]
     fn check_encoding_mov_deref(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
