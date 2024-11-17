@@ -330,8 +330,37 @@ impl Amd64CodeGenerator {
         output
     }
 
-    fn add_instruction_add(&self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
-        todo!()
+    fn add_instruction_add(&mut self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
+        match (lhs, rhs) {
+            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+
+                if lhs != dst {
+                    self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
+                }
+
+                match rhs.shrink_if_possible() {
+                    Immediate::Integer8(i8) => {
+                        self.instructions.push(Amd64Instruction::AddReg32Imm8 { dst, src: i8 })
+                    }
+
+                    unsupported => todo!("Support ADD rhs {unsupported:?}"),
+                }
+            }
+
+            (Operand::Register(lhs), Operand::Register(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+                let rhs = self.allocate_register(rhs);
+
+                if lhs != dst {
+                    self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
+                }
+
+                self.instructions.push(Amd64Instruction::AddReg32Reg32 { dst, src: rhs })
+            }
+
+            _ => todo!("Support add of {lhs}, {rhs}"),
+        }
     }
 
     fn add_instruction_sub(&self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {

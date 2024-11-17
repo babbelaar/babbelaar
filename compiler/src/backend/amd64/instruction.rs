@@ -23,6 +23,9 @@ use super::register::Amd64Register;
 /// | /r            | Indicates that the ModR/M byte of the instruction contains a register operand and an r/m operand.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Amd64Instruction {
+    AddReg32Imm8 { dst: Amd64Register, src: i8 },
+    AddReg32Reg32 { dst: Amd64Register, src: Amd64Register },
+
     CallNearRelative { symbol_name: BabString },
 
     CmpReg32Imm8 { lhs: Amd64Register, rhs: i8 },
@@ -57,6 +60,17 @@ impl Amd64Instruction {
 
     pub fn encode(&self, output: &mut Vec<u8>, offset: usize, label_offsets: &HashMap<Label, usize>) {
         match self {
+            Self::AddReg32Imm8 { dst, src } => {
+                output.push(0x83);
+                output.push(mod_rm_byte_extra_op(0, *dst));
+                output.push(*src as u8);
+            }
+
+            Self::AddReg32Reg32 { dst, src } => {
+                output.push(0x01);
+                output.push(mod_rm_byte_reg_reg(*dst, *src))
+            }
+
             Self::CallNearRelative { symbol_name } => {
                 _ = symbol_name;
 
@@ -166,6 +180,14 @@ impl Amd64Instruction {
 impl Display for Amd64Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::AddReg32Imm8 { dst, src } => {
+                f.write_fmt(format_args!("add {}, 0x{src:x}", dst.name32()))
+            }
+
+            Self::AddReg32Reg32 { dst, src } => {
+                f.write_fmt(format_args!("add {}, {}", dst.name32(), src.name32()))
+            }
+
             Self::CallNearRelative { symbol_name } => {
                 f.write_fmt(format_args!("call {symbol_name}"))
             }
@@ -283,6 +305,14 @@ mod tests {
     #[case(
         Amd64Instruction::CmpReg32Imm8 { lhs: Amd64Register::Rax, rhs: 1 },
         [ 0x83, 0xf8, 0x01 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::AddReg32Reg32 { dst: Amd64Register::Rax, src: Amd64Register::Rdx },
+        [ 0x01, 0xd0 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::AddReg32Imm8 { dst: Amd64Register::Rax, src: 10 },
+        [ 0x83, 0xc0, 0x0a ].to_vec(),
     )]
     fn check_encoding(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
