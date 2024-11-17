@@ -20,6 +20,20 @@ fn simple_return_0() {
 }
 
 #[test]
+fn simple_return_1_plus_2() {
+    let result = create_and_run_single_object_executable("
+        werkwijze een() -> g32 { bekeer 1; }
+
+        werkwijze hoofd() -> g32 {
+            bekeer een() + 2;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(3));
+}
+
+#[test]
 fn simple_call_other_than_returns_100() {
     let result = create_and_run_single_object_executable("
         werkwijze a() -> g32 {
@@ -37,6 +51,21 @@ fn simple_call_other_than_returns_100() {
 
     assert_eq!(result.signal, None);
     assert_eq!(result.exit_code, Some(100));
+}
+
+#[test]
+fn return_1_plus_1_with_subroutine_in_between() {
+    let result = create_and_run_single_object_executable("
+        werkwijze subroutine() {}
+
+        werkwijze hoofd() -> g32 {
+            stel een = 1;
+            bekeer 1 + een;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(2));
 }
 
 #[test]
