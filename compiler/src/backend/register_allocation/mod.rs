@@ -51,8 +51,8 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
         let mut currently_mapped = HashMap::new();
 
-        let mut currently_available = R::callee_saved_registers().iter()
-            .chain(R::caller_saved_registers().iter())
+        let mut currently_available = R::caller_saved_registers().iter()
+            .chain(R::callee_saved_registers().iter())
             .copied()
             .collect::<VecDeque<R>>();
 
@@ -61,13 +61,19 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
             currently_mapped.insert(register, reg);
             self.mappings.insert(*register, Some(reg));
+
+            if let Some((index, _)) = currently_available.iter().enumerate().find(|(_, avail_reg)| **avail_reg == reg) {
+                currently_available.remove(index);
+            }
         }
 
         for (index, _) in function.instructions().iter().enumerate() {
             for (reg, lifetime) in &registers {
                 if !lifetime.is_active_at(index) {
                     if let Some(mapped) = currently_mapped.remove(reg) {
-                        currently_available.push_front(mapped);
+                        if !currently_available.contains(&mapped) {
+                            currently_available.push_front(mapped);
+                        }
                     }
 
                     continue;
@@ -80,18 +86,25 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
                 let register_available_after_this_instruction = registers.iter()
                     .filter(|(_, lifetime)| lifetime.last_use() == index)
-                    .filter_map(|(reg, _)| currently_mapped.get(reg))
-                    .next()
-                    .copied();
+                    .filter_map(|(reg, _)| Some((*reg, *currently_mapped.get(reg)?)))
+                    .next();
+
+                if let Some((prev_avail_register, available_register)) = register_available_after_this_instruction {
+                    currently_mapped.remove(&prev_avail_register);
+
+                    currently_mapped.insert(reg, available_register);
+                    self.mappings.insert(*reg, Some(available_register));
+                    continue;
+                }
 
                 // Check if there is a register available, otherwise we should spill
-                let Some(available_register) = register_available_after_this_instruction.or_else(|| currently_available.pop_front()) else {
-                    self.mappings.insert(*reg, None);
+                if let Some(available_register) = currently_available.pop_front() {
+                    currently_mapped.insert(reg, available_register);
+                    self.mappings.insert(*reg, Some(available_register));
                     continue;
-                };
+                }
 
-                currently_mapped.insert(reg, available_register);
-                self.mappings.insert(*reg, Some(available_register));
+                self.mappings.insert(*reg, None);
             }
         }
 
