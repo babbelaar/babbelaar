@@ -245,6 +245,21 @@ impl Amd64CodeGenerator {
                 let base = self.allocate_register(base_ptr);
 
                 match (value, offset.shrink_if_possible(), typ.bytes()) {
+                    (Operand::Immediate(value), Operand::Immediate(Immediate::Integer8(offset)), 4) => {
+                        if offset == 0 {
+                            self.instructions.push(Amd64Instruction::MovImm32ToPtrReg64 {
+                                base,
+                                src: value.as_i32(),
+                            });
+                        } else {
+                            self.instructions.push(Amd64Instruction::MovImm32ToPtrReg64Off8 {
+                                base,
+                                offset,
+                                src: value.as_i32(),
+                            });
+                        }
+                    }
+
                     (Operand::Register(src), Operand::Immediate(Immediate::Integer8(offset)), 4) => {
                         let src = self.allocate_register(src);
                         if offset == 0 {
@@ -263,7 +278,7 @@ impl Amd64CodeGenerator {
                         }
                     }
 
-                    _ => todo!("Ondersteun register-offset {offset} met typegrootte {}", typ.bytes()),
+                    _ => todo!("Ondersteun {instruction}"),
                 }
             }
         }
