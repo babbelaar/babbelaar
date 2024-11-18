@@ -3,6 +3,8 @@
 
 use std::collections::HashSet;
 
+use object::pe::{IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_ARM64};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Architecture {
     AArch64,
@@ -13,6 +15,20 @@ impl Architecture {
     #[must_use]
     pub const fn endianness(&self) -> Endianness {
         Endianness::Little
+    }
+
+    #[must_use]
+    pub const fn is_64_bit(&self) -> bool {
+        true
+    }
+
+    /// See <https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types>
+    #[must_use]
+    pub const fn windows_machine_type(&self) -> u16 {
+        match self {
+            Self::AArch64 => IMAGE_FILE_MACHINE_ARM64,
+            Self::X86_64 => IMAGE_FILE_MACHINE_AMD64,
+        }
     }
 }
 
@@ -44,6 +60,15 @@ impl OperatingSystem {
             _ => "",
         }
     }
+
+    #[must_use]
+    pub const fn object_extension(&self) -> &'static str {
+        match self {
+            Self::Linux => "o",
+            Self::MacOs => "o",
+            Self::Windows => "obj",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,8 +90,8 @@ impl Platform {
         } else if cfg!(target_os = "windows") {
             Self {
                 architecture: Architecture::X86_64,
-                environment: Environment::Darwin,
-                operating_system: OperatingSystem::MacOs,
+                environment: Environment::MsVC,
+                operating_system: OperatingSystem::Windows,
             }
         } else {
             todo!()
@@ -172,4 +197,43 @@ impl<N: Eq> Default for Graph<N> {
 struct GraphEdge {
     from: usize,
     to: usize,
+}
+
+/// See [Microsoft Learn: Operating System Version](https://learn.microsoft.com/nl-nl/windows/win32/sysinfo/operating-system-version?redirectedfrom=MSDN)
+#[derive(Debug, Clone, Copy)]
+pub struct WindowsVersion {
+    major: u16,
+    minor: u16,
+}
+
+#[allow(unused)]
+impl WindowsVersion {
+    pub const WINDOWS_11: Self = Self { major: 10, minor: 0};
+    pub const WINDOWS_10: Self = Self { major: 10, minor: 0};
+    pub const WINDOWS_SERVER_2022: Self = Self { major: 10, minor: 0};
+    pub const WINDOWS_SERVER_2019: Self = Self { major: 10, minor: 0};
+    pub const WINDOWS_SERVER_2016: Self = Self { major: 10, minor: 0};
+    pub const WINDOWS_8_1: Self = Self { major: 6, minor: 3};
+    pub const WINDOWS_SERVER_2012_R2: Self = Self { major: 6, minor: 3};
+    pub const WINDOWS_8: Self = Self { major: 6, minor: 2};
+    pub const WINDOWS_SERVER_2012: Self = Self { major: 6, minor: 2};
+    pub const WINDOWS_7: Self = Self { major: 6, minor: 1};
+    pub const WINDOWS_SERVER_2008_R2: Self = Self { major: 6, minor: 1};
+    pub const WINDOWS_SERVER_2008: Self = Self { major: 6, minor: 0};
+    pub const WINDOWS_VISTA: Self = Self { major: 6, minor: 0};
+    pub const WINDOWS_SERVER_2003_R2: Self = Self { major: 5, minor: 2};
+    pub const WINDOWS_SERVER_2003: Self = Self { major: 5, minor: 2};
+    pub const WINDOWS_XP_64_BIT_EDITION: Self = Self { major: 5, minor: 2};
+    pub const WINDOWS_XP: Self = Self { major: 5, minor: 1};
+    pub const WINDOWS_2000: Self = Self { major: 5, minor: 0};
+
+    #[must_use]
+    pub const fn major(&self) -> u16 {
+        self.major
+    }
+
+    #[must_use]
+    pub const fn minor(&self) -> u16 {
+        self.minor
+    }
 }

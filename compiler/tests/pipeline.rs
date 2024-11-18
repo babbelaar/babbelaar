@@ -20,6 +20,34 @@ fn simple_return_0() {
 }
 
 #[test]
+fn simple_return_1_plus_2() {
+    let result = create_and_run_single_object_executable("
+        werkwijze een() -> g32 { bekeer 1; }
+
+        werkwijze hoofd() -> g32 {
+            bekeer een() + 2;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(3));
+}
+
+#[test]
+fn simple_return_8_minus_6() {
+    let result = create_and_run_single_object_executable("
+        werkwijze acht() -> g32 { bekeer 8; }
+
+        werkwijze hoofd() -> g32 {
+            bekeer acht() - 6;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(2));
+}
+
+#[test]
 fn simple_call_other_than_returns_100() {
     let result = create_and_run_single_object_executable("
         werkwijze a() -> g32 {
@@ -37,6 +65,40 @@ fn simple_call_other_than_returns_100() {
 
     assert_eq!(result.signal, None);
     assert_eq!(result.exit_code, Some(100));
+}
+
+#[test]
+fn return_1_plus_1_with_subroutine_in_between() {
+    let result = create_and_run_single_object_executable("
+        werkwijze subroutine() {}
+
+        werkwijze hoofd() -> g32 {
+            stel een = 1;
+            bekeer 1 + een;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(2));
+}
+
+#[test]
+fn return_8_if_5_is_equal_to_5() {
+    let result = create_and_run_single_object_executable("
+        werkwijze hoofd() -> g32 {
+            als 5 == 5 {
+                stel c = 9;
+                bekeer 8;
+            }
+
+            stel a = 4;
+            stel b = 4;
+            bekeer a;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(8));
 }
 
 #[test]
@@ -81,12 +143,38 @@ fn method_call_with_this() {
     assert_eq!(result.exit_code, Some(7));
 }
 
+#[test]
+fn method_call_with_this_and_two_fields() {
+    let result = create_and_run_single_object_executable("
+    structuur MijnStructuurMetTweeGetallen {
+        veld a: g32,
+        veld b: g32,
+
+        werkwijze gebruikGetal() -> g32 {
+            bekeer dit.a + dit.b + 2;
+        }
+    }
+
+    werkwijze hoofd() -> g32 {
+        stel paar = nieuw MijnStructuurMetTweeGetallen {
+            a: 0,
+            b: 9,
+        };
+        bekeer paar.gebruikGetal();
+    }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(11));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let dir = TempDir::new().unwrap().panic_on_cleanup_error();
-
-    let executable = create_single_object_executable(code, &dir);
-    println!("Running executable {}", executable.display());
+    let directory = dir.path().to_path_buf();
     dir.leak();
+
+    let executable = create_single_object_executable(code, &directory);
+    println!("Running executable {}", executable.display());
     let exit_status = run(executable).unwrap();
 
     let mut result = ProgramResult {
@@ -103,14 +191,14 @@ fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     result
 }
 
-fn create_single_object_executable(code: &str, dir: &TempDir) -> std::path::PathBuf {
+fn create_single_object_executable(code: &str, directory: &Path) -> std::path::PathBuf {
     let tree = parse_string_to_tree(code).unwrap();
 
     let mut pipeline = Pipeline::new(Platform::host_platform());
     pipeline.compile_trees(&[tree]);
-    pipeline.create_object(dir.path(), "BabBestand").unwrap();
+    pipeline.create_object(directory, "BabBestand").unwrap();
 
-    let executable = pipeline.link_to_executable(dir.path(), "BabUitvoerbare").unwrap();
+    let executable = pipeline.link_to_executable(directory, "BabUitvoerbare").unwrap();
     executable
 }
 

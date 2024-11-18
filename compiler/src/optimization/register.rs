@@ -126,10 +126,16 @@ impl FunctionOptimizer for RegisterInliner {
 
                 Instruction::StorePtr { base_ptr, offset, value, typ: size } => {
                     self.values.remove(base_ptr);
-                    // TODO: add known values
-                    _ = offset;
-                    _ = value;
-                    _ = size;
+
+                    let offset = self.try_inline_operand(offset);
+                    let value = self.try_inline_operand(value);
+
+                    *instruction = Instruction::StorePtr {
+                        base_ptr: *base_ptr,
+                        offset,
+                        value,
+                        typ: *size,
+                    };
                 }
             }
         }

@@ -44,11 +44,16 @@ impl FunctionLink {
 
         match self.method {
             FunctionLinkMethod::AArch64BranchLink => {
-                let offset = offset / 4;
+                let offset = (offset / 4) - 1;
 
                 let instruction = ArmInstruction::Bl { offset: offset as i32, symbol_name: BabString::empty() }
                     .encode(0, &HashMap::new());
                 code[0..4].copy_from_slice(&instruction.to_ne_bytes());
+            }
+
+            FunctionLinkMethod::Amd64CallNearRelative => {
+                let offset = (offset - self.offset as isize - 5) as u32;
+                code[1..5].copy_from_slice(&offset.to_le_bytes());
             }
         }
     }
@@ -57,6 +62,7 @@ impl FunctionLink {
 #[derive(Debug, Clone, PartialEq)]
 pub enum FunctionLinkMethod {
     AArch64BranchLink,
+    Amd64CallNearRelative,
 }
 
 impl FunctionLinkMethod {
@@ -64,6 +70,7 @@ impl FunctionLinkMethod {
     pub fn encoding(&self) -> RelocationEncoding {
         match self {
             Self::AArch64BranchLink => RelocationEncoding::AArch64Call,
+            Self::Amd64CallNearRelative => RelocationEncoding::X86RipRelative,
         }
     }
 
@@ -71,6 +78,7 @@ impl FunctionLinkMethod {
     pub fn size(&self) -> u8 {
         match self {
             Self::AArch64BranchLink => 32,
+            Self::Amd64CallNearRelative => 40,
         }
     }
 
@@ -78,6 +86,7 @@ impl FunctionLinkMethod {
     pub fn addend(&self) -> i64 {
         match self {
             Self::AArch64BranchLink => 0,
+            Self::Amd64CallNearRelative => 0,
         }
     }
 }

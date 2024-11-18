@@ -13,6 +13,25 @@ pub enum Immediate {
 
 impl Immediate {
     #[must_use]
+    pub fn shrink_if_possible(self) -> Self {
+        let value = self.as_i64();
+
+        if let Ok(i8) = i8::try_from(value) {
+            return Self::Integer8(i8);
+        }
+
+        if let Ok(i16) = i16::try_from(value) {
+            return Self::Integer16(i16);
+        }
+
+        if let Ok(i32) = i32::try_from(value) {
+            return Self::Integer32(i32);
+        }
+
+        Self::Integer64(value)
+    }
+
+    #[must_use]
     pub const fn as_i8(&self) -> i8 {
         match self {
             Self::Integer8(i) => *i,
@@ -112,6 +131,16 @@ impl RegisterAllocator {
 pub enum Operand {
     Immediate(Immediate),
     Register(Register),
+}
+
+impl Operand {
+    #[must_use]
+    pub fn shrink_if_possible(&self) -> Self {
+        match self {
+            Self::Immediate(immediate) => Self::Immediate(immediate.shrink_if_possible()),
+            Self::Register(reg) => Self::Register(*reg),
+        }
+    }
 }
 
 impl Display for Operand {
