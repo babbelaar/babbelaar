@@ -3,29 +3,58 @@
 
 #![deny(elided_lifetimes_in_paths)]
 
-mod attribute;
+mod ast;
 mod builtin;
 mod constants;
-mod expression;
 mod interpreter;
-mod keyword;
 mod lexer;
-mod parser;
 mod semantics;
-mod statement;
-mod string;
-mod structure;
-mod token;
-mod tree;
-mod type_;
 mod util;
-mod value;
 
 pub use self::{
-    attribute::{
+    ast::{
+        AssignStatement,
         Attribute,
         AttributeArgument,
         AttributeList,
+        BiExpression,
+        BiOperator,
+        Comparison,
+        Expression,
+        ExtensionStatement,
+        Field,
+        FieldInstantiation,
+        ForIterableKind,
+        ForStatement,
+        FunctionCallExpression,
+        FunctionStatement,
+        IfStatement,
+        InterfaceSpecifier,
+        InterfaceStatement,
+        MathOperator,
+        Method,
+        MethodCallExpression,
+        Parameter,
+        ParseDiagnostic,
+        ParseError,
+        Parser,
+        ParseTree,
+        PostfixExpression,
+        PostfixExpressionKind,
+        PrimaryExpression,
+        RangeExpression,
+        ReturnStatement,
+        Statement,
+        StatementKind,
+        Structure,
+        StructureInstantiationExpression,
+        TemplateStringExpressionPart,
+        Type,
+        TypeQualifier,
+        TypeSpecifier,
+        UnaryExpression,
+        UnaryExpressionKind,
+        VariableStatement
     },
     builtin::{
         ArrayMethod,
@@ -37,35 +66,16 @@ pub use self::{
         BuiltinType,
     },
     constants::Constants,
-    expression::{
-        BiExpression,
-        BiOperator,
-        Comparison,
-        Expression,
-        FieldInstantiation,
-        FunctionCallExpression,
-        MathOperator,
-        MethodCallExpression,
-        PostfixExpression,
-        PostfixExpressionKind,
-        PrimaryExpression,
-        RangeExpression,
-        StructureInstantiationExpression,
-        TemplateStringExpressionPart,
-        UnaryExpression,
-        UnaryExpressionKind,
-    },
     interpreter::Interpreter,
-    keyword::Keyword,
     lexer::{
+        Keyword,
         Lexer,
         LexerError,
         LexerErrorKind,
-    },
-    parser::{
-        Parser,
-        ParseDiagnostic,
-        ParseError,
+        Punctuator,
+        TemplateStringToken,
+        Token,
+        TokenKind,
     },
     semantics::{
         SemanticAnalysisPhase,
@@ -80,66 +90,30 @@ pub use self::{
         SemanticStructure,
         SemanticType,
     },
-    statement::{
-        AssignStatement,
-        ExtensionStatement,
-        ForIterableKind,
-        ForStatement,
-        FunctionStatement,
-        IfStatement,
-        ReturnStatement,
-        Statement,
-        StatementKind,
-        VariableStatement
-    },
-    string::{
-        BabString,
-        IntoBabString,
-        Slice,
-    },
-    structure::{
-        Field,
-        InterfaceStatement,
-        Method,
-        Structure,
-    },
-    token::{
-        Punctuator,
-        TemplateStringToken,
-        Token,
-        TokenKind
-    },
-    tree::ParseTree,
-    type_::{
-        InterfaceSpecifier,
-        Parameter,
-        Type,
-        TypeQualifier,
-        TypeSpecifier,
-    },
     util::{
         BabbelaarCodeAction,
         BabbelaarCodeActionType,
         BabbelaarCommand,
         BabbelaarFixKind,
+        BabString,
         DocumentationProvider,
+        ExtensionId,
         FileEdit,
         FileId,
         FileLocation,
         FileRange,
+        FunctionId,
+        InterfaceId,
+        IntoBabString,
         LspCompletion,
+        MethodId,
+        MethodOwnerId,
         OptionExt,
         Ranged,
+        Slice,
         SourceCode,
         StrExt,
         StrIterExt,
-    },
-    value::{
-        ExtensionId,
-        FunctionId,
-        InterfaceId,
-        MethodId,
-        MethodOwnerId,
         StructureId,
         Value,
         ValueType,

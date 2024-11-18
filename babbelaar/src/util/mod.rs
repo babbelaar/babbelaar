@@ -16,6 +16,8 @@ mod ranged;
 mod source_code;
 mod str_ext;
 mod str_iter_ext;
+mod string;
+mod value;
 
 pub use self::{
     babbelaar_code_action::BabbelaarCodeAction,
@@ -33,4 +35,19 @@ pub use self::{
     source_code::SourceCode,
     str_ext::StrExt,
     str_iter_ext::StrIterExt,
+    string::{
+        BabString,
+        IntoBabString,
+        Slice,
+    },
+    value::{
+        ExtensionId,
+        FunctionId,
+        InterfaceId,
+        MethodId,
+        MethodOwnerId,
+        StructureId,
+        Value,
+        ValueType,
+    },
 };
