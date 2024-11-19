@@ -163,6 +163,9 @@ impl<N: Eq> Graph<N> {
         }
     }
 
+    /// Returns:
+    /// - `true` if the edge was newly inserted
+    /// - `false` if there already was an edge between `from` and `to`
     pub fn add_edge(&mut self, from: N, to: N) -> bool {
         let from = self.add_or_get_node(from);
         let to = self.add_or_get_node(to);
