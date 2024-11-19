@@ -136,6 +136,7 @@ dependencies = [
  "rstest 0.22.0",
  "signal-hook",
  "temp-dir",
+ "thiserror",
 ]
 
 [[package]]
