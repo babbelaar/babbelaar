@@ -56,7 +56,7 @@ impl DeadCodeEliminator {
 
                 Instruction::JumpConditional { location, .. } => {
                     let position = self.position_of_label(instructions, location);
-                    if !self.control_flow_graph.add_edge(index, position) {
+                    if self.control_flow_graph.add_edge(index, position) {
                         self.visit_section(instructions, position);
                     }
                 }
