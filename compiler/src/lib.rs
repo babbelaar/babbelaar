@@ -50,6 +50,7 @@ pub use self::{
         optimize_function,
         optimize_program,
     },
+    os::Signal,
     pipeline::{
         LinkerError,
         Pipeline,

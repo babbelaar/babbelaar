@@ -4,7 +4,7 @@
 use std::{error::Error, path::Path, process::{Command, ExitStatus}};
 
 use babbelaar::parse_string_to_tree;
-use babbelaar_compiler::{Pipeline, Platform};
+use babbelaar_compiler::{Pipeline, Platform, Signal};
 use temp_dir::TempDir;
 
 #[test]
@@ -185,7 +185,7 @@ fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;
-        result.signal = exit_status.signal();
+        result.signal = exit_status.signal().map(Signal::from);
     }
 
     result
@@ -211,5 +211,5 @@ fn run(path: impl AsRef<Path>) -> Result<ExitStatus, Box<dyn Error>> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProgramResult {
     exit_code: Option<i32>,
-    signal: Option<i32>,
+    signal: Option<Signal>,
 }
