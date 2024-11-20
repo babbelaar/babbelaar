@@ -19,7 +19,7 @@ hallo("lezer");
 
 Dit heeft als uitvoer:
 ```babbelaar
-Hallo, persoon!
+Hallo, lezer!
 ```
 
 ### Statements
@@ -69,7 +69,7 @@ volg i in reeks(1, 2) {
 ### Vormen
 Er zijn verschillende typen ingebouwd binnen Babbelaar. Hieronder staan de standaardtypen, maar je kunt ook zelf typen bedenken door een [`structuur`](#structuren) aan te maken.
 
-#### 👍/👍 Booleaanse waarde
+#### 👍/👎 Booleaanse waarde
 Een booleaanse waarde, is een moeilijke naam voor een waarde die of `waar` of `onwaar` kan zijn. Je kunt bijvoorbeeld bruin haar hebben, of niet:
 ```babbelaar
 stel heeftBruinHaar = waar;
@@ -136,7 +136,7 @@ stel pietje = nieuw Persoon {
     leeftijd: 9,
 };
 
-pietje.zegGedag(); // Hallo, ik ben Pietje Bell Kwak en ik ben 9 jaar oud.
+pietje.zegGedag(); // Hallo, ik ben Pietje Bell en ik ben 9 jaar oud.
 ```
 
 ## Ontwikkeling
