@@ -244,6 +244,9 @@ impl Amd64CodeGenerator {
             Instruction::StorePtr { base_ptr, offset, value, typ } => {
                 let base = self.allocate_register(base_ptr);
 
+                // TODO: add x86-specific optimizations to create the following code below:
+                let value = &Operand::Register(*value);
+
                 match (value, offset.shrink_if_possible(), typ.bytes()) {
                     (Operand::Immediate(value), Operand::Immediate(Immediate::Integer8(offset)), 4) => {
                         if offset == 0 {

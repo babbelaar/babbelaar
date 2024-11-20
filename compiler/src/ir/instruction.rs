@@ -123,7 +123,7 @@ pub enum Instruction {
     StorePtr {
         base_ptr: Register,
         offset: Operand,
-        value: Operand,
+        value: Register,
         typ: PrimitiveType,
     },
 }

@@ -198,7 +198,7 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     /// Stores a value at the `base_ptr` offset by `offset`.
-    pub fn store_ptr(&mut self, base_ptr: Register, offset: Operand, value: impl Into<Operand>, typ: PrimitiveType) {
+    pub fn store_ptr(&mut self, base_ptr: Register, offset: Operand, value: impl Into<Register>, typ: PrimitiveType) {
         self.instructions.push(Instruction::StorePtr {
             base_ptr,
             offset,

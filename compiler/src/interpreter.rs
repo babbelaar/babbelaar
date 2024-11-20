@@ -279,25 +279,25 @@ impl Interpreter {
                 match typ.bytes() {
                     1 => {
                         let ptr = ptr as *mut i8;
-                        let value = self.operand_to_immediate(&value).as_i8();
+                        let value = self.register(&value).as_i8();
                         unsafe { ptr.write(value as _) };
                     }
 
                     2 => {
                         let ptr = ptr as *mut i16;
-                        let value = self.operand_to_immediate(&value).as_i16();
+                        let value = self.register(&value).as_i16();
                         unsafe { ptr.write(value as _) };
                     }
 
                     4 => {
                         let ptr = ptr as *mut i32;
-                        let value = self.operand_to_immediate(&value).as_i32();
+                        let value = self.register(&value).as_i32();
                         unsafe { ptr.write(value as _) };
                     }
 
                     8 => {
                         let ptr = ptr as *mut i64;
-                        let value = self.operand_to_immediate(&value).as_i64();
+                        let value = self.register(&value).as_i64();
                         unsafe { ptr.write(value as _) };
                     }
 
