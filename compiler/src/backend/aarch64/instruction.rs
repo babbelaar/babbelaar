@@ -558,15 +558,15 @@ impl Display for ArmInstruction {
                 _ = is_64_bit;
                 match mode {
                     ArmSignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("stp {first}, {second}, {dst}, #0x{offset:x}"))
+                        f.write_fmt(format_args!("stp {first}, {second}, {dst}, #{offset}"))
                     }
 
                     ArmSignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #0x{offset:x}]!"))
+                        f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #{offset}]!"))
                     }
 
                     ArmSignedAddressingMode::SignedOffset => {
-                        f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #0x{offset:x}]"))
+                        f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #{offset}]"))
                     }
                 }
             }
@@ -628,6 +628,17 @@ mod tests {
     #[case(
         ArmInstruction::Ret,
         0xd65f03c0,
+    )]
+    #[case(
+        ArmInstruction::Stp {
+            is_64_bit: true,
+            mode: ArmSignedAddressingMode::PreIndex,
+            dst: ArmRegister::SP,
+            offset: -16 as _,
+            first: ArmRegister::FP,
+            second: ArmRegister::LR,
+        },
+        0xa9bf7bfd,
     )]
     #[case(
         ArmInstruction::SubImmediate {
