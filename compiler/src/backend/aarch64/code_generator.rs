@@ -213,10 +213,7 @@ impl AArch64CodeGenerator {
 
                 let base_ptr = self.allocate_register(base_ptr);
 
-                let Operand::Register(src) = value else {
-                    todo!("Ondersteun immediate SlaOp-instructie");
-                };
-                let src = self.allocate_register(src);
+                let src = self.allocate_register(value);
 
                 self.instructions.push(ArmInstruction::StrImmediate {
                     is_64_bit,

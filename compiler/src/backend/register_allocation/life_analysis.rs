@@ -98,7 +98,7 @@ impl LifeAnalysis {
                 _ = typ;
                 self.add_lifetime(base_ptr, index);
                 self.try_add_lifetime(offset, index);
-                self.try_add_lifetime(value, index);
+                self.add_lifetime(value, index);
             }
         }
     }

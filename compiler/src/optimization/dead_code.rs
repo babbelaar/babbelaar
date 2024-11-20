@@ -234,9 +234,7 @@ impl DeadStoreEliminator {
                         self.notice_read(offset);
                     }
 
-                    if let Operand::Register(value) = value {
-                        self.notice_read(value);
-                    }
+                    self.notice_read(value);
                 }
             }
         }
