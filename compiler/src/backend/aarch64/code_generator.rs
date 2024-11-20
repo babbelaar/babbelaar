@@ -395,13 +395,23 @@ impl AArch64CodeGenerator {
 
         assert!(self.stack_size < (1 << 12));
 
-        if self.stack_size != 0 {
-            self.instructions.push(ArmInstruction::SubImmediate {
-                dst: ArmRegister::SP,
-                lhs: ArmRegister::SP,
-                rhs_imm12: self.stack_size as _,
-            });
+        if self.stack_size == SPACE_NEEDED_FOR_FP_AND_LR && !self.characteristics.is_leaf_function() {
+            self.add_prologue_instructions_stack_frame_optimization();
+        } else {
+            self.add_prologue_instructions_general();
         }
+    }
+
+    fn add_prologue_instructions_general(&mut self) {
+        if self.stack_size == 0 {
+            return;
+        }
+
+        self.instructions.push(ArmInstruction::SubImmediate {
+            dst: ArmRegister::SP,
+            lhs: ArmRegister::SP,
+            rhs_imm12: self.stack_size as _,
+        });
 
         if !self.characteristics.is_leaf_function() {
             self.instructions.push(ArmInstruction::Stp {
@@ -413,9 +423,32 @@ impl AArch64CodeGenerator {
                 second: ArmRegister::LR,
             });
         }
-}
+    }
+
+    fn add_prologue_instructions_stack_frame_optimization(&mut self) {
+        self.instructions.push(ArmInstruction::Stp {
+            is_64_bit: true,
+            mode: ArmSignedAddressingMode::PreIndex,
+            dst: ArmRegister::SP,
+            offset: -(SPACE_NEEDED_FOR_FP_AND_LR as i16),
+            first: ArmRegister::FP,
+            second: ArmRegister::LR,
+        });
+    }
 
     fn add_epilogue(&mut self) {
+        if self.stack_size == 0 {
+            return;
+        }
+
+        if self.stack_size == SPACE_NEEDED_FOR_FP_AND_LR && !self.characteristics.is_leaf_function() {
+            self.add_epilogue_instructions_stack_frame_optimization();
+        } else {
+            self.add_epilogue_instructions_general();
+        }
+    }
+
+    fn add_epilogue_instructions_general(&mut self) {
         if !self.characteristics.is_leaf_function() {
             self.instructions.push(ArmInstruction::Ldp {
                 is_64_bit: true,
@@ -427,14 +460,23 @@ impl AArch64CodeGenerator {
             });
         }
 
-        if self.stack_size != 0 {
-            self.instructions.push(ArmInstruction::AddImmediate {
-                dst: ArmRegister::SP,
-                src: ArmRegister::SP,
-                imm12: self.stack_size as _,
-                shift: false,
-            });
-        }
+        self.instructions.push(ArmInstruction::AddImmediate {
+            dst: ArmRegister::SP,
+            src: ArmRegister::SP,
+            imm12: self.stack_size as _,
+            shift: false,
+        });
+    }
+
+    fn add_epilogue_instructions_stack_frame_optimization(&mut self) {
+        self.instructions.push(ArmInstruction::Ldp {
+            is_64_bit: true,
+            mode: ArmSignedAddressingMode::PostIndex,
+            src: ArmRegister::SP,
+            offset: SPACE_NEEDED_FOR_FP_AND_LR as i16,
+            first: ArmRegister::FP,
+            second: ArmRegister::LR,
+        });
     }
 }
 
