@@ -79,25 +79,32 @@ impl AArch64CodeGenerator {
                 self.instructions.push(ArmInstruction::AddImmediate { dst, src, imm12, shift });
             }
 
-            Instruction::LoadImmediate { immediate, destination_reg } => {
-                let arm_register = self.allocate_register(destination_reg);
-                if immediate.as_i64() < 0 {
-                    self.instructions.push(ArmInstruction::MovN {
-                        is_64_bit: false,
-                        register: arm_register,
-                        unsigned_imm16: (immediate.as_i64().wrapping_neg()) as _,
-                    });
-                } else {
-                    self.instructions.push(ArmInstruction::MovZ { register: arm_register, imm16: immediate.as_i64() as _ });
-                }
-            }
-
             Instruction::Move { source, destination } => {
                 let dst = self.allocate_register(destination);
-                let src = self.allocate_register(source);
 
-                if dst != src {
-                    self.instructions.push(ArmInstruction::MovRegister64 { dst, src });
+                match source {
+                    Operand::Immediate(immediate) => {
+                        if immediate.as_i64() < 0 {
+                            self.instructions.push(ArmInstruction::MovN {
+                                is_64_bit: false,
+                                register: dst,
+                                unsigned_imm16: (immediate.as_i64().wrapping_neg()) as _,
+                            });
+                        } else {
+                            self.instructions.push(ArmInstruction::MovZ {
+                                register: dst,
+                                imm16: immediate.as_i64() as _,
+                            });
+                        }
+                    }
+
+                    Operand::Register(source) => {
+                        let src = self.allocate_register(source);
+
+                        if dst != src {
+                            self.instructions.push(ArmInstruction::MovRegister64 { dst, src });
+                        }
+                    }
                 }
             }
 

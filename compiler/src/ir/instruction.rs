@@ -5,7 +5,7 @@ use std::fmt::{Display, Write};
 
 use babbelaar::BabString;
 
-use super::{Immediate, Operand, Register};
+use super::{Operand, Register};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Label {
@@ -54,14 +54,9 @@ pub enum Instruction {
         register: Register,
     },
 
-    LoadImmediate {
-        immediate: Immediate,
-        destination_reg: Register,
-    },
-
     Move {
-        source: Register,
         destination: Register,
+        source: Operand,
     },
 
     //
@@ -141,13 +136,6 @@ impl Display for Instruction {
                 lhs.fmt(f)?;
                 f.write_str(", ")?;
                 rhs.fmt(f)
-            }
-
-            Instruction::LoadImmediate { immediate, destination_reg } => {
-                f.write_str("Laad ")?;
-                destination_reg.fmt(f)?;
-                f.write_str(", ")?;
-                immediate.fmt(f)
             }
 
             Instruction::Move { source, destination } => {

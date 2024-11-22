@@ -83,14 +83,14 @@ impl<'program> FunctionBuilder<'program> {
 
     #[must_use]
     pub fn load_immediate(&mut self, immediate: Immediate) -> Register {
-        let destination_reg = self.register_allocator.next();
+        let destination = self.register_allocator.next();
 
-        self.instructions.push(Instruction::LoadImmediate {
-            immediate,
-            destination_reg,
+        self.instructions.push(Instruction::Move {
+            destination,
+            source: Operand::Immediate(immediate),
         });
 
-        destination_reg
+        destination
     }
 
     pub fn associate_register_to_local(&mut self, register: Register, local_name: impl Into<BabString>, type_id: TypeId) {
@@ -232,6 +232,7 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     pub fn move_register(&mut self, destination: Register, source: Register) {
+        let source = Operand::Register(source);
         self.instructions.push(Instruction::Move { source, destination });
     }
 

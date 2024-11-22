@@ -15,7 +15,7 @@ use signal_hook::{consts::SIGBUS, iterator::Signals};
 
 #[test]
 fn function_that_returns_0() {
-    let result = compile_and_execute(
+    let result = compile_and_execute::<i32>(
         "bekeer_0",
         "
             werkwijze bekeer_0() -> g32 {
@@ -29,7 +29,7 @@ fn function_that_returns_0() {
 
 #[test]
 fn function_that_returns_5() {
-    let result = compile_and_execute("bekeer_5", "werkwijze bekeer_5() -> g32 {
+    let result = compile_and_execute::<i32>("bekeer_5", "werkwijze bekeer_5() -> g32 {
         bekeer 5;
     }");
 
@@ -38,7 +38,7 @@ fn function_that_returns_5() {
 
 #[test]
 fn function_that_returns_9_plus_10() {
-    let result = compile_and_execute("bekeer_negen_plus_tien", "werkwijze bekeer_negen_plus_tien() -> g32 {
+    let result = compile_and_execute::<i32>("bekeer_negen_plus_tien", "werkwijze bekeer_negen_plus_tien() -> g32 {
         stel negen = 9;
         stel tien = 10;
         als 1 == 1 {
@@ -52,7 +52,7 @@ fn function_that_returns_9_plus_10() {
 
 #[test]
 fn function_that_returns_6_if_3_is_equal_to_3() {
-    let result = compile_and_execute("bekeer_6", "werkwijze bekeer_6() -> g32 {
+    let result = compile_and_execute::<i32>("bekeer_6", "werkwijze bekeer_6() -> g32 {
         als 3 == 3 {
             bekeer 6;
         }
@@ -64,7 +64,7 @@ fn function_that_returns_6_if_3_is_equal_to_3() {
 
 #[test]
 fn function_with_for_statement() {
-    let value = compile_and_execute("volg_i_in_reeks_1_tot_10", "
+    let value = compile_and_execute::<i32>("volg_i_in_reeks_1_tot_10", "
     werkwijze volg_i_in_reeks_1_tot_10() -> g32 {
         volg i in reeks(0, 10) {
             als i == 10 {
@@ -80,7 +80,7 @@ fn function_with_for_statement() {
 
 #[test]
 fn structure_and_using_function() {
-    let value = compile_and_execute("gebruik_nummertjes", "
+    let value = compile_and_execute::<i32>("gebruik_nummertjes", "
     structuur Nummertjes {
         veld geboortejaar: g32,
         veld huidigJaar: g32,
@@ -101,7 +101,7 @@ fn structure_and_using_function() {
 
 #[test]
 fn two_functions() {
-    let value = compile_and_execute("stuurGetalDoor", "
+    let value = compile_and_execute::<i32>("stuurGetalDoor", "
     werkwijze krijgGetal() -> g32 {
         bekeer 8;
     }
@@ -116,7 +116,7 @@ fn two_functions() {
 
 #[test]
 fn method_call() {
-    let value = compile_and_execute("gebruikStructuur", "
+    let value = compile_and_execute::<i32>("gebruikStructuur", "
     structuur MijnGeavanceerdeStructuur {
         werkwijze krijgGetal() -> g32 {
             bekeer 3;
@@ -134,7 +134,7 @@ fn method_call() {
 
 #[test]
 fn method_call_with_this() {
-    let value = compile_and_execute("gebruikStructuurMetGetal", "
+    let value = compile_and_execute::<i32>("gebruikStructuurMetGetal", "
     structuur MijnStructuurMetGetal {
         veld getal: g32,
 
@@ -156,7 +156,7 @@ fn method_call_with_this() {
 
 #[test]
 fn negate_immediate() {
-    let value = compile_and_execute("keer_negatief", "
+    let value = compile_and_execute::<i32>("keer_negatief", "
     werkwijze keer_negatief() -> g32 {
         bekeer -8;
     }
@@ -167,7 +167,7 @@ fn negate_immediate() {
 
 #[test]
 fn negate_with_function_call() {
-    let value = compile_and_execute("gebruik_negatief", "
+    let value = compile_and_execute::<i32>("gebruik_negatief", "
     werkwijze keer_negatief(i: g32) -> g32 {
         bekeer -i;
     }
@@ -186,7 +186,7 @@ fn negate_with_function_call() {
 //
 //
 
-fn compile_and_execute(function: &'static str, code: &str) -> isize {
+fn compile_and_execute<T>(function: &'static str, code: &str) -> T {
     let tree = parse_string_to_tree(code).unwrap();
 
     let mut compiler = Compiler::new();
@@ -277,12 +277,12 @@ fn copy_to_region(region: &mut region::Allocation, src: &[u8]) {
     (&mut slice[0..src.len()]).copy_from_slice(src);
 }
 
-fn execute_code(region: &region::Allocation, offset: usize) -> isize {
-    type MainFn = extern "C" fn() -> isize;
+fn execute_code<T>(region: &region::Allocation, offset: usize) -> T {
+    type MainFn<T> = extern "C" fn() -> T;
 
     let ptr = region.as_ptr::<()>();
     let ptr = unsafe { (ptr as *const u8).offset(offset as _) };
-    let func: MainFn = unsafe { std::mem::transmute(ptr) };
+    let func: MainFn<T> = unsafe { std::mem::transmute(ptr) };
 
     (func)()
 }

@@ -102,28 +102,32 @@ impl Amd64CodeGenerator {
                 self.instructions.push(Amd64Instruction::Inc32 { reg });
             }
 
-            Instruction::LoadImmediate { immediate, destination_reg } => {
-                let dst = self.allocate_register(destination_reg);
-                match immediate.shrink_if_possible() {
-                    Immediate::Integer8(..) | Immediate::Integer16(..) | Immediate::Integer32(..) => {
-                        self.instructions.push(Amd64Instruction::MovReg32Imm32 {
-                            dst,
-                            src: immediate.as_i32(),
-                        });
-                    }
-
-                    Immediate::Integer64(qword) => {
-                        todo!("Support mov64 (value is 0x{qword:x})")
-                    }
-                }
-            }
-
             Instruction::Move { source, destination } => {
                 let dst = self.allocate_register(destination);
-                let src = self.allocate_register(source);
 
-                if dst != src {
-                    self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src });
+                match source {
+                    Operand::Immediate(immediate) => {
+                        match immediate.shrink_if_possible() {
+                            Immediate::Integer8(..) | Immediate::Integer16(..) | Immediate::Integer32(..) => {
+                                self.instructions.push(Amd64Instruction::MovReg32Imm32 {
+                                    dst,
+                                    src: immediate.as_i32(),
+                                });
+                            }
+
+                            Immediate::Integer64(qword) => {
+                                todo!("Support mov64 (value is 0x{qword:x})")
+                            }
+                        }
+                    }
+
+                    Operand::Register(source) => {
+                        let src = self.allocate_register(source);
+
+                        if dst != src {
+                            self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src });
+                        }
+                    }
                 }
             }
 

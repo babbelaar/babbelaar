@@ -177,17 +177,17 @@ impl Interpreter {
 
             Instruction::Label(..) => OperationResult::Continue,
 
-            Instruction::LoadImmediate { immediate, destination_reg } => {
-                let register = destination_reg.clone();
-                let value = immediate.clone();
-
-                self.frame().set_register(register, value);
-
-                OperationResult::Continue
-            }
-
             Instruction::Move { source, destination } => {
-                let value = self.frame().registers.get(&source).unwrap().clone();
+                let value = match source {
+                    Operand::Immediate(immediate) => {
+                        immediate
+                    }
+
+                    Operand::Register(source) => {
+                        self.frame().registers.get(&source).unwrap().clone()
+                    }
+                };
+
                 self.frame().set_register(destination, value);
 
                 OperationResult::Continue

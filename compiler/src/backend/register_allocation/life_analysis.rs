@@ -37,13 +37,10 @@ impl LifeAnalysis {
                 self.add_lifetime(register, index);
             }
 
-            Instruction::LoadImmediate { immediate, destination_reg } => {
-                _ = immediate;
-                self.add_lifetime(destination_reg, index);
-            }
-
             Instruction::Move { source, destination } => {
-                self.add_lifetime(source, index);
+                if let Operand::Register(source) = source {
+                    self.add_lifetime(source, index);
+                }
                 self.add_lifetime(destination, index);
             }
 

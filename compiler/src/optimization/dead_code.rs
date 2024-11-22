@@ -173,17 +173,14 @@ impl DeadStoreEliminator {
 
                 Instruction::Label(..) => (),
 
-                Instruction::LoadImmediate { destination_reg, immediate } => {
-                    _ = immediate;
-                    self.notice_write(destination_reg, index);
-                }
-
                 Instruction::Move { source, destination } => {
-                    debug_assert_ne!(source, destination);
+                    debug_assert_ne!(*source, Operand::Register(*destination));
 
                     // We use the value, which means that until this point, instructions for that register were actually
                     // useful.
-                    self.notice_read(source);
+                    if let Operand::Register(source) = source {
+                        self.notice_read(source);
+                    }
 
                     // But writes to the destination register before this are useless, since we override that value now.
                     self.notice_write(destination, index);
@@ -276,38 +273,38 @@ mod tests {
     )]
     #[case(
         &[
-            Instruction::LoadImmediate { immediate: Immediate::Integer8(12), destination_reg: Register::new(1) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1) },
             Instruction::Return { value_reg: None }
         ],
         &[
-            Instruction::LoadImmediate { immediate: Immediate::Integer8(12), destination_reg: Register::new(1) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1) },
             Instruction::Return { value_reg: None }
         ]
     )]
     #[case(
         &[
-            Instruction::LoadImmediate { immediate: Immediate::Integer8(12), destination_reg: Register::new(1) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1) },
             Instruction::Return { value_reg: Some(Register::new(1)) },
             Instruction::Return { value_reg: None }
         ],
         &[
-            Instruction::LoadImmediate { immediate: Immediate::Integer8(12), destination_reg: Register::new(1) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1) },
             Instruction::Return { value_reg: Some(Register::new(1)) }
         ]
     )]
     #[case(
         &[
             Instruction::Jump { location: Label::new(8) },
-            Instruction::LoadImmediate { immediate: Immediate::Integer8(7), destination_reg: Register::new(2) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(7)), destination: Register::new(2) },
             Instruction::Return { value_reg: Some(Register::new(7)) },
             Instruction::Label(Label::new(8)),
-            Instruction::LoadImmediate { immediate: Immediate::Integer16(1541), destination_reg: Register::new(9) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer16(1541)), destination: Register::new(9) },
             Instruction::Return { value_reg: Some(Register::new(9)) },
         ],
         &[
             Instruction::Jump { location: Label::new(8) },
             Instruction::Label(Label::new(8)),
-            Instruction::LoadImmediate { immediate: Immediate::Integer16(1541), destination_reg: Register::new(9) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer16(1541)), destination: Register::new(9) },
             Instruction::Return { value_reg: Some(Register::new(9)) },
         ]
     )]

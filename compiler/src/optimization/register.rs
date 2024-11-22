@@ -47,22 +47,26 @@ impl FunctionOptimizer for RegisterInliner {
                     self.values.clear();
                 }
 
-                Instruction::LoadImmediate { immediate, destination_reg } => {
-                    self.values.insert(destination_reg.clone(), immediate.clone());
-                }
-
                 Instruction::Label(..) => (),
 
                 Instruction::Move { source, destination } => {
-                    if let Some(known_value) = self.values.get(source).cloned() {
-                        self.values.insert(destination.clone(), known_value.clone());
-                        let destination_reg = destination.clone();
-                        *instruction = Instruction::LoadImmediate {
-                            immediate: known_value,
-                            destination_reg,
-                        };
-                    } else {
-                        self.values.remove(destination);
+                    match source {
+                        Operand::Register(source) => {
+                            if let Some(known_value) = self.values.get(source).cloned() {
+                                self.values.insert(destination.clone(), known_value.clone());
+                                let destination = destination.clone();
+                                *instruction = Instruction::Move {
+                                    source: Operand::Immediate(known_value),
+                                    destination,
+                                };
+                            } else {
+                                self.values.remove(destination);
+                            }
+                        }
+
+                        Operand::Immediate(immediate) => {
+                            self.values.insert(destination.clone(), immediate.clone());
+                        }
                     }
                 }
 
@@ -104,10 +108,10 @@ impl FunctionOptimizer for RegisterInliner {
 
                     self.values.insert(destination.clone(), value);
 
-                    let destination_reg = destination.clone();
-                    *instruction = Instruction::LoadImmediate {
-                        immediate: value,
-                        destination_reg,
+                    let destination = destination.clone();
+                    *instruction = Instruction::Move {
+                        destination,
+                        source: Operand::Immediate(value),
                     };
                 }
 
@@ -123,7 +127,7 @@ impl FunctionOptimizer for RegisterInliner {
 
                     self.values.insert(*dst, immediate);
 
-                    *instruction = Instruction::LoadImmediate { immediate, destination_reg: *dst };
+                    *instruction = Instruction::Move { source: Operand::Immediate(immediate), destination: *dst };
                 }
 
                 Instruction::Return { .. } => {
