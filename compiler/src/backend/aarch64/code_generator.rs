@@ -167,6 +167,7 @@ impl AArch64CodeGenerator {
 
                 match operation {
                     MathOperation::Add => self.add_instruction_add(dst, lhs, rhs),
+                    MathOperation::Multiply => self.add_instruction_mul(dst, lhs, rhs),
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
                 }
             }
@@ -302,6 +303,38 @@ impl AArch64CodeGenerator {
                 let lhs = self.allocate_register(lhs);
                 let rhs = self.allocate_register(rhs);
                 self.instructions.push(ArmInstruction::CmpRegister { lhs, rhs });
+            }
+        }
+    }
+
+    fn add_instruction_mul(&mut self, dst: ArmRegister, lhs: &Operand, rhs: &Operand) {
+        match (lhs, rhs) {
+            (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
+                let imm16 = lhs.as_i64() * rhs.as_i64();
+                debug_assert!(imm16 < (1 << 16));
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: dst,
+                    imm16: imm16 as _,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Register(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+                let rhs = self.allocate_register(rhs);
+                self.instructions.push(ArmInstruction::Mul {
+                    is_64_bit: true,
+                    dst,
+                    lhs,
+                    rhs,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
+                todo!("Mul {lhs}, {rhs}")
+            }
+
+            (Operand::Immediate(lhs), Operand::Register(rhs)) => {
+                todo!("Mul {lhs}, {rhs}")
             }
         }
     }

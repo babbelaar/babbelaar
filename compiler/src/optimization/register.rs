@@ -93,6 +93,10 @@ impl FunctionOptimizer for RegisterInliner {
                             Immediate::Integer64(lhs.as_i64().wrapping_add(rhs.as_i64()))
                         }
 
+                        MathOperation::Multiply => {
+                            Immediate::Integer64(lhs.as_i64().wrapping_mul(rhs.as_i64()))
+                        }
+
                         MathOperation::Subtract => {
                             Immediate::Integer64(lhs.as_i64().wrapping_sub(rhs.as_i64()))
                         }

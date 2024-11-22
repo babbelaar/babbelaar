@@ -199,6 +199,7 @@ impl Amd64CodeGenerator {
 
                 match operation {
                     MathOperation::Add => self.add_instruction_add(dst, lhs, rhs),
+                    MathOperation::Multiply => self.instruction_mul(dst, lhs, rhs),
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
                 }
             }
@@ -462,6 +463,10 @@ impl Amd64CodeGenerator {
 
             _ => todo!("Support sub of {lhs}, {rhs}"),
         }
+    }
+
+    fn instruction_mul(&mut self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
+        todo!("Ondersteun MUL {dst}, {lhs}, {rhs}")
     }
 }
 

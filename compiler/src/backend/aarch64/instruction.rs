@@ -89,6 +89,13 @@ pub enum ArmInstruction {
 
     MovZ { register: ArmRegister, imm16: u16 },
 
+    Mul {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        lhs: ArmRegister,
+        rhs: ArmRegister,
+    },
+
     Neg {
         is_64_bit: bool,
         shift: ArmShift2,
@@ -356,6 +363,19 @@ impl ArmInstruction {
                 instruction
             }
 
+            Self::Mul { is_64_bit, dst, lhs, rhs } => {
+                let mut instruction = 0x1B007C00;
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
+                instruction |= (rhs.number as u32) << 16;
+                instruction |= (lhs.number as u32) << 5;
+                instruction |= dst.number as u32;
+
+                instruction
+            }
+
             Self::Neg { is_64_bit, shift, shift_amount, dst, src } => {
                 let mut instruction = 0x4B0003E0;
                 if is_64_bit {
@@ -596,6 +616,11 @@ impl Display for ArmInstruction {
                 f.write_fmt(format_args!("mov {register}, #{imm16}"))
             }
 
+            Self::Mul { is_64_bit, dst, lhs, rhs } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("mul {dst}, {lhs}, {rhs}"))
+            }
+
             Self::Neg { is_64_bit, shift, shift_amount, dst, src } => {
                 _ = is_64_bit;
                 f.write_fmt(format_args!("neg {dst}, {src}"))?;
@@ -775,6 +800,15 @@ mod tests {
             register: ArmRegister::X0,
         },
         0x128000e0,
+    )]
+    #[case(
+        ArmInstruction::Mul {
+            is_64_bit: false,
+            dst: ArmRegister::X0,
+            lhs: ArmRegister::X0,
+            rhs: ArmRegister::X1,
+        },
+        0x1b017c00,
     )]
     fn encode_instruction(#[case] input: ArmInstruction, #[case] expected: u32) {
         let actual = input.encode(0, &HashMap::new());

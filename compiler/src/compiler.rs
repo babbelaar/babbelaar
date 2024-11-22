@@ -315,6 +315,7 @@ impl CompileExpression for BiExpression {
                 let math_operation = match math {
                     MathOperator::Add => MathOperation::Add,
                     MathOperator::Subtract => MathOperation::Subtract,
+                    MathOperator::Multiply => MathOperation::Multiply,
 
                     _ => todo!("Ondersteun {:?}", self.operator.value()),
                 };

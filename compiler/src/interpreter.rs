@@ -214,6 +214,7 @@ impl Interpreter {
                 let value = match operation {
                     MathOperation::Add => Immediate::Integer64(lhs.as_i64() + rhs.as_i64()),
                     MathOperation::Subtract => Immediate::Integer64(lhs.as_i64() - rhs.as_i64()),
+                    MathOperation::Multiply => Immediate::Integer64(lhs.as_i64() * rhs.as_i64()),
                 };
 
                 self.frame().set_register(destination, value);

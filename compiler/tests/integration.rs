@@ -205,3 +205,18 @@ fn negate_with_function_call() {
 
     assert_eq!(value.map(|x| x.as_i64()), Some(-94));
 }
+
+#[test]
+fn mul_with_function_call() {
+    let value = compile_and_interpret("
+    werkwijze vermenigvuldig(a: g32, b: g32) -> g32 {
+        bekeer a * b;
+    }
+
+    werkwijze doe_vermenigvuldigen() -> g32 {
+        bekeer vermenigvuldig(2, 5);
+    }
+    ", "doe_vermenigvuldigen");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(10));
+}

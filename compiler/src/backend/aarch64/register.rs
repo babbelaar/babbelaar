@@ -13,6 +13,7 @@ pub struct ArmRegister {
 #[allow(unused)]
 impl ArmRegister {
     pub const X0: Self = Self { number: 0 };
+    pub const X1: Self = Self { number: 1 };
     pub const X8: Self = Self { number: 8 };
     pub const X30: Self = Self { number: 30 };
 

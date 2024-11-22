@@ -276,6 +276,7 @@ impl Display for JumpCondition {
 pub enum MathOperation {
     Add,
     Subtract,
+    Multiply,
 }
 
 impl MathOperation {
@@ -284,6 +285,7 @@ impl MathOperation {
         match self {
             Self::Add => "TelOp",
             Self::Subtract => "TrekAf",
+            Self::Multiply => "Vermenigvuldig",
         }
     }
 }
