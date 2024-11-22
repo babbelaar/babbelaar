@@ -104,6 +104,11 @@ pub enum Instruction {
         rhs: Operand,
     },
 
+    Negate {
+        dst: Register,
+        src: Register,
+    },
+
     //
     // Stack Allocation
     //
@@ -205,6 +210,10 @@ impl Display for Instruction {
                 rhs.fmt(f)?;
 
                 Ok(())
+            }
+
+            Instruction::Negate { dst, src } => {
+                f.write_fmt(format_args!("KeerNegatief {dst}, {src}"))
             }
 
             Instruction::StackAlloc { dst, size } => {

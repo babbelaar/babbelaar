@@ -75,12 +75,27 @@ pub enum ArmInstruction {
         offset: i16,
     },
 
+    MovN {
+        is_64_bit: bool,
+        register: ArmRegister,
+        /// This make sure it is positive, otherwise it is flipped!
+        unsigned_imm16: u16,
+    },
+
     #[allow(unused)]
     MovRegister32 { dst: ArmRegister, src: ArmRegister },
 
     MovRegister64 { dst: ArmRegister, src: ArmRegister },
 
     MovZ { register: ArmRegister, imm16: u16 },
+
+    Neg {
+        is_64_bit: bool,
+        shift: ArmShift2,
+        shift_amount: i8,
+        dst: ArmRegister,
+        src: ArmRegister,
+    },
 
     Ret,
 
@@ -308,6 +323,18 @@ impl ArmInstruction {
                 instruction
             }
 
+            Self::MovN { is_64_bit, register, unsigned_imm16 } => {
+                let mut instruction = 0x12800000;
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
+                instruction |= (unsigned_imm16 as u32).wrapping_sub(1) << 5;
+                instruction |= register.number as u32;
+
+                instruction
+            }
+
             Self::MovRegister32 { dst, src } => {
                 let mut instruction = 0x2A0003E0;
                 instruction |= (src.number as u32) << 16;
@@ -326,6 +353,20 @@ impl ArmInstruction {
                 let mut instruction = 0xD2800000;
                 instruction |= register.number as u32;
                 instruction |= (imm16 as u32) << 5;
+                instruction
+            }
+
+            Self::Neg { is_64_bit, shift, shift_amount, dst, src } => {
+                let mut instruction = 0x4B0003E0;
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
+                instruction |= (shift as u32) << 22;
+                instruction |= (src.number as u32) << 16;
+                instruction |= take_bits(shift_amount as u32, 6) << 10;
+                instruction |= dst.number as u32;
+
                 instruction
             }
 
@@ -536,6 +577,11 @@ impl Display for ArmInstruction {
                 }
             }
 
+            Self::MovN { is_64_bit, register, unsigned_imm16 } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("mov {register}, #-{unsigned_imm16}"))
+            }
+
             Self::MovRegister32 { dst, src } => {
                 let dst = dst.number;
                 let src = src.number;
@@ -548,6 +594,17 @@ impl Display for ArmInstruction {
 
             Self::MovZ { register, imm16 } => {
                 f.write_fmt(format_args!("mov {register}, #{imm16}"))
+            }
+
+            Self::Neg { is_64_bit, shift, shift_amount, dst, src } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("neg {dst}, {src}"))?;
+
+                if *shift_amount != 0 {
+                    f.write_fmt(format_args!(", {shift:?}, 0x{shift_amount:x}"))?;
+                }
+
+                Ok(())
             }
 
             Self::Ret => {
@@ -700,6 +757,24 @@ mod tests {
             offset: 8,
         },
         0xb9000be0,
+    )]
+    #[case(
+        ArmInstruction::Neg {
+            is_64_bit: false,
+            shift: ArmShift2::LSL,
+            shift_amount: 0,
+            dst: ArmRegister::X0,
+            src: ArmRegister::X0,
+        },
+        0x4b0003e0,
+    )]
+    #[case(
+        ArmInstruction::MovN {
+            is_64_bit: false,
+            unsigned_imm16: 8,
+            register: ArmRegister::X0,
+        },
+        0x128000e0,
     )]
     fn encode_instruction(#[case] input: ArmInstruction, #[case] expected: u32) {
         let actual = input.encode(0, &HashMap::new());

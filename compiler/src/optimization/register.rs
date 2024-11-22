@@ -107,6 +107,21 @@ impl FunctionOptimizer for RegisterInliner {
                     };
                 }
 
+                Instruction::Negate { dst, src } => {
+                    let Some(val) = self.values.get(src) else { continue };
+
+                    let immediate = match val {
+                        Immediate::Integer8(i) => Immediate::Integer8(-i),
+                        Immediate::Integer16(i) => Immediate::Integer16(-i),
+                        Immediate::Integer32(i) => Immediate::Integer32(-i),
+                        Immediate::Integer64(i) => Immediate::Integer64(-i),
+                    };
+
+                    self.values.insert(*dst, immediate);
+
+                    *instruction = Instruction::LoadImmediate { immediate, destination_reg: *dst };
+                }
+
                 Instruction::Return { .. } => {
 
                 }

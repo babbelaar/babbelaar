@@ -203,6 +203,11 @@ impl DeadStoreEliminator {
                     self.notice_write(destination, index);
                 }
 
+                Instruction::Negate { dst, src } => {
+                    self.notice_write(dst, index);
+                    self.notice_read(src);
+                }
+
                 Instruction::Return { value_reg } => {
                     if let Some(return_value) = value_reg {
                         self.notice_read(return_value);

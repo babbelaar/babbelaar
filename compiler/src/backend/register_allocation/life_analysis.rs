@@ -82,6 +82,11 @@ impl LifeAnalysis {
                 self.try_add_lifetime(rhs, index);
             }
 
+            Instruction::Negate { dst, src } => {
+                self.add_lifetime(dst, index);
+                self.add_lifetime(src, index);
+            }
+
             Instruction::StackAlloc { dst, size } => {
                 _ = size;
                 self.add_lifetime(dst, index);

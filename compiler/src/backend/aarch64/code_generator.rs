@@ -81,7 +81,15 @@ impl AArch64CodeGenerator {
 
             Instruction::LoadImmediate { immediate, destination_reg } => {
                 let arm_register = self.allocate_register(destination_reg);
-                self.instructions.push(ArmInstruction::MovZ { register: arm_register, imm16: immediate.as_i64() as _ });
+                if immediate.as_i64() < 0 {
+                    self.instructions.push(ArmInstruction::MovN {
+                        is_64_bit: false,
+                        register: arm_register,
+                        unsigned_imm16: (immediate.as_i64().wrapping_neg()) as _,
+                    });
+                } else {
+                    self.instructions.push(ArmInstruction::MovZ { register: arm_register, imm16: immediate.as_i64() as _ });
+                }
             }
 
             Instruction::Move { source, destination } => {
@@ -161,6 +169,19 @@ impl AArch64CodeGenerator {
                     MathOperation::Add => self.add_instruction_add(dst, lhs, rhs),
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
                 }
+            }
+
+            Instruction::Negate { dst, src } => {
+                let dst = self.allocate_register(dst);
+                let src = self.allocate_register(src);
+
+                self.instructions.push(ArmInstruction::Neg {
+                    is_64_bit: true,
+                    shift: ArmShift2::default(),
+                    shift_amount: 0,
+                    dst,
+                    src,
+                });
             }
 
             Instruction::StackAlloc { dst, size } => {

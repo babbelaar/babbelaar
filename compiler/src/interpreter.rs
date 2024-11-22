@@ -220,6 +220,18 @@ impl Interpreter {
                 OperationResult::Continue
             }
 
+            Instruction::Negate { dst, src } => {
+                let value = match self.register(&src) {
+                    Immediate::Integer8(i) => Immediate::Integer8(-i),
+                    Immediate::Integer16(i) => Immediate::Integer16(-i),
+                    Immediate::Integer32(i) => Immediate::Integer32(-i),
+                    Immediate::Integer64(i) => Immediate::Integer64(-i),
+                };
+
+                self.frame().set_register(dst, value);
+                OperationResult::Continue
+            }
+
             Instruction::StackAlloc { dst, size } => {
                 let offset = self.stack.len();
                 self.stack.extend(std::iter::repeat_n(0, size));

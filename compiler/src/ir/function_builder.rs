@@ -234,6 +234,18 @@ impl<'program> FunctionBuilder<'program> {
     pub fn move_register(&mut self, destination: Register, source: Register) {
         self.instructions.push(Instruction::Move { source, destination });
     }
+
+    #[must_use]
+    pub fn unary_negate(&mut self, src: Register) -> Register {
+        let dst = self.register_allocator.next();
+
+        self.instructions.push(Instruction::Negate {
+            dst,
+            src,
+        });
+
+        dst
+    }
 }
 
 #[cfg(test)]

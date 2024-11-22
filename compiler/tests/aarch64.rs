@@ -154,6 +154,32 @@ fn method_call_with_this() {
     assert_eq!(value, 8);
 }
 
+#[test]
+fn negate_immediate() {
+    let value = compile_and_execute("keer_negatief", "
+    werkwijze keer_negatief() -> g32 {
+        bekeer -8;
+    }
+    ");
+
+    assert_eq!(value, -8);
+}
+
+#[test]
+fn negate_with_function_call() {
+    let value = compile_and_execute("gebruik_negatief", "
+    werkwijze keer_negatief(i: g32) -> g32 {
+        bekeer -i;
+    }
+
+    werkwijze gebruik_negatief() -> g32 {
+        bekeer keer_negatief(94);
+    }
+    ");
+
+    assert_eq!(value, -94);
+}
+
 //
 //
 // Helper code

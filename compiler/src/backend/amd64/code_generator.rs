@@ -203,6 +203,12 @@ impl Amd64CodeGenerator {
                 }
             }
 
+            Instruction::Negate { dst, src } => {
+                _ = dst;
+                _ = src;
+                todo!("Ondersteun {instruction}")
+            }
+
             Instruction::StackAlloc { dst, size } => {
                 let offset = self.space_used_on_stack;
                 self.space_used_on_stack += size;

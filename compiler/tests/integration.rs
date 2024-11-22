@@ -179,3 +179,29 @@ fn assignment_statement() {
 
     assert_eq!(value.map(|x| x.as_i64()), Some(72));
 }
+
+#[test]
+fn negate_immediate() {
+    let value = compile_and_interpret("
+    werkwijze keer_negatief() -> g32 {
+        bekeer -8;
+    }
+    ", "keer_negatief");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(-8));
+}
+
+#[test]
+fn negate_with_function_call() {
+    let value = compile_and_interpret("
+    werkwijze keer_negatief(i: g32) -> g32 {
+        bekeer -i;
+    }
+
+    werkwijze gebruik_negatief() -> g32 {
+        bekeer keer_negatief(94);
+    }
+    ", "gebruik_negatief");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(-94));
+}
