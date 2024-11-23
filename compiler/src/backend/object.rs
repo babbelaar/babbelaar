@@ -134,7 +134,7 @@ impl CompiledObject {
                     continue;
                 }
 
-                let puts_symbol = obj.add_symbol(Symbol {
+                let symbol = obj.add_symbol(Symbol {
                     name: link.name.as_bytes().to_vec(),
                     value: 0,
                     size: 0,
@@ -150,7 +150,7 @@ impl CompiledObject {
                     code_section,
                     Relocation {
                         offset: function_offset + link.offset as u64,
-                        symbol: puts_symbol,
+                        symbol,
                         addend: link.addend(),
                         flags: link.flags(),
                     },

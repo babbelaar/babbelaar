@@ -12,6 +12,7 @@ use super::{FunctionBuilder, Program, RegisterAllocator};
 #[derive(Debug)]
 pub struct ProgramBuilder {
     pub(super) program: Program,
+    pub(super) function_aliases: HashMap<BabString, BabString>,
     pub(super) type_manager: TypeManager,
 }
 
@@ -20,6 +21,7 @@ impl ProgramBuilder {
     pub fn new() -> Self {
         Self {
             program: Program::new(),
+            function_aliases: HashMap::new(),
             type_manager: TypeManager::new(),
         }
     }
@@ -77,5 +79,18 @@ impl ProgramBuilder {
     #[must_use]
     pub fn type_id_for_structure(&self, name: &BabString) -> TypeId {
         self.type_manager.layout_of(name).type_id().clone()
+    }
+
+    pub fn add_function_alias(&mut self, name: &BabString, actual_name: &BabString) {
+        self.function_aliases.insert(name.clone(), actual_name.clone());
+    }
+
+    #[must_use]
+    pub fn resolve_function_name(&self, name: BabString) -> BabString {
+        if let Some(actual_name) = self.function_aliases.get(&name) {
+            actual_name.clone()
+        } else {
+            name
+        }
     }
 }

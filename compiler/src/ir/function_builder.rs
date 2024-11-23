@@ -25,6 +25,7 @@ pub struct FunctionBuilder<'program> {
 
 impl<'program> FunctionBuilder<'program> {
     pub fn call(&mut self, name: BabString, arguments: impl Into<Vec<Register>>) -> Register {
+        let name = self.program_builder.resolve_function_name(name);
         let ret_val_reg = self.register_allocator.next();
 
         self.instructions.push(Instruction::Call {

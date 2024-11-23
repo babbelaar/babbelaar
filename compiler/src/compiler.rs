@@ -44,7 +44,7 @@ impl Compiler {
                 panic!();
             };
 
-            self.compile_function(func, func.name.value().clone(), CallingConvention::Regular);
+            self.compile_function(func, func.name.value().clone(), CallingConvention::Regular, &statement.attributes);
         }
     }
 
@@ -60,7 +60,7 @@ impl Compiler {
                 let name = create_mangled_method_name(structure.name.value(), method.function.name.value());
                 self.compile_function(&method.function, name, CallingConvention::Method {
                     this: type_id,
-                });
+                }, &[]);
             }
         }
     }
@@ -72,8 +72,22 @@ impl Compiler {
         program
     }
 
-    fn compile_function(&mut self, func: &FunctionStatement, name: BabString, call_convention: CallingConvention) {
+    fn compile_function(&mut self, func: &FunctionStatement, name: BabString, call_convention: CallingConvention, attributes: &[Ranged<Attribute>]) {
         let Some(body) = &func.body else {
+            for attr in attributes {
+                if attr.name.value() == Attribute::NAME_EXTERN {
+                    for arg in attr.arguments.value() {
+                        if arg.name.value() == "naam" {
+                            if let PrimaryExpression::StringLiteral(actual_name) = arg.value.value() {
+                                self.program_builder.add_function_alias(&name, actual_name);
+                                return;
+                            }
+                        }
+                    }
+
+                    return;
+                }
+            }
             return;
         };
 

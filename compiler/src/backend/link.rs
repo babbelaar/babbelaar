@@ -29,7 +29,7 @@ impl FunctionLink {
     #[must_use]
     pub(crate) fn flags(&self) -> RelocationFlags {
         RelocationFlags::Generic {
-            kind: RelocationKind::PltRelative,
+            kind: self.method.relocation_kind(),
             encoding: self.method.encoding(),
             size: self.method.size(),
         }
@@ -87,6 +87,14 @@ impl FunctionLinkMethod {
         match self {
             Self::AArch64BranchLink => 0,
             Self::Amd64CallNearRelative => 0,
+        }
+    }
+
+    #[must_use]
+    fn relocation_kind(&self) -> RelocationKind {
+        match self {
+            Self::AArch64BranchLink => RelocationKind::Relative,
+            Self::Amd64CallNearRelative => RelocationKind::PltRelative,
         }
     }
 }

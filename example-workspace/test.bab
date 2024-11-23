@@ -1,1 +1,18 @@
 // schrijfTekstNaarBestand("Hallo.txt", "Hallo, wereld!");
+
+// @uitheems(naam: "puts")
+// werkwijze schrijf(s: Slinger);
+
+@uitheems(naam: "putchar")
+werkwijze schrijfLetter(t: teken);
+
+
+werkwijze hoofd() {
+    schrijfLetter('H');
+    schrijfLetter('a');
+    schrijfLetter('l');
+    schrijfLetter('l');
+    schrijfLetter('o');
+    schrijfLetter('
+');
+}

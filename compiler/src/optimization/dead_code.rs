@@ -25,7 +25,8 @@ impl FunctionOptimizer for DeadCodeEliminator {
                 continue;
             }
 
-            function.instructions.remove(index);
+            let instr = function.instructions.remove(index);
+            println!("[DeadCode] Removing {instr}");
         }
     }
 }
