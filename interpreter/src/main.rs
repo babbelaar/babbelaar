@@ -17,7 +17,7 @@ mod scope;
 use std::{fmt::Display, fs::read_dir, path::{Path, PathBuf}, process::exit};
 
 pub use babbelaar::*;
-// use babbelaar_compiler::LlvmContext;
+use babbelaar_compiler::{Pipeline, Platform};
 use clap::Subcommand;
 use colored::Colorize;
 use logger::Logger;
@@ -77,8 +77,7 @@ fn main() {
 
     match args.command {
         Commands::Bouwen { bestand } => {
-            _ = bestand;
-            // compile(bestand)
+            compile(bestand)
         }
 
         Commands::Debug { bestand } => {
@@ -90,15 +89,29 @@ fn main() {
     }
 }
 
-// fn compile(bestand: PathBuf) {
-//     let source_code = std::fs::read_to_string(&bestand).unwrap();
-//     let mut babbelaar = BabbelaarContext::new(bestand, source_code);
-//     let mut llvm = LlvmContext::new();
+fn compile(bestand: PathBuf) {
+    let files: Vec<(SourceCode, ParseTree)> = read_dir(&bestand.parent().unwrap())
+        .unwrap()
+        .flatten()
+        .filter(|x| x.file_name().to_string_lossy().ends_with(".bab"))
+        .map(|x| parse(&x.path()))
+        .collect();
 
-//     babbelaar.with_tree(|tree| llvm.parse_tree(tree)).unwrap();
+    analyze(&files);
 
-//     llvm.finish();
-// }
+    let trees: Vec<ParseTree> = files.into_iter()
+        .map(|(_, tree)| tree)
+        .collect();
+
+    let mut pipeline = Pipeline::new(Platform::host_platform());
+    pipeline.compile_trees(&trees);
+
+    let dir = std::env::current_dir().unwrap();
+    let exec_name = bestand.file_stem().unwrap().to_string_lossy();
+
+    pipeline.create_object(&dir, &exec_name).unwrap();
+    pipeline.link_to_executable(&dir, &exec_name).unwrap();
+}
 
 pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
     let files: Vec<(SourceCode, ParseTree)> = read_dir(&path.parent().unwrap())

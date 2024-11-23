@@ -11,7 +11,7 @@ libloading = "0.8"
 log = "0.4"
 
 babbelaar = { path = "../babbelaar" }
-# babbelaar-compiler = { path = "../compiler" }
+babbelaar-compiler = { path = "../compiler" }
 clap = { version = "4.5.16", features = ["derive"] }
 colored = "2.1"
 
