@@ -180,6 +180,30 @@ fn negate_with_function_call() {
     assert_eq!(value, -94);
 }
 
+#[test]
+fn function_with_unused_string_literal_variable() {
+    let value = compile_and_execute::<i32>("ongebruikteSlinger", "
+    werkwijze ongebruikteSlinger() -> g32 {
+        stel a = \"Hallo\";
+        bekeer 1;
+    }
+    ");
+
+    assert_eq!(value, 1);
+}
+
+#[test]
+fn function_returns_length_of_string_literal() {
+    let value = compile_and_execute::<i32>("krijgLengteVanSlinger", "
+    werkwijze krijgLengteVanSlinger() -> g32 {
+        bekeer \"Hallo\".lengte();
+    }
+    ");
+
+    assert_eq!(value, 5);
+}
+
+
 //
 //
 // Helper code

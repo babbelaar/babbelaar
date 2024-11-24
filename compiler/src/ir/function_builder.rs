@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use babbelaar::BabString;
 
-use crate::{StructureLayout, TypeId};
+use crate::{DataSectionOffset, StructureLayout, TypeId};
 
 use super::{Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, PrimitiveType, ProgramBuilder, Register, RegisterAllocator};
 
@@ -107,8 +107,8 @@ impl<'program> FunctionBuilder<'program> {
 
     #[must_use]
     pub fn load_string(&mut self, string: &str) -> Register {
-        let immediate = self.program_builder.program.add_string(string);
-        self.load_immediate(immediate)
+        let offset = self.program_builder.program.add_string(string);
+        self.load_effective_address(offset)
     }
 
     #[must_use]
@@ -247,6 +247,25 @@ impl<'program> FunctionBuilder<'program> {
         });
 
         dst
+    }
+
+    #[must_use]
+    pub fn load_effective_address(&mut self, offset: DataSectionOffset) -> Register {
+        let destination = self.register_allocator.next();
+
+        self.instructions.push(Instruction::MoveAddress {
+            destination,
+            section: offset.section_kind(),
+        });
+
+        self.instructions.push(Instruction::MathOperation {
+            operation: MathOperation::Add,
+            destination,
+            lhs: Operand::Register(destination),
+            rhs: Operand::Immediate(Immediate::Integer64(offset.offset() as _)),
+        });
+
+        destination
     }
 }
 

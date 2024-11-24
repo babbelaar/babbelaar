@@ -26,12 +26,14 @@ impl Pipeline {
         let mut compiler = Compiler::new();
         compiler.compile_trees(trees);
 
-        let program = compiler.finish();
+        let mut program = compiler.finish();
         println!("Program: {program}");
 
         for function in program.functions() {
             self.code_gen(function);
         }
+
+        self.object.set_read_only_data(program.take_read_only_data());
     }
 
     fn code_gen(&mut self, function: &Function) {
@@ -52,6 +54,8 @@ impl Pipeline {
         path.push(format!("{name}.{}", self.object.platform().operating_system().object_extension()));
 
         println!("Path: {}", path.display());
+
+
 
         let obj = CompiledObject::new(self.object.platform().clone());
         let obj = replace(&mut self.object, obj);

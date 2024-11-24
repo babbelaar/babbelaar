@@ -68,6 +68,7 @@ impl Compiler {
     #[must_use]
     pub fn finish(self) -> Program {
         let mut program = self.program_builder.build();
+        println!("Before opt: {program}");
         optimize_program(&mut program);
         program
     }

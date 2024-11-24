@@ -5,13 +5,15 @@ use std::fmt::Display;
 
 use babbelaar::BabString;
 
-use super::{Function, Immediate};
+use crate::{DataSection, DataSectionKind, DataSectionOffset};
+
+use super::Function;
 
 #[derive(Debug)]
 pub struct Program {
     functions: Vec<Function>,
     function_symbols: Vec<BabString>,
-    strings: Vec<u8>,
+    read_only_data: Option<DataSection>,
 }
 
 impl Program {
@@ -20,7 +22,7 @@ impl Program {
         Self {
             functions: Vec::new(),
             function_symbols: Vec::new(),
-            strings: Vec::new(),
+            read_only_data: Some(DataSection::new(DataSectionKind::ReadOnly)),
         }
     }
 
@@ -31,17 +33,8 @@ impl Program {
         self.function_symbols.push(name);
     }
 
-    #[must_use]
-    pub fn add_string(&mut self, string: &str) -> Immediate {
-        let offset = self.strings.len();
-
-        self.strings.extend_from_slice(string.as_bytes());
-        self.strings.push(0);
-
-        let ptr = self.strings[offset..].as_ptr();
-        let ptr = ptr as usize as i64;
-
-        Immediate::Integer64(ptr)
+    pub fn add_string(&mut self, string: &str) -> DataSectionOffset {
+        self.read_only_data.as_mut().unwrap().add_null_terminated_string(string)
     }
 
     #[must_use]
@@ -73,6 +66,16 @@ impl Program {
     pub fn function_by_name(&self, name: impl Into<BabString>) -> Option<&Function> {
         let index = self.function_index_by_symbol(&name.into())?;
         Some(&self.functions[index])
+    }
+
+    #[must_use]
+    pub fn read_only_data(&self) -> &DataSection {
+        self.read_only_data.as_ref().unwrap()
+    }
+
+    #[must_use]
+    pub fn take_read_only_data(&mut self) -> DataSection {
+        self.read_only_data.take().unwrap()
     }
 }
 

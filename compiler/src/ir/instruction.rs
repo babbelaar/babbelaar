@@ -5,6 +5,8 @@ use std::fmt::{Display, Write};
 
 use babbelaar::BabString;
 
+use crate::DataSectionKind;
+
 use super::{Operand, Register};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,6 +59,11 @@ pub enum Instruction {
     Move {
         destination: Register,
         source: Operand,
+    },
+
+    MoveAddress {
+        destination: Register,
+        section: DataSectionKind,
     },
 
     //
@@ -143,6 +150,13 @@ impl Display for Instruction {
                 destination.fmt(f)?;
                 f.write_str(", ")?;
                 source.fmt(f)
+            }
+
+            Instruction::MoveAddress { destination, section } => {
+                f.write_str("Verplaats ")?;
+                destination.fmt(f)?;
+                f.write_str(", ")?;
+                section.fmt(f)
             }
 
             Instruction::Call { name, arguments, ret_val_reg } => {

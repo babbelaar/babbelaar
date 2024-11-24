@@ -70,6 +70,15 @@ impl FunctionOptimizer for RegisterInliner {
                     }
                 }
 
+                Instruction::MoveAddress { destination, section } => {
+                    // We *can* optimize if we have some more magical value (not just immediate)
+                    // that encompasses the fact that we have stored a pointer to the data section
+                    // here.
+                    _ = section;
+
+                    self.values.remove(destination);
+                }
+
                 Instruction::MathOperation { operation, destination, lhs, rhs } => {
                     let (lhs, rhs) = match (self.resolve_operand_to_immediate(lhs), self.resolve_operand_to_immediate(rhs)) {
                         (Some(lhs), Some(rhs)) => (lhs, rhs),

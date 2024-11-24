@@ -108,6 +108,10 @@ impl AArch64CodeGenerator {
                 }
             }
 
+            Instruction::MoveAddress { destination, section } => {
+                todo!("Bereken datasectie adres {section} en zet hem in {destination}")
+            }
+
             Instruction::Call { name, arguments, ret_val_reg } => {
                 debug_assert!(arguments.len() < (1 << 8));
 

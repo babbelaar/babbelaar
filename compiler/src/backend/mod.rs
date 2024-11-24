@@ -3,6 +3,7 @@
 
 mod aarch64;
 mod amd64;
+mod data_section;
 mod link;
 mod object;
 mod register_allocation;
@@ -12,6 +13,11 @@ use crate::Function;
 pub use self::{
     aarch64::AArch64CodeGenerator,
     amd64::Amd64CodeGenerator,
+    data_section::{
+        DataSection,
+        DataSectionKind,
+        DataSectionOffset,
+    },
     link::{
         FunctionLink,
         FunctionLinkMethod,

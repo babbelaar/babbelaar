@@ -25,7 +25,7 @@ use object::{
 
 use crate::{OperatingSystem, Platform, WindowsVersion};
 
-use super::FunctionLink;
+use super::{DataSection, DataSectionKind, FunctionLink};
 
 #[derive(Debug, Clone)]
 pub struct CompiledFunction {
@@ -64,6 +64,7 @@ pub struct CompiledObject {
     symbol_offsets: HashMap<BabString, usize>,
     functions: Vec<CompiledFunction>,
     functions_length: usize,
+    read_only_data: DataSection,
 }
 
 impl CompiledObject {
@@ -73,6 +74,7 @@ impl CompiledObject {
             symbol_offsets: HashMap::new(),
             functions: Vec::new(),
             functions_length: 0,
+            read_only_data: DataSection::new(DataSectionKind::ReadOnly),
         }
     }
 
@@ -145,7 +147,6 @@ impl CompiledObject {
                     flags: SymbolFlags::None,
                 });
 
-                // Relocation for the call to puts.
                 obj.add_relocation(
                     code_section,
                     Relocation {
@@ -270,6 +271,10 @@ impl CompiledObject {
             size_of_heap_reserve: 0x100000,
             size_of_heap_commit: 0x1000,
         }
+    }
+
+    pub fn set_read_only_data(&mut self, data: DataSection) {
+        self.read_only_data = data;
     }
 }
 

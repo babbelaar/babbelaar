@@ -16,7 +16,7 @@ unsafe fn load_str<'a>(data: *const u8) -> Cow<'a, str> {
 }
 
 #[must_use]
-const unsafe fn strlen(mut ptr: *const u8) -> usize {
+pub unsafe fn strlen(mut ptr: *const u8) -> usize {
     let mut size = 0;
 
     while ptr.read() != 0 {

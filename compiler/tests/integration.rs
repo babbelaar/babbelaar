@@ -220,3 +220,26 @@ fn mul_with_function_call() {
 
     assert_eq!(value.map(|x| x.as_i64()), Some(10));
 }
+
+#[test]
+fn function_with_unused_string_literal_variable() {
+    let value = compile_and_interpret("
+    werkwijze ongebruikteSlinger() -> g32 {
+        stel a = \"Hallo\";
+        bekeer 1;
+    }
+    ", "ongebruikteSlinger");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(1));
+}
+
+#[test]
+fn function_returns_length_of_string_literal() {
+    let value = compile_and_interpret("
+    werkwijze krijgLengteVanSlinger() -> g32 {
+        bekeer \"Hallo\".lengte();
+    }
+    ", "krijgLengteVanSlinger");
+
+    assert_eq!(value.map(|x| x.as_i64()), Some(5));
+}

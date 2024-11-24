@@ -208,6 +208,10 @@ impl Amd64CodeGenerator {
                 }
             }
 
+            Instruction::MoveAddress { destination, section } => {
+                todo!("Bereken datasectie adres {section} en zet hem in {destination}")
+            }
+
             Instruction::Negate { dst, src } => {
                 _ = dst;
                 _ = src;

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use babbelaar::BabString;
 
-use crate::{Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Program, Register};
+use crate::{DataSectionKind, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Program, Register};
 
 pub struct Interpreter {
     program: Program,
@@ -31,6 +31,10 @@ impl Interpreter {
     }
 
     pub fn execute_function(&mut self, name: &BabString, arguments: Vec<Immediate>) -> Option<Immediate> {
+        if let Some(result) = self.execute_builtin_function(name, &arguments) {
+            return result;
+        }
+
         let function_index = self.program.function_index_by_symbol(name).unwrap();
         self.execute_function_by_index(function_index, arguments)
     }
@@ -93,15 +97,13 @@ impl Interpreter {
 
         match self.program.function(function_index).instructions()[program_counter].clone() {
             Instruction::Call { name, arguments, ret_val_reg } => {
-                let function_index = self.program.function_index_by_symbol(&name).unwrap();
-
                 let frame = self.frame();
 
                 let arguments = arguments.iter()
                     .map(|reg| frame.registers.get(reg).unwrap().clone())
                     .collect();
 
-                let return_value = self.execute_function_by_index(function_index, arguments);
+                let return_value = self.execute_function(&name, arguments);
 
                 if let Some(return_value) = return_value {
                     self.frame().set_register(ret_val_reg, return_value);
@@ -189,6 +191,18 @@ impl Interpreter {
                 };
 
                 self.frame().set_register(destination, value);
+
+                OperationResult::Continue
+            }
+
+            Instruction::MoveAddress { destination, section } => {
+                let section = match section {
+                    DataSectionKind::ReadOnly => self.program.read_only_data(),
+                };
+
+                let ptr = section.data().as_ptr();
+                let ptr = Immediate::Integer64(ptr as i64);
+                self.frame().set_register(destination, ptr);
 
                 OperationResult::Continue
             }
@@ -325,6 +339,28 @@ impl Interpreter {
     fn frame(&mut self) -> &mut StackFrame {
         self.stack_frames.last_mut().unwrap()
     }
+
+    fn execute_builtin_function(&mut self, name: &BabString, arguments: &[Immediate]) -> Option<Option<Immediate>> {
+        match name.as_str() {
+            "g32__lengte" => {
+                let ptr = arguments[0].as_i64() as _;
+                let result = unsafe { babbelaar_builtin::strlen(ptr) };
+                Some(Some(Immediate::Integer64(result as _)))
+            }
+
+            "schrijf" => {
+                let ptr = arguments[0].as_i64() as _;
+                unsafe { babbelaar_builtin::schrijf(ptr) };
+                Some(None)
+            }
+
+            _ => None,
+        }
+    }
+}
+
+impl babbelaar::Interpreter for Interpreter {
+
 }
 
 struct StackFrame {

@@ -44,6 +44,11 @@ impl LifeAnalysis {
                 self.add_lifetime(destination, index);
             }
 
+            Instruction::MoveAddress { destination, section } => {
+                self.add_lifetime(destination, index);
+                _ = section;
+            }
+
             Instruction::Call { name, arguments, ret_val_reg } => {
                 _ = name;
                 self.add_lifetime(ret_val_reg, index);
