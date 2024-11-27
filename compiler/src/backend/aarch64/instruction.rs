@@ -31,6 +31,11 @@ pub enum ArmInstruction {
         shift: ArmShift2,
     },
 
+    Adrp {
+        dst: ArmRegister,
+        imm: u32,
+    },
+
     B {
         location: ArmBranchLocation,
     },
@@ -171,6 +176,21 @@ impl ArmInstruction {
                 instruction |= (rhs.number as u32) << 16;
                 instruction |= (shift as u32) << 22;
 
+
+                instruction
+            }
+
+            Self::Adrp { dst, imm } => {
+                debug_assert_eq!(imm % 0xFFF, 0, "bottom 12 bits should've been");
+
+                let mut instruction = 0x90000000;
+                instruction |= dst.number as u32;
+
+                // immhi 5 to 29
+                instruction |= (imm >> 14) << 5;
+
+                // immlo 29 to 30
+                instruction |= ((imm >> 12) & 0b11) << 29;
 
                 instruction
             }
@@ -541,6 +561,10 @@ impl Display for ArmInstruction {
 
             Self::AddRegister { dst, lhs, rhs, imm, shift } => {
                 f.write_fmt(format_args!("add {dst}, {lhs} + {rhs} + #{imm} ({shift:?})"))
+            }
+
+            Self::Adrp { dst, imm } => {
+                f.write_fmt(format_args!("adrp {dst}, 0x{imm:x}"))
             }
 
             Self::B { location } => {
