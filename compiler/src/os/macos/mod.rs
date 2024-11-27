@@ -31,6 +31,7 @@ impl MacOsLdLinker {
         for object_path in &self.object_paths {
             command.arg(object_path);
         }
+        command.arg(find_builtin_lib_path().unwrap());
 
         command.arg("-o");
         command.arg(&self.output_path);
@@ -44,9 +45,24 @@ impl MacOsLdLinker {
         if !exit_status.success() {
             let mut description = String::new();
             _ = process.stderr.unwrap().read_to_string(&mut description);
+            eprintln!("{description}");
             return Err(LinkerError::UnexpectedError(description).into());
         }
 
         Ok(())
     }
+}
+
+fn find_builtin_lib_path() -> Option<PathBuf> {
+    let mut exe = std::env::current_exe().unwrap();
+
+    while exe.pop() {
+        if exe.file_name().unwrap_or_default() == "target" {
+            break;
+        }
+    }
+
+    exe.push("debug");
+    exe.push("libbabbelaar_builtin.a");
+    Some(exe)
 }

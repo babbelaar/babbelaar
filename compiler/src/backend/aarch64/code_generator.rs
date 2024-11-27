@@ -5,7 +5,7 @@ use std::{collections::HashMap, mem::take};
 
 use babbelaar::BabString;
 
-use crate::{CodeGenerator, CompiledFunction, Function, FunctionLink, FunctionLinkMethod, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator};
+use crate::{CodeGenerator, CompiledFunction, Function, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
 use super::{AArch64FunctionCharacteristics, ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode};
 
@@ -20,7 +20,7 @@ pub struct AArch64CodeGenerator {
     register_allocator: RegisterAllocator<ArmRegister>,
     stack_size: usize,
     space_used_on_stack: usize,
-    link_locations: Vec<FunctionLink>,
+    relocations: Vec<Relocation>,
 }
 
 impl AArch64CodeGenerator {
@@ -35,7 +35,7 @@ impl AArch64CodeGenerator {
             register_allocator: RegisterAllocator::new(function),
             stack_size: 0,
             space_used_on_stack: 0,
-            link_locations: Vec::new(),
+            relocations: Vec::new(),
         };
 
         this.add_prologue(function.instructions());
@@ -46,7 +46,7 @@ impl AArch64CodeGenerator {
 
         this.dump_instructions();
 
-        let link_locations = take(&mut this.link_locations);
+        let relocations = take(&mut this.relocations);
 
         let byte_code = this.to_byte_code();
         print!("Bytecode: ");
@@ -61,7 +61,7 @@ impl AArch64CodeGenerator {
         CompiledFunction {
             name: function.name.clone(),
             byte_code,
-            link_locations,
+            relocations,
         }
     }
 
@@ -108,8 +108,39 @@ impl AArch64CodeGenerator {
                 }
             }
 
-            Instruction::MoveAddress { destination, section } => {
-                todo!("Bereken datasectie adres {section} en zet hem in {destination}")
+            Instruction::MoveAddress { destination, offset } => {
+                let dst = self.allocate_register(destination);
+                let section = offset.section_kind();
+
+                self.relocations.push(Relocation {
+                    ty: RelocationType::Data {
+                        section,
+                        offset: offset.offset(),
+                    },
+                    offset: self.instructions.len() * 4,
+                    method: RelocationMethod::Aarch64Page21,
+                });
+
+                self.instructions.push(ArmInstruction::Adrp {
+                    dst,
+                    imm: 0,
+                });
+
+                self.relocations.push(Relocation {
+                    ty: RelocationType::Data {
+                        section,
+                        offset: offset.offset(),
+                    },
+                    offset: self.instructions.len() * 4,
+                    method: RelocationMethod::Aarch64PageOff12,
+                });
+
+                self.instructions.push(ArmInstruction::AddImmediate {
+                    dst,
+                    src: dst,
+                    imm12: 0,
+                    shift: false,
+                });
             }
 
             Instruction::Call { name, arguments, ret_val_reg } => {
@@ -126,10 +157,12 @@ impl AArch64CodeGenerator {
                     }
                 }
 
-                self.link_locations.push(FunctionLink {
-                    name: name.clone(),
+                self.relocations.push(Relocation {
+                    ty: RelocationType::Function {
+                        name: name.clone(),
+                    },
                     offset: self.instructions.len() * 4,
-                    method: FunctionLinkMethod::AArch64BranchLink,
+                    method: RelocationMethod::AArch64BranchLink,
                 });
 
                 self.instructions.push(ArmInstruction::Bl {

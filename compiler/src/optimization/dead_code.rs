@@ -187,8 +187,8 @@ impl DeadStoreEliminator {
                     self.notice_write(destination, index);
                 }
 
-                Instruction::MoveAddress { destination, section } => {
-                    _ = section;
+                Instruction::MoveAddress { destination, offset } => {
+                    _ = offset;
                     self.notice_write(destination, index);
                 }
 

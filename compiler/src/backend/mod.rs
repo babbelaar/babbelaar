@@ -4,9 +4,9 @@
 mod aarch64;
 mod amd64;
 mod data_section;
-mod link;
 mod object;
 mod register_allocation;
+mod relocation;
 
 use crate::Function;
 
@@ -18,10 +18,6 @@ pub use self::{
         DataSectionKind,
         DataSectionOffset,
     },
-    link::{
-        FunctionLink,
-        FunctionLinkMethod,
-    },
     object::{
         CompiledFunction,
         CompiledObject,
@@ -29,7 +25,12 @@ pub use self::{
     register_allocation::{
         AllocatableRegister,
         RegisterAllocator,
-    }
+    },
+    relocation::{
+        Relocation,
+        RelocationMethod,
+        RelocationType,
+    },
 };
 
 pub trait CodeGenerator {

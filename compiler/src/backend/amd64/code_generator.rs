@@ -5,7 +5,7 @@ use std::{collections::HashMap, mem::take};
 
 use babbelaar::BabString;
 
-use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, FunctionLink, FunctionLinkMethod, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Register, RegisterAllocator};
+use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
 use super::{Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
 
@@ -18,7 +18,7 @@ pub struct Amd64CodeGenerator {
     register_allocator: RegisterAllocator<Amd64Register>,
     stack_size: usize,
     space_used_on_stack: usize,
-    link_locations: Vec<FunctionLink>,
+    relocations: Vec<Relocation>,
 }
 
 impl Amd64CodeGenerator {
@@ -33,7 +33,7 @@ impl Amd64CodeGenerator {
             register_allocator: RegisterAllocator::new(function),
             stack_size: 0,
             space_used_on_stack: 0,
-            link_locations: Vec::new(),
+            relocations: Vec::new(),
         };
 
         this.add_prologue(function.instructions());
@@ -54,12 +54,12 @@ impl Amd64CodeGenerator {
         }
         println!("\n");
 
-        let link_locations = take(&mut this.link_locations);
+        let relocations = take(&mut this.relocations);
 
         CompiledFunction {
             name: function.name.clone(),
             byte_code,
-            link_locations,
+            relocations,
         }
     }
 
@@ -208,8 +208,8 @@ impl Amd64CodeGenerator {
                 }
             }
 
-            Instruction::MoveAddress { destination, section } => {
-                todo!("Bereken datasectie adres {section} en zet hem in {destination}")
+            Instruction::MoveAddress { destination, offset } => {
+                todo!("Bereken datasectie adres {offset} en zet hem in {destination}")
             }
 
             Instruction::Negate { dst, src } => {
@@ -380,10 +380,12 @@ impl Amd64CodeGenerator {
             }
 
             if let Amd64Instruction::CallNearRelative { symbol_name, .. } = instruction {
-                self.link_locations.push(FunctionLink {
-                    name: symbol_name.clone(),
+                self.relocations.push(Relocation {
+                    ty: RelocationType::Function {
+                        name: symbol_name.clone(),
+                    },
                     offset,
-                    method: FunctionLinkMethod::Amd64CallNearRelative,
+                    method: RelocationMethod::Amd64CallNearRelative,
                 });
             }
         }

@@ -70,11 +70,11 @@ impl FunctionOptimizer for RegisterInliner {
                     }
                 }
 
-                Instruction::MoveAddress { destination, section } => {
+                Instruction::MoveAddress { destination, offset } => {
                     // We *can* optimize if we have some more magical value (not just immediate)
                     // that encompasses the fact that we have stored a pointer to the data section
                     // here.
-                    _ = section;
+                    _ = offset;
 
                     self.values.remove(destination);
                 }

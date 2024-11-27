@@ -168,6 +168,43 @@ fn method_call_with_this_and_two_fields() {
     assert_eq!(result.exit_code, Some(11));
 }
 
+#[test]
+fn function_with_unused_string_literal_variable() {
+    let value = create_and_run_single_object_executable("
+    werkwijze hoofd() -> g32 {
+        stel a = \"Hallo\";
+        bekeer 1;
+    }
+    ");
+
+    assert_eq!(value.signal, None);
+    assert_eq!(value.exit_code, Some(1));
+}
+
+#[test]
+fn function_returns_length_of_string_literal() {
+    let value = create_and_run_single_object_executable("
+    werkwijze hoofd() -> g32 {
+        bekeer \"Hallo\".lengte();
+    }
+    ");
+
+    assert_eq!(value.signal, None);
+    assert_eq!(value.exit_code, Some(5));
+}
+
+#[test]
+fn two_strings_one_program() {
+    let value = create_and_run_single_object_executable("
+    werkwijze hoofd() -> g32 {
+        bekeer \"Hallo\".lengte() + \"Doei\".lengte();
+    }
+    ");
+
+    assert_eq!(value.signal, None);
+    assert_eq!(value.exit_code, Some(9));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let dir = TempDir::new().unwrap().panic_on_cleanup_error();
     let directory = dir.path().to_path_buf();

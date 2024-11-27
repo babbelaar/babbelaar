@@ -46,6 +46,13 @@ impl DataSectionKind {
             Self::ReadOnly => ".rodata",
         }
     }
+
+    #[must_use]
+    pub const fn object_symbol_kind(&self) -> object::SymbolKind {
+        match self {
+            Self::ReadOnly => object::SymbolKind::Data,
+        }
+    }
 }
 
 impl Display for DataSectionKind {
@@ -77,5 +84,13 @@ impl DataSectionOffset {
     #[must_use]
     pub const fn section_kind(&self) -> DataSectionKind {
         self.kind
+    }
+}
+
+impl Display for DataSectionOffset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.kind.fmt(f)?;
+        f.write_str("+")?;
+        self.offset.fmt(f)
     }
 }

@@ -13,7 +13,7 @@ use object::{
             Writer as PeWriter,
         },
         Object,
-        Relocation,
+        Relocation as ObjectRelocation,
         StandardSection,
         Symbol,
         SymbolSection,
@@ -25,13 +25,13 @@ use object::{
 
 use crate::{OperatingSystem, Platform, WindowsVersion};
 
-use super::{DataSection, DataSectionKind, FunctionLink};
+use super::{DataSection, DataSectionKind, Relocation, RelocationType};
 
 #[derive(Debug, Clone)]
 pub struct CompiledFunction {
     pub(super) name: BabString,
     pub(super) byte_code: Vec<u8>,
-    pub(super) link_locations: Vec<FunctionLink>,
+    pub(super) relocations: Vec<Relocation>,
 }
 
 impl CompiledFunction {
@@ -46,8 +46,8 @@ impl CompiledFunction {
     }
 
     #[must_use]
-    pub fn link_locations(&self) -> &[FunctionLink] {
-        &self.link_locations
+    pub fn relocations(&self) -> &[Relocation] {
+        &self.relocations
     }
 
     fn final_name(&self) -> &str {
@@ -105,6 +105,9 @@ impl CompiledObject {
     fn write_using_unified_api(self, path: &Path) -> Result<(), Box<dyn Error>> {
         let mut obj = Object::new(self.object_format(), self.object_architecture(), self.object_endian());
 
+        let rodata_section = obj.section_id(StandardSection::ReadOnlyData);
+        obj.append_section_data(rodata_section, self.read_only_data.data(), 4);
+
         let code_section = obj.add_subsection(StandardSection::Text, b"main");
 
         for mut function in self.functions {
@@ -121,41 +124,74 @@ impl CompiledObject {
                 flags: SymbolFlags::None,
             });
 
-            for link in &function.link_locations {
-                let Some(internal_offset) = self.symbol_offsets.get(&link.name) else {
-                    continue;
-                };
+            for relocation in &function.relocations {
+                match relocation.ty() {
+                    RelocationType::Data { .. } => (),
 
-                link.write(function.byte_code.as_mut_slice(), *internal_offset as isize - *our_offset as isize);
+                    RelocationType::Function { name } => {
+                        let Some(internal_offset) = self.symbol_offsets.get(name) else {
+                            continue;
+                        };
+
+                        relocation.write(function.byte_code.as_mut_slice(), *internal_offset as isize - *our_offset as isize);
+                    }
+                }
             }
 
             let function_offset = obj.add_symbol_data(main_symbol, code_section, &function.byte_code(), 1);
 
-            for link in &function.link_locations {
-                if self.symbol_offsets.get(&link.name).is_some() {
-                    continue;
+            for relocation in &function.relocations {
+                match relocation.ty() {
+                    RelocationType::Data { section, offset } => {
+                        let symbol = obj.add_symbol(Symbol {
+                            name: format!("{section}-{offset}").into(),
+                            value: 0,
+                            size: 0,
+                            kind: section.object_symbol_kind(),
+                            scope: SymbolScope::Compilation,
+                            weak: false,
+                            section: SymbolSection::Section(rodata_section),
+                            flags: SymbolFlags::None,
+                        });
+
+                        obj.add_relocation(
+                            code_section,
+                            ObjectRelocation {
+                                offset: function_offset + relocation.offset() as u64,
+                                symbol,
+                                addend: relocation.addend() + *offset as i64,
+                                flags: relocation.flags(),
+                            }
+                        )?;
+                    }
+
+                    RelocationType::Function { name } => {
+                        if self.symbol_offsets.get(name).is_some() {
+                            continue;
+                        }
+
+                        let symbol = obj.add_symbol(Symbol {
+                            name: name.as_bytes().to_vec(),
+                            value: 0,
+                            size: 0,
+                            kind: SymbolKind::Text,
+                            scope: SymbolScope::Dynamic,
+                            weak: false,
+                            section: SymbolSection::Undefined,
+                            flags: SymbolFlags::None,
+                        });
+
+                        obj.add_relocation(
+                            code_section,
+                            ObjectRelocation {
+                                offset: function_offset + relocation.offset() as u64,
+                                symbol,
+                                addend: relocation.addend(),
+                                flags: relocation.flags(),
+                            },
+                        )?;
+                    }
                 }
-
-                let symbol = obj.add_symbol(Symbol {
-                    name: link.name.as_bytes().to_vec(),
-                    value: 0,
-                    size: 0,
-                    kind: SymbolKind::Text,
-                    scope: SymbolScope::Dynamic,
-                    weak: false,
-                    section: SymbolSection::Undefined,
-                    flags: SymbolFlags::None,
-                });
-
-                obj.add_relocation(
-                    code_section,
-                    Relocation {
-                        offset: function_offset + link.offset as u64,
-                        symbol,
-                        addend: link.addend(),
-                        flags: link.flags(),
-                    },
-                )?;
             }
         }
 
@@ -287,7 +323,7 @@ struct PeSection {
 mod tests {
     use temp_dir::TempDir;
 
-    use crate::{backend::aarch64::{ArmInstruction, ArmRegister}, Architecture, Environment, FunctionLinkMethod};
+    use crate::{backend::aarch64::{ArmInstruction, ArmRegister}, Architecture, Environment, RelocationMethod};
 
     use super::*;
 
@@ -298,7 +334,7 @@ mod tests {
         object.add_function(CompiledFunction {
             name: BabString::new_static("a"),
             byte_code: ArmInstruction::Ret.encode(0, &HashMap::new()).to_le_bytes().to_vec(),
-            link_locations: Vec::new(),
+            relocations: Vec::new(),
         });
         object.add_function(CompiledFunction {
             name: BabString::new_static("b"),
@@ -306,11 +342,13 @@ mod tests {
                 ArmInstruction::MovZ { register: ArmRegister::X0, imm16: 100 }.encode(0, &HashMap::new()).to_le_bytes(),
                 ArmInstruction::Bl { offset: 0, symbol_name: BabString::new_static("a") }.encode(0, &HashMap::new()).to_le_bytes(),
             ].into_iter().flatten().collect(),
-            link_locations: [
-                FunctionLink {
-                    name: BabString::new_static("a"),
+            relocations: [
+                Relocation {
+                    ty: RelocationType::Function {
+                        name: BabString::new_static("a"),
+                    },
                     offset: 4,
-                    method: FunctionLinkMethod::AArch64BranchLink,
+                    method: RelocationMethod::AArch64BranchLink,
                 }
             ].to_vec(),
         });

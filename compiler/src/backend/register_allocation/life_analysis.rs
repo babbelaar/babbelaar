@@ -44,9 +44,9 @@ impl LifeAnalysis {
                 self.add_lifetime(destination, index);
             }
 
-            Instruction::MoveAddress { destination, section } => {
+            Instruction::MoveAddress { destination, offset } => {
                 self.add_lifetime(destination, index);
-                _ = section;
+                _ = offset;
             }
 
             Instruction::Call { name, arguments, ret_val_reg } => {

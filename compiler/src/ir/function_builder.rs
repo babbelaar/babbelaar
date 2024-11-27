@@ -255,14 +255,7 @@ impl<'program> FunctionBuilder<'program> {
 
         self.instructions.push(Instruction::MoveAddress {
             destination,
-            section: offset.section_kind(),
-        });
-
-        self.instructions.push(Instruction::MathOperation {
-            operation: MathOperation::Add,
-            destination,
-            lhs: Operand::Register(destination),
-            rhs: Operand::Immediate(Immediate::Integer64(offset.offset() as _)),
+            offset,
         });
 
         destination

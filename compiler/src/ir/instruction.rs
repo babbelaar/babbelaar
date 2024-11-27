@@ -5,7 +5,7 @@ use std::fmt::{Display, Write};
 
 use babbelaar::BabString;
 
-use crate::DataSectionKind;
+use crate::DataSectionOffset;
 
 use super::{Operand, Register};
 
@@ -63,7 +63,7 @@ pub enum Instruction {
 
     MoveAddress {
         destination: Register,
-        section: DataSectionKind,
+        offset: DataSectionOffset,
     },
 
     //
@@ -152,11 +152,11 @@ impl Display for Instruction {
                 source.fmt(f)
             }
 
-            Instruction::MoveAddress { destination, section } => {
+            Instruction::MoveAddress { destination, offset } => {
                 f.write_str("Verplaats ")?;
                 destination.fmt(f)?;
                 f.write_str(", ")?;
-                section.fmt(f)
+                offset.offset().fmt(f)
             }
 
             Instruction::Call { name, arguments, ret_val_reg } => {

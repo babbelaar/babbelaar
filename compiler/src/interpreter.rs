@@ -195,13 +195,13 @@ impl Interpreter {
                 OperationResult::Continue
             }
 
-            Instruction::MoveAddress { destination, section } => {
-                let section = match section {
+            Instruction::MoveAddress { destination, offset } => {
+                let section = match offset.section_kind() {
                     DataSectionKind::ReadOnly => self.program.read_only_data(),
                 };
 
                 let ptr = section.data().as_ptr();
-                let ptr = Immediate::Integer64(ptr as i64);
+                let ptr = Immediate::Integer64(ptr as i64 + offset.offset() as i64);
                 self.frame().set_register(destination, ptr);
 
                 OperationResult::Continue

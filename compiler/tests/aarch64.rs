@@ -10,7 +10,7 @@ use core::slice;
 use std::collections::HashMap;
 
 use babbelaar::{parse_string_to_tree, BabString};
-use babbelaar_compiler::{AArch64CodeGenerator, Compiler, Program};
+use babbelaar_compiler::{AArch64CodeGenerator, Compiler, DataSectionKind, Program, RelocationType};
 use signal_hook::{consts::SIGBUS, iterator::Signals};
 
 #[test]
@@ -237,27 +237,41 @@ fn compile_and_execute<T>(function: &'static str, code: &str) -> T {
 fn compile_ir_to_arm_and_link(program: &Program, target: &str) -> (Vec<u8>, usize) {
     let mut offsets = HashMap::new();
     let mut data = Vec::new();
-    let mut links = Vec::new();
+    let mut relocations = Vec::new();
 
     for function in program.functions() {
         let function = AArch64CodeGenerator::compile(function);
         let offset = data.len();
         offsets.insert(function.name().clone(), offset);
 
-        for link in function.link_locations() {
-            links.push((offset, link.clone()));
+        for relocation in function.relocations() {
+            relocations.push((offset, relocation.clone()));
         }
 
         data.extend_from_slice(function.byte_code());
     }
 
-    for (base_offset, link) in links {
-        let subroutine_offset = *offsets.get(link.name()).unwrap();
+    for (base_offset, relocation) in relocations {
+        let base_offset = base_offset + relocation.offset();
 
-        let base_offset = base_offset + link.offset();
-        let offset = (subroutine_offset as i32 - base_offset as i32) / 4;
-        let instruction = 0x94000000 + (offset as u32 & 0x3FFFFFF);
-        data[base_offset..base_offset+4].copy_from_slice(&instruction.to_ne_bytes());
+        match relocation.ty() {
+            RelocationType::Data { section, offset } => {
+                match section {
+                    DataSectionKind::ReadOnly => {
+                        let ptr = program.read_only_data().data().as_ptr();
+                        relocation.write(&mut data[base_offset..base_offset+4], ptr as isize + *offset as isize);
+                    }
+                }
+            }
+
+            RelocationType::Function { name } => {
+                let subroutine_offset = *offsets.get(name).unwrap();
+
+                let offset = (subroutine_offset as i32 - base_offset as i32) / 4;
+                let instruction = 0x94000000 + (offset as u32 & 0x3FFFFFF);
+                data[base_offset..base_offset+4].copy_from_slice(&instruction.to_ne_bytes());
+            }
+        }
     }
 
     let target = *offsets.get(&BabString::from(target.to_string())).unwrap();
