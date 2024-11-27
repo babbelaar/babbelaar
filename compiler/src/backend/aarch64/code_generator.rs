@@ -9,7 +9,10 @@ use crate::{CodeGenerator, CompiledFunction, Function, Instruction, Label, MathO
 
 use super::{AArch64FunctionCharacteristics, ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode};
 
-const SPACE_NEEDED_FOR_FP_AND_LR: usize = 2 * 8;
+const POINTER_SIZE: usize = 8;
+const STACK_ALIGNMENT: usize = 16;
+
+const SPACE_NEEDED_FOR_FP_AND_LR: usize = 2 * POINTER_SIZE;
 
 #[derive(Debug)]
 pub struct AArch64CodeGenerator {
@@ -480,6 +483,8 @@ impl AArch64CodeGenerator {
             self.stack_size += SPACE_NEEDED_FOR_FP_AND_LR;
         }
 
+        self.stack_size += (self.register_allocator.callee_saved_registers_to_save().len() * POINTER_SIZE).next_multiple_of(STACK_ALIGNMENT);
+
         // ignoring possible optimizations, count up the needed stack size when the StackAlloc instruction is used.
         for instruction in instructions {
             if let Instruction::StackAlloc { dst, size } = instruction {
@@ -498,6 +503,8 @@ impl AArch64CodeGenerator {
         } else {
             self.add_prologue_instructions_general();
         }
+
+        self.add_prologue_register_saves();
     }
 
     fn add_prologue_instructions_general(&mut self) {
@@ -534,10 +541,50 @@ impl AArch64CodeGenerator {
         });
     }
 
+    fn add_prologue_register_saves(&mut self) {
+        if self.stack_size == 0 {
+            return;
+        }
+
+        let mut base_offset = self.stack_size;
+        if !self.characteristics.is_leaf_function() {
+            base_offset -= SPACE_NEEDED_FOR_FP_AND_LR;
+        }
+
+        // TODO: use `array_chunks()` when it is stabilized
+        let pairs = self.register_allocator.callee_saved_registers_to_save().chunks(2);
+        for register_pair in pairs {
+            let offset = (base_offset - POINTER_SIZE * 2) as _;
+
+            if register_pair.len() == 1 {
+                self.instructions.push(ArmInstruction::StrImmediate {
+                    is_64_bit: true,
+                    mode: ArmUnsignedAddressingMode::UnsignedOffset,
+                    src: register_pair[0],
+                    base_ptr: ArmRegister::SP,
+                    offset,
+                });
+            } else {
+                self.instructions.push(ArmInstruction::Stp {
+                    is_64_bit: true,
+                    mode: ArmSignedAddressingMode::SignedOffset,
+                    dst: ArmRegister::SP,
+                    first: register_pair[0],
+                    second: register_pair[1],
+                    offset,
+                })
+            }
+
+            base_offset -= POINTER_SIZE * 2;
+        }
+    }
+
     fn add_epilogue(&mut self) {
         if self.stack_size == 0 {
             return;
         }
+
+        self.add_epilogue_register_restores();
 
         if self.stack_size == SPACE_NEEDED_FOR_FP_AND_LR && !self.characteristics.is_leaf_function() {
             self.add_epilogue_instructions_stack_frame_optimization();
@@ -575,6 +622,44 @@ impl AArch64CodeGenerator {
             first: ArmRegister::FP,
             second: ArmRegister::LR,
         });
+    }
+
+    fn add_epilogue_register_restores(&mut self) {
+        if self.stack_size == 0 {
+            return;
+        }
+
+        let mut base_offset = self.stack_size;
+        if !self.characteristics.is_leaf_function() {
+            base_offset -= SPACE_NEEDED_FOR_FP_AND_LR;
+        }
+
+        // TODO: use `array_chunks()` when it is stabilized
+        let pairs = self.register_allocator.callee_saved_registers_to_save().chunks(2);
+        for register_pair in pairs {
+            let offset = (base_offset - POINTER_SIZE * 2) as _;
+
+            if register_pair.len() == 1 {
+                self.instructions.push(ArmInstruction::LdrImmediate {
+                    is_64_bit: true,
+                    mode: ArmUnsignedAddressingMode::UnsignedOffset,
+                    dst: register_pair[0],
+                    base_ptr: ArmRegister::SP,
+                    offset,
+                });
+            } else {
+                self.instructions.push(ArmInstruction::Ldp {
+                    is_64_bit: true,
+                    mode: ArmSignedAddressingMode::SignedOffset,
+                    src: ArmRegister::SP,
+                    first: register_pair[0],
+                    second: register_pair[1],
+                    offset,
+                })
+            }
+
+            base_offset -= POINTER_SIZE * 2;
+        }
     }
 }
 

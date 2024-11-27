@@ -6,6 +6,7 @@ pub struct RegisterLifetime {
     first_use: usize,
     last_use: usize,
     times_used_as_return: usize,
+    times_used_between_calls: usize,
 }
 
 impl RegisterLifetime {
@@ -15,6 +16,7 @@ impl RegisterLifetime {
             first_use: index,
             last_use: index,
             times_used_as_return: 0,
+            times_used_between_calls: 0,
         }
     }
 
@@ -39,8 +41,17 @@ impl RegisterLifetime {
         self.times_used_as_return
     }
 
+    #[must_use]
+    pub fn times_used_between_calls(&self) -> usize {
+        self.times_used_between_calls
+    }
+
     pub fn did_use_for_return(&mut self) {
         self.times_used_as_return += 1;
+    }
+
+    pub fn did_use_between_calls(&mut self) {
+        self.times_used_between_calls += 1;
     }
 
     pub fn did_use_at(&mut self, index: usize) {

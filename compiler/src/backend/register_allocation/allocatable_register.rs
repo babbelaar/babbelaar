@@ -20,4 +20,14 @@ pub trait AllocatableRegister: Debug + Display + Clone + Copy + PartialEq + Eq +
 
     #[must_use]
     fn argument_nth(n: usize) -> Self;
+
+    #[must_use]
+    fn is_caller_saved(&self) -> bool {
+        Self::caller_saved_registers().contains(self)
+    }
+
+    #[must_use]
+    fn is_callee_saved(&self) -> bool {
+        Self::callee_saved_registers().contains(self)
+    }
 }

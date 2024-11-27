@@ -19,6 +19,7 @@ use self::{
 #[derive(Debug)]
 pub struct RegisterAllocator<R: AllocatableRegister> {
     mappings: HashMap<IrRegister, Option<R>>,
+    registers_to_save: Vec<R>,
 }
 
 impl<R: AllocatableRegister> RegisterAllocator<R> {
@@ -26,11 +27,19 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
     pub fn new(function: &Function) -> Self {
         let mut this = Self {
             mappings: HashMap::new(),
+            registers_to_save: Vec::new(),
         };
 
         this.allocate(function);
 
         this
+    }
+
+    /// Which callee-saved registers do we use? These need to be saved by the
+    /// architecture-specific code generator.
+    #[must_use]
+    pub fn callee_saved_registers_to_save(&self) -> &[R] {
+        &self.registers_to_save
     }
 
     #[must_use]
@@ -85,21 +94,52 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                     continue;
                 }
 
-                let register_available_after_this_instruction = registers.iter()
+                let register_available_after_this_instruction: Vec<_> = registers.iter()
                     .filter(|(_, lifetime)| lifetime.last_use() == index)
                     .filter_map(|(reg, _)| Some((*reg, *currently_mapped.get(reg)?)))
-                    .next();
+                    .collect();
 
-                if let Some((prev_avail_register, available_register)) = register_available_after_this_instruction {
-                    currently_mapped.remove(&prev_avail_register);
+                if lifetime.times_used_between_calls() > 0 {
+                    if let Some((prev_avail_register, available_register)) = register_available_after_this_instruction.iter().find(|(_, reg)| reg.is_callee_saved()) {
+                        currently_mapped.remove(prev_avail_register);
 
-                    currently_mapped.insert(*reg, available_register);
-                    self.mappings.insert(*reg, Some(available_register));
+                        currently_mapped.insert(*reg, *available_register);
+                        self.mappings.insert(*reg, Some(*available_register));
+                        continue;
+                    }
+
+                    let available = currently_available.iter()
+                        .cloned()
+                        .enumerate()
+                        .filter(|(_, reg)| reg.is_callee_saved())
+                        .next();
+
+                    if let Some((idx, available_register)) = available {
+                        self.registers_to_save.push(available_register);
+
+                        currently_available.remove(idx);
+                        currently_mapped.insert(*reg, available_register);
+                        self.mappings.insert(*reg, Some(available_register));
+                        continue;
+                    }
+
+                    panic!("Spilled!")
+                }
+
+                if let Some((prev_avail_register, available_register)) = register_available_after_this_instruction.first() {
+                    currently_mapped.remove(prev_avail_register);
+
+                    currently_mapped.insert(*reg, *available_register);
+                    self.mappings.insert(*reg, Some(*available_register));
                     continue;
                 }
 
                 // Check if there is a register available, otherwise we should spill
                 if let Some(available_register) = currently_available.pop_front() {
+                    if available_register.is_callee_saved() {
+                        self.registers_to_save.push(available_register);
+                    }
+
                     currently_mapped.insert(*reg, available_register);
                     self.mappings.insert(*reg, Some(available_register));
                     continue;

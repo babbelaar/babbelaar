@@ -10,6 +10,7 @@ use super::RegisterLifetime;
 #[derive(Debug, Default)]
 pub struct LifeAnalysis {
     result: LifeAnalysisResult,
+    function_calls: Vec<usize>,
 }
 
 impl LifeAnalysis {
@@ -21,6 +22,14 @@ impl LifeAnalysis {
 
         for (index, instruction) in instructions.iter().enumerate() {
             this.add_instruction(index, instruction);
+        }
+
+        for call_index in this.function_calls {
+            for (_, lifetime) in &mut this.result.lifetimes {
+                if lifetime.first_use() < call_index && lifetime.last_use() > call_index {
+                    lifetime.did_use_between_calls();
+                }
+            }
         }
 
         this.result
@@ -55,6 +64,8 @@ impl LifeAnalysis {
                 for arg in arguments {
                     self.add_lifetime(arg, index);
                 }
+
+                self.add_call(index);
             }
 
             Instruction::Jump { location } => {
@@ -128,6 +139,10 @@ impl LifeAnalysis {
         for register in argument_registers {
             self.add_lifetime(register, 0);
         }
+    }
+
+    fn add_call(&mut self, index: usize) {
+        self.function_calls.push(index);
     }
 }
 
