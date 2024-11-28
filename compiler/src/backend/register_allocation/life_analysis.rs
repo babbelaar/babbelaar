@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{Instruction, Operand, Register as IrRegister};
 
@@ -148,7 +148,7 @@ impl LifeAnalysis {
 
 #[derive(Debug, Default)]
 pub struct LifeAnalysisResult {
-    lifetimes: HashMap<IrRegister, RegisterLifetime>,
+    lifetimes: BTreeMap<IrRegister, RegisterLifetime>,
 }
 
 impl LifeAnalysisResult {
@@ -171,7 +171,7 @@ impl LifeAnalysisResult {
     }
 
     #[must_use]
-    pub fn lifetimes(&self) -> &HashMap<IrRegister, RegisterLifetime> {
+    pub fn lifetimes(&self) -> &BTreeMap<IrRegister, RegisterLifetime> {
         &self.lifetimes
     }
 
