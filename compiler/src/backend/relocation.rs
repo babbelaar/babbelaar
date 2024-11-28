@@ -40,7 +40,7 @@ impl Relocation {
 
         match self.method {
             RelocationMethod::AArch64BranchLink => {
-                let offset = (offset / 4) - 1;
+                let offset = offset / 4;
 
                 let instruction = ArmInstruction::Bl { offset: offset as i32, symbol_name: BabString::empty() }
                     .encode(0, &HashMap::new());

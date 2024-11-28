@@ -111,7 +111,7 @@ impl CompiledObject {
         let code_section = obj.add_subsection(StandardSection::Text, b"main");
 
         for mut function in self.functions {
-            let our_offset = self.symbol_offsets.get(&function.name).unwrap();
+            let our_offset = *self.symbol_offsets.get(&function.name).unwrap();
 
             let main_symbol = obj.add_symbol(Symbol {
                 name: function.final_name().as_bytes().to_vec(),
@@ -129,11 +129,12 @@ impl CompiledObject {
                     RelocationType::Data { .. } => (),
 
                     RelocationType::Function { name } => {
-                        let Some(internal_offset) = self.symbol_offsets.get(name) else {
+                        let Some(internal_offset) = self.symbol_offsets.get(name).copied() else {
                             continue;
                         };
 
-                        relocation.write(function.byte_code.as_mut_slice(), *internal_offset as isize - *our_offset as isize);
+                        let offset = internal_offset as isize - relocation.offset() as isize - our_offset as isize;
+                        relocation.write(function.byte_code.as_mut_slice(), offset);
                     }
                 }
             }

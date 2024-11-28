@@ -74,6 +74,7 @@ fn return_1_plus_1_with_subroutine_in_between() {
 
         werkwijze hoofd() -> g32 {
             stel een = 1;
+            subroutine();
             bekeer 1 + een;
         }
     ");
@@ -102,6 +103,24 @@ fn return_8_if_5_is_equal_to_5() {
 }
 
 #[test]
+fn subroutine_for_minus() {
+    let result = create_and_run_single_object_executable("
+        werkwijze minus(a: g32, b: g32) -> g32 {
+            bekeer a - b - 1;
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel a = 5;
+            stel b = 4;
+            bekeer minus(a, b);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+}
+
+#[test]
 fn method_call() {
     let result = create_and_run_single_object_executable("
         structuur MijnGeavanceerdeStructuur {
@@ -121,7 +140,7 @@ fn method_call() {
 }
 
 #[test]
-fn method_call_with_this() {
+fn method_call_with_this() { //
     let result = create_and_run_single_object_executable("
     structuur MijnStructuurMetGetal {
         veld getal: g32,
