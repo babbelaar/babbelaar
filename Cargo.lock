@@ -111,7 +111,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "babbelaar"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "log",
  "rstest 0.23.0",
@@ -121,11 +121,11 @@ dependencies = [
 
 [[package]]
 name = "babbelaar-builtin"
-version = "0.0.2"
+version = "0.0.3"
 
 [[package]]
 name = "babbelaar-compiler"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "babbelaar",
  "babbelaar-builtin",
@@ -141,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "babbelaar-interpreter"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "babbelaar",
  "babbelaar-compiler",
@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "babbelaar-lsp"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "babbelaar",
@@ -697,7 +697,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "playground-api"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "babbelaar",
  "babbelaar-compiler",
@@ -1091,7 +1091,7 @@ checksum = "bc1ee6eef34f12f765cb94725905c6312b6610ab2b0940889cfe58dae7bc3c72"
 
 [[package]]
 name = "tests"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "babbelaar",
  "babbelaar-interpreter",
