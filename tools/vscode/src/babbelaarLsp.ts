@@ -5,6 +5,7 @@ import { Command, Executable, ExecuteCommandRequest, LanguageClient, LanguageCli
 import { BabbelaarContext } from "./babbelaarContext";
 import { ensureLspServer } from "./downloadBabbelaar";
 import { window, workspace } from "vscode";
+import { BabbelaarLog } from "./logger";
 
 let client: LanguageClient;
 
@@ -17,6 +18,8 @@ const BabbelaarLsp = {
 export { BabbelaarLsp };
 
 async function startClient(context: BabbelaarContext) {
+	BabbelaarLog.info(`Taaldienaar (LSP) wordt geregistreerd...`);
+
 	const command = await ensureLspServer(context);
 	if (!command)
 		return;

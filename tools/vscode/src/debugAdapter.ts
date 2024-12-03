@@ -19,10 +19,12 @@ import {
 } from "vscode";
 
 import { BabbelaarContext } from "./babbelaarContext";
+import { BabbelaarLog } from "./logger";
 
 const BabbelaarDebugAdapter = {
 
     register: async (context: BabbelaarContext) => {
+		BabbelaarLog.info(`Debug-adapter wordt geregistreerd...`);
 
         debug.registerDebugAdapterTrackerFactory('*', {
             createDebugAdapterTracker(session: DebugSession) {

@@ -10,12 +10,15 @@ import { BabbelaarContext } from "./babbelaarContext";
 import { BabbelaarLsp } from "./babbelaarLsp";
 import { BabbelaarDebugAdapter } from "./debugAdapter";
 import { BabbelaarCommands } from "./commands";
+import { BabbelaarLog } from "./logger";
 
 export async function activate(context: ExtensionContext) {
 	const babbelaarContext: BabbelaarContext = {
 		ext: context,
 		version: context.extension.packageJSON.version?.trim(),
 	};
+
+	BabbelaarLog.info(`Babbelaar-extensie is geactiveerd met gedetecteerde versie ${babbelaarContext.version}`);
 
 	if (!babbelaarContext.version || `${babbelaarContext.version}`.length === 0) {
 		window.showErrorMessage("Ongeldige Babbelaar-extensie: versie is niet ingesteld.");
@@ -24,8 +27,11 @@ export async function activate(context: ExtensionContext) {
 	await BabbelaarDebugAdapter.register(babbelaarContext);
 	await BabbelaarCommands.register(babbelaarContext);
 	await BabbelaarLsp.startClient(babbelaarContext);
+
+	BabbelaarLog.info(`Babbelaar-extensie is volledig geactiveerd.`);
 }
 
 export function deactivate(): Thenable<void> {
+	BabbelaarLog.info(`Babbelaar-extensie wordt gedeactiveerd...`);
 	return BabbelaarLsp.stopClient();
 }

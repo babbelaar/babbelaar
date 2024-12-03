@@ -7,9 +7,11 @@ import { chmod, mkdir, writeFile } from "fs/promises";
 import { window } from "vscode";
 import { unzip } from "zlib";
 import { BabbelaarContext } from "./babbelaarContext";
+import { BabbelaarLog } from "./logger";
 
 
 export async function ensureLspServer(context: BabbelaarContext): Promise<string|null> {
+    BabbelaarLog.info(`Babbelaar-taaldienaar wordt gezocht...`);
     const path = await ensureLspServerPath(context);
 
     if (!path)
@@ -22,12 +24,10 @@ export async function ensureLspServer(context: BabbelaarContext): Promise<string
 }
 
 async function ensureLspServerPath(context: BabbelaarContext): Promise<string|null> {
-    console.log(`Versie ${context.version}`);
-
     const envPath = process.env.BABBELAAR_LSP_SERVER_PATH;
     if (envPath && existsSync(envPath)) {
         const path = realpathSync(envPath);
-        console.log(`Omgevingspad is gekozen: ${path}`);
+        BabbelaarLog.info(`Babbelaar-taaldienaar gebruikt omgevingspad: '${path}'`);
         return path;
     }
 
@@ -62,6 +62,7 @@ async function ensureLspServerUsingDownload(context: BabbelaarContext): Promise<
     await writeFile(path, Buffer.from(babbelaar.arrayBuffer));
     path = await ensureExecutable(path);
 
+    BabbelaarLog.info("Babbelaar-taaldienaar is gedownload");
     window.showInformationMessage("Babbelaar is gedownload");
     return path;
 }
@@ -69,6 +70,7 @@ async function ensureLspServerUsingDownload(context: BabbelaarContext): Promise<
 async function downloadLspClient(ctx: BabbelaarContext, executableName: ExecutableName): Promise<BabbelaarDownload|undefined> {
 	const url: string = "https://babbelaar.dev/blob/" + ctx.version + "/" + executableName.dir + "/" + executableName.file;
 
+    BabbelaarLog.info(`Babbelaar-taaldienaar wordt gedownload vanaf ${url}`);
 	const response = await fetch(url);
 
     if (!response.ok) {
