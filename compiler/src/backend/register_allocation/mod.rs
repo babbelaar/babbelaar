@@ -3,6 +3,8 @@
 
 use std::{collections::{HashMap, VecDeque}, fmt::Debug};
 
+use log::debug;
+
 use crate::{Function, Register as IrRegister};
 
 mod allocatable_register;
@@ -154,14 +156,14 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
     #[allow(unused)]
     fn dump_mappings(&self) {
-        println!("Register mappings:");
+        debug!("Register mappings:");
         for (virtual_reg, physical_reg) in &self.mappings {
             if let Some(physical_reg) = physical_reg {
-                println!("    IR {virtual_reg} is mapped to {physical_reg}");
+                debug!("    IR {virtual_reg} is mapped to {physical_reg}");
             } else {
-                println!("    IR {virtual_reg} is spilled");
+                debug!("    IR {virtual_reg} is spilled");
             }
         }
-        println!();
+        debug!("");
     }
 }

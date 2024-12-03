@@ -4,6 +4,7 @@
 use std::{error::Error, fmt::Display, mem::replace, path::{Path, PathBuf}};
 
 use babbelaar::ParseTree;
+use log::debug;
 
 use crate::{backend::Amd64CodeGenerator, os::{macos::MacOsLdLinker, windows::WindowsLinkLinker}, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, OperatingSystem, Platform};
 
@@ -27,7 +28,7 @@ impl Pipeline {
         compiler.compile_trees(trees);
 
         let mut program = compiler.finish();
-        println!("Program: {program}");
+        debug!("Program: {program}");
 
         for function in program.functions() {
             self.code_gen(function);
@@ -53,7 +54,7 @@ impl Pipeline {
         let mut path = directory.to_path_buf();
         path.push(format!("{name}.{}", self.object.platform().operating_system().object_extension()));
 
-        println!("Path: {}", path.display());
+        debug!("Objectpad: {}", path.display());
 
 
 

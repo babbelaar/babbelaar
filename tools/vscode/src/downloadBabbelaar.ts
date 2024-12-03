@@ -9,6 +9,18 @@ import { unzip } from "zlib";
 import { BabbelaarContext } from "./babbelaarContext";
 import { BabbelaarLog } from "./logger";
 
+export async function ensureCli(context: BabbelaarContext): Promise<string|null> {
+    BabbelaarLog.info(`Babbelaar-hoofdprogramma wordt gezocht...`);
+    const path = await ensureCliPath(context);
+
+    if (!path)
+        return path;
+
+    if (process.platform === 'win32')
+        return copyTempPath(path);
+
+    return path;
+}
 
 export async function ensureLspServer(context: BabbelaarContext): Promise<string|null> {
     BabbelaarLog.info(`Babbelaar-taaldienaar wordt gezocht...`);
@@ -39,38 +51,86 @@ async function ensureLspServerPath(context: BabbelaarContext): Promise<string|nu
     return installPath;
 }
 
+async function ensureCliPath(context: BabbelaarContext): Promise<string|null> {
+    const envPath = process.env.BABBELAAR_CLI_PATH;
+    if (envPath && existsSync(envPath)) {
+        const path = realpathSync(envPath);
+        BabbelaarLog.info(`Babbelaar-hoofdprogramma gebruikt omgevingspad: '${path}'`);
+        return path;
+    }
+
+    const installPath = ensureCliUsingDownload(context);
+    if (!installPath) {
+        showError(context, "Kon Babbelaar niet vinden op het systeem, maar kon het ook niet downloaden.");
+    }
+
+    return installPath;
+}
+
 async function ensureLspServerUsingDownload(context: BabbelaarContext): Promise<string|null> {
     const dir = context.ext.globalStorageUri.fsPath + "/" + context.version;
     if (!existsSync(dir)) {
         await mkdir(dir, { recursive: true });
     }
 
-    const executableName = detectBabbelaarFileName(context);
+    const executableName = detectBabbelaarFileName(context, "babbelaar-lsp");
 	if (!executableName)
         return null;
 
     let path = dir + "/" + executableName.file;
-    if (existsSync(path))
+    if (existsSync(path)) {
+        BabbelaarLog.info(`Babbelaar-taaldienaar is gevonden op '${path}'`);
         return await ensureExecutable(path);
+    }
 
     window.showInformationMessage("We downloaden Babbelaar...");
 
-    const babbelaar = await downloadLspClient(context, executableName);
+    const babbelaar = await downloadProgram(context, executableName);
     if (!babbelaar)
         return null;
 
     await writeFile(path, Buffer.from(babbelaar.arrayBuffer));
     path = await ensureExecutable(path);
 
-    BabbelaarLog.info("Babbelaar-taaldienaar is gedownload");
+    BabbelaarLog.info("Babbelaar-taaldienaar is gedownload in: " + path);
     window.showInformationMessage("Babbelaar is gedownload");
     return path;
 }
 
-async function downloadLspClient(ctx: BabbelaarContext, executableName: ExecutableName): Promise<BabbelaarDownload|undefined> {
+async function ensureCliUsingDownload(context: BabbelaarContext): Promise<string|null> {
+    const dir = context.ext.globalStorageUri.fsPath + "/" + context.version;
+    if (!existsSync(dir)) {
+        await mkdir(dir, { recursive: true });
+    }
+
+    const executableName = detectBabbelaarFileName(context, "babbelaar-interpreter");
+	if (!executableName)
+        return null;
+
+    let path = dir + "/" + executableName.file;
+    if (existsSync(path)) {
+        BabbelaarLog.info(`Babbelaar-hoofdprogramma is gevonden op '${path}'`);
+        return await ensureExecutable(path);
+    }
+
+    window.showInformationMessage("We downloaden Babbelaar...");
+
+    const babbelaar = await downloadProgram(context, executableName);
+    if (!babbelaar)
+        return null;
+
+    await writeFile(path, Buffer.from(babbelaar.arrayBuffer));
+    path = await ensureExecutable(path);
+
+    BabbelaarLog.info("Babbelaar-hoofdprogramma is gedownload in: " + path);
+    window.showInformationMessage("Babbelaar-hoofdprogramma is gedownload");
+    return path;
+}
+
+async function downloadProgram(ctx: BabbelaarContext, executableName: ExecutableName): Promise<BabbelaarDownload|undefined> {
 	const url: string = "https://babbelaar.dev/blob/" + ctx.version + "/" + executableName.dir + "/" + executableName.file;
 
-    BabbelaarLog.info(`Babbelaar-taaldienaar wordt gedownload vanaf ${url}`);
+    BabbelaarLog.info(`${executableName.file} wordt gedownload vanaf ${url}`);
 	const response = await fetch(url);
 
     if (!response.ok) {
@@ -92,7 +152,7 @@ async function downloadLspClient(ctx: BabbelaarContext, executableName: Executab
     };
 }
 
-function detectBabbelaarFileName(ctx: BabbelaarContext): ExecutableName|null {
+function detectBabbelaarFileName(ctx: BabbelaarContext, program: string): ExecutableName|null {
     const messageOptions = {
         noRetry: true,
     };
@@ -105,7 +165,7 @@ function detectBabbelaarFileName(ctx: BabbelaarContext): ExecutableName|null {
 
 		return {
             dir: "macos",
-            file: "babbelaar-lsp",
+            file: program,
         };
 	}
 
@@ -117,7 +177,7 @@ function detectBabbelaarFileName(ctx: BabbelaarContext): ExecutableName|null {
 
 		return {
             dir: "linux",
-            file: "babbelaar-lsp",
+            file: program,
         };
 	}
 
@@ -129,7 +189,7 @@ function detectBabbelaarFileName(ctx: BabbelaarContext): ExecutableName|null {
 
 		return {
             dir: "windows",
-            file: "babbelaar-lsp.exe",
+            file: program + ".exe",
         };
 	}
 

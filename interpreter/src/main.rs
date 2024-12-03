@@ -11,16 +11,15 @@ mod debug_adapter;
 mod error;
 mod ffi;
 mod interpreter;
-mod logger;
 mod scope;
 
-use std::{fmt::Display, fs::read_dir, path::{Path, PathBuf}, process::exit};
+use std::{fmt::Display, fs::{create_dir_all, read_dir}, path::{Path, PathBuf}, process::{exit, Command, Stdio}, time::Instant};
 
 pub use babbelaar::*;
 use babbelaar_compiler::{Pipeline, Platform};
 use clap::Subcommand;
 use colored::Colorize;
-use logger::Logger;
+use env_logger::Env;
 
 pub use self::{
     data::{
@@ -72,24 +71,34 @@ enum Commands {
 }
 
 fn main() {
-    Logger::initialize();
+    init_logger();
     let args = Args::parse_args();
 
     match args.command {
         Commands::Bouwen { bestand } => {
-            compile(bestand)
+            let start = Instant::now();
+
+            let path = compile(bestand);
+
+            println!("Gecompileerd in {}ms naar {}", start.elapsed().as_millis(), path.display());
         }
 
         Commands::Debug { bestand } => {
             interpret(&bestand, DebugAdapter::new(bestand.to_string_lossy().to_string()));
         }
         Commands::Uitvoeren { bestand } => {
-            interpret(&bestand, ());
+            // interpret(&bestand, ());
+            let path = compile(bestand);
+            Command::new(path)
+                .stderr(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .spawn().unwrap()
+                .wait().unwrap();
         }
     }
 }
 
-fn compile(bestand: PathBuf) {
+fn compile(bestand: PathBuf) -> PathBuf {
     let files: Vec<(SourceCode, ParseTree)> = read_dir(&bestand.parent().unwrap())
         .unwrap()
         .flatten()
@@ -106,11 +115,11 @@ fn compile(bestand: PathBuf) {
     let mut pipeline = Pipeline::new(Platform::host_platform());
     pipeline.compile_trees(&trees);
 
-    let dir = std::env::current_dir().unwrap();
+    let dir = output_dir();
     let exec_name = bestand.file_stem().unwrap().to_string_lossy();
 
     pipeline.create_object(&dir, &exec_name).unwrap();
-    pipeline.link_to_executable(&dir, &exec_name).unwrap();
+    pipeline.link_to_executable(&dir, &exec_name).unwrap()
 }
 
 pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
@@ -228,4 +237,24 @@ fn print_error(source_code: &SourceCode, range: FileRange, message: impl Display
     eprintln!();
 
     eprintln!("In {}:{}:{}\n", source_code.path().display(), range.start().line() + 1, range.start().column() + 1);
+}
+
+#[must_use]
+fn output_dir() -> PathBuf {
+    let mut dir = std::env::current_dir().unwrap();
+
+    dir.push("uit");
+
+    create_dir_all(&dir).unwrap();
+    dir
+}
+
+fn init_logger() {
+    let env = Env::default()
+        .filter("BABBELAAR_LOG")
+        .write_style("BABBELAAR_LOGSTIJL");
+
+    env_logger::builder()
+        .parse_env(env)
+        .init();
 }

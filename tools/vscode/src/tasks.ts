@@ -3,15 +3,23 @@
 
 
 import { CancellationToken, ProviderResult, ShellExecution, Task, TaskProvider, tasks, TaskScope } from "vscode";
+import { ensureCli } from "./downloadBabbelaar";
+import { BabbelaarContext } from "./babbelaarContext";
 
 class BabbelaarTaskProvider implements TaskProvider<Task> {
+	private babbelaar: BabbelaarContext;
+
+	constructor(babbelaar: BabbelaarContext) {
+		this.babbelaar = babbelaar;
+	}
+
 	provideTasks(token: CancellationToken): ProviderResult<Task[]> {
 		console.log(`Tasks token ${token}`);
 		// throw new Error("Method not implemented.");
 		return [];
 	}
 
-	createRun(path: string): Task {
+	async createRun(path: string): Promise<Task> {
 		const task = new Task(
 			{
 				type: "babbelaar",
@@ -28,8 +36,8 @@ class BabbelaarTaskProvider implements TaskProvider<Task> {
 		return this.resolveTaskImpl(task);
 	}
 
-	resolveTaskImpl(task: Task): Task {
-		const command = process.env.BABBELAAR || "babbelaar";
+	async resolveTaskImpl(task: Task): Promise<Task> {
+		const command = await ensureCli(this.babbelaar) ?? "babbelaar";
 
 		const path = task.definition["path"] as string;
 		const execution = new ShellExecution(`clear; \"${command.replaceAll(/(?<!\\)"/g, "\"")}\" uitvoeren \"${path.replaceAll(/(?<!\\)"/g, "\"")}\"`, {
@@ -50,7 +58,11 @@ class BabbelaarTaskProvider implements TaskProvider<Task> {
 	}
 }
 
-const taskProvider = new BabbelaarTaskProvider();
-const taskProviderSubscription = tasks.registerTaskProvider("babbelaar", taskProvider);
+async function registerTaskProvider(context: BabbelaarContext) {
+	const taskProvider = new BabbelaarTaskProvider(context);
+	const taskProviderSubscription = tasks.registerTaskProvider("babbelaar", taskProvider);
+	context.taskProvider = taskProvider;
+	await ensureCli(context);
+}
 
-export { taskProvider };
+export { BabbelaarTaskProvider, registerTaskProvider, };

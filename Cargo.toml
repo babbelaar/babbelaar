@@ -30,3 +30,4 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 tower-lsp = { git = "https://github.com/babbelaar/tower-lsp.git", rev = "cce815536edb201b5082b8310227796ec40e09d4" }
 url = "1"
+env_logger = "0.11"

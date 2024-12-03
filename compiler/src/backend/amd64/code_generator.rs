@@ -4,6 +4,7 @@
 use std::{collections::HashMap, mem::take};
 
 use babbelaar::BabString;
+use log::debug;
 
 use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
@@ -45,14 +46,14 @@ impl Amd64CodeGenerator {
         this.dump_instructions();
 
         let byte_code = this.to_byte_code();
-        print!("Bytecode: ");
+        let mut result = String::new();
         for x in &byte_code {
             if *x < 0x10 {
-                print!("0");
+                result += "0";
             }
-            print!("{x:X} ");
+            result += &format!("{x:X} ");
         }
-        println!("\n");
+        debug!("Bytecode: {result}");
 
         let relocations = take(&mut this.relocations);
 
@@ -347,19 +348,19 @@ impl Amd64CodeGenerator {
     }
 
     fn dump_instructions(&self) {
-        println!("AMD64-instructies voor {}:", self.function_name);
+        debug!("AMD64-instructies voor {}:", self.function_name);
 
         for (offset, instruction) in self.instructions.iter().enumerate() {
             for (label, label_offset) in &self.label_offsets {
                 if *label_offset == offset {
-                    println!("{label}:");
+                    debug!("{label}:");
                 }
             }
 
-            println!("    {instruction}");
+            debug!("    {instruction}");
         }
 
-        println!();
+        debug!("");
     }
 
     // TODO: I hate this, but we don't know the size of the future instruction since they are variable length, meaning we can't just do it all in one go

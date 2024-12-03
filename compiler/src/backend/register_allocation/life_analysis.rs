@@ -3,6 +3,8 @@
 
 use std::collections::BTreeMap;
 
+use log::debug;
+
 use crate::{Instruction, Operand, Register as IrRegister};
 
 use super::RegisterLifetime;
@@ -185,9 +187,9 @@ impl LifeAnalysisResult {
     #[allow(unused)]
     pub fn dump_result(&self) {
         for (reg, lifetime) in self.lifetimes() {
-            println!("Register {reg} has a lifetime of {} instructions. start={} end={}", lifetime.length(), lifetime.first_use(), lifetime.last_use());
+            debug!("Register {reg} has a lifetime of {} instructions. start={} end={}", lifetime.length(), lifetime.first_use(), lifetime.last_use());
             if lifetime.times_used_as_return() != 0 {
-                println!("    and was used {}x as the return value", lifetime.times_used_as_return());
+                debug!("    and was used {}x as the return value", lifetime.times_used_as_return());
             }
         }
     }

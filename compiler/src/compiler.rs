@@ -7,6 +7,7 @@
 use std::rc::Rc;
 
 use babbelaar::*;
+use log::debug;
 
 use crate::{optimize_program, ArgumentList, FunctionBuilder, Immediate, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId};
 
@@ -68,7 +69,6 @@ impl Compiler {
     #[must_use]
     pub fn finish(self) -> Program {
         let mut program = self.program_builder.build();
-        println!("Before opt: {program}");
         optimize_program(&mut program);
         program
     }
@@ -176,7 +176,7 @@ impl CompileStatement for Statement {
 impl CompileStatement for AssignStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
         let destination = self.destination.compile(builder).to_readable(builder);
-        println!("Dest {} is at {destination}", self.source.value());
+        debug!("Dest {} is at {destination}", self.source.value());
         let source = self.source.compile(builder).to_readable(builder);
         builder.move_register(destination, source);
     }

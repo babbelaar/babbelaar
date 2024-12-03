@@ -11,11 +11,13 @@ import { BabbelaarLsp } from "./babbelaarLsp";
 import { BabbelaarDebugAdapter } from "./debugAdapter";
 import { BabbelaarCommands } from "./commands";
 import { BabbelaarLog } from "./logger";
+import { registerTaskProvider } from "./tasks";
 
 export async function activate(context: ExtensionContext) {
 	const babbelaarContext: BabbelaarContext = {
 		ext: context,
 		version: context.extension.packageJSON.version?.trim(),
+		taskProvider: null,
 	};
 
 	BabbelaarLog.info(`Babbelaar-extensie is geactiveerd met gedetecteerde versie ${babbelaarContext.version}`);
@@ -25,6 +27,7 @@ export async function activate(context: ExtensionContext) {
 	}
 
 	await BabbelaarDebugAdapter.register(babbelaarContext);
+	await registerTaskProvider(babbelaarContext);
 	await BabbelaarCommands.register(babbelaarContext);
 	await BabbelaarLsp.startClient(babbelaarContext);
 

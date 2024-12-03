@@ -3,6 +3,8 @@
 
 use std::collections::HashMap;
 
+use log::debug;
+
 use crate::{types::Graph, Function, FunctionOptimizer, Instruction, Label, Operand, Register};
 
 #[derive(Debug, Default)]
@@ -26,7 +28,7 @@ impl FunctionOptimizer for DeadCodeEliminator {
             }
 
             let instr = function.instructions.remove(index);
-            println!("[DeadCode] Removing {instr}");
+            debug!("[DeadCode] Removing {instr}");
         }
     }
 }

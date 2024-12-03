@@ -38,6 +38,7 @@ impl MacOsLdLinker {
 
         command.arg("-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib");
         command.arg("-lSystem");
+        command.args(["-platform_version", "macos", "10.13", "10.13"]);
 
         let mut process = command.spawn()?;
         let exit_status = process.wait()?;

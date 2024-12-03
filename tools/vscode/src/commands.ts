@@ -4,7 +4,6 @@
 import { commands, tasks, workspace } from "vscode";
 import { BabbelaarContext } from "./babbelaarContext";
 import { BabbelaarLsp } from "./babbelaarLsp";
-import { taskProvider } from "./tasks";
 import { BabbelaarLog } from "./logger";
 
 const BabbelaarCommands = {
@@ -20,7 +19,7 @@ const BabbelaarCommands = {
         context.ext.subscriptions.push(
             commands.registerCommand("babbelaar.uitvoeren", async uri => {
                 const path = workspace.textDocuments[0].uri.fsPath;
-                tasks.executeTask(taskProvider.createRun(path));
+                tasks.executeTask(await context.taskProvider!.createRun(path));
             })
         );
     }

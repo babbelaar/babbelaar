@@ -4,6 +4,7 @@
 use std::{collections::HashMap, mem::take};
 
 use babbelaar::BabString;
+use log::debug;
 
 use crate::{CodeGenerator, CompiledFunction, Function, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
@@ -52,14 +53,14 @@ impl AArch64CodeGenerator {
         let relocations = take(&mut this.relocations);
 
         let byte_code = this.to_byte_code();
-        print!("Bytecode: ");
+        let mut result = String::new();
         for x in &byte_code {
             if *x < 0x10 {
-                print!("0");
+                result += "0";
             }
-            print!("{x:X} ");
+            result += &format!("{x:X} ");
         }
-        println!("\n");
+        debug!("Bytecode: {result}");
 
         CompiledFunction {
             name: function.name.clone(),
@@ -449,19 +450,19 @@ impl AArch64CodeGenerator {
     }
 
     fn dump_instructions(&self) {
-        println!("AArch64-instructies voor {}:", self.function_name);
+        debug!("AArch64-instructies voor {}:", self.function_name);
 
         for (offset, instruction) in self.instructions.iter().enumerate() {
             for (label, label_offset) in &self.label_offsets {
                 if *label_offset == offset {
-                    println!("{label}:");
+                    debug!("{label}:");
                 }
             }
 
-            println!("    {instruction}");
+            debug!("    {instruction}");
         }
 
-        println!();
+        debug!("");
     }
 
     #[must_use]

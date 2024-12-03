@@ -14,6 +14,7 @@ babbelaar = { path = "../babbelaar" }
 babbelaar-compiler = { path = "../compiler" }
 clap.workspace = true
 colored.workspace = true
+env_logger.workspace = true
 
 [dev-dependencies]
 rstest = "0.23"
