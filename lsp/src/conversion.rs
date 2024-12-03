@@ -116,7 +116,7 @@ impl Converter {
                     utf8_column += character.len_utf8();
                 }
 
-                debug_assert!(utf16_column == column);
+                debug_assert!(utf16_column == column, "We konden onze de gegeven UTF-16-kolom {column} niet omzetten naar interne UTF-8-kolom ({utf8_column}), we kwamen zelf maar tot UTF-16-kolom {utf16_column}");
                 utf8_column
             }
         };
