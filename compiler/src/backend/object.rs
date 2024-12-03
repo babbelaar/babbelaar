@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, error::Error, fs::File, io::Write, path::Path, time::SystemTime};
 
-use babbelaar::BabString;
+use babbelaar::{BabString, Constants};
 use object::{
     pe::{IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE, IMAGE_SUBSYSTEM_WINDOWS_CUI},
     write::{
@@ -51,7 +51,7 @@ impl CompiledFunction {
     }
 
     fn final_name(&self) -> &str {
-        if self.name() == "hoofd" {
+        if self.name() == Constants::MAIN_FUNCTION {
             return "main";
         }
         &self.name

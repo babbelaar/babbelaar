@@ -18,4 +18,6 @@ impl Constants {
     pub const DISCARDING_IDENT: BabString = BabString::new_static("_");
 
     pub const OBJECT_FILE_EXTENSION: &'static str = "bab-voorwerp";
+
+    pub const MAIN_FUNCTION: &'static str = "hoofd";
 }
