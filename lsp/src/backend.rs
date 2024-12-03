@@ -107,12 +107,35 @@ impl Backend {
                     command: "babbelaar.uitvoeren".into(),
                     arguments: Some(vec![
                         "uitvoeren".into(),
-                        url.into(),
+                        url.clone().into(),
                     ]),
                 }),
                 data: None,
             });
         }
+
+        self.with_semantics(&params.text_document, |semantics, source_code| {
+            for scope in semantics.context.previous_scopes.iter().chain(semantics.context.scope.iter()) {
+                if let Some(main_func) = scope.locals.get(&BabString::new_static(Constants::MAIN_FUNCTION)) {
+                    if main_func.kind.is_function() {
+                        let range = self.converter(source_code).convert_file_range(main_func.name_declaration_range);
+                        lenses.push(CodeLens {
+                            range,
+                            command: Some(Command {
+                                title: "► Uitvoeren".into(),
+                                command: "babbelaar.uitvoeren".into(),
+                                arguments: Some(vec![
+                                    "uitvoeren".into(),
+                                    url.clone().into(),
+                                ]),
+                            }),
+                            data: None,
+                        });
+                    }
+                }
+            }
+            Ok(())
+        }).await?;
 
         Ok(Some(lenses))
     }
