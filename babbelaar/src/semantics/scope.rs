@@ -79,3 +79,10 @@ pub enum SemanticScopeKind {
         right_parameter_range: FileRange,
     },
 }
+
+impl SemanticScopeKind {
+    #[must_use]
+    pub const fn is_function(&self) -> bool {
+        matches!(self, Self::Function { .. })
+    }
+}

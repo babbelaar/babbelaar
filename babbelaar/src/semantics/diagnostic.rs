@@ -331,6 +331,9 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Kan alleen het adres nemen van een lokale variabele")]
     CannotTakeAddressOfNonIdentifier,
+
+    #[error("Deze statement mag alleen binnen werkwijzen gebruikt worden.")]
+    StatementOutsideFunction,
 }
 
 impl SemanticDiagnosticKind {

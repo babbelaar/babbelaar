@@ -446,6 +446,13 @@ impl SemanticAnalyzer {
     pub fn analyze_statement(&mut self, statement: &Statement) {
         self.analyze_attributes_for_statement(statement);
 
+        if !statement.is_freestanding() && !self.is_in_function_scope() {
+            self.diagnostics.create(|| {
+                SemanticDiagnostic::new(statement.range, SemanticDiagnosticKind::StatementOutsideFunction)
+            });
+            return;
+        }
+
         match &statement.kind {
             StatementKind::Expression(expr) => {
                 let value = self.analyze_expression(expr);
@@ -2692,5 +2699,20 @@ impl SemanticAnalyzer {
             .filter(|extension| extension.is_for_type(typ))
             .filter(|extension| extension.interface.as_ref().is_some_and(|i| i.as_ref() == interface))
             .next()
+    }
+
+    /// Returns whether or not we are in a function scope, or a parent scope is a function scope.
+    ///
+    /// E.g.
+    /// ```plain
+    /// function -> true
+    /// function if -> true
+    /// function if if -> true
+    /// if -> false
+    /// if if -> false
+    /// ```
+    #[must_use]
+    fn is_in_function_scope(&self) -> bool {
+        self.context.scope.iter().find(|x| x.kind.is_function()).is_some()
     }
 }

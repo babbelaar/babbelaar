@@ -10,6 +10,13 @@ pub struct Statement {
     pub kind: StatementKind,
 }
 
+impl Statement {
+    #[must_use]
+    pub fn is_freestanding(&self) -> bool {
+        self.kind.is_freestanding()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum StatementKind {
     Assignment(Ranged<AssignStatement>),
@@ -28,6 +35,23 @@ impl StatementKind {
     #[must_use]
     pub const fn is_expression(&self) -> bool {
         matches!(self, Self::Expression(..))
+    }
+
+    #[must_use]
+    pub fn is_freestanding(&self) -> bool {
+        match self {
+            Self::Assignment(..) => false,
+            Self::Expression(..) => false,
+            Self::For(..) => false,
+            Self::If(..) => false,
+            Self::Return(..) => false,
+            Self::Variable(..) => false,
+
+            Self::Extension(..) => true,
+            Self::Function(..) => true,
+            Self::Interface(..) => true,
+            Self::Structure(..) => true,
+        }
     }
 }
 
