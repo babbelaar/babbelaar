@@ -4,10 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-thiserror = "1"
-strum = { version = "0.26", features = ["derive"] }
-
-log = "0.4"
+thiserror.workspace = true
+strum.workspace = true
+log.workspace = true
 
 [dev-dependencies]
 rstest = "0.23"

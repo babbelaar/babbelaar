@@ -7,4 +7,4 @@ edition.workspace = true
 babbelaar = { path = "../babbelaar" }
 babbelaar-interpreter = { path = "../interpreter" }
 
-rstest = "0.22"
+rstest = "0.23"

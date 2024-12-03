@@ -4,16 +4,16 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-dap = "0.4.1-alpha1"
-thiserror = "1"
-strum = { version = "0.26", features = ["derive"] }
-libloading = "0.8"
-log = "0.4"
+dap.workspace = true
+thiserror.workspace = true
+strum.workspace = true
+libloading.workspace = true
+log.workspace = true
 
 babbelaar = { path = "../babbelaar" }
 babbelaar-compiler = { path = "../compiler" }
-clap = { version = "4.5.16", features = ["derive"] }
-colored = "2.1"
+clap.workspace = true
+colored.workspace = true
 
 [dev-dependencies]
 rstest = "0.23"
