@@ -62,14 +62,7 @@ impl<D> Interpreter<D>
             }
         }
 
-        for tree in trees {
-            for statement in tree.statements() {
-                match self.execute_statement(statement) {
-                    StatementResult::Continue => continue,
-                    StatementResult::Return(..) => break,
-                }
-            }
-        }
+        self.execute_function_by_name(Constants::MAIN_FUNCTION);
     }
 
     pub fn execute(&mut self, statement: &Statement) {
@@ -900,6 +893,19 @@ impl<D> Interpreter<D>
         }
 
         value
+    }
+
+    fn execute_function_by_name(&mut self, name: &'static str) {
+        let Some(value) = self.scope.variables.get(&BabString::new_static(name)) else {
+            eprintln!("Dit project bevat geen `{name}`-werkwijze");
+            exit(1);
+        };
+
+        let Value::Function { id, .. } = value else {
+            panic!("`{name}` is geen werkwijze, maar: {value:#?}")
+        };
+
+        self.execute_function_by_id(*id, Vec::new(), None, FileRange::INTERNAL);
     }
 }
 
