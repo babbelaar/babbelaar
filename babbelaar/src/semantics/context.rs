@@ -170,6 +170,7 @@ impl SemanticContext {
     }
 
     pub fn push_function(&mut self, function: SemanticFunction, range: FileRange) {
+        let name = function.name.value().clone();
         let declaration_range = function.name.range();
 
         if let Some(tracker) = &mut self.declaration_tracker {
@@ -181,14 +182,17 @@ impl SemanticContext {
             });
         }
 
-        self.scope.last_mut().unwrap().locals.insert(
-            function.name.value().clone(),
-            SemanticLocal::new(
-                SemanticLocalKind::Function,
-                SemanticType::Function(function),
-                declaration_range,
-            ).with_declaration_range(range)
-        );
+        let mut local = SemanticLocal::new(
+            SemanticLocalKind::Function,
+            SemanticType::Function(function),
+            declaration_range,
+        ).with_declaration_range(range);
+
+        if name == Constants::MAIN_FUNCTION {
+            local.add_usage();
+        }
+
+        self.scope.last_mut().unwrap().locals.insert(name, local);
     }
 
     pub fn push_structure(&mut self, structure: Arc<SemanticStructure>) {
