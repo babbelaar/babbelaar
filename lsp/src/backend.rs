@@ -609,20 +609,61 @@ impl Backend {
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
 
-        self.lexed_document(&params.text_document, |tokens, source_code| {
-            let mut symbolizer = Symbolizer::new(params.text_document.uri.clone(), source_code, self.converter(source_code));
+        self.with_semantics(&params.text_document, |analyzer, source_code| {
+            let mut symbols = Vec::new();
 
-            for token in tokens {
-                symbolizer.add_token(token);
+            let converter = self.converter(source_code);
+
+            for scope in analyzer.context.scope.iter().chain(analyzer.context.previous_scopes.iter()) {
+                if scope.range.file_id() != source_code.file_id() {
+                    continue;
+                }
+
+                for (name, structure) in &scope.structures {
+                    #[allow(deprecated)]
+                    symbols.push(SymbolInformation {
+                        name: name.to_string(),
+                        kind: SymbolKind::CLASS,
+                        tags: None,
+                        deprecated: None,
+                        location: converter.convert_file_range_to_location(params.text_document.uri.clone(), FileRange::new(
+                            structure.name.range().start(),
+                            structure.right_curly_range.end(),
+                        )),
+                        container_name: None,
+                    });
+
+                    for field in &structure.fields {
+                        #[allow(deprecated)]
+                        symbols.push(SymbolInformation {
+                            name: field.name.to_string(),
+                            kind: SymbolKind::FIELD,
+                            tags: None,
+                            deprecated: None,
+                            location: converter.convert_file_range_to_location(params.text_document.uri.clone(), field.name.range()),
+                            container_name: None,
+                        });
+                    }
+                }
+
+                match &scope.kind {
+                    SemanticScopeKind::Function { name, .. } => {
+                        #[allow(deprecated)]
+                        symbols.push(SymbolInformation {
+                            name: name.to_string(),
+                            kind: SymbolKind::FUNCTION,
+                            tags: None,
+                            deprecated: None,
+                            location: converter.convert_file_range_to_location(params.text_document.uri.clone(), scope.range),
+                            container_name: None,
+                        })
+                    }
+
+                    _ => (),
+                }
             }
 
-            let mut parser = Parser::new(params.text_document.uri.to_path()?, &tokens);
-            let tree = parser.parse_tree();
-
-            symbolizer.add_tree(&tree);
-
-            let response = symbolizer.to_response();
-            Ok(Some(response))
+            Ok(Some(DocumentSymbolResponse::Flat(symbols)))
         }).await
     }
 

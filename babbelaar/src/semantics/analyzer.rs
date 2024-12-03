@@ -698,8 +698,7 @@ impl SemanticAnalyzer {
                     .filter_map(|x| match &x.kind {
                         SemanticScopeKind::Default => None,
                         SemanticScopeKind::TopLevel => None,
-                        SemanticScopeKind::Structure => None,
-                        SemanticScopeKind::Werkwijze => None,
+                        SemanticScopeKind::Structure { .. } => None,
                         SemanticScopeKind::Function { right_parameter_range, .. } => Some(right_parameter_range.clone()),
                     })
                     .next();
@@ -743,8 +742,7 @@ impl SemanticAnalyzer {
                     .filter_map(|x| match &x.kind {
                         SemanticScopeKind::Default => None,
                         SemanticScopeKind::TopLevel => None,
-                        SemanticScopeKind::Structure => None,
-                        SemanticScopeKind::Werkwijze => None,
+                        SemanticScopeKind::Structure { .. } => None,
                         SemanticScopeKind::Function { right_parameter_range, .. } => Some(right_parameter_range.clone()),
                     })
                     .next();

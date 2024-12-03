@@ -87,6 +87,7 @@ pub use self::{
         SemanticLocalKind,
         SemanticReference,
         SemanticScope,
+        SemanticScopeKind,
         SemanticStructure,
         SemanticType,
     },

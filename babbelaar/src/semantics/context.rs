@@ -63,6 +63,7 @@ impl SemanticContext {
             this,
             return_type: None,
             kind: SemanticScopeKind::Function {
+                name: function.name.value().clone(),
                 right_parameter_range: function.parameters_right_paren_range,
             },
             extensions: Vec::new(),

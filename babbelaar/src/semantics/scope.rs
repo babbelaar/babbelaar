@@ -73,9 +73,9 @@ pub enum SemanticScopeKind {
 
     TopLevel,
     Structure,
-    Werkwijze,
 
     Function {
+        name: BabString,
         right_parameter_range: FileRange,
     },
 }
