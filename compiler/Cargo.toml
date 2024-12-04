@@ -17,3 +17,4 @@ region = "3"
 signal-hook = "0.3"
 temp-dir = "0.1"
 pretty_assertions = "1"
+env_logger.workspace = true

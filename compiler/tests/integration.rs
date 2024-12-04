@@ -5,6 +5,7 @@ use babbelaar::{parse_string_to_tree, BabString, ParseDiagnostic};
 use babbelaar_compiler::{Compiler, Immediate, Interpreter};
 
 fn compile_and_interpret(code: &str, function: &'static str) -> Option<Immediate> {
+    let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
     let tree = match parse_string_to_tree(code) {
         Ok(tree) => tree,
         Err(e) => {

@@ -161,6 +161,7 @@ fn method_call_with_this() {
 //
 
 fn compile_and_execute(function: &'static str, code: &str) -> isize {
+    let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
     let tree = parse_string_to_tree(code).unwrap();
 
     let mut compiler = Compiler::new();

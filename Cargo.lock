@@ -129,6 +129,7 @@ version = "0.0.3"
 dependencies = [
  "babbelaar",
  "babbelaar-builtin",
+ "env_logger",
  "log",
  "object",
  "pretty_assertions",

@@ -211,6 +211,7 @@ fn function_returns_length_of_string_literal() {
 //
 
 fn compile_and_execute<T>(function: &'static str, code: &str) -> T {
+    let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
     let tree = parse_string_to_tree(code).unwrap();
 
     let mut compiler = Compiler::new();

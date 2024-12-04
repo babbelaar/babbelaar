@@ -225,6 +225,8 @@ fn two_strings_one_program() {
 }
 
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
+    let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
+
     let dir = TempDir::new().unwrap().panic_on_cleanup_error();
     let directory = dir.path().to_path_buf();
     dir.leak();
