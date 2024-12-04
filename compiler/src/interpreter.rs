@@ -207,6 +207,37 @@ impl Interpreter {
                 OperationResult::Continue
             }
 
+            Instruction::MoveCondition { destination, condition } => {
+                let is_true = match condition {
+                    JumpCondition::Equal => {
+                        self.comparison_flags.zero
+                    }
+
+                    JumpCondition::Greater => {
+                        !self.comparison_flags.negative
+                    }
+
+                    JumpCondition::GreaterOrEqual => {
+                        !self.comparison_flags.negative || self.comparison_flags.zero
+                    }
+
+                    JumpCondition::Less => {
+                        self.comparison_flags.negative
+                    }
+
+                    JumpCondition::LessOrEqual => {
+                        self.comparison_flags.negative || self.comparison_flags.zero
+                    }
+
+                    JumpCondition::NotEqual => {
+                        !self.comparison_flags.zero
+                    }
+                };
+
+                self.frame().registers.insert(destination, Immediate::Integer8(is_true as _));
+                OperationResult::Continue
+            }
+
             Instruction::Return { value_reg} => {
                 match value_reg {
                     Some(register) => {

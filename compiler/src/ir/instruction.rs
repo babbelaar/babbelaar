@@ -66,6 +66,11 @@ pub enum Instruction {
         offset: DataSectionOffset,
     },
 
+    MoveCondition {
+        destination: Register,
+        condition: JumpCondition,
+    },
+
     //
     // Control Flow
     //
@@ -157,6 +162,13 @@ impl Display for Instruction {
                 destination.fmt(f)?;
                 f.write_str(", ")?;
                 offset.offset().fmt(f)
+            }
+
+            Instruction::MoveCondition { destination, condition } => {
+                f.write_str("VerplaatsVoorwaarde ")?;
+                destination.fmt(f)?;
+                f.write_str(", ")?;
+                condition.fmt(f)
             }
 
             Instruction::Call { name, arguments, ret_val_reg } => {

@@ -224,6 +224,22 @@ fn two_strings_one_program() {
     assert_eq!(value.exit_code, Some(9));
 }
 
+#[test]
+fn return_comparison_value() {
+    let result = create_and_run_single_object_executable("
+        werkwijze bekeerAls5(a: g32) -> g32 {
+            bekeer a == 5;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer bekeerAls5(5234) + bekeerAls5(5) + bekeerAls5(550);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(1));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
 

@@ -61,6 +61,12 @@ pub enum ArmInstruction {
         rhs: ArmRegister,
     },
 
+    CSet {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        condition: ArmConditionCode,
+    },
+
     /// Load pair
     Ldp {
         is_64_bit: bool,
@@ -238,6 +244,22 @@ impl ArmInstruction {
 
                 let mut instruction = 0x94000000;
                 instruction |= (offset as u32) & 0x3FFFFFF;
+                instruction
+            }
+
+            Self::CSet { is_64_bit, dst, condition } => {
+                let mut instruction = 0x1A9F07E0;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
+                assert!(condition != ArmConditionCode::AL, "Kan geen AL gebruiken voor CSET (waarom is er geen `mov {dst}, #1` gebruikt?)");
+                assert!(condition != ArmConditionCode::NV, "Kan geen NV gebruiken voor CSET (waarom is er geen `mov {dst}, #0` gebruikt?)");
+
+                instruction |= (condition.invert() as u32) << 12;
+                instruction |= dst.number as u32;
+
                 instruction
             }
 
@@ -585,6 +607,11 @@ impl Display for ArmInstruction {
 
             Self::CmpRegister { lhs, rhs } => {
                 f.write_fmt(format_args!("cmp {lhs}, {rhs}"))
+            }
+
+            Self::CSet { is_64_bit, dst, condition } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("cset {dst}, {condition}"))
             }
 
             Self::Ldp { is_64_bit, mode, first, second, src, offset } => {

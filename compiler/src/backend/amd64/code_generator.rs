@@ -132,6 +132,12 @@ impl Amd64CodeGenerator {
                 }
             }
 
+            Instruction::MoveCondition { destination, condition } => {
+                _ = destination;
+                _ = condition;
+                todo!("Maak AMD64-ondersteuning voor: {instruction}");
+            }
+
             Instruction::Call { name, arguments, ret_val_reg } => {
                 debug_assert!(arguments.len() < (1 << 8));
 

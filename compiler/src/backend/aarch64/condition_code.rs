@@ -65,6 +65,28 @@ pub enum ArmConditionCode {
 
 impl ArmConditionCode {
     #[must_use]
+    pub const fn invert(&self) -> Self {
+        match self {
+            Self::EQ => Self::NE,
+            Self::NE => Self::EQ,
+            Self::CS => Self::CC,
+            Self::CC => Self::CS,
+            Self::MI => Self::PL,
+            Self::PL => Self::MI,
+            Self::VS => Self::VC,
+            Self::VC => Self::VS,
+            Self::HI => Self::LS,
+            Self::LS => Self::HI,
+            Self::GE => Self::LT,
+            Self::LT => Self::GE,
+            Self::GT => Self::LE,
+            Self::LE => Self::GT,
+            Self::AL => Self::NV,
+            Self::NV => Self::AL,
+        }
+    }
+
+    #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {
             Self::EQ => "eq",

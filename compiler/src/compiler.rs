@@ -9,7 +9,7 @@ use std::rc::Rc;
 use babbelaar::*;
 use log::debug;
 
-use crate::{optimize_program, ArgumentList, FunctionBuilder, Immediate, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId};
+use crate::{optimize_program, ArgumentList, FunctionBuilder, Immediate, JumpCondition, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId};
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -608,9 +608,15 @@ impl ExpressionResultKind {
     #[must_use]
     fn to_readable(self, builder: &mut FunctionBuilder<'_>) -> Register {
         match self {
-            Self::Comparison(..) => {
-                _ = builder; // Use the builder to load the comparison flags (NZCV / FLAGS) to a register, somehow
-                todo!("Hoe moet ik een Vergelijkresultaat omzetten naar een Register?")
+            Self::Comparison(comparison) => {
+                builder.load_condition(match comparison {
+                    Comparison::Equality => JumpCondition::Equal,
+                    Comparison::GreaterThan => JumpCondition::Greater,
+                    Comparison::GreaterThanOrEqual => JumpCondition::GreaterOrEqual,
+                    Comparison::Inequality => JumpCondition::NotEqual,
+                    Comparison::LessThan => JumpCondition::Less,
+                    Comparison::LessThanOrEqual => JumpCondition::LessOrEqual,
+                })
             }
 
             Self::Register(reg) => reg,

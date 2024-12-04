@@ -60,6 +60,11 @@ impl LifeAnalysis {
                 _ = offset;
             }
 
+            Instruction::MoveCondition { destination, condition } => {
+                self.add_lifetime(destination, index);
+                _ = condition;
+            }
+
             Instruction::Call { name, arguments, ret_val_reg } => {
                 _ = name;
                 self.add_lifetime(ret_val_reg, index);
@@ -190,6 +195,9 @@ impl LifeAnalysisResult {
             debug!("Register {reg} has a lifetime of {} instructions. start={} end={}", lifetime.length(), lifetime.first_use(), lifetime.last_use());
             if lifetime.times_used_as_return() != 0 {
                 debug!("    and was used {}x as the return value", lifetime.times_used_as_return());
+            }
+            if lifetime.times_used_between_calls() != 0 {
+                debug!("    and was used {}x between subroutine calls", lifetime.times_used_between_calls());
             }
         }
     }

@@ -79,6 +79,12 @@ impl FunctionOptimizer for RegisterInliner {
                     self.values.remove(destination);
                 }
 
+                Instruction::MoveCondition { destination, condition } => {
+                    // We *can* optimize if we keep track of the condition variable.
+                    _ = condition;
+                    self.values.remove(destination);
+                }
+
                 Instruction::MathOperation { operation, destination, lhs, rhs } => {
                     let (lhs, rhs) = match (self.resolve_operand_to_immediate(lhs), self.resolve_operand_to_immediate(rhs)) {
                         (Some(lhs), Some(rhs)) => (lhs, rhs),

@@ -147,6 +147,16 @@ impl AArch64CodeGenerator {
                 });
             }
 
+            Instruction::MoveCondition { destination, condition } => {
+                let dst = self.allocate_register(destination);
+                let condition = ArmConditionCode::from(*condition);
+                self.instructions.push(ArmInstruction::CSet {
+                    is_64_bit: true,
+                    dst,
+                    condition,
+                })
+            }
+
             Instruction::Call { name, arguments, ret_val_reg } => {
                 debug_assert!(arguments.len() < (1 << 8));
 

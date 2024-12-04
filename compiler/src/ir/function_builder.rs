@@ -94,6 +94,19 @@ impl<'program> FunctionBuilder<'program> {
         destination
     }
 
+    /// Loads `1` to the register if the condition is true.
+    #[must_use]
+    pub fn load_condition(&mut self, condition: JumpCondition) -> Register {
+        let destination = self.register_allocator.next();
+
+        self.instructions.push(Instruction::MoveCondition {
+            destination,
+            condition,
+        });
+
+        destination
+    }
+
     pub fn associate_register_to_local(&mut self, register: Register, local_name: impl Into<BabString>, type_id: TypeId) {
         let local_name = local_name.into();
 
