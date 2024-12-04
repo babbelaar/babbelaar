@@ -1719,6 +1719,11 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_member_expression(&mut self, typ: SemanticType, member: &Ranged<BabString>) -> SemanticValue {
+        let typ = match typ {
+            SemanticType::Pointer(inner) => *inner,
+            other => other,
+        };
+
         let SemanticType::Custom { base, .. } = &typ else {
             self.diagnostics.create(|| SemanticDiagnostic::new(
                 member.range(),
