@@ -106,7 +106,13 @@ impl SemanticReference {
             SemanticLocalKind::StructureReference => {
                 let mut fields = String::new();
 
-                if let SemanticType::Custom { base: typ, .. } = &self.typ {
+                let typ = match &self.typ {
+                    SemanticType::Array(item) => &*item,
+                    SemanticType::Pointer(item) => &*item,
+                    other => other,
+                };
+
+                if let SemanticType::Custom { base: typ, .. } = typ {
                     for field in &typ.fields {
                         fields += &format!("\n    veld {}: {}", field.name.value(), field.ty);
                     }
@@ -116,7 +122,7 @@ impl SemanticReference {
                     }
                 }
 
-                format!("structuur {} {{{fields}\n}}", self.typ.to_string())
+                format!("structuur {} {{{fields}\n}}", typ.to_string())
             }
 
             SemanticLocalKind::Variable => {
