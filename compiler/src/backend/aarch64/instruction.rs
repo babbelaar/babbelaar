@@ -100,6 +100,14 @@ pub enum ArmInstruction {
 
     MovZ { register: ArmRegister, imm16: u16 },
 
+    MSub {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        lhs: ArmRegister,
+        rhs: ArmRegister,
+        minuend: ArmRegister,
+    },
+
     Mul {
         is_64_bit: bool,
         dst: ArmRegister,
@@ -413,6 +421,21 @@ impl ArmInstruction {
                 instruction
             }
 
+            Self::MSub { is_64_bit, dst, lhs, rhs, minuend } => {
+                let mut instruction = 0x1B008000;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
+                instruction |= (rhs.number as u32) << 16;
+                instruction |= (minuend.number as u32) << 10;
+                instruction |= (lhs.number as u32) << 5;
+                instruction |= dst.number as u32;
+
+                instruction
+            }
+
             Self::Mul { is_64_bit, dst, lhs, rhs } => {
                 let mut instruction = 0x1B007C00;
                 if is_64_bit {
@@ -687,6 +710,11 @@ impl Display for ArmInstruction {
 
             Self::MovZ { register, imm16 } => {
                 f.write_fmt(format_args!("mov {register}, #{imm16}"))
+            }
+
+            Self::MSub { is_64_bit, dst, lhs, rhs, minuend } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("msub {dst}, {lhs}, {rhs}, {minuend}"))
             }
 
             Self::Mul { is_64_bit, dst, lhs, rhs } => {

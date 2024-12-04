@@ -300,6 +300,66 @@ fn divide_known_rhs() {
     assert_eq!(result.exit_code, Some(40));
 }
 
+#[test]
+fn modulo_immediate() {
+    let result = create_and_run_single_object_executable("
+        werkwijze hoofd() -> g32 {
+            bekeer 13 % 2;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(1));
+}
+
+#[test]
+fn modulo_unknown_lhs_and_rhs() {
+    let result = create_and_run_single_object_executable("
+        werkwijze modulo(a: g32, b: g32) -> g32 {
+            bekeer a % b;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer modulo(100, 25);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+}
+
+#[test]
+fn modulo_known_lhs() {
+    let result = create_and_run_single_object_executable("
+        werkwijze module100MetIets(a: g32) -> g32 {
+            bekeer 100 % a;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer module100MetIets(6);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(4));
+}
+
+#[test]
+fn modulo_known_rhs() {
+    let result = create_and_run_single_object_executable("
+        werkwijze moduloIetsMet5(a: g32) -> g32 {
+            bekeer a % 5;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer moduloIetsMet5(200);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
 

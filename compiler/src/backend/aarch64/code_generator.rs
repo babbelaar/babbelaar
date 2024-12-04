@@ -228,6 +228,7 @@ impl AArch64CodeGenerator {
                     MathOperation::Divide => self.add_instruction_sdiv(dst, lhs, rhs),
                     MathOperation::Multiply => self.add_instruction_mul(dst, lhs, rhs),
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
+                    MathOperation::Modulo => self.add_operation_modulo(dst, lhs, rhs),
                 }
             }
 
@@ -519,6 +520,87 @@ impl AArch64CodeGenerator {
                 });
             }
         }
+    }
+
+    /// AArch64 doesn't have a MOD/REM instruction, so we have to use
+    fn add_operation_modulo(&mut self, dst: ArmRegister, lhs: &Operand, rhs: &Operand) {
+        let (lhs, rhs) = match (lhs, rhs) {
+            (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
+                warn!("Immediate-modulo zou gedaan moeten worden door de optimalisator!");
+
+                let val = lhs.as_i64() % rhs.as_i64();
+
+                self.instructions.push(ArmInstruction::MovN {
+                    is_64_bit: true,
+                    register: dst,
+                    unsigned_imm16: val as u16,
+                });
+                return;
+            }
+
+            (Operand::Register(lhs), Operand::Register(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+                let rhs = self.allocate_register(rhs);
+                (lhs, rhs)
+            }
+
+            (Operand::Immediate(lhs), Operand::Register(rhs)) => {
+                let rhs = self.allocate_register(rhs);
+
+                let lhs_reg = if rhs == dst {
+                    self.register_allocator.hacky_random_available_register().unwrap()
+                } else {
+                    dst
+                };
+
+                // TODO: add good mov subroutine for stuff like this
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: lhs_reg,
+                    imm16: lhs.as_i64() as _,
+                });
+
+                (lhs_reg, rhs)
+            }
+
+            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+
+                let rhs_reg = if lhs == dst {
+                    self.register_allocator.hacky_random_available_register().unwrap()
+                } else {
+                    dst
+                };
+
+                // TODO: add good mov subroutine for stuff like this
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: rhs_reg,
+                    imm16: rhs.as_i64() as _,
+                });
+
+                (lhs, rhs_reg)
+            }
+        };
+
+        let tmp = if dst == lhs || dst == rhs {
+            self.register_allocator.hacky_random_available_register().unwrap()
+        } else {
+            dst
+        };
+
+        self.instructions.push(ArmInstruction::SDiv {
+            is_64_bit: true,
+            dst: tmp,
+            lhs,
+            rhs,
+        });
+
+        self.instructions.push(ArmInstruction::MSub {
+            is_64_bit: true,
+            dst,
+            lhs: tmp,
+            rhs,
+            minuend: lhs,
+        });
     }
 
     #[must_use]
