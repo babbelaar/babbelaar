@@ -240,6 +240,66 @@ fn return_comparison_value() {
     assert_eq!(result.exit_code, Some(1));
 }
 
+#[test]
+fn divide_immediate() {
+    let result = create_and_run_single_object_executable("
+        werkwijze hoofd() -> g32 {
+            bekeer 12 / 2;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(6));
+}
+
+#[test]
+fn divide_unknown_lhs_and_rhs() {
+    let result = create_and_run_single_object_executable("
+        werkwijze deelDoor(a: g32, b: g32) -> g32 {
+            bekeer a / b;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer deelDoor(100, 4);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(25));
+}
+
+#[test]
+fn divide_known_lhs() {
+    let result = create_and_run_single_object_executable("
+        werkwijze deel100DoorIets(a: g32) -> g32 {
+            bekeer 100 / a;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer deel100DoorIets(25);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(4));
+}
+
+#[test]
+fn divide_known_rhs() {
+    let result = create_and_run_single_object_executable("
+        werkwijze deelDoor5(a: g32) -> g32 {
+            bekeer a / 5;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer deelDoor5(200);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(40));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
 

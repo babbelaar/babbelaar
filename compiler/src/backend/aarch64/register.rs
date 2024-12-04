@@ -5,7 +5,7 @@ use std::fmt::Display;
 
 use crate::backend::AllocatableRegister;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ArmRegister {
     pub(super) number: u8,
 }

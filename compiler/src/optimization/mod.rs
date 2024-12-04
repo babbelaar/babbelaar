@@ -5,6 +5,7 @@ mod dead_code;
 mod register;
 
 use dead_code::DeadCodeEliminator;
+use log::debug;
 
 use self::{
     dead_code::DeadStoreEliminator,
@@ -27,6 +28,7 @@ pub trait FunctionOptimizer: Default {
 }
 
 pub fn optimize_program(program: &mut Program) {
+    debug!("Programma voor optimalisatie: {program}");
     for function in program.functions_mut() {
         optimize_function(function);
     }

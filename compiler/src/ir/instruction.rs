@@ -291,6 +291,7 @@ pub enum MathOperation {
     Add,
     Subtract,
     Multiply,
+    Divide,
 }
 
 impl MathOperation {
@@ -300,6 +301,7 @@ impl MathOperation {
             Self::Add => "TelOp",
             Self::Subtract => "TrekAf",
             Self::Multiply => "Vermenigvuldig",
+            Self::Divide => "DeelDoor",
         }
     }
 }

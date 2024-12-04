@@ -4,7 +4,7 @@
 use std::{collections::HashMap, mem::take};
 
 use babbelaar::BabString;
-use log::debug;
+use log::{debug, warn};
 
 use crate::{CodeGenerator, CompiledFunction, Function, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
@@ -225,6 +225,7 @@ impl AArch64CodeGenerator {
 
                 match operation {
                     MathOperation::Add => self.add_instruction_add(dst, lhs, rhs),
+                    MathOperation::Divide => self.add_instruction_sdiv(dst, lhs, rhs),
                     MathOperation::Multiply => self.add_instruction_mul(dst, lhs, rhs),
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
                 }
@@ -393,6 +394,78 @@ impl AArch64CodeGenerator {
 
             (Operand::Immediate(lhs), Operand::Register(rhs)) => {
                 todo!("Mul {lhs}, {rhs}")
+            }
+        }
+    }
+
+    fn add_instruction_sdiv(&mut self, dst: ArmRegister, lhs: &Operand, rhs: &Operand) {
+        match (lhs, rhs) {
+            (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
+                warn!("Immediate-DeelDoor zou gedaan moeten worden door de optimalisator!");
+
+                let imm16 = lhs.as_i64() / rhs.as_i64();
+                debug_assert!(imm16 < (1 << 16));
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: dst,
+                    imm16: imm16 as _,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Register(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+                let rhs = self.allocate_register(rhs);
+                self.instructions.push(ArmInstruction::SDiv {
+                    is_64_bit: true,
+                    dst,
+                    lhs,
+                    rhs,
+                });
+            }
+
+            (Operand::Immediate(lhs), Operand::Register(rhs)) => {
+                let rhs = self.allocate_register(rhs);
+
+                let lhs_reg = if rhs == dst {
+                    self.register_allocator.hacky_random_available_register().unwrap()
+                } else {
+                    dst
+                };
+
+                // TODO: add good mov subroutine for stuff like this
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: lhs_reg,
+                    imm16: lhs.as_i64() as _,
+                });
+
+                self.instructions.push(ArmInstruction::SDiv {
+                    is_64_bit: true,
+                    dst,
+                    lhs: lhs_reg,
+                    rhs,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+
+                let rhs_reg = if lhs == dst {
+                    self.register_allocator.hacky_random_available_register().unwrap()
+                } else {
+                    dst
+                };
+
+                // TODO: add good mov subroutine for stuff like this
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: rhs_reg,
+                    imm16: rhs.as_i64() as _,
+                });
+
+                self.instructions.push(ArmInstruction::SDiv {
+                    is_64_bit: true,
+                    dst,
+                    lhs,
+                    rhs: rhs_reg,
+                });
             }
         }
     }

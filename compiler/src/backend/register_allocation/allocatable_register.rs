@@ -1,9 +1,9 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::{Debug, Display};
+use std::{fmt::{Debug, Display}, hash::Hash};
 
-pub trait AllocatableRegister: Debug + Display + Clone + Copy + PartialEq + Eq + 'static {
+pub trait AllocatableRegister: Debug + Display + Clone + Copy + PartialEq + Eq + Hash + 'static {
     /// Return what register is the return value for this architecture / platform (e.g. x0 on ARM64).
     #[must_use]
     fn return_register() -> Self;

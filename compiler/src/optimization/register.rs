@@ -119,6 +119,10 @@ impl FunctionOptimizer for RegisterInliner {
                         MathOperation::Subtract => {
                             Immediate::Integer64(lhs.as_i64().wrapping_sub(rhs.as_i64()))
                         }
+
+                        MathOperation::Divide => {
+                            Immediate::Integer64(lhs.as_i64().wrapping_div(rhs.as_i64()))
+                        }
                     };
 
                     self.values.insert(destination.clone(), value);

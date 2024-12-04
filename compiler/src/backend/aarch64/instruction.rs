@@ -117,6 +117,14 @@ pub enum ArmInstruction {
 
     Ret,
 
+    /// Signed divide
+    SDiv {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        lhs: ArmRegister,
+        rhs: ArmRegister,
+    },
+
     /// Store Pair of Registers calculates an address from a base register
     /// value and an immediate offset, and stores two 32-bit words or two
     /// 64-bit double words to the calculated address, from two registers.
@@ -439,6 +447,20 @@ impl ArmInstruction {
                 instruction
             }
 
+            Self::SDiv { is_64_bit, dst, lhs, rhs } => {
+                let mut instruction = 0x1AC00C00;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
+                instruction |= (rhs.number as u32) << 16;
+                instruction |= (lhs.number as u32) << 5;
+                instruction |= dst.number as u32;
+
+                instruction
+            }
+
             Self::Stp { mode, is_64_bit, dst, mut offset, first, second } => {
                 let mut instruction = match mode {
                     ArmSignedAddressingMode::PostIndex    => 0x28800000,
@@ -685,6 +707,11 @@ impl Display for ArmInstruction {
 
             Self::Ret => {
                 f.write_str("ret")
+            }
+
+            Self::SDiv { is_64_bit, dst, lhs, rhs } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("sdiv {dst}, {lhs}, {rhs}"))
             }
 
             Self::Stp { is_64_bit, dst, offset, first, second, mode } => {

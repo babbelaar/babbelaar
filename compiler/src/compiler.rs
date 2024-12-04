@@ -343,6 +343,7 @@ impl CompileExpression for BiExpression {
                     MathOperator::Add => MathOperation::Add,
                     MathOperator::Subtract => MathOperation::Subtract,
                     MathOperator::Multiply => MathOperation::Multiply,
+                    MathOperator::Divide => MathOperation::Divide,
 
                     _ => todo!("Ondersteun {:?}", self.operator.value()),
                 };

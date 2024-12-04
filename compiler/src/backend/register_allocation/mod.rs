@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{collections::{HashMap, VecDeque}, fmt::Debug};
+use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Debug};
 
 use log::debug;
 
@@ -165,5 +165,19 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
             }
         }
         debug!("");
+    }
+
+    /// TODO: this is a hack! We should instead try to avoid situations in which
+    /// RISC-architectures need more registers than was allocated up front.
+    #[must_use]
+    pub fn hacky_random_available_register(&self) -> Option<R> {
+        let mut available = HashSet::new();
+        available.extend(R::caller_saved_registers().iter().map(|r| *r));
+
+        for mapping in self.mappings.values().flatten() {
+            available.remove(mapping);
+        }
+
+        available.into_iter().next()
     }
 }

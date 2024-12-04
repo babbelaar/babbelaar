@@ -212,6 +212,7 @@ impl Amd64CodeGenerator {
                     MathOperation::Add => self.add_instruction_add(dst, lhs, rhs),
                     MathOperation::Multiply => self.instruction_mul(dst, lhs, rhs),
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
+                    MathOperation::Divide => todo!("Ondersteun DeelDoor op AMD64"),
                 }
             }
 
