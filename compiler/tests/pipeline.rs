@@ -389,6 +389,23 @@ fn array_zero_initialised() {
     assert_eq!(result.exit_code, Some(0));
 }
 
+#[test]
+fn iterate_fixed_range_sum() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            stel totaal = 0;
+            volg i in reeks(0, 5) {
+                totaal = totaal + 1;
+            }
+
+            bekeer totaal;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(5));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
 

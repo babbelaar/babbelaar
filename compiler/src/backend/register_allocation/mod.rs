@@ -77,6 +77,10 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         if let Some(return_register) = only_return_register {
             currently_mapped.insert(return_register, R::return_register());
             self.mappings.insert(return_register, Some(R::return_register()));
+
+            if let Some((idx, _)) = currently_available.iter().enumerate().find(|(_, r)| **r == R::return_register()) {
+                currently_available.remove(idx);
+            }
         }
 
         for (index, _) in function.instructions().iter().enumerate() {
