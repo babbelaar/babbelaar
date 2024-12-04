@@ -15,6 +15,8 @@ impl ArmRegister {
     pub const X0: Self = Self { number: 0 };
     pub const X1: Self = Self { number: 1 };
     pub const X8: Self = Self { number: 8 };
+    pub const X19: Self = Self { number: 19 };
+    pub const X20: Self = Self { number: 20 };
     pub const X30: Self = Self { number: 30 };
 
     /// Frame Pointer

@@ -86,6 +86,14 @@ pub enum ArmInstruction {
         offset: i16,
     },
 
+    /// Load register
+    LdrRegister {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        base_ptr: ArmRegister,
+        offset: ArmRegister,
+    },
+
     MovN {
         is_64_bit: bool,
         register: ArmRegister,
@@ -151,6 +159,13 @@ pub enum ArmInstruction {
         src: ArmRegister,
         base_ptr: ArmRegister,
         offset: i16,
+    },
+
+    StrRegister {
+        is_64_bit: bool,
+        src: ArmRegister,
+        base_ptr: ArmRegister,
+        offset: ArmRegister,
     },
 
     SubImmediate {
@@ -388,6 +403,24 @@ impl ArmInstruction {
                 instruction
             }
 
+            Self::LdrRegister { is_64_bit, dst, base_ptr, offset } => {
+                let mut instruction = 0xB8600800;
+
+                if is_64_bit {
+                    instruction |= 1 << 30;
+                }
+
+                instruction |= (offset.number as u32) << 16;
+
+                // LSL is default, add option to enum perhaps?
+                instruction |= 0b011 << 13;
+
+                instruction |= (base_ptr.number as u32) << 5;
+                instruction |= dst.number as u32;
+
+                instruction
+            }
+
             Self::MovN { is_64_bit, register, unsigned_imm16 } => {
                 let mut instruction = 0x12800000;
                 if is_64_bit {
@@ -574,6 +607,24 @@ impl ArmInstruction {
                 instruction
             }
 
+            Self::StrRegister { is_64_bit, src, base_ptr, offset } => {
+                let mut instruction = 0xB8200800;
+
+                if is_64_bit {
+                    instruction |= 1 << 30;
+                }
+
+                instruction |= (offset.number as u32) << 16;
+
+                // LSL is default, add option to enum perhaps?
+                instruction |= 0b011 << 13;
+
+                instruction |= (base_ptr.number as u32) << 5;
+                instruction |= src.number as u32;
+
+                instruction
+            }
+
             Self::SubImmediate { dst, lhs, rhs_imm12 } => {
                 debug_assert!(rhs_imm12 < (1 << 12));
 
@@ -693,6 +744,11 @@ impl Display for ArmInstruction {
                 }
             }
 
+            Self::LdrRegister { is_64_bit, dst, base_ptr, offset } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("ldr {dst}, [{base_ptr}, {offset}]"))
+            }
+
             Self::MovN { is_64_bit, register, unsigned_imm16 } => {
                 _ = is_64_bit;
                 f.write_fmt(format_args!("mov {register}, #-{unsigned_imm16}"))
@@ -774,6 +830,11 @@ impl Display for ArmInstruction {
                         f.write_fmt(format_args!("str {src}, [{base_ptr}, #0x{offset:x}]"))
                     }
                 }
+            }
+
+            Self::StrRegister { is_64_bit, src, base_ptr, offset } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("str {src}, [{base_ptr}, {offset}]"))
             }
 
             Self::SubImmediate { dst, lhs, rhs_imm12 } => {
@@ -916,6 +977,12 @@ mod tests {
         },
         0x1b017c00,
     )]
+    #[case(ArmInstruction::LdrRegister {
+        is_64_bit: true,
+        dst: ArmRegister::X1,
+        base_ptr: ArmRegister::X19,
+        offset: ArmRegister::X20,
+    }, 0xf8746a61)]
     fn encode_instruction(#[case] input: ArmInstruction, #[case] expected: u32) {
         let actual = input.encode(0, &HashMap::new());
         assert_eq!(expected, actual, "actual was: 0x{actual:x}");

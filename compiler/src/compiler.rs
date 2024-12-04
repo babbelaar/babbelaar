@@ -214,8 +214,35 @@ impl CompileStatement for ForStatement {
 
         match self.iterable.value() {
             ForIterableKind::Expression(expression) => {
-                _ = expression;
-                todo!("ondersteun Doorloper-gebaseerde expressies met `volg`");
+                let (reg, ty) = expression.compile(builder).to_readable_and_type(builder);
+
+                if ty.type_id() == TypeId::SLINGER {
+                    let str_ptr_reg = reg;
+                    let current_value = builder.load_immediate(Immediate::Integer64(0));
+
+                    let end = builder.call(create_mangled_method_name(&BuiltinType::Slinger.name(), &BabString::new_static("lengte")), vec![str_ptr_reg]);
+
+                    builder.compare(current_value, end);
+                    builder.jump_if_greater_or_equal(after);
+
+                    let body = builder.create_label_and_link_here("volg-lichaam");
+
+                    let char_reg = builder.load_ptr(str_ptr_reg, Operand::Register(current_value), PrimitiveType::new(4, false));
+                    builder.associate_register_to_local(char_reg, self.iterator_name.value(), ty);
+
+
+                    for statement in &self.body {
+                        statement.compile(builder);
+                    }
+
+                    builder.increment(current_value);
+
+                    builder.compare(current_value, end);
+                    builder.jump_if_less(body);
+                } else {
+                    println!("{builder:#?}");
+                    todo!("ondersteun Doorloper-gebaseerde expressies met `volg` en type {ty:?}");
+                }
             }
 
             ForIterableKind::Range(range) => {

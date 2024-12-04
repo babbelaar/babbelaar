@@ -588,6 +588,10 @@ impl SemanticAnalyzer {
                 return *item_type;
             }
 
+            SemanticType::Builtin(BuiltinType::Slinger) => {
+                return SemanticType::Builtin(BuiltinType::Teken);
+            }
+
             SemanticType::Custom { ref base, ref parameters } => {
                 if let Some(interface) = self.resolve_interface_by_name(&BabString::new_static("Doorloper")) {
                     if let Some(extension) = self.get_interface_implementation_for(&ty, &interface) {

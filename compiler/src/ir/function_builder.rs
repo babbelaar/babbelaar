@@ -119,9 +119,10 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     #[must_use]
-    pub fn load_string(&mut self, string: &str) -> Register {
+    pub fn load_string(&mut self, string: &str) -> (TypeInfo, Register) {
         let offset = self.program_builder.program.add_string(string);
-        self.load_effective_address(offset)
+        let reg = self.load_effective_address(offset);
+        (TypeInfo::Plain(TypeId::SLINGER), reg)
     }
 
     #[must_use]

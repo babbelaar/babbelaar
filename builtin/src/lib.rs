@@ -9,7 +9,7 @@ pub unsafe extern "C" fn schrijf(ptr: *const u8) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn g32__lengte(ptr: *const u8) -> u64 {
+pub unsafe extern "C" fn Slinger__lengte(ptr: *const u8) -> u64 {
     let len = unsafe { strlen(ptr) };
     len as _
 }

@@ -424,6 +424,24 @@ fn loop_string_length() {
     assert_eq!(result.exit_code, Some(5));
 }
 
+#[test]
+fn loop_string_chars() {
+    let result = create_and_run_single_object_executable(r#"
+        @uitheems(naam: "putchar")
+        werkwijze schrijfLetter(t: teken);
+
+        werkwijze hoofd() -> g32 {
+            volg t in "Hallo" {
+                schrijfLetter(t);
+            }
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
 
