@@ -85,6 +85,7 @@ impl<'source_code> Lexer<'source_code> {
         tok
     }
 
+    #[must_use]
     fn consume_single_char_token(&mut self, kind: TokenKind) -> Option<Token> {
         let begin = self.current_location();
 
@@ -336,14 +337,7 @@ impl<'source_code> Lexer<'source_code> {
     fn skip_whitespace(&mut self) {
         while let Some(c) = self.peek_char() {
             if c == '/' {
-                self.consume_char();
-                if self.peek_char() != Some('/') {
-                    self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus));
-                    continue;
-                }
-
-                self.consume_until_end_of_line();
-                continue;
+                break;
             }
 
             if !c.is_whitespace() {
@@ -395,7 +389,14 @@ impl<'source_code> Lexer<'source_code> {
     }
 
     fn handle_solidus(&mut self) -> Option<Token> {
-        self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus))
+        let token = self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus))?;
+
+        if self.peek_char() != Some('/') {
+            return Some(token);
+        }
+
+        self.consume_until_end_of_line();
+        self.next()
     }
 
     fn consume_until_end_of_line(&mut self) {
