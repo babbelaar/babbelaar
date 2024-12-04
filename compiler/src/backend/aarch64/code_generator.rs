@@ -209,14 +209,14 @@ impl AArch64CodeGenerator {
             }
 
             Instruction::Return { value_reg } => {
-                self.add_epilogue();
-
                 if let Some(value_reg) = value_reg {
                     let value_reg = self.allocate_register(value_reg);
                     if value_reg != ArmRegister::X0 {
                         self.instructions.push(ArmInstruction::MovRegister64 { dst: ArmRegister::X0, src: value_reg });
                     }
                 }
+
+                self.add_epilogue();
                 self.instructions.push(ArmInstruction::Ret);
             }
 
