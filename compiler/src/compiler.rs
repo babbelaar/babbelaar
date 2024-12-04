@@ -501,7 +501,9 @@ impl CompileExpression for UnaryExpression {
     fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
         let value = self.rhs.compile(builder).to_readable(builder);
         match self.kind.value() {
-            UnaryExpressionKind::AddressOf => todo!("Ondersteun AdresVan-operatie"),
+            UnaryExpressionKind::AddressOf => {
+                self.rhs.compile(builder)
+            }
 
             UnaryExpressionKind::Negate => {
                 builder.unary_negate(value).into()
