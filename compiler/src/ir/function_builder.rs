@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use babbelaar::BabString;
 
-use crate::{DataSectionOffset, StructureLayout, TypeId};
+use crate::{DataSectionOffset, StructureLayout, TypeId, TypeInfo};
 
 use super::{Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, PrimitiveType, ProgramBuilder, Register, RegisterAllocator};
 
@@ -107,14 +107,14 @@ impl<'program> FunctionBuilder<'program> {
         destination
     }
 
-    pub fn associate_register_to_local(&mut self, register: Register, local_name: impl Into<BabString>, type_id: TypeId) {
+    pub fn associate_register_to_local(&mut self, register: Register, local_name: impl Into<BabString>, type_info: TypeInfo) {
         let local_name = local_name.into();
 
         debug_assert_eq!(self.locals.get(&local_name), None, "Lokale had al een waarde!");
 
         self.locals.insert(local_name, FunctionLocal {
             register,
-            type_id,
+            type_info,
         });
     }
 
@@ -125,10 +125,10 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     #[must_use]
-    pub fn load_local(&mut self, name: &BabString) -> (TypeId, Register) {
-        let src = *self.locals.get(name).expect("Local name is not valid");
+    pub fn load_local(&mut self, name: &BabString) -> (TypeInfo, Register) {
+        let src = self.locals.get(name).expect("Local name is not valid").clone();
 
-        (src.type_id, src.register)
+        (src.type_info, src.register)
     }
 
     #[must_use]
@@ -211,6 +211,20 @@ impl<'program> FunctionBuilder<'program> {
         (layout, dst)
     }
 
+    pub fn allocate_array(&mut self, item_structure_name: &BabString, size: usize) -> (&StructureLayout, Register) {
+        let layout = self.program_builder.type_manager.layout_of(item_structure_name);
+        let size = layout.size() * size;
+
+        let dst = self.register_allocator.next();
+
+        self.instructions.push(Instruction::StackAlloc {
+            dst,
+            size,
+        });
+
+        (layout, dst)
+    }
+
     /// Stores a value at the `base_ptr` offset by `offset`.
     pub fn store_ptr(&mut self, base_ptr: Register, offset: Operand, value: impl Into<Register>, typ: PrimitiveType) {
         self.instructions.push(Instruction::StorePtr {
@@ -273,6 +287,12 @@ impl<'program> FunctionBuilder<'program> {
 
         destination
     }
+
+    #[must_use]
+    pub const fn pointer_size(&self) -> usize {
+        // TODO: depends on platform
+        8
+    }
 }
 
 #[cfg(test)]
@@ -292,8 +312,8 @@ mod tests {
 
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionLocal {
     pub(super) register: Register,
-    pub(super) type_id: TypeId,
+    pub(super) type_info: TypeInfo,
 }

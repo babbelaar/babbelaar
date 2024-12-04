@@ -50,7 +50,7 @@ impl ProgramBuilder {
                 ArgumentName::Name(name) => {
                     builder.locals.insert(name, FunctionLocal {
                         register,
-                        type_id,
+                        type_info: type_id.into(),
                     });
                 }
 

@@ -47,6 +47,7 @@ pub use self::{
         FieldLayout,
         StructureLayout,
         TypeId,
+        TypeInfo,
         TypeManager,
     },
     optimization::{

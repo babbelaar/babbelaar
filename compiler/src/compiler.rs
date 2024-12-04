@@ -9,7 +9,7 @@ use std::rc::Rc;
 use babbelaar::*;
 use log::debug;
 
-use crate::{optimize_program, ArgumentList, FunctionBuilder, Immediate, JumpCondition, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId};
+use crate::{optimize_program, ArgumentList, FunctionBuilder, Immediate, JumpCondition, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId, TypeInfo};
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -380,7 +380,7 @@ impl CompileExpression for PostfixExpression {
 
                 let (base_ptr, ty) = lhs.to_readable_and_type(builder);
 
-                let field = builder.layout_of(ty).field(&member);
+                let field = builder.layout_of(ty.type_id()).field(&member);
                 let offset = field.offset() as isize;
                 let field_type = field.type_id();
                 let primitive_typ = field.primitive_type();
@@ -390,7 +390,7 @@ impl CompileExpression for PostfixExpression {
 
             PostfixExpressionKind::MethodCall(method) => {
                 let lhs = self.lhs.compile(builder);
-                let struct_ty = lhs.type_id;
+                let struct_ty = lhs.type_info.type_id();
 
                 let mut arguments = method.call.arguments.compile(builder);
                 arguments.insert(0, lhs.to_readable(builder));
@@ -404,8 +404,22 @@ impl CompileExpression for PostfixExpression {
             }
 
             PostfixExpressionKind::Subscript(subscript) => {
-                _ = subscript;
-                todo!()
+                let base_ptr = self.lhs.compile(builder);
+
+                let (base_ptr, ty) = base_ptr.to_readable_and_type(builder);
+
+                match ty {
+                    TypeInfo::Array(item_ty) => {
+                        let offset = subscript.compile(builder).to_readable(builder);
+
+                        let dst = builder.math(MathOperation::Add, base_ptr, Operand::Register(offset));
+
+                        let typ = item_ty.primitive_type();
+                        ExpressionResult::pointer(dst, 0, *item_ty, typ)
+                    }
+
+                    TypeInfo::Plain(..) => todo!("Subscript for types"),
+                }
             }
         }
     }
@@ -439,9 +453,33 @@ impl CompileExpression for PrimaryExpression {
             }
 
             Self::SizedArrayInitializer { typ, size } => {
-                _ = typ;
-                _ = size;
-                todo!()
+                let Expression::Primary(PrimaryExpression::IntegerLiteral(size)) = size.value() else {
+                    todo!("Ondersteun variabele-grootte lijsten");
+                };
+
+                assert!(*size > 0);
+                let size = *size as usize;
+
+                let (layout, ptr) = builder.allocate_array(&typ.specifier.unqualified_name(), size);
+                let result = ExpressionResult::array(ptr, *layout.type_id());
+
+                let mut space_to_zero = layout.size() * size;
+                let mut offset = 0;
+                let zero = builder.load_immediate(Immediate::Integer64(0));
+                let pointer_size = builder.pointer_size();
+                while space_to_zero >= builder.pointer_size() {
+                    builder.store_ptr(ptr, Operand::Immediate(Immediate::Integer64(offset as i64)), zero, PrimitiveType::new(pointer_size, false));
+                    space_to_zero -= pointer_size;
+                    offset += pointer_size;
+                }
+
+                while space_to_zero > 0 {
+                    builder.store_ptr(ptr, Operand::Immediate(Immediate::Integer64(offset as i64)), zero, PrimitiveType::new(1, false));
+                    space_to_zero -= 1;
+                    offset += 1;
+                }
+
+                result
             }
 
             Self::StringLiteral(literal) => {
@@ -517,23 +555,31 @@ impl CompileExpression for UnaryExpression {
 #[derive(Debug, Clone)]
 struct ExpressionResult {
     kind: ExpressionResultKind,
-    type_id: TypeId,
+    type_info: TypeInfo,
 }
 
 impl ExpressionResult {
     #[must_use]
-    pub fn typed(register: Register, type_id: TypeId) -> Self {
+    pub fn typed(register: Register, type_info: impl Into<TypeInfo>) -> Self {
         Self {
             kind: ExpressionResultKind::Register(register),
-            type_id,
+            type_info: type_info.into(),
         }
     }
 
     #[must_use]
-    pub fn pointer(base_ptr: Register, offset: isize, type_id: TypeId, typ: PrimitiveType) -> Self {
+    pub fn array(register: Register, type_info: impl Into<TypeInfo>) -> Self {
+        Self {
+            kind: ExpressionResultKind::Register(register),
+            type_info: TypeInfo::Array(Box::new(type_info.into())),
+        }
+    }
+
+    #[must_use]
+    pub fn pointer(base_ptr: Register, offset: isize, type_info: impl Into<TypeInfo>, typ: PrimitiveType) -> Self {
         Self {
             kind: ExpressionResultKind::PointerRegister { base_ptr, offset, typ },
-            type_id,
+            type_info: type_info.into(),
         }
     }
 
@@ -548,8 +594,8 @@ impl ExpressionResult {
     }
 
     #[must_use]
-    pub fn to_readable_and_type(self, builder: &mut FunctionBuilder) -> (Register, TypeId) {
-        (self.kind.to_readable(builder), self.type_id)
+    pub fn to_readable_and_type(self, builder: &mut FunctionBuilder) -> (Register, TypeInfo) {
+        (self.kind.to_readable(builder), self.type_info)
     }
 }
 
@@ -557,7 +603,7 @@ impl From<Comparison> for ExpressionResult {
     fn from(value: Comparison) -> Self {
         Self {
             kind: ExpressionResultKind::Comparison(value),
-            type_id: TypeId::G32,
+            type_info: TypeId::G32.into(),
         }
     }
 }
@@ -566,7 +612,7 @@ impl From<&Comparison> for ExpressionResult {
     fn from(value: &Comparison) -> Self {
         Self {
             kind: ExpressionResultKind::Comparison(*value),
-            type_id: TypeId::G32,
+            type_info: TypeId::G32.into(),
         }
     }
 }
@@ -575,7 +621,7 @@ impl From<Register> for ExpressionResult {
     fn from(value: Register) -> Self {
         Self {
             kind: ExpressionResultKind::Register(value),
-            type_id: TypeId::G32,
+            type_info: TypeId::G32.into(),
         }
     }
 }
@@ -584,13 +630,19 @@ impl From<&Register> for ExpressionResult {
     fn from(value: &Register) -> Self {
         Self {
             kind: ExpressionResultKind::Register(*value),
-            type_id: TypeId::G32,
+            type_info: TypeId::G32.into(),
         }
     }
 }
 
 impl From<(TypeId, Register)> for ExpressionResult {
     fn from(value: (TypeId, Register)) -> Self {
+        Self::typed(value.1, value.0)
+    }
+}
+
+impl From<(TypeInfo, Register)> for ExpressionResult {
+    fn from(value: (TypeInfo, Register)) -> Self {
         Self::typed(value.1, value.0)
     }
 }

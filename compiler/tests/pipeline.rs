@@ -360,6 +360,35 @@ fn modulo_known_rhs() {
     assert_eq!(result.exit_code, Some(0));
 }
 
+#[test]
+fn simple_array_add() {
+    let result = create_and_run_single_object_executable("
+        werkwijze hoofd() -> g32 {
+            stel x = nieuw g32[2];
+            x[0] = 5;
+            x[1] = 2;
+
+            bekeer x[0] + x[1];
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(7));
+}
+
+#[test]
+fn array_zero_initialised() {
+    let result = create_and_run_single_object_executable("
+        werkwijze hoofd() -> g32 {
+            stel x = nieuw g32[2];
+            bekeer x[0] + x[1];
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
 

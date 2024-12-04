@@ -199,6 +199,7 @@ impl CompiledObject {
         obj.write_stream(File::create(path)?)
     }
 
+    #[allow(unused)]
     fn write_using_pe_api(self, path: &Path) -> Result<(), Box<dyn Error>> {
         let section_alignment = 4096; // equal to the page size
         let file_alignment = 512; // default value according to MSDN

@@ -263,3 +263,30 @@ impl TypeId {
     pub const TEKEN: Self = Self { index: 4 };
     pub const SLINGER: Self = Self { index: 5 };
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeInfo {
+    Array(Box<TypeInfo>),
+    Plain(TypeId),
+}
+
+impl TypeInfo {
+    #[must_use]
+    pub fn type_id(&self) -> TypeId {
+        match self {
+            Self::Array(info) => info.type_id(),
+            Self::Plain(ty) => *ty,
+        }
+    }
+
+    #[must_use]
+    pub fn primitive_type(&self) -> PrimitiveType {
+        PrimitiveType::new(8, true)
+    }
+}
+
+impl From<TypeId> for TypeInfo {
+    fn from(value: TypeId) -> Self {
+        Self::Plain(value)
+    }
+}
