@@ -175,10 +175,22 @@ impl CompileStatement for Statement {
 
 impl CompileStatement for AssignStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
-        let destination = self.destination.compile(builder).to_readable(builder);
-        debug!("Dest {} is at {destination}", self.source.value());
+        let dst = self.destination.compile(builder);
+        debug!("Dst is: {dst:#?}");
+
         let source = self.source.compile(builder).to_readable(builder);
-        builder.move_register(destination, source);
+
+        match dst.kind {
+            ExpressionResultKind::Register(destination) => {
+                builder.move_register(destination, source);
+            }
+
+            ExpressionResultKind::Comparison(..) => todo!(),
+
+            ExpressionResultKind::PointerRegister { base_ptr, offset, typ } => {
+                builder.store_ptr(base_ptr, Operand::Immediate(Immediate::Integer64(offset as _)), source, typ);
+            }
+        }
     }
 }
 
