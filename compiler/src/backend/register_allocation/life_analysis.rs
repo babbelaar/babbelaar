@@ -161,6 +161,7 @@ pub struct LifeAnalysisResult {
 impl LifeAnalysisResult {
     #[must_use]
     pub fn find_only_return_register(&self) -> Option<IrRegister> {
+        let mut result_lifetime = None;
         let mut result = None;
 
         for (register, lifetime) in &self.lifetimes {
@@ -170,8 +171,13 @@ impl LifeAnalysisResult {
                     return None;
                 }
 
+                result_lifetime = Some(lifetime);
                 result = Some(*register);
             }
+        }
+
+        if result_lifetime?.times_used_between_calls() != 0 {
+            return None;
         }
 
         result
