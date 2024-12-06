@@ -86,56 +86,7 @@ impl FunctionOptimizer for RegisterInliner {
                 }
 
                 Instruction::MathOperation { operation, destination, lhs, rhs } => {
-                    let (lhs, rhs) = match (self.resolve_operand_to_immediate(lhs), self.resolve_operand_to_immediate(rhs)) {
-                        (Some(lhs), Some(rhs)) => (lhs, rhs),
-
-                        (_, _) => {
-                            let lhs = self.try_inline_operand(lhs);
-                            let rhs = self.try_inline_operand(rhs);
-                            let operation = *operation;
-                            let destination = *destination;
-                            *instruction = Instruction::MathOperation {
-                                operation,
-                                destination,
-                                lhs,
-                                rhs,
-                            };
-                            continue;
-                        }
-                    };
-
-                    // TODO: is it necessary to honor the bit size of the
-                    //       integer (wrapping at that boundary), or would
-                    //       the CPU also overflow?
-                    let value = match operation {
-                        MathOperation::Add => {
-                            Immediate::Integer64(lhs.as_i64().wrapping_add(rhs.as_i64()))
-                        }
-
-                        MathOperation::Multiply => {
-                            Immediate::Integer64(lhs.as_i64().wrapping_mul(rhs.as_i64()))
-                        }
-
-                        MathOperation::Subtract => {
-                            Immediate::Integer64(lhs.as_i64().wrapping_sub(rhs.as_i64()))
-                        }
-
-                        MathOperation::Divide => {
-                            Immediate::Integer64(lhs.as_i64().wrapping_div(rhs.as_i64()))
-                        }
-
-                        MathOperation::Modulo => {
-                            Immediate::Integer64(lhs.as_i64().wrapping_rem(rhs.as_i64()))
-                        }
-                    };
-
-                    self.values.insert(destination.clone(), value);
-
-                    let destination = destination.clone();
-                    *instruction = Instruction::Move {
-                        destination,
-                        source: Operand::Immediate(value),
-                    };
+                    *instruction = self.calculate_math_operation(*operation, *destination, lhs, rhs);
                 }
 
                 Instruction::Negate { dst, src } => {
@@ -203,5 +154,93 @@ impl RegisterInliner {
         } else {
             operand.clone()
         }
+    }
+
+    fn calculate_math_operation(&mut self, operation: MathOperation, destination: Register, lhs: &Operand, rhs: &Operand) -> Instruction {
+        let lhs = self.try_inline_operand(lhs);
+        let rhs = self.try_inline_operand(rhs);
+
+        match (lhs, rhs) {
+            (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
+                return Instruction::Move {
+                    destination,
+                    source: Operand::Immediate(self.calculate_math_operation_using_known_immediates(operation, destination, lhs, rhs))
+                };
+            }
+
+            (Operand::Register(_), Operand::Immediate(rhs)) => {
+                if let Some(instruction) = self.calculate_math_operation_using_math_rules(operation, destination, lhs, rhs) {
+                    return instruction;
+                }
+            }
+
+            _ => (),
+        }
+
+        Instruction::MathOperation {
+            operation,
+            destination,
+            lhs,
+            rhs,
+        }
+    }
+
+    fn calculate_math_operation_using_known_immediates(&mut self, operation: MathOperation, destination: Register, lhs: Immediate, rhs: Immediate) -> Immediate {
+        // TODO: is it necessary to honor the bit size of the
+        //       integer (wrapping at that boundary), or would
+        //       the CPU also overflow?
+        let value = match operation {
+            MathOperation::Add => {
+                Immediate::Integer64(lhs.as_i64().wrapping_add(rhs.as_i64()))
+            }
+
+            MathOperation::Multiply => {
+                Immediate::Integer64(lhs.as_i64().wrapping_mul(rhs.as_i64()))
+            }
+
+            MathOperation::Subtract => {
+                Immediate::Integer64(lhs.as_i64().wrapping_sub(rhs.as_i64()))
+            }
+
+            MathOperation::Divide => {
+                Immediate::Integer64(lhs.as_i64().wrapping_div(rhs.as_i64()))
+            }
+
+            MathOperation::Modulo => {
+                Immediate::Integer64(lhs.as_i64().wrapping_rem(rhs.as_i64()))
+            }
+        };
+
+        self.values.insert(destination.clone(), value);
+        value
+    }
+
+    fn calculate_math_operation_using_math_rules(&self, operation: MathOperation, destination: Register, lhs: Operand, rhs: Immediate) -> Option<Instruction> {
+        if rhs.as_i64() == 0 {
+            if operation == MathOperation::Add || operation == MathOperation::Subtract || operation == MathOperation::Modulo {
+                return Some(Instruction::Move {
+                    destination,
+                    source: lhs,
+                });
+            }
+
+            if operation == MathOperation::Multiply {
+                return Some(Instruction::Move {
+                    destination,
+                    source: Operand::Immediate(Immediate::Integer64(0)),
+                });
+            }
+        }
+
+        if rhs.as_i64() == 1 {
+            if operation == MathOperation::Multiply || operation == MathOperation::Divide {
+                return Some(Instruction::Move {
+                    destination,
+                    source: lhs,
+                });
+            }
+        }
+
+        None
     }
 }

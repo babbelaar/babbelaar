@@ -161,7 +161,7 @@ impl Display for Instruction {
                 f.write_str("Verplaats ")?;
                 destination.fmt(f)?;
                 f.write_str(", ")?;
-                offset.offset().fmt(f)
+                offset.fmt(f)
             }
 
             Instruction::MoveCondition { destination, condition } => {
