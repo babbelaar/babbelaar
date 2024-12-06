@@ -48,6 +48,9 @@ struct Args {
 
     #[arg(short, long)]
     verbose: bool,
+
+    #[arg(short, long)]
+    debug: bool,
 }
 
 impl Args {
@@ -71,8 +74,8 @@ enum Commands {
 }
 
 fn main() {
-    init_logger();
     let args = Args::parse_args();
+    init_logger(&args);
 
     match args.command {
         Commands::Bouwen { bestand } => {
@@ -249,12 +252,18 @@ fn output_dir() -> PathBuf {
     dir
 }
 
-fn init_logger() {
+fn init_logger(args: &Args) {
+    let mut builder = env_logger::builder();
+
+    if args.debug {
+        builder.filter(None, log::LevelFilter::Debug);
+    }
+
     let env = Env::default()
         .filter("BABBELAAR_LOG")
         .write_style("BABBELAAR_LOGSTIJL");
+    builder.parse_env(env);
 
-    env_logger::builder()
-        .parse_env(env)
-        .init();
+
+    builder.init();
 }
