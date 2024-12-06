@@ -1354,9 +1354,9 @@ impl SemanticAnalyzer {
 
         let ty = match unary.kind.value() {
             UnaryExpressionKind::AddressOf => {
-                if !matches!(unary.rhs.value(), Expression::Primary(PrimaryExpression::Reference(..))) {
+                if !unary.rhs.value().can_be_taken_address_of() {
                     self.diagnostics.create(|| {
-                        SemanticDiagnostic::new(operator_range, SemanticDiagnosticKind::CannotNegateNonInteger)
+                        SemanticDiagnostic::new(operator_range, SemanticDiagnosticKind::CannotTakeAddressOfExpression)
                     });
                 }
 

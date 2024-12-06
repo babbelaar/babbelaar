@@ -329,8 +329,8 @@ pub enum SemanticDiagnosticKind {
     #[error("Kan alleen getallen negatief keren")]
     CannotNegateNonInteger,
 
-    #[error("Kan alleen het adres nemen van een lokale variabele")]
-    CannotTakeAddressOfNonIdentifier,
+    #[error("Kan alleen het adres nemen van een lokale variabele of een structuurveld.")]
+    CannotTakeAddressOfExpression,
 
     #[error("Deze statement mag alleen binnen werkwijzen gebruikt worden.")]
     StatementOutsideFunction,

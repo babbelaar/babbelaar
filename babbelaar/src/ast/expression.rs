@@ -96,6 +96,19 @@ impl Expression {
             _ => None,
         }
     }
+
+    #[must_use]
+    pub const fn can_be_taken_address_of(&self) -> bool {
+        if let Expression::Primary(PrimaryExpression::Reference(..)) = self {
+            return true;
+        }
+
+        if let Expression::Postfix(postfix) = self {
+            return matches!(postfix.kind.value(), PostfixExpressionKind::Member(..));
+        }
+
+        false
+    }
 }
 
 impl Display for Expression {

@@ -573,13 +573,15 @@ impl CompileExpression for StructureInstantiationExpression {
 
 impl CompileExpression for UnaryExpression {
     fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
-        let value = self.rhs.compile(builder).to_readable(builder);
+        let value = self.rhs.compile(builder);
         match self.kind.value() {
             UnaryExpressionKind::AddressOf => {
-                self.rhs.compile(builder)
+                debug!("Current instructions: {builder:#?}");
+                value
             }
 
             UnaryExpressionKind::Negate => {
+                let value = value.to_readable(builder);
                 builder.unary_negate(value).into()
             }
         }
@@ -625,6 +627,11 @@ impl ExpressionResult {
     #[must_use]
     pub fn to_readable(self, builder: &mut FunctionBuilder) -> Register {
         self.kind.to_readable(builder)
+    }
+
+    #[must_use]
+    pub fn to_register(self, builder: &mut FunctionBuilder) -> Register {
+        self.kind.to_register(builder)
     }
 
     #[must_use]
@@ -710,6 +717,21 @@ impl ExpressionResultKind {
     #[must_use]
     fn to_readable(self, builder: &mut FunctionBuilder<'_>) -> Register {
         match self {
+            Self::Comparison(..) => {
+                self.to_register(builder)
+            }
+
+            Self::Register(reg) => reg,
+
+            Self::PointerRegister { base_ptr, offset, typ } => {
+                builder.load_ptr(base_ptr, Immediate::Integer64(offset as _), typ)
+            }
+        }
+    }
+
+    #[must_use]
+    fn to_register(self, builder: &mut FunctionBuilder<'_>) -> Register {
+        match self {
             Self::Comparison(comparison) => {
                 builder.load_condition(match comparison {
                     Comparison::Equality => JumpCondition::Equal,
@@ -723,8 +745,8 @@ impl ExpressionResultKind {
 
             Self::Register(reg) => reg,
 
-            Self::PointerRegister { base_ptr, offset, typ } => {
-                builder.load_ptr(base_ptr, Immediate::Integer64(offset as _), typ)
+            Self::PointerRegister { base_ptr, offset, .. } => {
+                builder.math(MathOperation::Add, base_ptr, Operand::Immediate(Immediate::Integer64(offset as _)))
             }
         }
     }
@@ -741,7 +763,7 @@ impl CompileSome for Vec<Ranged<Expression>> {
 
     fn compile(&self, builder: &mut FunctionBuilder) -> Self::Output {
         self.iter()
-            .map(|x| x.compile(builder).to_readable(builder))
+            .map(|x| x.compile(builder).to_register(builder))
             .collect()
     }
 }
