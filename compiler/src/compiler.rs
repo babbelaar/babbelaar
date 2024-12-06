@@ -111,7 +111,14 @@ impl Compiler {
                 statement.compile(builder);
             }
 
-            builder.ret();
+            // Make sure the main function always returns a known value. If there was a return statement,
+            // this will be removed by DCE.
+            if func.name.value().as_str() == Constants::MAIN_FUNCTION {
+                let fallback_value_zero = builder.load_immediate(Immediate::Integer8(0));
+                builder.ret_with(fallback_value_zero);
+            } else {
+                builder.ret();
+            }
         });
     }
 }
