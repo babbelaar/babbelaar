@@ -6,6 +6,162 @@ use std::collections::HashMap;
 use crate::{Function, FunctionOptimizer, Immediate, Instruction, MathOperation, Operand, Register};
 
 #[derive(Debug, Default)]
+pub struct RegisterDeduplicator {
+    unchanged_moves: HashMap<Register, Register>,
+}
+
+impl RegisterDeduplicator {
+    fn set_value_unknown(&mut self, register: &Register) {
+        self.unchanged_moves.remove(register);
+    }
+
+    fn set_value_changed(&mut self, register: &Register) {
+        self.unchanged_moves.remove(register);
+    }
+
+    fn set_value_duplicated(&mut self, destination: &Register, origin: &Register) {
+        let origin = if let Some(origin) = self.unchanged_moves.get(origin).cloned() {
+            origin
+        } else {
+            *origin
+        };
+
+        self.unchanged_moves.insert(*destination, origin);
+    }
+}
+
+impl FunctionOptimizer for RegisterDeduplicator {
+    fn optimize(&mut self, function: &mut Function) {
+        for instruction in function.instructions.iter_mut() {
+            match instruction {
+                Instruction::Call { ret_val_reg, arguments, name } => {
+                    _ = name;
+                    for argument in arguments {
+                        if let Some(other_reg) = self.unchanged_moves.get(&argument).cloned() {
+                            *argument = other_reg;
+                        }
+                    }
+
+                    self.set_value_unknown(ret_val_reg);
+                }
+
+                Instruction::Compare { .. } => (),
+
+                Instruction::Increment { register } => {
+                    self.set_value_changed(register);
+                }
+
+                Instruction::Jump { location } => {
+                    _ = location;
+                    self.unchanged_moves.clear();
+                }
+
+                Instruction::JumpConditional { condition, location } => {
+                    _ = condition;
+                    _ = location;
+                    self.unchanged_moves.clear();
+                }
+
+                Instruction::Label(..) => (),
+
+                Instruction::Move { source, destination } => {
+                    match source {
+                        Operand::Immediate(..) => {
+                            self.set_value_changed(destination);
+                        }
+
+                        Operand::Register(source) => {
+                            self.set_value_duplicated(destination, source);
+                        }
+                    }
+                }
+
+                Instruction::MoveAddress { destination, offset } => {
+                    _ = offset;
+                    self.set_value_unknown(destination);
+                }
+
+                Instruction::MoveCondition { destination, condition } => {
+                    // We *can* optimize if we keep track of the condition variable.
+                    _ = condition;
+                    self.set_value_unknown(destination);
+                }
+
+                Instruction::MathOperation { operation, destination, lhs, rhs } => {
+                    _ = operation;
+
+                    if let Operand::Register(reg) = lhs {
+                        if let Some(reg) = self.unchanged_moves.get(&reg).cloned() {
+                            *lhs = Operand::Register(reg);
+                        }
+                    }
+
+                    if let Operand::Register(reg) = rhs {
+                        if let Some(reg) = self.unchanged_moves.get(&reg).cloned() {
+                            *rhs = Operand::Register(reg);
+                        }
+                    }
+
+                    self.set_value_unknown(destination);
+                }
+
+                Instruction::Negate { dst, src } => {
+                    if let Some(other_reg) = self.unchanged_moves.get(&src).cloned() {
+                        *dst = other_reg;
+                    }
+                    self.set_value_changed(dst);
+                }
+
+                Instruction::Return { value_reg } => {
+                    if let Some(value) = value_reg.clone() {
+                        if let Some(other_reg) = self.unchanged_moves.get(&value).cloned() {
+                            *value_reg = Some(other_reg);
+                        }
+                    }
+                }
+
+                Instruction::StackAlloc { dst, size } => {
+                    _ = size;
+                    self.set_value_unknown(dst);
+                }
+
+                Instruction::LoadPtr { destination, base_ptr, offset, typ: size } => {
+                    if let Some(value) = self.unchanged_moves.get(&base_ptr).cloned() {
+                        *base_ptr = value;
+                    }
+
+                    self.set_value_unknown(destination);
+
+                    // TODO: add known values
+                    _ = offset;
+                    _ = size;
+                }
+
+                Instruction::StorePtr { base_ptr, offset, value, typ } => {
+                    _ = typ;
+
+                    self.set_value_unknown(value);
+
+                    if let Operand::Register(offset_reg) = offset {
+                        if let Some(offset_reg) = self.unchanged_moves.get(&offset_reg).cloned() {
+                            *offset = Operand::Register(offset_reg);
+                        }
+                    }
+
+                    if let Some(value_reg) = self.unchanged_moves.get(&value).cloned() {
+                        *value = value_reg;
+                    }
+
+                    if let Some(base_ptr_reg) = self.unchanged_moves.get(&base_ptr).cloned() {
+                        *value = base_ptr_reg;
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct RegisterInliner {
     values: HashMap<Register, Immediate>,
 }

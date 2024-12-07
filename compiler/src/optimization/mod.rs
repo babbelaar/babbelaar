@@ -9,7 +9,10 @@ use log::debug;
 
 use self::{
     dead_code::DeadStoreEliminator,
-    register::RegisterInliner,
+    register::{
+        RegisterDeduplicator,
+        RegisterInliner,
+    },
 };
 
 use crate::{Function, Program};
@@ -36,6 +39,7 @@ pub fn optimize_program(program: &mut Program) {
 
 pub fn optimize_function(function: &mut Function) {
     run_optimization::<RegisterInliner>(function);
+    run_optimization::<RegisterDeduplicator>(function);
     run_optimization::<DeadStoreEliminator>(function);
     run_optimization::<DeadCodeEliminator>(function);
 }
