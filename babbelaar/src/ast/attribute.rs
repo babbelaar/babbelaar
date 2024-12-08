@@ -14,6 +14,7 @@ pub struct Attribute {
 
 impl Attribute {
     pub const NAME_EXTERN: &'static str = "uitheems";
+    pub const NAME_VAR_ARGS: &'static str = "flexibeleArgumenten";
 }
 
 #[derive(Debug, Clone)]

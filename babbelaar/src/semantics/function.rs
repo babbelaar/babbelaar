@@ -17,6 +17,12 @@ pub struct SemanticExternFunction {
 pub struct SemanticFunction {
     pub name: Ranged<BabString>,
     pub parameters: Vec<SemanticParameter>,
+
+    /// Signifies that the function allows more arguments than specified in the
+    /// functions argument list. (Not intended to be a standard Babbelaar feature,
+    /// but for compatibility with C).
+    pub has_variable_arguments: bool,
+
     pub parameters_right_paren_range: FileRange,
     pub extern_function: Option<SemanticExternFunction>,
     pub return_type: Box<SemanticType>,

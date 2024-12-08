@@ -153,4 +153,19 @@ impl SemanticReference {
             _ => SemanticType::null()
         }
     }
+
+    #[must_use]
+    pub fn has_variable_arguments(&self) -> bool {
+        match &self.typ {
+            SemanticType::Function(func) => {
+                func.has_variable_arguments
+            }
+
+            SemanticType::FunctionReference(FunctionReference::Custom(func)) => {
+                func.has_variable_arguments
+            }
+
+            _ => false,
+        }
+    }
 }

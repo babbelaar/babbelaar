@@ -143,6 +143,7 @@ impl SemanticAnalyzer {
             SemanticFunction {
                 name: function.name.clone(),
                 parameters,
+                has_variable_arguments: false,
                 parameters_right_paren_range: function.parameters_right_paren_range,
                 extern_function: None,
                 return_type,
@@ -913,6 +914,7 @@ impl SemanticAnalyzer {
         SemanticFunction {
             name: function.name.clone(),
             parameters,
+            has_variable_arguments: false,
             parameters_right_paren_range: function.parameters_right_paren_range,
             extern_function: None,
             return_type,
@@ -1023,6 +1025,7 @@ impl SemanticAnalyzer {
 
         let param_count = function.typ.parameter_count().expect("This reference to be a function, verified by self.find_function()");
         let arg_count = expression.arguments.len();
+        let has_var_args = function.has_variable_arguments();
 
         if param_count > arg_count {
             self.diagnostics.create(|| SemanticDiagnostic::new(
@@ -1031,7 +1034,7 @@ impl SemanticAnalyzer {
             ).with_related(function_hint.clone()));
         }
 
-        if param_count < arg_count {
+        if !has_var_args && param_count < arg_count {
             let mut add_parameter_action = None;
             let mut remove_parameter_action = None;
 
@@ -1083,7 +1086,9 @@ impl SemanticAnalyzer {
             let argument_type = self.analyze_expression(arg).ty;
 
             let Some(parameter_type) = self.resolve_parameter_type(&function, arg_idx) else {
-                warn!("Cannot check type of parameter with index {arg_idx}");
+                if !has_var_args {
+                    warn!("Cannot check type of parameter with index {arg_idx}");
+                }
                 break;
             };
 
@@ -2009,6 +2014,11 @@ impl SemanticAnalyzer {
                 continue;
             }
 
+            if attribute.name.value() == Attribute::NAME_VAR_ARGS {
+                self.analyze_attribute_var_args(statement, attribute);
+                continue;
+            }
+
             self.diagnostics.create(|| SemanticDiagnostic::new(
                 attribute.name.range(),
                 SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone(), range: attribute.range() },
@@ -2129,6 +2139,49 @@ impl SemanticAnalyzer {
         Some(SemanticExternFunction {
             name: name_literal.clone(),
         })
+    }
+
+    fn analyze_attribute_var_args(&mut self, statement: &Statement, attr: &Attribute) {
+        let StatementKind::Function(function) = &statement.kind else {
+            let diag = SemanticDiagnostic::new(
+                attr.name.range().as_full_line(),
+                SemanticDiagnosticKind::AttributeExternOnlyOnFunctions,
+            );
+            let diag = diag.with_action(BabbelaarCodeAction::new(
+                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.value().clone() },
+                vec![FileEdit::new(attr.name.range().as_full_line(), "")],
+            ));
+            self.diagnostics.create(|| diag);
+            return;
+        };
+
+        if function.body.is_some() {
+            let diag = SemanticDiagnostic::new(
+                attr.name.range().as_full_line(),
+                SemanticDiagnosticKind::AttributeVarArgsOnlyOnFunctionsWithoutBody,
+            );
+            self.diagnostics.create(|| diag);
+        }
+
+        let Some(func) = self.context.current().get_function_mut(&function.name) else {
+            log::warn!("Expected function '{}' to be defined earlier", function.name.value());
+            return;
+        };
+
+        if func.extern_function.is_some() {
+            let diag = SemanticDiagnostic::new(
+                attr.name.range().as_full_line(),
+                SemanticDiagnosticKind::AttributeExternOnlyOnce,
+            );
+            let diag = diag.with_action(BabbelaarCodeAction::new(
+                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.value().clone() },
+                vec![FileEdit::new(attr.name.range().as_full_line(), "")],
+            ));
+            self.diagnostics.create(|| diag);
+            return;
+        }
+
+        func.has_variable_arguments = true;
     }
 
     fn analyze_attributes_for_field(&mut self, field: &SemanticField) {

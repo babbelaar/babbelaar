@@ -228,8 +228,14 @@ pub enum SemanticDiagnosticKind {
     #[error("Onbekend argument `{name}` is niet toegestaan binnen attribuut `@uitheems`")]
     AttributeExternUnexpectedArgument { name: BabString },
 
-    #[error("Attribuut `@uitheems` kan maar één keer gebruikt worden per werkwijzen.")]
+    #[error("Attribuut `@uitheems` kan maar één keer gebruikt worden per werkwijze.")]
     AttributeExternOnlyOnce,
+
+    #[error("Het attribuut `@flexibeleArgumenten` kan alleen gebruikt worden op werkwijzen.")]
+    AttributeVarArgsOnlyOnFunctions,
+
+    #[error("Het attribuut `@flexibeleArgumenten` kan alleen gebruikt worden op werkwijzen zonder lichaam {{ .. }}")]
+    AttributeVarArgsOnlyOnFunctionsWithoutBody,
 
     #[error("De werkwijze genaamd `{name}` is meerdere keren gedefinieerd.")]
     DuplicateFunction { name: BabString },
