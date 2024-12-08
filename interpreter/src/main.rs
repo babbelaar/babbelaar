@@ -13,13 +13,14 @@ mod ffi;
 mod interpreter;
 mod scope;
 
-use std::{fmt::Display, fs::{create_dir_all, read_dir}, path::{Path, PathBuf}, process::{exit, Command, Stdio}, time::Instant};
+use std::{collections::HashMap, fmt::Display, fs::{create_dir_all, read_dir}, path::{Path, PathBuf}, process::{exit, Command, Stdio}, time::Instant};
 
 pub use babbelaar::*;
 use babbelaar_compiler::{Pipeline, Platform};
 use clap::Subcommand;
 use colored::Colorize;
 use env_logger::Env;
+use error::ErrorPrinter;
 
 pub use self::{
     data::{
@@ -145,11 +146,11 @@ pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
 }
 
 fn analyze(files: &[(SourceCode, ParseTree)]) {
-    let file_ids = files.iter()
+    let file_ids: HashMap<FileId, SourceCode> = files.iter()
         .map(|(source_code, _)| (source_code.file_id(), source_code.clone()))
         .collect();
 
-    let mut analyzer = SemanticAnalyzer::new(file_ids, true);
+    let mut analyzer = SemanticAnalyzer::new(file_ids.clone(), true);
 
     for phase in SemanticAnalysisPhase::iter() {
         for (_, tree) in files {
@@ -161,7 +162,11 @@ fn analyze(files: &[(SourceCode, ParseTree)]) {
     let diags = analyzer.into_diagnostics();
     let mut has_error = false;
     for diagnostic in &diags {
-        eprintln!("{}: {}", diagnostic.severity(), diagnostic.kind());
+        let source_code = file_ids.get(&diagnostic.range().file_id()).unwrap();
+        ErrorPrinter::new(source_code, diagnostic.range(), diagnostic.kind())
+            .severity(diagnostic.severity())
+            .hint(diagnostic.actions().first().map(|action| action.type_().to_string()))
+            .print();
 
         if diagnostic.severity() == SemanticDiagnosticSeverity::Error {
             has_error = true;
@@ -172,10 +177,7 @@ fn analyze(files: &[(SourceCode, ParseTree)]) {
         if diags.len() == 1 {
             eprintln!("1 semantisch probleem gevonden");
         } else {
-            eprintln!("{} semantische {} gevonden",
-                diags.len(),
-                if diags.len() == 1 {  "probleem" } else { "problemen" }
-            );
+            eprintln!("{} semantische problemen gevonden", diags.len());
         }
     }
 
@@ -192,7 +194,8 @@ fn parse(path: &Path) -> (SourceCode, ParseTree) {
     let (tokens, errors) = lexer.collect_all();
 
     for e in &errors {
-        print_error(&source_code, e.location.as_zero_range(), &e.kind);
+        ErrorPrinter::new(&source_code, e.location.as_zero_range(), &e.kind)
+            .print();
     }
 
     let mut parser = Parser::new(path.to_path_buf(), &tokens);
@@ -202,44 +205,11 @@ fn parse(path: &Path) -> (SourceCode, ParseTree) {
     }
 
     for e in parser.diagnostics() {
-        print_error(&source_code, e.range(), e);
+        ErrorPrinter::new(&source_code, e.range(), e)
+            .print();
     }
 
     exit(1);
-}
-
-fn print_error(source_code: &SourceCode, range: FileRange, message: impl Display) {
-    eprintln!("{}: {}", "fout".red().bold(), message.to_string().bold());
-
-    eprintln!();
-    let mut iter = source_code.lines().skip(range.start().line().saturating_sub(1));
-
-    if let Some(line) = iter.next() {
-        if !line.trim().is_empty() {
-            eprintln!("{}", line);
-        }
-    }
-
-    if let Some(line) = iter.next() {
-        eprintln!("{line}");
-        eprintln!(
-            "{spaces}{caret}{tildes} {description}",
-            spaces = " ".repeat(range.start().column()),
-            caret = "^".bright_red().bold(),
-            tildes = "~".repeat(range.len().saturating_sub(1)).bright_blue(),
-            description = "fout trad hier op".bright_red()
-        );
-    }
-
-    if let Some(line) = iter.next() {
-        if !line.trim().is_empty() {
-            eprintln!("{}", line);
-        }
-    }
-
-    eprintln!();
-
-    eprintln!("In {}:{}:{}\n", source_code.path().display(), range.start().line() + 1, range.start().column() + 1);
 }
 
 #[must_use]
@@ -266,4 +236,8 @@ fn init_logger(args: &Args) {
 
 
     builder.init();
+}
+
+fn test(s: &str) {
+    let a = "";
 }

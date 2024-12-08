@@ -26,7 +26,10 @@ pub use self::{
         DebuggerFunction,
         DebuggerFunctionType,
     },
-    error::RuntimeError,
+    error::{
+        ErrorPrinter,
+        RuntimeError,
+    },
     ffi::FFIManager,
     interpreter::Interpreter,
     scope::Scope,
