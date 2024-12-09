@@ -442,6 +442,180 @@ fn loop_string_chars() {
     assert_eq!(result.exit_code, Some(0));
 }
 
+#[test]
+fn left_shift_immediate_2() {
+    let result = create_and_run_single_object_executable(r#"
+
+        werkwijze hoofd() -> g32 {
+            bekeer 3 << 2;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(12));
+}
+
+#[test]
+fn left_shift_immediate_lhs_0() {
+    let result = create_and_run_single_object_executable(r#"
+
+        werkwijze hoofd() -> g32 {
+            bekeer 0 << 3;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+}
+
+#[test]
+fn left_shift_immediate_rhs_0() {
+    let result = create_and_run_single_object_executable(r#"
+
+        werkwijze hoofd() -> g32 {
+            bekeer 3 << 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(3));
+}
+
+#[test]
+fn left_shift_unknown_lhs() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze schuifLinks(a: g32) -> g32 {
+            bekeer a << 3;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer schuifLinks(2);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(16));
+}
+
+#[test]
+fn left_shift_unknown_rhs() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze schuifLinks(a: g32) -> g32 {
+            bekeer 8 << a;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer schuifLinks(3);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(64));
+}
+
+#[test]
+fn left_shift_unknown_lhs_and_rhs() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze schuifLinks(a: g32, b: g32) -> g32 {
+            bekeer a << b;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer schuifLinks(5, 3);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(40));
+}
+
+#[test]
+fn right_shift_immediate_2() {
+    let result = create_and_run_single_object_executable(r#"
+
+        werkwijze hoofd() -> g32 {
+            bekeer 12 >> 2;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(3));
+}
+
+#[test]
+fn right_shift_immediate_lhs_0() {
+    let result = create_and_run_single_object_executable(r#"
+
+        werkwijze hoofd() -> g32 {
+            bekeer 0 >> 3;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+}
+
+#[test]
+fn right_shift_immediate_rhs_0() {
+    let result = create_and_run_single_object_executable(r#"
+
+        werkwijze hoofd() -> g32 {
+            bekeer 3 >> 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(3));
+}
+
+#[test]
+fn right_shift_unknown_lhs() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze schuifLinks(a: g32) -> g32 {
+            bekeer a >> 3;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer schuifLinks(16);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(2));
+}
+
+#[test]
+fn right_shift_unknown_rhs() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze schuifLinks(a: g32) -> g32 {
+            bekeer 64 >> a;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer schuifLinks(3);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(8));
+}
+
+#[test]
+fn right_shift_unknown_lhs_and_rhs() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze schuifLinks(a: g32, b: g32) -> g32 {
+            bekeer a >> b;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer schuifLinks(255, 6);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(3));
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
 

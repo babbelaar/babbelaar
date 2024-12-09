@@ -36,6 +36,22 @@ pub enum ArmInstruction {
         imm: u32,
     },
 
+    /// Arithmetic Shift Right (immediate)
+    AsrImmediate {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        src: ArmRegister,
+        amount: u8,
+    },
+
+    /// Arithmetic Shift Right (register)
+    AsrRegister {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        src: ArmRegister,
+        amount: ArmRegister,
+    },
+
     B {
         location: ArmBranchLocation,
     },
@@ -92,6 +108,20 @@ pub enum ArmInstruction {
         dst: ArmRegister,
         base_ptr: ArmRegister,
         offset: ArmRegister,
+    },
+
+    LslImmediate {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        src: ArmRegister,
+        amount: u8,
+    },
+
+    LslRegister {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        src: ArmRegister,
+        amount: ArmRegister,
     },
 
     MovN {
@@ -228,6 +258,42 @@ impl ArmInstruction {
 
                 // immlo 29 to 30
                 instruction |= ((imm >> 12) & 0b11) << 29;
+
+                instruction
+            }
+
+            Self::AsrImmediate { is_64_bit, dst, src, amount } => {
+                debug_assert_ne!(amount, 0, "inefficient codegen");
+
+                let mut instruction = 0x13007C00;
+
+                if is_64_bit {
+                    instruction |= 1 << 31; // sf
+                    instruction |= 1 << 22; // N
+                    instruction |= 1 << 15; // x (imms)
+
+                    assert!(amount <= 63, "operation out of bounds");
+                } else {
+                    assert!(amount <= 31, "operation out of bounds");
+                }
+
+                instruction |= (amount as u32) << 16;
+                instruction |= (src.number as u32) << 5;
+                instruction |= dst.number as u32;
+
+                instruction
+            }
+
+            Self::AsrRegister { is_64_bit, dst, src, amount } => {
+                let mut instruction = 0x1AC02800;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
+                instruction |= (amount.number as u32) << 16;
+                instruction |= (src.number as u32) << 5;
+                instruction |= dst.number as u32;
 
                 instruction
             }
@@ -416,6 +482,51 @@ impl ArmInstruction {
                 instruction |= 0b011 << 13;
 
                 instruction |= (base_ptr.number as u32) << 5;
+                instruction |= dst.number as u32;
+
+                instruction
+            }
+
+            Self::LslImmediate { is_64_bit, dst, src, amount } => {
+                debug_assert_ne!(amount, 0, "inefficient codegen");
+
+                let mut instruction = 0x53000000;
+
+                let immr;
+                let imms;
+
+                if is_64_bit {
+                    instruction |= 1 << 31; // sf
+                    instruction |= 1 << 22; // N
+
+                    assert!(amount <= 63, "operation out of bounds");
+
+                    immr = 64 - amount as u32;
+                    imms = 63 - amount as u32;
+                } else {
+                    assert!(amount <= 31, "operation out of bounds");
+
+                    immr = 32 - amount as u32;
+                    imms = 31 - amount as u32;
+                }
+
+                instruction |= immr << 16;
+                instruction |= imms << 10;
+                instruction |= (src.number as u32) << 5;
+                instruction |= dst.number as u32;
+
+                instruction
+            }
+
+            Self::LslRegister { is_64_bit, dst, src, amount } => {
+                let mut instruction = 0x1AC02000;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
+                instruction |= (amount.number as u32) << 16;
+                instruction |= (src.number as u32) << 5;
                 instruction |= dst.number as u32;
 
                 instruction
@@ -685,6 +796,16 @@ impl Display for ArmInstruction {
                 f.write_fmt(format_args!("adrp {dst}, 0x{imm:x}"))
             }
 
+            Self::AsrImmediate { is_64_bit, dst, src, amount } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("asr {dst}, {src}, #{amount}"))
+            }
+
+            Self::AsrRegister { is_64_bit, dst, src, amount } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("asr {dst}, {src}, {amount}"))
+            }
+
             Self::B { location } => {
                 f.write_fmt(format_args!("b {location}"))
             }
@@ -747,6 +868,16 @@ impl Display for ArmInstruction {
             Self::LdrRegister { is_64_bit, dst, base_ptr, offset } => {
                 _ = is_64_bit;
                 f.write_fmt(format_args!("ldr {dst}, [{base_ptr}, {offset}]"))
+            }
+
+            Self::LslImmediate { is_64_bit, dst, src, amount } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("lsl {dst}, {src}, #{amount}"))
+            }
+
+            Self::LslRegister { is_64_bit, dst, src, amount } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("lsl {dst}, {src}, {amount}"))
             }
 
             Self::MovN { is_64_bit, register, unsigned_imm16 } => {
@@ -983,6 +1114,78 @@ mod tests {
         base_ptr: ArmRegister::X19,
         offset: ArmRegister::X20,
     }, 0xf8746a61)]
+    #[case(ArmInstruction::LslImmediate {
+        is_64_bit: false,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: 1,
+    }, 0x531f7800)]
+    #[case(ArmInstruction::LslImmediate {
+        is_64_bit: false,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: 2,
+    }, 0x531e7400)]
+    #[case(ArmInstruction::LslImmediate {
+        is_64_bit: true,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: 1,
+    }, 0xd37ff800)]
+    #[case(ArmInstruction::LslImmediate {
+        is_64_bit: true,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: 2,
+    }, 0xd37ef400)]
+    #[case(ArmInstruction::LslRegister {
+        is_64_bit: false,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: ArmRegister::X1,
+    }, 0x1ac12000)]
+    #[case(ArmInstruction::LslRegister {
+        is_64_bit: true,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: ArmRegister::X1,
+    }, 0x9ac12000)]
+    #[case(ArmInstruction::AsrImmediate {
+        is_64_bit: true,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: 2,
+    }, 0x9342fc00)]
+    #[case(ArmInstruction::AsrImmediate {
+        is_64_bit: true,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: 4,
+    }, 0x9344fc00)]
+    #[case(ArmInstruction::AsrImmediate {
+        is_64_bit: false,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: 2,
+    }, 0x13027c00)]
+    #[case(ArmInstruction::AsrImmediate {
+        is_64_bit: false,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: 4,
+    }, 0x13047c00)]
+    #[case(ArmInstruction::AsrRegister {
+        is_64_bit: true,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: ArmRegister::X1,
+    }, 0x9ac12800)]
+    #[case(ArmInstruction::AsrRegister {
+        is_64_bit: false,
+        dst: ArmRegister::X0,
+        src: ArmRegister::X0,
+        amount: ArmRegister::X1,
+    }, 0x1ac12800)]
     fn encode_instruction(#[case] input: ArmInstruction, #[case] expected: u32) {
         let actual = input.encode(0, &HashMap::new());
         assert_eq!(expected, actual, "actual was: 0x{actual:x}");

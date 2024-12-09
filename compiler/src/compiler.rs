@@ -379,6 +379,8 @@ impl CompileExpression for BiExpression {
                     MathOperator::Multiply => MathOperation::Multiply,
                     MathOperator::Divide => MathOperation::Divide,
                     MathOperator::Modulo => MathOperation::Modulo,
+                    MathOperator::LeftShift => MathOperation::LeftShift,
+                    MathOperator::RightShift => MathOperation::RightShift,
 
                     _ => todo!("Ondersteun {:?}", self.operator.value()),
                 };

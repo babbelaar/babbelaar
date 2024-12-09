@@ -70,6 +70,11 @@ impl Immediate {
             Self::Integer64(i) => *i,
         }
     }
+
+    #[must_use]
+    pub const fn as_u64(&self) -> u64 {
+        self.as_i64() as u64
+    }
 }
 
 impl Display for Immediate {

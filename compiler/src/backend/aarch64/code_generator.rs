@@ -229,6 +229,8 @@ impl AArch64CodeGenerator {
                     MathOperation::Multiply => self.add_instruction_mul(dst, lhs, rhs),
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
                     MathOperation::Modulo => self.add_operation_modulo(dst, lhs, rhs),
+                    MathOperation::LeftShift => self.add_instruction_lsl(dst, lhs, rhs),
+                    MathOperation::RightShift => self.add_instruction_asr(dst, lhs, rhs),
                 }
             }
 
@@ -366,6 +368,67 @@ impl AArch64CodeGenerator {
         }
     }
 
+    /// Arithmetic Shift Right
+    fn add_instruction_asr(&mut self, dst: ArmRegister, lhs: &Operand, rhs: &Operand) {
+        match (lhs, rhs) {
+            (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
+                warn!("Immediate-SchuifRechts zou gedaan moeten worden door de optimalisator!");
+
+                let imm16 = lhs.as_i64() >> rhs.as_i64();
+                debug_assert!(imm16 < (1 << 16));
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: dst,
+                    imm16: imm16 as _,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Register(rhs)) => {
+                let src = self.allocate_register(lhs);
+                let amount = self.allocate_register(rhs);
+                self.instructions.push(ArmInstruction::AsrRegister {
+                    is_64_bit: true,
+                    dst,
+                    src,
+                    amount,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
+                let src = self.allocate_register(lhs);
+
+                self.instructions.push(ArmInstruction::AsrImmediate {
+                    is_64_bit: true,
+                    dst,
+                    src,
+                    amount: rhs.as_i8() as _,
+                });
+            }
+
+            (Operand::Immediate(lhs), Operand::Register(rhs)) => {
+                let amount = self.allocate_register(rhs);
+
+                let src = if amount == dst {
+                    self.register_allocator.hacky_random_available_register().unwrap()
+                } else {
+                    dst
+                };
+
+                // TODO: add good mov subroutine for stuff like this
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: src,
+                    imm16: lhs.as_i64() as _,
+                });
+
+                self.instructions.push(ArmInstruction::AsrRegister {
+                    is_64_bit: true,
+                    dst,
+                    src,
+                    amount,
+                });
+            }
+        }
+    }
+
     fn add_instruction_cmp(&mut self, lhs: &Register, rhs: &Operand) {
         match rhs {
             Operand::Immediate(immediate) => {
@@ -383,6 +446,67 @@ impl AArch64CodeGenerator {
                 let lhs = self.allocate_register(lhs);
                 let rhs = self.allocate_register(rhs);
                 self.instructions.push(ArmInstruction::CmpRegister { lhs, rhs });
+            }
+        }
+    }
+
+    /// Logical Shift Left
+    fn add_instruction_lsl(&mut self, dst: ArmRegister, lhs: &Operand, rhs: &Operand) {
+        match (lhs, rhs) {
+            (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
+                warn!("Immediate-SchuifLinks zou gedaan moeten worden door de optimalisator!");
+
+                let imm16 = lhs.as_i64() << rhs.as_i64();
+                debug_assert!(imm16 < (1 << 16));
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: dst,
+                    imm16: imm16 as _,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Register(rhs)) => {
+                let src = self.allocate_register(lhs);
+                let amount = self.allocate_register(rhs);
+                self.instructions.push(ArmInstruction::LslRegister {
+                    is_64_bit: true,
+                    dst,
+                    src,
+                    amount,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
+                let src = self.allocate_register(lhs);
+
+                self.instructions.push(ArmInstruction::LslImmediate {
+                    is_64_bit: true,
+                    dst,
+                    src,
+                    amount: rhs.as_i8() as _,
+                });
+            }
+
+            (Operand::Immediate(lhs), Operand::Register(rhs)) => {
+                let amount = self.allocate_register(rhs);
+
+                let src = if amount == dst {
+                    self.register_allocator.hacky_random_available_register().unwrap()
+                } else {
+                    dst
+                };
+
+                // TODO: add good mov subroutine for stuff like this
+                self.instructions.push(ArmInstruction::MovZ {
+                    register: src,
+                    imm16: lhs.as_i64() as _,
+                });
+
+                self.instructions.push(ArmInstruction::LslRegister {
+                    is_64_bit: true,
+                    dst,
+                    src,
+                    amount,
+                });
             }
         }
     }

@@ -365,6 +365,14 @@ impl RegisterInliner {
             MathOperation::Modulo => {
                 Immediate::Integer64(lhs.as_i64().wrapping_rem(rhs.as_i64()))
             }
+
+            MathOperation::LeftShift => {
+                Immediate::Integer64((lhs.as_u64() << rhs.as_u64()) as _)
+            }
+
+            MathOperation::RightShift => {
+                Immediate::Integer64((lhs.as_u64() >> rhs.as_u64()) as _)
+            }
         };
 
         self.values.insert(destination.clone(), value);

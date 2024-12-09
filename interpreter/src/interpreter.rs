@@ -569,6 +569,9 @@ impl<D> Interpreter<D>
             BiOperator::Math(MathOperator::BitwiseOr) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a | b),
             BiOperator::Math(MathOperator::BitwiseXor) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a ^ b),
 
+            BiOperator::Math(MathOperator::LeftShift) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a << b),
+            BiOperator::Math(MathOperator::RightShift) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a << b),
+
             BiOperator::Math(MathOperator::LogicalAnd) => Value::Bool(lhs == Value::Bool(true) && rhs == Value::Bool(true)),
             BiOperator::Math(MathOperator::LogicalOr) => Value::Bool(lhs == Value::Bool(true) || rhs == Value::Bool(true)),
 

@@ -59,6 +59,10 @@ pub enum Punctuator {
     LogicalAnd,
     #[strum(serialize = "logische-of")]
     LogicalOr,
+    #[strum(serialize = "schuif-links")]
+    LeftShift,
+    #[strum(serialize = "schuif-rechts")]
+    RightShift,
 }
 
 impl Punctuator {
@@ -91,6 +95,8 @@ impl Punctuator {
             Self::BitwiseXor => "^",
             Self::LogicalAnd => "&&",
             Self::LogicalOr => "||",
+            Self::LeftShift => "<<",
+            Self::RightShift => ">>",
         }
     }
 }

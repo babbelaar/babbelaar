@@ -293,6 +293,8 @@ pub enum MathOperation {
     Multiply,
     Divide,
     Modulo,
+    LeftShift,
+    RightShift,
 }
 
 impl MathOperation {
@@ -304,6 +306,8 @@ impl MathOperation {
             Self::Multiply => "Vermenigvuldig",
             Self::Divide => "DeelDoor",
             Self::Modulo => "Modulo",
+            Self::LeftShift => "SchuifLinks",
+            Self::RightShift => "SchuifRechts",
         }
     }
 }

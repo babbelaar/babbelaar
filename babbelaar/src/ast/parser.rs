@@ -1152,7 +1152,10 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn parse_shift_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
-        self.parse_additive_expression()
+        self.parse_bi_expression(Self::parse_additive_expression, &[
+            (Punctuator::LeftShift, BiOperator::Math(MathOperator::LeftShift)),
+            (Punctuator::RightShift, BiOperator::Math(MathOperator::RightShift)),
+        ])
     }
 
     fn parse_additive_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {

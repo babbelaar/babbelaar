@@ -265,6 +265,8 @@ pub enum MathOperator {
     BitwiseXor,
     LogicalAnd,
     LogicalOr,
+    LeftShift,
+    RightShift,
 }
 
 impl MathOperator {
@@ -281,6 +283,8 @@ impl MathOperator {
             Self::BitwiseXor => "^",
             Self::LogicalAnd => "&&",
             Self::LogicalOr => "||",
+            Self::LeftShift => "<<",
+            Self::RightShift => ">>",
         }
     }
 }
