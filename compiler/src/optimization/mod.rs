@@ -3,9 +3,11 @@
 
 mod dead_code;
 mod register;
+mod strength;
 
 use dead_code::DeadCodeEliminator;
 use log::debug;
+use strength::StrengthReductor;
 
 use self::{
     dead_code::DeadStoreEliminator,
@@ -39,6 +41,7 @@ pub fn optimize_program(program: &mut Program) {
 
 pub fn optimize_function(function: &mut Function) {
     run_optimization::<RegisterInliner>(function);
+    run_optimization::<StrengthReductor>(function);
     run_optimization::<RegisterDeduplicator>(function);
     run_optimization::<DeadStoreEliminator>(function);
     run_optimization::<DeadCodeEliminator>(function);

@@ -53,6 +53,16 @@ pub struct Function {
 
 impl Function {
     #[must_use]
+    pub fn new(name: BabString, argument_registers: Vec<Register>, instructions: Vec<Instruction>, label_names: HashMap<Label, BabString>) -> Self {
+        Self {
+            name,
+            argument_registers,
+            instructions,
+            label_names,
+        }
+    }
+
+    #[must_use]
     pub fn name(&self) -> &BabString {
         &self.name
     }
