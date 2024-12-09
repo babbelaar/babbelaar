@@ -195,7 +195,7 @@ impl CompileStatement for AssignStatement {
             ExpressionResultKind::Comparison(..) => todo!(),
 
             ExpressionResultKind::PointerRegister { base_ptr, offset, typ } => {
-                builder.store_ptr(base_ptr, Operand::Immediate(Immediate::Integer64(offset as _)), source, typ);
+                builder.store_ptr(base_ptr, offset, source, typ);
             }
         }
     }
@@ -421,7 +421,7 @@ impl CompileExpression for PostfixExpression {
                 let field_type = field.type_id();
                 let primitive_typ = field.primitive_type();
 
-                ExpressionResult::pointer(base_ptr, offset, field_type, primitive_typ)
+                ExpressionResult::pointer(base_ptr, Operand::Immediate(Immediate::Integer64(offset as _)), field_type, primitive_typ)
             }
 
             PostfixExpressionKind::MethodCall(method) => {
@@ -448,10 +448,12 @@ impl CompileExpression for PostfixExpression {
                     TypeInfo::Array(item_ty) => {
                         let offset = subscript.compile(builder).to_readable(builder);
 
-                        let dst = builder.math(MathOperation::Add, base_ptr, Operand::Register(offset));
+                        let size = builder.size_of_type_info(&item_ty);
+                        let offset = builder.math(MathOperation::Multiply, offset, Immediate::Integer64(size as _));
+                        let offset = Operand::Register(offset);
 
-                        let typ = item_ty.primitive_type();
-                        ExpressionResult::pointer(dst, 0, *item_ty, typ)
+                        let typ = builder.primitive_type_of(&item_ty);
+                        ExpressionResult::pointer(base_ptr, offset, *item_ty, typ)
                     }
 
                     TypeInfo::Plain(..) => todo!("Subscript for types"),
@@ -614,7 +616,7 @@ impl ExpressionResult {
     }
 
     #[must_use]
-    pub fn pointer(base_ptr: Register, offset: isize, type_info: impl Into<TypeInfo>, typ: PrimitiveType) -> Self {
+    pub fn pointer(base_ptr: Register, offset: Operand, type_info: impl Into<TypeInfo>, typ: PrimitiveType) -> Self {
         Self {
             kind: ExpressionResultKind::PointerRegister { base_ptr, offset, typ },
             type_info: type_info.into(),
@@ -694,7 +696,7 @@ impl From<(TypeInfo, Register)> for ExpressionResult {
 enum ExpressionResultKind {
     Comparison(Comparison),
     Register(Register),
-    PointerRegister { base_ptr: Register, offset: isize, typ: PrimitiveType },
+    PointerRegister { base_ptr: Register, offset: Operand, typ: PrimitiveType },
 }
 
 impl ExpressionResultKind {
@@ -709,7 +711,7 @@ impl ExpressionResultKind {
             }
             Self::PointerRegister { base_ptr, offset, typ } => {
                 // if the value is a register, we want to branch/jump when the value isn't 0 (false)
-                let register = builder.load_ptr(base_ptr, Immediate::Integer64(offset as _), typ);
+                let register = builder.load_ptr(base_ptr, offset, typ);
                 builder.compare(register, Operand::Immediate(Immediate::Integer64(0)));
                 Comparison::Inequality
             }
@@ -726,7 +728,7 @@ impl ExpressionResultKind {
             Self::Register(reg) => reg,
 
             Self::PointerRegister { base_ptr, offset, typ } => {
-                builder.load_ptr(base_ptr, Immediate::Integer64(offset as _), typ)
+                builder.load_ptr(base_ptr, offset, typ)
             }
         }
     }
@@ -748,7 +750,7 @@ impl ExpressionResultKind {
             Self::Register(reg) => reg,
 
             Self::PointerRegister { base_ptr, offset, .. } => {
-                builder.math(MathOperation::Add, base_ptr, Operand::Immediate(Immediate::Integer64(offset as _)))
+                builder.math(MathOperation::Add, base_ptr, offset)
             }
         }
     }

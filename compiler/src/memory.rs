@@ -98,6 +98,11 @@ impl StructureLayout {
         self.field_names.insert(field_name, self.fields.len());
         self.fields.push(field);
     }
+
+    #[must_use]
+    pub fn primitive_type(&self) -> PrimitiveType {
+        PrimitiveType::new(self.size, true)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -277,11 +282,6 @@ impl TypeInfo {
             Self::Array(info) => info.type_id(),
             Self::Plain(ty) => *ty,
         }
-    }
-
-    #[must_use]
-    pub fn primitive_type(&self) -> PrimitiveType {
-        PrimitiveType::new(8, true)
     }
 }
 

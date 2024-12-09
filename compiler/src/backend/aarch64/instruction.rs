@@ -1186,6 +1186,20 @@ mod tests {
         src: ArmRegister::X0,
         amount: ArmRegister::X1,
     }, 0x1ac12800)]
+    #[case(ArmInstruction::StrImmediate {
+        is_64_bit: false,
+        mode: ArmUnsignedAddressingMode::UnsignedOffset,
+        src: ArmRegister::X2,
+        base_ptr: ArmRegister::X1,
+        offset: 4,
+    }, 0xb9000422)]
+    #[case(ArmInstruction::StrImmediate {
+        is_64_bit: false,
+        mode: ArmUnsignedAddressingMode::UnsignedOffset,
+        src: ArmRegister::X1,
+        base_ptr: ArmRegister::X2,
+        offset: 8,
+    }, 0xb9000841)]
     fn encode_instruction(#[case] input: ArmInstruction, #[case] expected: u32) {
         let actual = input.encode(0, &HashMap::new());
         assert_eq!(expected, actual, "actual was: 0x{actual:x}");

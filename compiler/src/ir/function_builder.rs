@@ -294,6 +294,27 @@ impl<'program> FunctionBuilder<'program> {
         // TODO: depends on platform
         8
     }
+
+    #[must_use]
+    pub fn size_of_type_id(&self, ty: TypeId) -> usize {
+        self.program_builder.type_manager.layout(ty).size()
+    }
+
+    #[must_use]
+    pub fn size_of_type_info(&self, ty: &TypeInfo) -> usize {
+        match ty {
+            TypeInfo::Array(..) => self.pointer_size(),
+            TypeInfo::Plain(ty) => self.size_of_type_id(*ty),
+        }
+    }
+
+    #[must_use]
+    pub fn primitive_type_of(&self, ty: &TypeInfo) -> PrimitiveType {
+        match ty {
+            TypeInfo::Array(..) => PrimitiveType::new(self.pointer_size(), false),
+            TypeInfo::Plain(ty) => self.program_builder.type_manager.layout(*ty).primitive_type(),
+        }
+    }
 }
 
 #[cfg(test)]

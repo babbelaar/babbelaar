@@ -377,6 +377,19 @@ fn simple_array_add() {
 }
 
 #[test]
+fn simple_array_add_zero_initialized() {
+    let result = create_and_run_single_object_executable("
+        werkwijze hoofd() -> g32 {
+            stel x = nieuw g32[2];
+            bekeer x[0] + x[1];
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+}
+
+#[test]
 fn array_zero_initialised() {
     let result = create_and_run_single_object_executable("
         werkwijze hoofd() -> g32 {
@@ -617,7 +630,9 @@ fn right_shift_unknown_lhs_and_rhs() {
 }
 
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
-    let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
+    if !std::env::args().nth(1).unwrap_or_default().is_empty() {
+        let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
+    }
 
     let dir = TempDir::new().unwrap().panic_on_cleanup_error();
     let directory = dir.path().to_path_buf();
