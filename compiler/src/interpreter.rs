@@ -107,7 +107,9 @@ impl Interpreter {
                 let return_value = self.execute_function(&name, arguments);
 
                 if let Some(return_value) = return_value {
-                    self.frame().set_register(ret_val_reg, return_value);
+                    if let Some(ret_val_reg) = ret_val_reg {
+                        self.frame().set_register(ret_val_reg, return_value);
+                    }
                 }
 
                 OperationResult::Continue

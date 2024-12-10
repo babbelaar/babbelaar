@@ -79,7 +79,7 @@ pub enum Instruction {
         name: BabString,
         arguments: Vec<FunctionArgument>,
         variable_arguments: Vec<FunctionArgument>,
-        ret_val_reg: Register,
+        ret_val_reg: Option<Register>,
     },
 
     /// An unconditional jump
@@ -173,7 +173,11 @@ impl Display for Instruction {
             }
 
             Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
-                f.write_fmt(format_args!("RoepAan {ret_val_reg}, {name}"))?;
+                f.write_str("RoepAap ")?;
+                if let Some(ret_val_reg) = ret_val_reg {
+                    ret_val_reg.fmt(f)?;
+                }
+                f.write_fmt(format_args!(", {name}"))?;
 
                 for arg in arguments {
                     f.write_str(", ")?;

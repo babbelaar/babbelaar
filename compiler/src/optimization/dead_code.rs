@@ -83,8 +83,8 @@ impl DeadCodeEliminator {
 
 #[derive(Debug, Default)]
 pub struct DeadStoreEliminator {
-    writing_instructions_per_register: HashMap<Register, usize>,
-    instructions_to_remove: Vec<usize>,
+    writing_instructions_per_register: HashMap<Register, Store>,
+    stores_to_change: Vec<Store>,
 }
 
 impl FunctionOptimizer for DeadStoreEliminator {
@@ -95,20 +95,37 @@ impl FunctionOptimizer for DeadStoreEliminator {
             self.analyze_instructions(function.instructions());
 
             // The instructions that are still in the map are unused, as they would've been removed by a read.
-            for value in self.writing_instructions_per_register.values() {
-                self.instructions_to_remove.push(*value);
+            for store in self.writing_instructions_per_register.values() {
+                self.stores_to_change.push(*store);
             }
 
-            if self.instructions_to_remove.is_empty() {
+            if self.stores_to_change.is_empty() {
                 break;
             }
 
-            self.instructions_to_remove.sort();
-            for removal_index in self.instructions_to_remove.iter().rev() {
-                if !self.can_remove_instruction(&function.instructions[*removal_index]) {
-                    continue;
+            self.stores_to_change.sort();
+            for store in self.stores_to_change.iter().rev() {
+                let removal_index = store.index;
+                match store.kind {
+                    StoreKind::CallReturnValue => {
+                        let Instruction::Call { ret_val_reg, .. } = &mut function.instructions[removal_index] else {
+                            debug_assert!(false, "Verwachtte een 'Call' maar kreeg: {:#?}", function.instructions[removal_index]);
+                            continue;
+                        };
+
+                        debug_assert!(ret_val_reg.is_some(), "Deze zou gevuld moeten zijn, waarom is ie al leeg?");
+
+                        *ret_val_reg = None;
+                    }
+
+                    StoreKind::Normal => {
+                        if !self.can_remove_instruction(&function.instructions[removal_index]) {
+                            continue;
+                        }
+
+                        function.instructions.remove(removal_index);
+                    }
                 }
-                function.instructions.remove(*removal_index);
             }
         }
     }
@@ -123,22 +140,21 @@ impl DeadStoreEliminator {
         self.writing_instructions_per_register.remove(register);
     }
 
-    fn notice_write(&mut self, register: &Register, index: usize) {
+    fn notice_normal_write(&mut self, register: &Register, index: usize) {
+        self.notice_write(register, Store {
+            index,
+            kind: StoreKind::Normal,
+        })
+    }
+
+    fn notice_write(&mut self, register: &Register, store: Store) {
         // All instructions that simply load values to this register, and those aren't actually being read,
         // are useless, since we override that value now anyways.
 
-        let previous_writes_without_a_read = self.writing_instructions_per_register.insert(register.clone(), index);
+        let previous_write_without_a_read = self.writing_instructions_per_register.insert(register.clone(), store);
 
-        if let Some(useless_instruction) = previous_writes_without_a_read {
-            self.instructions_to_remove.push(useless_instruction);
-        }
-    }
-
-    fn notice_unavoidable_write(&mut self, register: &Register) {
-        let previous_writes_without_a_read = self.writing_instructions_per_register.remove(register);
-
-        if let Some(useless_instruction) = previous_writes_without_a_read {
-            self.instructions_to_remove.push(useless_instruction);
+        if let Some(useless_store) = previous_write_without_a_read {
+            self.stores_to_change.push(useless_store);
         }
     }
 
@@ -162,11 +178,16 @@ impl DeadStoreEliminator {
                         self.notice_read(&arg.register());
                     }
 
-                    self.notice_unavoidable_write(ret_val_reg);
+                    if let Some(ret_val_reg) = ret_val_reg {
+                        self.notice_write(ret_val_reg, Store {
+                            index,
+                            kind: StoreKind::CallReturnValue,
+                        });
+                    }
                 }
 
                 Instruction::Increment { register } => {
-                    self.notice_write(register, index);
+                    self.notice_normal_write(register, index);
                 }
 
                 Instruction::Jump { location } => {
@@ -190,17 +211,17 @@ impl DeadStoreEliminator {
                     }
 
                     // But writes to the destination register before this are useless, since we override that value now.
-                    self.notice_write(destination, index);
+                    self.notice_normal_write(destination, index);
                 }
 
                 Instruction::MoveAddress { destination, offset } => {
                     _ = offset;
-                    self.notice_write(destination, index);
+                    self.notice_normal_write(destination, index);
                 }
 
                 Instruction::MoveCondition { destination, condition } => {
                     _ = condition;
-                    self.notice_write(destination, index);
+                    self.notice_normal_write(destination, index);
                 }
 
                 Instruction::MathOperation { operation, destination, lhs, rhs } => {
@@ -214,11 +235,11 @@ impl DeadStoreEliminator {
                         self.notice_read(rhs);
                     }
 
-                    self.notice_write(destination, index);
+                    self.notice_normal_write(destination, index);
                 }
 
                 Instruction::Negate { dst, src } => {
-                    self.notice_write(dst, index);
+                    self.notice_normal_write(dst, index);
                     self.notice_read(src);
                 }
 
@@ -229,14 +250,14 @@ impl DeadStoreEliminator {
                 }
 
                 Instruction::StackAlloc { dst, size } => {
-                    self.notice_write(dst, index);
+                    self.notice_normal_write(dst, index);
                     _ = size;
                 }
 
                 Instruction::LoadPtr { destination, base_ptr, offset, typ: size } => {
                     _ = size;
 
-                    self.notice_write(destination, index);
+                    self.notice_normal_write(destination, index);
                     self.notice_read(base_ptr);
 
                     if let Operand::Register(offset) = offset {
@@ -266,6 +287,19 @@ impl DeadStoreEliminator {
             _ => true,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Store {
+    index: usize,
+    kind: StoreKind,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum StoreKind {
+    #[default]
+    Normal,
+    CallReturnValue,
 }
 
 #[cfg(test)]

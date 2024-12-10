@@ -213,12 +213,14 @@ impl AArch64CodeGenerator {
                     offset: 0,
                 });
 
-                let ret_val_reg = self.allocate_register(ret_val_reg);
-                if ret_val_reg != ArmRegister::X0 {
-                    self.instructions.push(ArmInstruction::MovRegister64 {
-                        dst: ret_val_reg,
-                        src: ArmRegister::X0,
-                    });
+                if let Some(ret_val_reg) = ret_val_reg {
+                    let ret_val_reg = self.allocate_register(ret_val_reg);
+                    if ret_val_reg != ArmRegister::X0 {
+                        self.instructions.push(ArmInstruction::MovRegister64 {
+                            dst: ret_val_reg,
+                            src: ArmRegister::X0,
+                        });
+                    }
                 }
             }
 

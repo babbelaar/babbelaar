@@ -47,7 +47,9 @@ impl FunctionOptimizer for RegisterDeduplicator {
                         }
                     }
 
-                    self.set_value_unknown(ret_val_reg);
+                    if let Some(ret_val_reg) = ret_val_reg {
+                        self.set_value_unknown(ret_val_reg);
+                    }
                 }
 
                 Instruction::Compare { .. } => (),
@@ -178,7 +180,9 @@ impl FunctionOptimizer for RegisterInliner {
                 Instruction::Call { ret_val_reg, .. } => {
                     // we don't know the return value of the register, so after
                     // this point, we can't make assumptions about the data.
-                    self.values.remove(ret_val_reg);
+                    if let Some(ret_val_reg) = ret_val_reg {
+                        self.values.remove(ret_val_reg);
+                    }
                 }
 
                 Instruction::Compare { lhs, rhs } => {

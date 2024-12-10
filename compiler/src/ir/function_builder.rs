@@ -41,7 +41,7 @@ impl<'program> FunctionBuilder<'program> {
             name,
             arguments,
             variable_arguments,
-            ret_val_reg,
+            ret_val_reg: Some(ret_val_reg),
         });
 
         ret_val_reg

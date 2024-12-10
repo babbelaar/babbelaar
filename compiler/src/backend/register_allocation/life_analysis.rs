@@ -67,7 +67,9 @@ impl LifeAnalysis {
 
             Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
                 _ = name;
-                self.add_lifetime(ret_val_reg, index);
+                if let Some(ret_val_reg) = ret_val_reg {
+                    self.add_lifetime(ret_val_reg, index);
+                }
                 for arg in arguments.iter().chain(variable_arguments.iter()) {
                     self.add_lifetime(&arg.register(), index);
                 }

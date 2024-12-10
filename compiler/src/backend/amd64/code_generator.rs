@@ -158,12 +158,14 @@ impl Amd64CodeGenerator {
                     symbol_name: name.clone(),
                 });
 
-                let ret_val_reg = self.allocate_register(ret_val_reg);
-                if ret_val_reg != Amd64Register::return_register() {
-                    self.instructions.push(Amd64Instruction::MovReg64Reg64 {
-                        dst: ret_val_reg,
-                        src: Amd64Register::return_register(),
-                    });
+                if let Some(ret_val_reg) = ret_val_reg {
+                    let ret_val_reg = self.allocate_register(ret_val_reg);
+                    if ret_val_reg != Amd64Register::return_register() {
+                        self.instructions.push(Amd64Instruction::MovReg64Reg64 {
+                            dst: ret_val_reg,
+                            src: Amd64Register::return_register(),
+                        });
+                    }
                 }
             }
 
