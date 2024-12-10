@@ -29,3 +29,9 @@ impl AArch64FunctionCharacteristics {
         self.is_leaf
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AArch64VarArgsConvention {
+    RegistersAndStack,
+    StackOnly,
+}

@@ -7,7 +7,7 @@ use babbelaar::BabString;
 
 use crate::DataSectionOffset;
 
-use super::{Operand, Register};
+use super::{FunctionArgument, Operand, Register};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Label {
@@ -77,7 +77,8 @@ pub enum Instruction {
 
     Call {
         name: BabString,
-        arguments: Vec<Register>,
+        arguments: Vec<FunctionArgument>,
+        variable_arguments: Vec<FunctionArgument>,
         ret_val_reg: Register,
     },
 
@@ -171,11 +172,17 @@ impl Display for Instruction {
                 condition.fmt(f)
             }
 
-            Instruction::Call { name, arguments, ret_val_reg } => {
+            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
                 f.write_fmt(format_args!("RoepAan {ret_val_reg}, {name}"))?;
+
                 for arg in arguments {
                     f.write_str(", ")?;
-                    arg.fmt(f)?;
+                    arg.register().fmt(f)?;
+                }
+
+                for arg in variable_arguments {
+                    f.write_str(", ")?;
+                    arg.register().fmt(f)?;
                 }
 
                 Ok(())

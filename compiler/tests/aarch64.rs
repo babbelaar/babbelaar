@@ -10,7 +10,7 @@ use core::slice;
 use std::collections::HashMap;
 
 use babbelaar::{parse_string_to_tree, BabString};
-use babbelaar_compiler::{AArch64CodeGenerator, Compiler, DataSectionKind, Program, RelocationType};
+use babbelaar_compiler::{AArch64CodeGenerator, Compiler, DataSectionKind, Platform, Program, RelocationType};
 use signal_hook::{consts::SIGBUS, iterator::Signals};
 
 #[test]
@@ -241,7 +241,7 @@ fn compile_ir_to_arm_and_link(program: &Program, target: &str) -> (Vec<u8>, usiz
     let mut relocations = Vec::new();
 
     for function in program.functions() {
-        let function = AArch64CodeGenerator::compile(function);
+        let function = AArch64CodeGenerator::compile(function, Platform::host_platform());
         let offset = data.len();
         offsets.insert(function.name().clone(), offset);
 

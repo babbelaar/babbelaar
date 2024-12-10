@@ -66,6 +66,7 @@ impl Builtin {
         BuiltinType::G8,
         BuiltinType::G16,
         BuiltinType::G32,
+        BuiltinType::G64,
         BuiltinType::Slinger,
         BuiltinType::Teken,
     ];

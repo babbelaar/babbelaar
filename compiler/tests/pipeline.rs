@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{error::Error, path::Path, process::{Command, ExitStatus}};
+use std::{error::Error, io::Read, path::Path, process::{Command, Stdio}};
 
 use babbelaar::parse_string_to_tree;
 use babbelaar_compiler::{Pipeline, Platform, Signal};
@@ -629,6 +629,24 @@ fn right_shift_unknown_lhs_and_rhs() {
     assert_eq!(result.exit_code, Some(3));
 }
 
+#[test]
+fn printf_with_single_number() {
+    let result = create_and_run_single_object_executable(r#"
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+
+        werkwijze hoofd() -> g32 {
+            printf("Hallo, %d", 10);
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "Hallo, 10");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
@@ -640,20 +658,7 @@ fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
 
     let executable = create_single_object_executable(code, &directory);
     println!("Running executable {}", executable.display());
-    let exit_status = run(executable).unwrap();
-
-    let mut result = ProgramResult {
-        exit_code: exit_status.code(),
-        signal: None, // only set on UNIX-platforms below
-    };
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        result.signal = exit_status.signal().map(Signal::from);
-    }
-
-    result
+    run(executable).unwrap()
 }
 
 fn create_single_object_executable(code: &str, directory: &Path) -> std::path::PathBuf {
@@ -667,14 +672,37 @@ fn create_single_object_executable(code: &str, directory: &Path) -> std::path::P
     executable
 }
 
-fn run(path: impl AsRef<Path>) -> Result<ExitStatus, Box<dyn Error>> {
+fn run(path: impl AsRef<Path>) -> Result<ProgramResult, Box<dyn Error>> {
     let mut command = Command::new(path.as_ref());
+    command.stdout(Stdio::piped());
+
     let mut process = command.spawn()?;
-    Ok(process.wait()?)
+    let exit_status = process.wait()?;
+
+    let stdout = process.stdout.and_then(|mut x| {
+        let mut buf = String::new();
+        x.read_to_string(&mut buf).ok()?;
+        Some(buf)
+    }).unwrap_or_default();
+
+    let mut result = ProgramResult {
+        exit_code: exit_status.code(),
+        signal: None, // only set on UNIX-platforms below
+        stdout,
+    };
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        result.signal = exit_status.signal().map(Signal::from);
+    }
+
+    Ok(result)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProgramResult {
     exit_code: Option<i32>,
     signal: Option<Signal>,
+    stdout: String,
 }

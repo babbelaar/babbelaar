@@ -5,7 +5,7 @@ use std::fmt::Display;
 
 use crate::{BabString, BuiltinFunction};
 
-use super::methods::{METHODS_BOOL, METHODS_G16, METHODS_G32, METHODS_G8, METHODS_NULL, METHODS_SLINGER, METHODS_TEKEN};
+use super::methods::{METHODS_BOOL, METHODS_G16, METHODS_G32, METHODS_G64, METHODS_G8, METHODS_NULL, METHODS_SLINGER, METHODS_TEKEN};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 #[repr(u8)]
@@ -14,6 +14,7 @@ pub enum BuiltinType {
     G8,
     G16,
     G32,
+    G64,
     Null,
     Slinger,
     Teken,
@@ -27,6 +28,7 @@ impl BuiltinType {
             Self::G8 => BabString::new_static("g8"),
             Self::G16 => BabString::new_static("g16"),
             Self::G32 => BabString::new_static("g32"),
+            Self::G64 => BabString::new_static("g64"),
             Self::Null => BabString::new_static("null"),
             Self::Slinger => BabString::new_static("Slinger"),
             Self::Teken => BabString::new_static("teken"),
@@ -81,6 +83,7 @@ impl BuiltinType {
             Self::G8 => "Een geheel getal met 8-bits precisie.",
             Self::G16 => "Een geheel getal met 16-bits precisie.",
             Self::G32 => "Een geheel getal met 32-bits precisie.",
+            Self::G64 => "Een geheel getal met 64-bits precisie.",
             Self::Null => "Tijdelijk type, niet gebruiken",
             Self::Slinger => "Een stuk tekst, schrijfbaar met bijvoorbeeld: \"Hallo, slinger!\"",
             Self::Teken => "Een letter, cijfer of speciaal teken.",
@@ -94,6 +97,7 @@ impl BuiltinType {
             Self::G8 => METHODS_G8,
             Self::G16 => METHODS_G16,
             Self::G32 => METHODS_G32,
+            Self::G64 => METHODS_G64,
             Self::Null => METHODS_NULL,
             Self::Slinger => METHODS_SLINGER,
             Self::Teken => METHODS_TEKEN,

@@ -2,6 +2,8 @@
 // All Rights Reserved.
 
 mod function;
+mod function_argument;
+mod function_attribute;
 mod function_builder;
 mod instruction;
 mod operand;
@@ -13,6 +15,11 @@ pub use self::{
         ArgumentName,
         ArgumentList,
         Function,
+    },
+    function_argument::FunctionArgument,
+    function_attribute::{
+        FunctionAttribute,
+        FunctionAttributesExt,
     },
     function_builder::FunctionBuilder,
     instruction::{

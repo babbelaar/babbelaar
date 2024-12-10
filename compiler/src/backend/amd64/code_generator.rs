@@ -138,11 +138,12 @@ impl Amd64CodeGenerator {
                 todo!("Maak AMD64-ondersteuning voor: {instruction}");
             }
 
-            Instruction::Call { name, arguments, ret_val_reg } => {
+            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
+                assert_eq!(variable_arguments.len(), 0, "flexibele argumenten zijn niet ondersteund op dit platform!");
                 debug_assert!(arguments.len() < (1 << 8));
 
                 for (idx, arg) in arguments.iter().enumerate() {
-                    let current_reg = self.allocate_register(arg);
+                    let current_reg = self.allocate_register(&arg.register());
                     let actual_reg = Amd64Register::argument_nth(idx);
 
                     if current_reg != actual_reg {

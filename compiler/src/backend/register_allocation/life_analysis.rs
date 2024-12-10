@@ -65,11 +65,11 @@ impl LifeAnalysis {
                 _ = condition;
             }
 
-            Instruction::Call { name, arguments, ret_val_reg } => {
+            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
                 _ = name;
                 self.add_lifetime(ret_val_reg, index);
-                for arg in arguments {
-                    self.add_lifetime(arg, index);
+                for arg in arguments.iter().chain(variable_arguments.iter()) {
+                    self.add_lifetime(&arg.register(), index);
                 }
 
                 self.add_call(index);

@@ -13,6 +13,12 @@ mod condition_code;
 mod function_characteristics;
 mod instruction;
 mod register;
+mod stack_allocator;
+
+const POINTER_SIZE: usize = 8;
+const STACK_ALIGNMENT: usize = 16;
+
+const SPACE_NEEDED_FOR_FP_AND_LR: usize = 2 * POINTER_SIZE;
 
 pub use self::{
     addressing_mode::{
@@ -22,10 +28,14 @@ pub use self::{
     branch_location::ArmBranchLocation,
     code_generator::AArch64CodeGenerator,
     condition_code::ArmConditionCode,
-    function_characteristics::AArch64FunctionCharacteristics,
+    function_characteristics::{
+        AArch64FunctionCharacteristics,
+        AArch64VarArgsConvention,
+    },
     instruction::{
         ArmInstruction,
         ArmShift2,
     },
     register::ArmRegister,
+    stack_allocator::AArch64StackAllocator,
 };

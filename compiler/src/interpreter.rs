@@ -96,11 +96,12 @@ impl Interpreter {
         let program_counter = self.frame().program_counter;
 
         match self.program.function(function_index).instructions()[program_counter].clone() {
-            Instruction::Call { name, arguments, ret_val_reg } => {
+            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
                 let frame = self.frame();
 
                 let arguments = arguments.iter()
-                    .map(|reg| frame.registers.get(reg).unwrap().clone())
+                    .chain(variable_arguments.iter())
+                    .map(|arg| frame.registers.get(&arg.register()).unwrap().clone())
                     .collect();
 
                 let return_value = self.execute_function(&name, arguments);

@@ -9,7 +9,7 @@ use std::rc::Rc;
 use babbelaar::*;
 use log::debug;
 
-use crate::{optimize_program, ArgumentList, FunctionBuilder, Immediate, JumpCondition, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId, TypeInfo};
+use crate::{ir::FunctionArgument, optimize_program, ArgumentList, FunctionAttribute, FunctionBuilder, Immediate, JumpCondition, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId, TypeInfo};
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -76,17 +76,21 @@ impl Compiler {
     fn compile_function(&mut self, func: &FunctionStatement, name: BabString, call_convention: CallingConvention, attributes: &[Ranged<Attribute>]) {
         let Some(body) = &func.body else {
             for attr in attributes {
+                if attr.name.value() == Attribute::NAME_VAR_ARGS {
+                    self.program_builder.add_function_attribute(name.clone(), FunctionAttribute::VarArgs {
+                        after_n_normal_params: func.parameters.len(),
+                    });
+                }
+
                 if attr.name.value() == Attribute::NAME_EXTERN {
                     for arg in attr.arguments.value() {
                         if arg.name.value() == "naam" {
                             if let PrimaryExpression::StringLiteral(actual_name) = arg.value.value() {
                                 self.program_builder.add_function_alias(&name, actual_name);
-                                return;
+                                break;
                             }
                         }
                     }
-
-                    return;
                 }
             }
             return;
@@ -227,7 +231,17 @@ impl CompileStatement for ForStatement {
                     let str_ptr_reg = reg;
                     let current_value = builder.load_immediate(Immediate::Integer64(0));
 
-                    let end = builder.call(create_mangled_method_name(&BuiltinType::Slinger.name(), &BabString::new_static("lengte")), vec![str_ptr_reg]);
+                    let end = builder.call(
+                        create_mangled_method_name(&BuiltinType::Slinger.name(),
+                        &BabString::new_static("lengte")),
+                        [
+                            FunctionArgument::new(
+                                str_ptr_reg,
+                                TypeInfo::Plain(TypeId::SLINGER),
+                                builder.layout_of(TypeId::SLINGER).primitive_type()
+                            )
+                        ],
+                    );
 
                     builder.compare(current_value, end);
                     builder.jump_if_greater_or_equal(after);
@@ -429,7 +443,14 @@ impl CompileExpression for PostfixExpression {
                 let struct_ty = lhs.type_info.type_id();
 
                 let mut arguments = method.call.arguments.compile(builder);
-                arguments.insert(0, lhs.to_readable(builder));
+
+                let (this_register, this_type) = lhs.to_readable_and_type(builder);
+                let this_primitive_type = builder.primitive_type_of(&this_type);
+                arguments.insert(0, FunctionArgument::new(
+                    this_register,
+                    this_type,
+                    this_primitive_type,
+                ));
 
                 let name = create_mangled_method_name(
                     builder.layout_of(struct_ty).name(),
@@ -580,8 +601,8 @@ impl CompileExpression for UnaryExpression {
         let value = self.rhs.compile(builder);
         match self.kind.value() {
             UnaryExpressionKind::AddressOf => {
-                debug!("Current instructions: {builder:#?}");
-                value
+                let (register, _) = value.to_register_and_type(builder);
+                ExpressionResult::typed(register, TypeInfo::Plain(TypeId::G64))
             }
 
             UnaryExpressionKind::Negate => {
@@ -634,8 +655,18 @@ impl ExpressionResult {
     }
 
     #[must_use]
-    pub fn to_register(self, builder: &mut FunctionBuilder) -> Register {
-        self.kind.to_register(builder)
+    pub fn to_function_argument(self, builder: &mut FunctionBuilder) -> FunctionArgument {
+        let primitive_type = match &self.kind {
+            ExpressionResultKind::PointerRegister { .. } => PrimitiveType::new(builder.pointer_size(), false),
+            _ => builder.layout_of(self.type_info.type_id()).primitive_type(),
+        };
+        let register = self.kind.to_readable(builder);
+        FunctionArgument::new(register, self.type_info, primitive_type)
+    }
+
+    #[must_use]
+    pub fn to_register_and_type(self, builder: &mut FunctionBuilder) -> (Register, TypeInfo) {
+        (self.kind.to_register(builder), self.type_info)
     }
 
     #[must_use]
@@ -763,11 +794,13 @@ trait CompileSome {
 }
 
 impl CompileSome for Vec<Ranged<Expression>> {
-    type Output = Vec<Register>;
+    type Output = Vec<FunctionArgument>;
 
     fn compile(&self, builder: &mut FunctionBuilder) -> Self::Output {
         self.iter()
-            .map(|x| x.compile(builder).to_register(builder))
+            .map(|x| {
+                x.compile(builder).to_function_argument(builder)
+            })
             .collect()
     }
 }

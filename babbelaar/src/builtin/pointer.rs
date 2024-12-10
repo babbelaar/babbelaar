@@ -122,6 +122,7 @@ fn pointer_krijg(_: &mut dyn Interpreter, _parameters: Vec<Value>, this: Option<
             BuiltinType::G8 => Value::Integer(unsafe { *(address as *const i8) } as i64),
             BuiltinType::G16 => Value::Integer(unsafe { *(address as *const i16) } as i64),
             BuiltinType::G32 => Value::Integer(unsafe { *(address as *const i32) } as i64),
+            BuiltinType::G64 => Value::Integer(unsafe { *(address as *const i64) }),
             BuiltinType::Null => Value::Null,
             BuiltinType::Slinger => {
                 let start = address as *const u8;

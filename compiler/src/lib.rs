@@ -31,6 +31,7 @@ pub use self::{
     ir::{
         ArgumentList,
         Function,
+        FunctionAttribute,
         FunctionBuilder,
         Immediate,
         Instruction,

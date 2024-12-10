@@ -6,14 +6,9 @@ use std::{collections::HashMap, mem::take};
 use babbelaar::BabString;
 use log::{debug, warn};
 
-use crate::{CodeGenerator, CompiledFunction, Function, Instruction, Label, MathOperation, Operand, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
+use crate::{backend::aarch64::AArch64VarArgsConvention, CodeGenerator, CompiledFunction, Environment, Function, Instruction, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
-use super::{AArch64FunctionCharacteristics, ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode};
-
-const POINTER_SIZE: usize = 8;
-const STACK_ALIGNMENT: usize = 16;
-
-const SPACE_NEEDED_FOR_FP_AND_LR: usize = 2 * POINTER_SIZE;
+use super::{AArch64FunctionCharacteristics, AArch64StackAllocator, ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode, POINTER_SIZE, SPACE_NEEDED_FOR_FP_AND_LR};
 
 #[derive(Debug)]
 pub struct AArch64CodeGenerator {
@@ -22,30 +17,37 @@ pub struct AArch64CodeGenerator {
     instructions: Vec<ArmInstruction>,
     label_offsets: HashMap<Label, usize>,
     register_allocator: RegisterAllocator<ArmRegister>,
-    stack_size: usize,
-    space_used_on_stack: usize,
+    stack_allocator: AArch64StackAllocator,
     relocations: Vec<Relocation>,
+
+    var_args_convention: AArch64VarArgsConvention,
 }
 
 impl AArch64CodeGenerator {
     #[must_use]
-    pub fn compile(function: &Function) -> CompiledFunction {
+    pub fn compile(function: &Function, platform: Platform) -> CompiledFunction {
         let characteristics = AArch64FunctionCharacteristics::analyze(function);
+
+        let var_args_convention = match platform.environment() {
+            Environment::Darwin => AArch64VarArgsConvention::StackOnly,
+            _ => todo!("ondersteun niet-macOS AArch64")
+        };
+
         let mut this = Self {
             function_name: function.name().clone(),
             characteristics,
             instructions: Vec::new(),
             label_offsets: HashMap::new(),
             register_allocator: RegisterAllocator::new(function),
-            stack_size: 0,
-            space_used_on_stack: 0,
+            stack_allocator: AArch64StackAllocator::new(),
             relocations: Vec::new(),
+            var_args_convention,
         };
 
         this.add_prologue(function.instructions());
 
-        for instruction in function.instructions() {
-            this.add_instruction(instruction);
+        for (index, instruction) in function.instructions().iter().enumerate() {
+            this.add_instruction(index, instruction);
         }
 
         this.dump_instructions();
@@ -69,7 +71,7 @@ impl AArch64CodeGenerator {
         }
     }
 
-    fn add_instruction(&mut self, instruction: &Instruction) {
+    fn add_instruction(&mut self, instruction_id: usize, instruction: &Instruction) {
         match instruction {
             Instruction::Compare { lhs, rhs } => {
                 self.add_instruction_cmp(lhs, rhs);
@@ -157,11 +159,38 @@ impl AArch64CodeGenerator {
                 })
             }
 
-            Instruction::Call { name, arguments, ret_val_reg } => {
+            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
                 debug_assert!(arguments.len() < (1 << 8));
 
-                for (idx, arg) in arguments.iter().enumerate() {
-                    let reg = self.allocate_register(arg);
+                let register_var_args = match self.var_args_convention {
+                    AArch64VarArgsConvention::RegistersAndStack => {
+                        variable_arguments.as_slice()
+                    }
+
+                    AArch64VarArgsConvention::StackOnly => {
+                        if !variable_arguments.is_empty() {
+                            let mut offset = self.stack_allocator.offset_of_variadic_args(instruction_id);
+
+                            for arg in variable_arguments {
+                                let src = self.allocate_register(&arg.register());
+                                self.instructions.push(ArmInstruction::StrImmediate {
+                                    is_64_bit: arg.size() == 8,
+                                    src,
+                                    base_ptr: ArmRegister::SP,
+                                    offset: offset as _,
+                                    mode: ArmUnsignedAddressingMode::UnsignedOffset,
+                                });
+
+                                offset += arg.size();
+                            }
+                        }
+
+                        &[]
+                    }
+                };
+
+                for (idx, arg) in arguments.iter().chain(register_var_args.iter()).enumerate() {
+                    let reg = self.allocate_register(&arg.register());
 
                     if reg.number != idx as u8 {
                         self.instructions.push(ArmInstruction::MovRegister64 {
@@ -247,18 +276,16 @@ impl AArch64CodeGenerator {
                 });
             }
 
-            Instruction::StackAlloc { dst, size } => {
+            Instruction::StackAlloc { dst, size: _ } => {
                 let dst = self.allocate_register(dst);
+                let offset = self.stack_allocator.offset_of_reg(instruction_id);
 
                 self.instructions.push(ArmInstruction::AddImmediate {
                     dst,
                     src: ArmRegister::SP,
-                    imm12: self.space_used_on_stack as _,
+                    imm12: offset as _,
                     shift: false,
                 });
-
-                self.space_used_on_stack += size;
-                debug_assert!(self.space_used_on_stack <= self.stack_size);
             }
 
             Instruction::LoadPtr { destination, base_ptr, offset, typ } => {
@@ -786,29 +813,34 @@ impl AArch64CodeGenerator {
     }
 
     fn add_prologue(&mut self, instructions: &[Instruction]) {
-        // begin with space for Frame Pointer and Link Register
-        self.stack_size = 0;
-
         if !self.characteristics.is_leaf_function() {
-            self.stack_size += SPACE_NEEDED_FOR_FP_AND_LR;
+            self.stack_allocator.reserve_save_frame_pointer(SPACE_NEEDED_FOR_FP_AND_LR);
         }
 
-        self.stack_size += (self.register_allocator.callee_saved_registers_to_save().len() * POINTER_SIZE).next_multiple_of(STACK_ALIGNMENT);
+        self.stack_allocator.reserve_callee_saved_registers(self.register_allocator.callee_saved_registers_to_save().len());
 
         // ignoring possible optimizations, count up the needed stack size when the StackAlloc instruction is used.
-        for instruction in instructions {
+        for (instruction_id, instruction) in instructions.iter().enumerate() {
             if let Instruction::StackAlloc { dst, size } = instruction {
-                _ = dst; // we don't encode this here
-                self.stack_size += size;
+                self.stack_allocator.reserve_stack_allocation(instruction_id, *dst, *size);
+            }
+
+            if let Instruction::Call { variable_arguments, .. } = instruction {
+                if self.var_args_convention == AArch64VarArgsConvention::StackOnly {
+                    let size = variable_arguments.iter()
+                        .map(|arg| arg.size())
+                        .sum();
+                    if size != 0 {
+                        self.stack_allocator.reserve_variadic_function_call_arguments(instruction_id, size);
+                    }
+                }
             }
         }
 
         // ensure the stack is 16-byte aligned
-        self.stack_size = self.stack_size.next_multiple_of(16);
+        self.stack_allocator.finalize();
 
-        assert!(self.stack_size < (1 << 12));
-
-        if self.stack_size == SPACE_NEEDED_FOR_FP_AND_LR && !self.characteristics.is_leaf_function() {
+        if self.stack_allocator.has_only_frame_pointer_reservation() && !self.characteristics.is_leaf_function() {
             self.add_prologue_instructions_stack_frame_optimization();
         } else {
             self.add_prologue_instructions_general();
@@ -818,14 +850,14 @@ impl AArch64CodeGenerator {
     }
 
     fn add_prologue_instructions_general(&mut self) {
-        if self.stack_size == 0 {
+        if self.stack_allocator.total_size() == 0 {
             return;
         }
 
         self.instructions.push(ArmInstruction::SubImmediate {
             dst: ArmRegister::SP,
             lhs: ArmRegister::SP,
-            rhs_imm12: self.stack_size as _,
+            rhs_imm12: self.stack_allocator.total_size() as _,
         });
 
         if !self.characteristics.is_leaf_function() {
@@ -833,7 +865,7 @@ impl AArch64CodeGenerator {
                 is_64_bit: true,
                 mode: ArmSignedAddressingMode::SignedOffset,
                 dst: ArmRegister::SP,
-                offset: (self.stack_size - SPACE_NEEDED_FOR_FP_AND_LR) as _,
+                offset: self.stack_allocator.offset_of_frame_pointer() as _,
                 first: ArmRegister::FP,
                 second: ArmRegister::LR,
             });
@@ -845,34 +877,29 @@ impl AArch64CodeGenerator {
             is_64_bit: true,
             mode: ArmSignedAddressingMode::PreIndex,
             dst: ArmRegister::SP,
-            offset: -(SPACE_NEEDED_FOR_FP_AND_LR as i16),
+            offset: self.stack_allocator.offset_of_frame_pointer() as _,
             first: ArmRegister::FP,
             second: ArmRegister::LR,
         });
     }
 
     fn add_prologue_register_saves(&mut self) {
-        if self.stack_size == 0 {
+        if self.stack_allocator.total_size() == 0 {
             return;
         }
 
-        let mut base_offset = self.stack_size;
-        if !self.characteristics.is_leaf_function() {
-            base_offset -= SPACE_NEEDED_FOR_FP_AND_LR;
-        }
+        let mut offset = self.stack_allocator.offset_of_callee_register_saves();
 
         // TODO: use `array_chunks()` when it is stabilized
         let pairs = self.register_allocator.callee_saved_registers_to_save().chunks(2);
         for register_pair in pairs {
-            let offset = (base_offset - POINTER_SIZE * 2) as _;
-
             if register_pair.len() == 1 {
                 self.instructions.push(ArmInstruction::StrImmediate {
                     is_64_bit: true,
                     mode: ArmUnsignedAddressingMode::UnsignedOffset,
                     src: register_pair[0],
                     base_ptr: ArmRegister::SP,
-                    offset,
+                    offset: offset as _,
                 });
             } else {
                 self.instructions.push(ArmInstruction::Stp {
@@ -881,22 +908,22 @@ impl AArch64CodeGenerator {
                     dst: ArmRegister::SP,
                     first: register_pair[0],
                     second: register_pair[1],
-                    offset,
+                    offset: offset as _,
                 })
             }
 
-            base_offset -= POINTER_SIZE * 2;
+            offset += POINTER_SIZE * 2;
         }
     }
 
     fn add_epilogue(&mut self) {
-        if self.stack_size == 0 {
+        if self.stack_allocator.total_size() == 0 {
             return;
         }
 
         self.add_epilogue_register_restores();
 
-        if self.stack_size == SPACE_NEEDED_FOR_FP_AND_LR && !self.characteristics.is_leaf_function() {
+        if self.stack_allocator.has_only_frame_pointer_reservation() && !self.characteristics.is_leaf_function() {
             self.add_epilogue_instructions_stack_frame_optimization();
         } else {
             self.add_epilogue_instructions_general();
@@ -909,7 +936,7 @@ impl AArch64CodeGenerator {
                 is_64_bit: true,
                 mode: ArmSignedAddressingMode::SignedOffset,
                 src: ArmRegister::SP,
-                offset: (self.stack_size - SPACE_NEEDED_FOR_FP_AND_LR) as _,
+                offset: self.stack_allocator.offset_of_frame_pointer() as _,
                 first: ArmRegister::FP,
                 second: ArmRegister::LR,
             });
@@ -918,7 +945,7 @@ impl AArch64CodeGenerator {
         self.instructions.push(ArmInstruction::AddImmediate {
             dst: ArmRegister::SP,
             src: ArmRegister::SP,
-            imm12: self.stack_size as _,
+            imm12: self.stack_allocator.total_size() as _,
             shift: false,
         });
     }
@@ -935,27 +962,22 @@ impl AArch64CodeGenerator {
     }
 
     fn add_epilogue_register_restores(&mut self) {
-        if self.stack_size == 0 {
+        if self.stack_allocator.total_size() == 0 {
             return;
         }
 
-        let mut base_offset = self.stack_size;
-        if !self.characteristics.is_leaf_function() {
-            base_offset -= SPACE_NEEDED_FOR_FP_AND_LR;
-        }
+        let mut offset = self.stack_allocator.offset_of_callee_register_saves();
 
         // TODO: use `array_chunks()` when it is stabilized
         let pairs = self.register_allocator.callee_saved_registers_to_save().chunks(2);
         for register_pair in pairs {
-            let offset = (base_offset - POINTER_SIZE * 2) as _;
-
             if register_pair.len() == 1 {
                 self.instructions.push(ArmInstruction::LdrImmediate {
                     is_64_bit: true,
                     mode: ArmUnsignedAddressingMode::UnsignedOffset,
                     dst: register_pair[0],
                     base_ptr: ArmRegister::SP,
-                    offset,
+                    offset: offset as _,
                 });
             } else {
                 self.instructions.push(ArmInstruction::Ldp {
@@ -964,17 +986,17 @@ impl AArch64CodeGenerator {
                     src: ArmRegister::SP,
                     first: register_pair[0],
                     second: register_pair[1],
-                    offset,
+                    offset: offset as _,
                 })
             }
 
-            base_offset -= POINTER_SIZE * 2;
+            offset += POINTER_SIZE * 2;
         }
     }
 }
 
 impl CodeGenerator for AArch64CodeGenerator {
     fn compile(function: &Function) -> CompiledFunction {
-        Self::compile(function)
+        Self::compile(function, Platform::host_platform())
     }
 }

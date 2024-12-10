@@ -7,7 +7,7 @@ use babbelaar::BabString;
 
 use crate::{DataSectionOffset, StructureLayout, TypeId, TypeInfo};
 
-use super::{Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, PrimitiveType, ProgramBuilder, Register, RegisterAllocator};
+use super::{Function, FunctionArgument, FunctionAttributesExt, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, PrimitiveType, ProgramBuilder, Register, RegisterAllocator};
 
 #[derive(Debug)]
 pub struct FunctionBuilder<'program> {
@@ -24,13 +24,23 @@ pub struct FunctionBuilder<'program> {
 }
 
 impl<'program> FunctionBuilder<'program> {
-    pub fn call(&mut self, name: BabString, arguments: impl Into<Vec<Register>>) -> Register {
+    pub fn call(&mut self, name: BabString, arguments: impl Into<Vec<FunctionArgument>>) -> Register {
+        let var_args_after_n = self.program_builder.function_attributes_of(&name).var_args_after_n_normal_params().unwrap_or(usize::MAX);
+
         let name = self.program_builder.resolve_function_name(name);
         let ret_val_reg = self.register_allocator.next();
 
+        let mut arguments: Vec<FunctionArgument> = arguments.into();
+        let variable_arguments = if var_args_after_n > arguments.len() {
+            Vec::new()
+        } else {
+            arguments.split_off(var_args_after_n)
+        };
+
         self.instructions.push(Instruction::Call {
             name,
-            arguments: arguments.into(),
+            arguments,
+            variable_arguments,
             ret_val_reg,
         });
 

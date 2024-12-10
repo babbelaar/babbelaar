@@ -153,9 +153,13 @@ impl DeadStoreEliminator {
                     }
                 }
 
-                Instruction::Call { ret_val_reg, arguments, .. } => {
+                Instruction::Call { ret_val_reg, arguments, variable_arguments, .. } => {
                     for arg in arguments {
-                        self.notice_read(arg);
+                        self.notice_read(&arg.register());
+                    }
+
+                    for arg in variable_arguments {
+                        self.notice_read(&arg.register());
                     }
 
                     self.notice_unavoidable_write(ret_val_reg);

@@ -222,6 +222,7 @@ impl TypeManager {
                 BuiltinType::G8 => 1,
                 BuiltinType::G16 => 2,
                 BuiltinType::G32 => 4,
+                BuiltinType::G64 => 8,
                 BuiltinType::Teken => 4,
 
                 BuiltinType::Null => continue,
@@ -233,6 +234,7 @@ impl TypeManager {
                 BuiltinType::G8 => TypeId::G8,
                 BuiltinType::G16 => TypeId::G16,
                 BuiltinType::G32 => TypeId::G32,
+                BuiltinType::G64 => TypeId::G64,
                 BuiltinType::Teken => TypeId::TEKEN,
                 _ => unreachable!(),
             };
@@ -265,8 +267,9 @@ impl TypeId {
     pub const G8: Self = Self { index: 1 };
     pub const G16: Self = Self { index: 2 };
     pub const G32: Self = Self { index: 3 };
-    pub const TEKEN: Self = Self { index: 4 };
-    pub const SLINGER: Self = Self { index: 5 };
+    pub const G64: Self = Self { index: 4 };
+    pub const TEKEN: Self = Self { index: 5 };
+    pub const SLINGER: Self = Self { index: 6 };
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

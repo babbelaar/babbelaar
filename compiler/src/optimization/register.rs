@@ -34,11 +34,16 @@ impl FunctionOptimizer for RegisterDeduplicator {
     fn optimize(&mut self, function: &mut Function) {
         for instruction in function.instructions.iter_mut() {
             match instruction {
-                Instruction::Call { ret_val_reg, arguments, name } => {
+                Instruction::Call { ret_val_reg, arguments, variable_arguments, name } => {
                     _ = name;
                     for argument in arguments {
-                        if let Some(other_reg) = self.unchanged_moves.get(&argument).cloned() {
-                            *argument = other_reg;
+                        if let Some(other_reg) = self.unchanged_moves.get(&argument.register()).cloned() {
+                            argument.set_register(other_reg);
+                        }
+                    }
+                    for argument in variable_arguments {
+                        if let Some(other_reg) = self.unchanged_moves.get(&argument.register()).cloned() {
+                            argument.set_register(other_reg);
                         }
                     }
 

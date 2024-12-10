@@ -40,7 +40,7 @@ impl Pipeline {
     fn code_gen(&mut self, function: &Function) {
         let function = match self.object.platform().architecture() {
             Architecture::AArch64 => {
-                AArch64CodeGenerator::compile(function)
+                AArch64CodeGenerator::compile(function, self.object.platform().clone())
             }
 
             Architecture::X86_64 => {

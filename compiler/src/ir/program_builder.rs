@@ -7,12 +7,13 @@ use babbelaar::{BabString, Structure};
 
 use crate::{ir::{function_builder::FunctionLocal, ArgumentName}, ArgumentList, TypeId, TypeManager};
 
-use super::{FunctionBuilder, Program, RegisterAllocator};
+use super::{FunctionAttribute, FunctionBuilder, Program, RegisterAllocator};
 
 #[derive(Debug)]
 pub struct ProgramBuilder {
     pub(super) program: Program,
     pub(super) function_aliases: HashMap<BabString, BabString>,
+    pub(super) function_attributes: HashMap<BabString, Vec<FunctionAttribute>>,
     pub(super) type_manager: TypeManager,
 }
 
@@ -22,6 +23,7 @@ impl ProgramBuilder {
         Self {
             program: Program::new(),
             function_aliases: HashMap::new(),
+            function_attributes: HashMap::new(),
             type_manager: TypeManager::new(),
         }
     }
@@ -83,6 +85,18 @@ impl ProgramBuilder {
 
     pub fn add_function_alias(&mut self, name: &BabString, actual_name: &BabString) {
         self.function_aliases.insert(name.clone(), actual_name.clone());
+    }
+
+    pub fn add_function_attribute(&mut self, name: BabString, attr: FunctionAttribute) {
+        self.function_attributes.entry(name).or_default().push(attr);
+    }
+
+    #[must_use]
+    pub fn function_attributes_of(&self, name: &BabString) -> &[FunctionAttribute] {
+        match self.function_attributes.get(name) {
+            Some(attributes) => &attributes,
+            None => &[],
+        }
     }
 
     #[must_use]
