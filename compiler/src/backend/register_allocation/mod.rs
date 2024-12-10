@@ -25,6 +25,10 @@ pub struct RegisterAllocator<R: AllocatableRegister> {
     currently_mapped: HashMap<IrRegister, R>,
     currently_available: VecDeque<R>,
     only_return_register: Option<IrRegister>,
+
+    // When we have a nicer structure, we can consolidate it into one thing,
+    // but for now I don't want to over-engineer this.
+    return_register_will_be_mapped_at: Option<usize>,
 }
 
 impl<R: AllocatableRegister> RegisterAllocator<R> {
@@ -39,6 +43,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                 .copied()
                 .collect::<VecDeque<R>>(),
             only_return_register: None,
+            return_register_will_be_mapped_at: None,
         };
 
         this.allocate(function);
@@ -67,7 +72,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
         self.map_argument_registers(function);
 
-        self.map_only_return_register();
+        self.map_only_return_register(&register_lifetimes);
         self.map_registers(function, register_lifetimes);
 
         self.dump_mappings();
@@ -128,8 +133,19 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
                 // Check if there is a register available, otherwise we should spill
                 if let Some(available_register) = self.currently_available.pop_front() {
-                    self.map(*reg, available_register);
-                    continue;
+                    if available_register == R::return_register() && self.return_register_will_be_mapped_at.is_some_and(|first_use_return_reg| lifetime.last_use() > first_use_return_reg) {
+                        if let Some(next_available) = self.currently_available.pop_front() {
+                            self.currently_available.push_front(available_register);
+
+                            self.map(*reg, next_available);
+                            continue;
+                        }
+
+                        self.currently_available.push_front(available_register);
+                    } else {
+                        self.map(*reg, available_register);
+                        continue;
+                    }
                 }
 
                 self.mappings.insert(*reg, None);
@@ -178,15 +194,21 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
     /// This is an optimization where we try to find the IR registers that are used as the return value,
     /// and if there is only one, we always allocate that to the ISA return register.
-    fn map_only_return_register(&mut self) {
+    fn map_only_return_register(&mut self, register_lifetimes: &Vec<(IrRegister, RegisterLifetime)>) {
         let Some(return_register) = self.only_return_register else {
             return;
         };
 
         self.map(return_register, R::return_register());
 
-        if let Some((idx, _)) = self.currently_available.iter().enumerate().find(|(_, r)| **r == R::return_register()) {
-            self.currently_available.remove(idx);
+        self.return_register_will_be_mapped_at = register_lifetimes.iter()
+            .find(|(reg, _)| *reg == return_register)
+            .map(|(_, lifetime)| lifetime.first_use());
+
+        if self.return_register_will_be_mapped_at.is_none() {
+            if let Some((idx, _)) = self.currently_available.iter().enumerate().find(|(_, r)| **r == R::return_register()) {
+                self.currently_available.remove(idx);
+            }
         }
     }
 
