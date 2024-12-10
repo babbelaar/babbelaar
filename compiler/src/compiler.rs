@@ -186,10 +186,14 @@ impl CompileStatement for Statement {
 
 impl CompileStatement for AssignStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
+        let source = self.source.compile(builder).to_readable(builder);
+
+        if self.destination.value().as_identifier() == Some(&Constants::DISCARDING_IDENT) {
+            return;
+        }
+
         let dst = self.destination.compile(builder);
         debug!("Dst is: {dst:#?}");
-
-        let source = self.source.compile(builder).to_readable(builder);
 
         match dst.kind {
             ExpressionResultKind::Register(destination) => {

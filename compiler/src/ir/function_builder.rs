@@ -137,7 +137,9 @@ impl<'program> FunctionBuilder<'program> {
 
     #[must_use]
     pub fn load_local(&mut self, name: &BabString) -> (TypeInfo, Register) {
-        let src = self.locals.get(name).expect("Local name is not valid").clone();
+        let Some(src) = self.locals.get(name).cloned() else {
+            panic!("Ongeldige lokale variabele: `{name}`");
+        };
 
         (src.type_info, src.register)
     }
