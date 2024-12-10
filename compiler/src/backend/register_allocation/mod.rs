@@ -22,6 +22,9 @@ use self::{
 pub struct RegisterAllocator<R: AllocatableRegister> {
     mappings: HashMap<IrRegister, Option<R>>,
     registers_to_save: Vec<R>,
+    currently_mapped: HashMap<IrRegister, R>,
+    currently_available: VecDeque<R>,
+    only_return_register: Option<IrRegister>,
 }
 
 impl<R: AllocatableRegister> RegisterAllocator<R> {
@@ -30,6 +33,12 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         let mut this = Self {
             mappings: HashMap::new(),
             registers_to_save: Vec::new(),
+            currently_mapped: HashMap::new(),
+            currently_available: R::caller_saved_registers().iter()
+                .chain(R::callee_saved_registers().iter())
+                .copied()
+                .collect::<VecDeque<R>>(),
+            only_return_register: None,
         };
 
         this.allocate(function);
@@ -37,7 +46,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         this
     }
 
-    /// Which callee-saved registers do we use? These need to be saved by the
+    /// Which callee-saved self.register_lifetimes do we use? These need to be saved by the
     /// architecture-specific code generator.
     #[must_use]
     pub fn callee_saved_registers_to_save(&self) -> &[R] {
@@ -53,42 +62,24 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         let analysis = LifeAnalysis::analyze(function.argument_registers(), function.instructions());
         analysis.dump_result();
 
-        let only_return_register = analysis.find_only_return_register();
-        let registers: Vec<(IrRegister, RegisterLifetime)> = analysis.into_sorted_vec();
+        self.only_return_register = analysis.find_only_return_register();
+        let register_lifetimes = analysis.into_sorted_vec();
 
-        let mut currently_mapped: HashMap<IrRegister, R> = HashMap::new();
+        self.map_argument_registers(function);
 
-        let mut currently_available = R::caller_saved_registers().iter()
-            .chain(R::callee_saved_registers().iter())
-            .copied()
-            .collect::<VecDeque<R>>();
+        self.map_only_return_register();
+        self.map_registers(function, register_lifetimes);
 
-        for (idx, register) in function.argument_registers().iter().enumerate() {
-            let reg = R::argument_nth(idx);
+        self.dump_mappings();
+    }
 
-            currently_mapped.insert(*register, reg);
-            self.mappings.insert(*register, Some(reg));
-
-            if let Some((index, _)) = currently_available.iter().enumerate().find(|(_, avail_reg)| **avail_reg == reg) {
-                currently_available.remove(index);
-            }
-        }
-
-        if let Some(return_register) = only_return_register {
-            currently_mapped.insert(return_register, R::return_register());
-            self.mappings.insert(return_register, Some(R::return_register()));
-
-            if let Some((idx, _)) = currently_available.iter().enumerate().find(|(_, r)| **r == R::return_register()) {
-                currently_available.remove(idx);
-            }
-        }
-
+    fn map_registers(&mut self, function: &Function, register_lifetimes: Vec<(IrRegister, RegisterLifetime)>) {
         for (index, _) in function.instructions().iter().enumerate() {
-            for (reg, lifetime) in &registers {
+            for (reg, lifetime) in &register_lifetimes {
                 if !lifetime.is_active_at(index) && lifetime.first_use() < index {
-                    if let Some(mapped) = currently_mapped.remove(reg) {
-                        if !currently_available.contains(&mapped) {
-                            currently_available.push_front(mapped);
+                    if let Some(mapped) = self.currently_mapped.remove(reg) {
+                        if !self.currently_available.contains(&mapped) {
+                            self.currently_available.push_front(mapped);
                         }
                     }
 
@@ -100,32 +91,28 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                     continue;
                 }
 
-                let register_available_after_this_instruction: Vec<_> = registers.iter()
+                let register_available_after_this_instruction: Vec<_> = register_lifetimes.iter()
                     .filter(|(_, lifetime)| lifetime.last_use() == index)
-                    .filter_map(|(reg, _)| Some((*reg, *currently_mapped.get(reg)?)))
+                    .filter_map(|(reg, _)| Some((*reg, *self.currently_mapped.get(reg)?)))
                     .collect();
 
                 if lifetime.times_used_between_calls() > 0 {
                     if let Some((prev_avail_register, available_register)) = register_available_after_this_instruction.iter().find(|(_, reg)| reg.is_callee_saved()) {
-                        currently_mapped.remove(prev_avail_register);
+                        self.currently_mapped.remove(prev_avail_register);
 
-                        currently_mapped.insert(*reg, *available_register);
-                        self.mappings.insert(*reg, Some(*available_register));
+                        self.map(*reg, *available_register);
                         continue;
                     }
 
-                    let available = currently_available.iter()
+                    let available = self.currently_available.iter()
                         .cloned()
                         .enumerate()
                         .filter(|(_, reg)| reg.is_callee_saved())
                         .next();
 
                     if let Some((idx, available_register)) = available {
-                        self.registers_to_save.push(available_register);
-
-                        currently_available.remove(idx);
-                        currently_mapped.insert(*reg, available_register);
-                        self.mappings.insert(*reg, Some(available_register));
+                        self.currently_available.remove(idx);
+                        self.map(*reg, available_register);
                         continue;
                     }
 
@@ -133,29 +120,21 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                 }
 
                 if let Some((prev_avail_register, available_register)) = register_available_after_this_instruction.first() {
-                    currently_mapped.remove(prev_avail_register);
+                    self.currently_mapped.remove(prev_avail_register);
 
-                    currently_mapped.insert(*reg, *available_register);
-                    self.mappings.insert(*reg, Some(*available_register));
+                    self.map(*reg, *available_register);
                     continue;
                 }
 
                 // Check if there is a register available, otherwise we should spill
-                if let Some(available_register) = currently_available.pop_front() {
-                    if available_register.is_callee_saved() {
-                        self.registers_to_save.push(available_register);
-                    }
-
-                    currently_mapped.insert(*reg, available_register);
-                    self.mappings.insert(*reg, Some(available_register));
+                if let Some(available_register) = self.currently_available.pop_front() {
+                    self.map(*reg, available_register);
                     continue;
                 }
 
                 self.mappings.insert(*reg, None);
             }
         }
-
-        self.dump_mappings();
     }
 
     #[allow(unused)]
@@ -183,5 +162,42 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         }
 
         available.into_iter().next()
+    }
+
+    fn map_argument_registers(&mut self, function: &Function) {
+        for (idx, register) in function.argument_registers().iter().enumerate() {
+            let reg = R::argument_nth(idx);
+
+            self.map(*register, reg);
+
+            if let Some((index, _)) = self.currently_available.iter().enumerate().find(|(_, avail_reg)| **avail_reg == reg) {
+                self.currently_available.remove(index);
+            }
+        }
+    }
+
+    /// This is an optimization where we try to find the IR registers that are used as the return value,
+    /// and if there is only one, we always allocate that to the ISA return register.
+    fn map_only_return_register(&mut self) {
+        let Some(return_register) = self.only_return_register else {
+            return;
+        };
+
+        self.map(return_register, R::return_register());
+
+        if let Some((idx, _)) = self.currently_available.iter().enumerate().find(|(_, r)| **r == R::return_register()) {
+            self.currently_available.remove(idx);
+        }
+    }
+
+    fn map(&mut self, ir: IrRegister, isa: R) {
+        if isa.is_callee_saved() {
+            if !self.registers_to_save.contains(&isa) {
+                self.registers_to_save.push(isa);
+            }
+        }
+
+        self.currently_mapped.insert(ir, isa);
+        self.mappings.insert(ir, Some(isa));
     }
 }
