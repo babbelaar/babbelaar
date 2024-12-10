@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{AssignStatement, Attribute, BabString, Expression, ExtensionStatement, Field, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, InterfaceSpecifier, InterfaceStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalysisPhase, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
+use babbelaar::{AssignStatement, Attribute, BabString, Expression, ExtensionStatement, Field, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, InterfaceSpecifier, InterfaceStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalysisPhase, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
 use log::error;
 use strum::EnumIter;
 use tower_lsp::lsp_types::{DocumentSymbolResponse, SemanticToken, SemanticTokenModifier, SemanticTokenType, SymbolInformation, SymbolKind, Uri};
@@ -72,15 +72,42 @@ impl Symbolizer {
         match &token.kind {
             TokenKind::TemplateString(ts) => {
                 for part in ts.iter() {
-                    if let TemplateStringToken::Expression(expr) = part {
-                        for token in expr.iter() {
-                            self.add_token(token);
+                    match part {
+                        TemplateStringToken::Expression(expr) => {
+                            for token in expr.iter() {
+                                self.add_token(token);
+                            }
+                        }
+
+                        TemplateStringToken::Plain { begin, end, str } => {
+                            self.add_escapes_in_string(str, *begin);
+                            _ = end;
                         }
                     }
                 }
             }
 
+            TokenKind::StringLiteral(str) => {
+                self.add_escapes_in_string(str, token.begin);
+            }
+
             _ => (),
+        }
+    }
+
+    fn add_escapes_in_string(&mut self, str: &BabString, begin: FileLocation) {
+        for (pos, c) in str.char_indices() {
+            if c == '\\' || c == '\n' || c == '\r' || c == '\t' || c == '"' {
+                self.symbols.insert(LspSymbol {
+                    name: BabString::empty(),
+                    kind: LspTokenType::EscapeSequence,
+                    range: FileRange::new(
+                        FileLocation::new(begin.file_id(), begin.offset() + pos + 1, begin.line(), begin.column() + pos + 1),
+                        FileLocation::new(begin.file_id(), begin.offset() + pos + 3, begin.line(), begin.column() + pos + 3)
+                    ),
+                    modifier: LspSymbolModifier::None,
+                });
+            }
         }
     }
 
@@ -571,6 +598,7 @@ impl LspSymbol {
 #[allow(unused)]
 pub enum LspTokenType {
     Attribute,
+    EscapeSequence,
     Function,
     Keyword,
     Number,
@@ -609,8 +637,10 @@ impl From<&TokenKind> for LspTokenType {
 
 impl From<LspTokenType> for SemanticTokenType {
     fn from(value: LspTokenType) -> Self {
+
         match value {
             LspTokenType::Attribute => SemanticTokenType::MACRO,
+            LspTokenType::EscapeSequence => SemanticTokenType::new("escapeSequence"),
             LspTokenType::Function => SemanticTokenType::FUNCTION,
             LspTokenType::Keyword => SemanticTokenType::KEYWORD,
             LspTokenType::Method => SemanticTokenType::METHOD,
@@ -636,6 +666,7 @@ impl From<LspTokenType> for SymbolKind {
     fn from(value: LspTokenType) -> Self {
         match value {
             LspTokenType::Attribute => SymbolKind::KEY,
+            LspTokenType::EscapeSequence => todo!(),
             LspTokenType::Function => SymbolKind::FUNCTION,
             LspTokenType::Keyword => SymbolKind::KEY,
             LspTokenType::Method => SymbolKind::METHOD,

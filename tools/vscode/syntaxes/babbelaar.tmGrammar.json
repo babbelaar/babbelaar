@@ -50,14 +50,17 @@
             "patterns": [
                 {
                     "match": "'[^']*'",
+                    "include": "#escaped_character",
                     "name": "string.quoted.single.babbelaar"
                 },
                 {
                     "match": "\"[^\"]*\"",
+                    "include": "#escaped_character",
                     "name": "string.quoted.double.babbelaar"
                 },
                 {
                     "match": "€\"[^\"]*\"",
+                    "include": "#escaped_character",
                     "patterns": [
                         {
                             "begin": "\\{",
@@ -76,6 +79,10 @@
                 }
             ]
         },
+        "escaped_character": {
+			"name": "constant.character.escape.babbelaar",
+			"match": "\\\\[\\\"\\\\nrt]"
+		},
         "comments": {
 			"patterns": [
 				{

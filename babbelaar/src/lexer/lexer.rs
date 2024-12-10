@@ -6,7 +6,7 @@ use std::{error::Error, fmt::Display, str::CharIndices};
 use strum::AsRefStr;
 use thiserror::Error;
 
-use crate::{FileLocation, Keyword, Punctuator, Slice, SourceCode, TemplateStringToken, Token, TokenKind};
+use crate::{BabString, FileLocation, Keyword, Punctuator, Slice, SourceCode, TemplateStringToken, Token, TokenKind};
 
 pub struct Lexer<'source_code> {
     input: &'source_code SourceCode,
@@ -151,6 +151,8 @@ impl<'source_code> Lexer<'source_code> {
 
         let offset_begin = self.current_location().offset();
 
+        let mut str = None;
+
         loop {
             let Some(c) = self.peek_char() else {
                 break;
@@ -160,11 +162,45 @@ impl<'source_code> Lexer<'source_code> {
                 break;
             }
 
+            let pos = self.current_location().offset();
             self.consume_char();
+
+            if c == '\\' {
+                let mut buf = str.take().unwrap_or_else(|| self.input[offset_begin..pos].to_string());
+
+                match self.peek_char() {
+                    Some('"') => buf.push('"'),
+                    Some('n') => buf.push('\n'),
+                    Some('r') => buf.push('\r'),
+                    Some('t') => buf.push('\t'),
+                    Some('\\') => buf.push('\\'),
+
+                    Some(invalid) => {
+                        buf.push('\\');
+                        buf.push(invalid);
+
+                        let location = self.current_location();
+                        self.errors.push(LexerError {
+                            location,
+                            kind: LexerErrorKind::InvalidEscape { invalid },
+                        });
+                    }
+
+                    None => break,
+                }
+
+                self.consume_char();
+                str = Some(buf);
+            } else if let Some(buf) = &mut str {
+                buf.push(c);
+            }
         }
 
         let offset_end = self.current_location().offset();
-        let str = self.input.slice(offset_begin..offset_end);
+        let str = match str {
+            Some(str) => BabString::new(str),
+            None => self.input.slice(offset_begin..offset_end),
+        };
 
         self.consume_char();
 
@@ -462,7 +498,7 @@ fn is_identifier_char(c: char) -> bool {
         || c == '_'
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LexerError {
     pub location: FileLocation,
     pub kind: LexerErrorKind,
@@ -486,6 +522,9 @@ pub enum LexerErrorKind {
 
     #[error("Ongeldig teken")]
     InvalidCharacterLiteral,
+
+    #[error("Ongeldige ontsnappingscode `\\{invalid}`, alleen `\\\"`, `\\\\`, `\\n`, `\\r` en `\\t` zijn toegestaan")]
+    InvalidEscape { invalid: char },
 }
 impl LexerErrorKind {
     #[must_use]
@@ -513,9 +552,37 @@ mod tests {
         begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
         end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
     })]
+    #[case("\"Hal\\nlo\" ", Token {
+        kind: TokenKind::StringLiteral(BabString::new_static("Hal\nlo")),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 9, 0, 9),
+    })]
+    #[case("\"Hal\\tlo\" ", Token {
+        kind: TokenKind::StringLiteral(BabString::new_static("Hal\tlo")),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 9, 0, 9),
+    })]
+    #[case("\"Hal\\rlo\" ", Token {
+        kind: TokenKind::StringLiteral(BabString::new_static("Hal\rlo")),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 9, 0, 9),
+    })]
+    #[case("\"Hal\\r\\nlo\" ", Token {
+        kind: TokenKind::StringLiteral(BabString::new_static("Hal\r\nlo")),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 11, 0, 11),
+    })]
     fn next_text(#[case] input: &'static str, #[case] expected: Token) {
         let source_code = SourceCode::new(PathBuf::new(), 0, input.to_string());
-        let actual = Lexer::new(&source_code).next();
+        let mut lexer = Lexer::new(&source_code);
+        let mut actual = lexer.next();
+
+        assert_eq!(lexer.errors, Vec::new());
+
+        if let Some(actual) = &mut actual {
+            actual.begin = FileLocation::new(FileId::INTERNAL, actual.begin.offset(), actual.begin.line(), actual.begin.column());
+            actual.end = FileLocation::new(FileId::INTERNAL, actual.end.offset(), actual.end.line(), actual.end.column());
+        }
 
         assert_eq!(actual, Some(expected));
     }
