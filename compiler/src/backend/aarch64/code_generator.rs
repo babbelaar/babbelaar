@@ -521,14 +521,24 @@ impl AArch64CodeGenerator {
     fn add_instruction_cmp(&mut self, lhs: &Register, rhs: &Operand) {
         match rhs {
             Operand::Immediate(immediate) => {
-                let immediate = immediate.as_i64();
-                assert!(immediate < 4095, "cannot fit in an imm12");
-
                 let register = self.allocate_register(lhs);
-                self.instructions.push(ArmInstruction::CmpImmediate {
-                    register,
-                    value: immediate as _,
-                });
+
+                let immediate = immediate.as_i64();
+                if immediate >= 0 {
+                    assert!(immediate < 4095, "cannot fit comparison {immediate} in an imm12");
+
+                    self.instructions.push(ArmInstruction::CmpImmediate {
+                        register,
+                        value: immediate as _,
+                    });
+                } else {
+                    assert!(-immediate < 4095, "cannot fit comparison {immediate} in an imm12");
+
+                    self.instructions.push(ArmInstruction::CmnImmediate {
+                        register,
+                        value: -immediate as _,
+                    });
+                }
             }
 
             Operand::Register(rhs) => {

@@ -67,11 +67,26 @@ pub enum ArmInstruction {
         symbol_name: BabString,
     },
 
+    /// Compare Negative (immediate)
+    CmnImmediate {
+        register: ArmRegister,
+        value: u16,
+    },
+
+    /// Compare (shifted register)
+    #[allow(unused)] // I added this for completeness, but when is this ever needed?
+    CmnRegister {
+        lhs: ArmRegister,
+        rhs: ArmRegister,
+    },
+
+    /// Compare Negative (immediate)
     CmpImmediate {
         register: ArmRegister,
         value: u16,
     },
 
+    /// Compare (shifted register)
     CmpRegister {
         lhs: ArmRegister,
         rhs: ArmRegister,
@@ -383,6 +398,25 @@ impl ArmInstruction {
                 instruction |= (condition.invert() as u32) << 12;
                 instruction |= dst.number as u32;
 
+                instruction
+            }
+
+            Self::CmnImmediate { register, value } => {
+                let mut instruction = 0xB100001F;
+                // NOTE: sf is 1
+                instruction |= (register.number as u32) << 5;
+                instruction |= (value as u32) << 10;
+                // NOTE: sh is 0
+                instruction
+            }
+
+            Self::CmnRegister { lhs, rhs } => {
+                let mut instruction = 0xAB00001F;
+                instruction |= (lhs.number as u32) << 5;
+                instruction |= (rhs.number as u32) << 16;
+                // NOTE: sf is 1
+                // NOTE: imm6 is 0
+                // NOTE: shift is 0
                 instruction
             }
 
@@ -908,6 +942,14 @@ impl Display for ArmInstruction {
                 f.write_fmt(format_args!("cmp {lhs}, {rhs}"))
             }
 
+            Self::CmnImmediate { register, value } => {
+                f.write_fmt(format_args!("cmn {register}, #{value}"))
+            }
+
+            Self::CmnRegister { lhs, rhs } => {
+                f.write_fmt(format_args!("cmn {lhs}, {rhs}"))
+            }
+
             Self::CSet { is_64_bit, dst, condition } => {
                 _ = is_64_bit;
                 f.write_fmt(format_args!("cset {dst}, {condition}"))
@@ -1322,6 +1364,10 @@ mod tests {
         base_ptr: ArmRegister::X2,
         offset: 8,
     }, 0xb9000841)]
+    #[case(ArmInstruction::CmnImmediate {
+        register: ArmRegister::X0,
+        value: 1,
+    }, 0xB100041f)]
     fn encode_instruction(#[case] input: ArmInstruction, #[case] expected: u32) {
         let actual = input.encode(0, &HashMap::new());
         assert_eq!(expected, actual, "actual was: 0x{actual:x}");
