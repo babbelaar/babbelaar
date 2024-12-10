@@ -183,6 +183,32 @@ pub enum ArmInstruction {
         second: ArmRegister,
     },
 
+    StrByteImmediate {
+        mode: ArmUnsignedAddressingMode,
+        src: ArmRegister,
+        base_ptr: ArmRegister,
+        offset: i16,
+    },
+
+    StrByteRegister {
+        src: ArmRegister,
+        base_ptr: ArmRegister,
+        offset: ArmRegister,
+    },
+
+    StrHalfImmediate {
+        mode: ArmUnsignedAddressingMode,
+        src: ArmRegister,
+        base_ptr: ArmRegister,
+        offset: i16,
+    },
+
+    StrHalfRegister {
+        src: ArmRegister,
+        base_ptr: ArmRegister,
+        offset: ArmRegister,
+    },
+
     StrImmediate {
         is_64_bit: bool,
         mode: ArmUnsignedAddressingMode,
@@ -672,68 +698,30 @@ impl ArmInstruction {
                 instruction
             }
 
+            Self::StrByteImmediate { mode, src, base_ptr, offset } => {
+                encode_store_offset_immediate(LoadStoreSize::Byte, src, base_ptr, mode, offset)
+            }
+
+            Self::StrByteRegister { src, base_ptr, offset } => {
+                encode_store_offset_register(LoadStoreSize::Byte, src, base_ptr, offset)
+            }
+
+            Self::StrHalfImmediate { mode, src, base_ptr, offset } => {
+                encode_store_offset_immediate(LoadStoreSize::Half, src, base_ptr, mode, offset)
+            }
+
+            Self::StrHalfRegister { src, base_ptr, offset } => {
+                encode_store_offset_register(LoadStoreSize::Half, src, base_ptr, offset)
+            }
+
             Self::StrImmediate { is_64_bit, mode, src, base_ptr, offset } => {
-                let mut instruction = match mode {
-                    ArmUnsignedAddressingMode::PostIndex      => 0xB8000400,
-                    ArmUnsignedAddressingMode::PreIndex       => 0xB8000C00,
-                    ArmUnsignedAddressingMode::UnsignedOffset => 0xB9000000,
-                };
-
-                if is_64_bit {
-                    instruction |= 1 << 30;
-                }
-
-                instruction |= src.number as u32;
-                instruction |= (base_ptr.number as u32) << 5;
-
-                match mode {
-                    ArmUnsignedAddressingMode::PostIndex | ArmUnsignedAddressingMode::PreIndex => {
-                        // Is the signed immediate byte offset, in the range -256 to 255, encoded in the "imm9" field.
-
-                        debug_assert!(offset >= -256);
-                        debug_assert!(offset <= 255);
-
-                        instruction |= take_bits(offset as u32, 9) << 12;
-                    }
-
-                    ArmUnsignedAddressingMode::UnsignedOffset => {
-                        // For the 32-bit variant: is the optional positive immediate byte offset, a multiple of 4 in
-                        // the range 0 to 16380, defaulting to 0 and encoded in the "imm12" field as <pimm>/4.
-
-                        // For the 64-bit variant: is the optional positive immediate byte offset, a multiple of 8 in
-                        // the range 0 to 32760, defaulting to 0 and encoded in the "imm12" field as <pimm>/8.
-
-                        debug_assert!(offset >= 0);
-
-                        if is_64_bit {
-                            debug_assert!(offset <= 32760);
-                            instruction |= take_bits((offset / 8) as u32, 12) << 10;
-                        } else {
-                            debug_assert!(offset <= 16380);
-                            instruction |= take_bits((offset / 4) as u32, 12) << 10;
-                        }
-                    }
-                }
-
-                instruction
+                let size = if is_64_bit { LoadStoreSize::Double } else { LoadStoreSize::Word };
+                encode_store_offset_immediate(size, src, base_ptr, mode, offset)
             }
 
             Self::StrRegister { is_64_bit, src, base_ptr, offset } => {
-                let mut instruction = 0xB8200800;
-
-                if is_64_bit {
-                    instruction |= 1 << 30;
-                }
-
-                instruction |= (offset.number as u32) << 16;
-
-                // LSL is default, add option to enum perhaps?
-                instruction |= 0b011 << 13;
-
-                instruction |= (base_ptr.number as u32) << 5;
-                instruction |= src.number as u32;
-
-                instruction
+                let size = if is_64_bit { LoadStoreSize::Double } else { LoadStoreSize::Word };
+                encode_store_offset_register(size, src, base_ptr, offset)
             }
 
             Self::SubImmediate { dst, lhs, rhs_imm12 } => {
@@ -771,7 +759,101 @@ impl ArmInstruction {
 }
 
 #[must_use]
-fn take_bits(i: u32, n: u32) -> u32  {
+const fn encode_store_offset_immediate(size: LoadStoreSize, src: ArmRegister, base_ptr: ArmRegister, mode: ArmUnsignedAddressingMode, offset: i16) -> u32 {
+    let mut instruction = match mode {
+        ArmUnsignedAddressingMode::PostIndex      => 0x38000400,
+        ArmUnsignedAddressingMode::PreIndex       => 0x38000C00,
+        ArmUnsignedAddressingMode::UnsignedOffset => 0x39000000,
+    };
+
+    instruction |= take_bits(size as u32, 2) << 30;
+
+    instruction |= src.number as u32;
+    instruction |= (base_ptr.number as u32) << 5;
+
+    match mode {
+        ArmUnsignedAddressingMode::PostIndex | ArmUnsignedAddressingMode::PreIndex => {
+            // Is the signed immediate byte offset, in the range -256 to 255, encoded in the "imm9" field.
+
+            debug_assert!(offset >= -256);
+            debug_assert!(offset <= 255);
+
+            instruction |= take_bits(offset as u32, 9) << 12;
+        }
+
+        ArmUnsignedAddressingMode::UnsignedOffset => {
+
+
+
+
+            debug_assert!(offset >= 0);
+
+            match size {
+                LoadStoreSize::Byte => {
+                    // Is the optional positive immediate byte offset, in the range 0 to 4095, defaulting to 0
+                    // and encoded in the "imm12" field.
+                    debug_assert!(offset <= 4095);
+                    instruction |= take_bits(offset as u32, 12) << 10;
+                }
+
+                LoadStoreSize::Half => {
+                    // Is the optional positive immediate byte offset, a multiple of 2 in the range 0 to 8190,
+                    // defaulting to 0 and encoded in the "imm12" field as <pimm>/2.
+                    debug_assert!(offset <= 8190);
+                    instruction |= take_bits((offset / 2) as u32, 12) << 10;
+                }
+
+                LoadStoreSize::Word => {
+                    // For the 32-bit variant: is the optional positive immediate byte offset, a multiple of 4 in
+                    // the range 0 to 16380, defaulting to 0 and encoded in the "imm12" field as <pimm>/4.
+                    debug_assert!(offset <= 16380);
+                    instruction |= take_bits((offset / 4) as u32, 12) << 10;
+                }
+
+                LoadStoreSize::Double => {
+                    // For the 64-bit variant: is the optional positive immediate byte offset, a multiple of 8 in
+                    // the range 0 to 32760, defaulting to 0 and encoded in the "imm12" field as <pimm>/8.
+                    debug_assert!(offset <= 32760);
+                    instruction |= take_bits((offset / 8) as u32, 12) << 10;
+                }
+            }
+        }
+    }
+
+    instruction
+}
+
+#[must_use]
+const fn encode_store_offset_register(size: LoadStoreSize, src: ArmRegister, base_ptr: ArmRegister, offset: ArmRegister) -> u32 {
+    let mut instruction = 0x38200800;
+
+    instruction |= take_bits(size as u32, 2) << 30;
+
+    instruction |= (offset.number as u32) << 16;
+
+    // LSL is default, add option to enum perhaps?
+    instruction |= 0b011 << 13;
+
+    instruction |= (base_ptr.number as u32) << 5;
+    instruction |= src.number as u32;
+
+    instruction
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LoadStoreSize {
+    /// 8 bit
+    Byte,
+    /// 16 bit
+    Half,
+    /// 32 bit
+    Word,
+    /// 64 bit
+    Double,
+}
+
+#[must_use]
+const fn take_bits(i: u32, n: u32) -> u32  {
     i & ((1 << n) - 1)
 }
 
@@ -944,6 +1026,46 @@ impl Display for ArmInstruction {
                         f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #{offset}]"))
                     }
                 }
+            }
+
+            Self::StrByteImmediate { mode, src, base_ptr, offset } => {
+                match mode {
+                    ArmUnsignedAddressingMode::PostIndex => {
+                        f.write_fmt(format_args!("strb {src}, {base_ptr}, #{offset}"))
+                    }
+
+                    ArmUnsignedAddressingMode::PreIndex => {
+                        f.write_fmt(format_args!("strb {src}, [{base_ptr}, #{offset}]!"))
+                    }
+
+                    ArmUnsignedAddressingMode::UnsignedOffset => {
+                        f.write_fmt(format_args!("strb {src}, [{base_ptr}, #{offset}]"))
+                    }
+                }
+            }
+
+            Self::StrByteRegister { src, base_ptr, offset } => {
+                f.write_fmt(format_args!("strb {src}, [{base_ptr}, {offset}]"))
+            }
+
+            Self::StrHalfImmediate { mode, src, base_ptr, offset } => {
+                match mode {
+                    ArmUnsignedAddressingMode::PostIndex => {
+                        f.write_fmt(format_args!("strb {src}, {base_ptr}, #{offset}"))
+                    }
+
+                    ArmUnsignedAddressingMode::PreIndex => {
+                        f.write_fmt(format_args!("strb {src}, [{base_ptr}, #{offset}]!"))
+                    }
+
+                    ArmUnsignedAddressingMode::UnsignedOffset => {
+                        f.write_fmt(format_args!("strb {src}, [{base_ptr}, #{offset}]"))
+                    }
+                }
+            }
+
+            Self::StrHalfRegister { src, base_ptr, offset } => {
+                f.write_fmt(format_args!("strh {src}, [{base_ptr}, {offset}]"))
             }
 
             Self::StrImmediate { is_64_bit, mode, src, base_ptr, offset } => {
