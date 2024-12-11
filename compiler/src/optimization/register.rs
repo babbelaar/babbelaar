@@ -58,6 +58,10 @@ impl FunctionOptimizer for RegisterDeduplicator {
                     self.set_value_changed(register);
                 }
 
+                Instruction::InitArg { destination, arg_idx: _ } => {
+                    self.set_value_changed(destination);
+                }
+
                 Instruction::Jump { location } => {
                     _ = location;
                     self.unchanged_moves.clear();
@@ -288,6 +292,10 @@ impl FunctionOptimizer for RegisterInliner {
                         offset,
                         typ: *size,
                     };
+                }
+
+                Instruction::InitArg { destination, arg_idx: _ } => {
+                    self.values.remove(destination);
                 }
 
                 Instruction::StorePtr { base_ptr, offset, value, typ: size } => {

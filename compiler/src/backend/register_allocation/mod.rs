@@ -70,7 +70,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         self.only_return_register = analysis.find_only_return_register();
         let register_lifetimes = analysis.into_sorted_vec();
 
-        self.map_argument_registers(function);
+        // self.map_argument_registers(function);
 
         self.map_only_return_register(&register_lifetimes);
         self.map_registers(function, register_lifetimes);

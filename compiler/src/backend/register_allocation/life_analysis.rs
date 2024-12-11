@@ -44,6 +44,10 @@ impl LifeAnalysis {
                 self.try_add_lifetime(rhs, index);
             }
 
+            Instruction::InitArg { destination, arg_idx: _ } => {
+                self.add_lifetime(destination, index);
+            }
+
             Instruction::Increment { register } => {
                 self.add_lifetime(register, index);
             }

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use babbelaar::{BabString, Structure};
 
-use crate::{ir::{function_builder::FunctionLocal, ArgumentName}, ArgumentList, TypeId, TypeManager};
+use crate::{ir::{function_builder::FunctionLocal, ArgumentName}, ArgumentList, Instruction, TypeId, TypeManager};
 
 use super::{FunctionAttribute, FunctionBuilder, Program, RegisterAllocator};
 
@@ -44,7 +44,7 @@ impl ProgramBuilder {
             label_positions: HashMap::new(),
         };
 
-        for (name, type_id) in arguments.iter().cloned() {
+        for (idx, (name, type_id)) in arguments.iter().cloned().enumerate() {
             let register = builder.register_allocator.next();
             builder.argument_registers.push(register);
 
@@ -61,6 +61,11 @@ impl ProgramBuilder {
                     builder.this = Some((type_id, register));
                 }
             }
+
+            builder.instructions.push(Instruction::InitArg {
+                destination: register,
+                arg_idx: idx,
+            });
         }
 
         f(&mut builder);

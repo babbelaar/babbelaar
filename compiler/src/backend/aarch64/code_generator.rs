@@ -239,6 +239,18 @@ impl AArch64CodeGenerator {
                 self.label_offsets.insert(*label, self.instructions.len());
             }
 
+            Instruction::InitArg { destination, arg_idx } => {
+                let reg = self.allocate_register(destination);
+                if *arg_idx != reg.number as usize {
+                    self.instructions.push(ArmInstruction::MovRegister64 {
+                        dst: reg,
+                        src: ArmRegister {
+                            number: *arg_idx as _,
+                        },
+                    });
+                }
+            }
+
             Instruction::Return { value_reg } => {
                 if let Some(value_reg) = value_reg {
                     let value_reg = self.allocate_register(value_reg);

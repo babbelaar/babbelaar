@@ -193,6 +193,8 @@ impl Amd64CodeGenerator {
                 self.label_offsets.insert(*label, self.instructions.len());
             }
 
+            Instruction::InitArg { .. } => (),
+
             Instruction::Return { value_reg } => {
                 if let Some(value_reg) = value_reg {
                     let value_reg = self.allocate_register(value_reg);

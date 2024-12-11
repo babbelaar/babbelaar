@@ -56,6 +56,11 @@ pub enum Instruction {
         register: Register,
     },
 
+    InitArg {
+        destination: Register,
+        arg_idx: usize,
+    },
+
     Move {
         destination: Register,
         source: Operand,
@@ -195,6 +200,10 @@ impl Display for Instruction {
             Instruction::Increment { register } => {
                 f.write_str("Verhoog ")?;
                 register.fmt(f)
+            }
+
+            Instruction::InitArg { destination, arg_idx } => {
+                f.write_fmt(format_args!("InitArg {destination}, Arg{arg_idx}"))
             }
 
             Instruction::Jump { location } => {

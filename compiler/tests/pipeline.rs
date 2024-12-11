@@ -11,6 +11,18 @@ use temp_dir::TempDir;
 fn simple_return_0() {
     let result = create_and_run_single_object_executable("
         werkwijze hoofd() -> g32 {
+            bekeer 0;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+}
+
+#[test]
+fn simple_return_123() {
+    let result = create_and_run_single_object_executable("
+        werkwijze hoofd() -> g32 {
             bekeer 123;
         }
     ");
@@ -645,6 +657,28 @@ fn printf_with_single_number() {
     assert_eq!(result.signal, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "Hallo, 10");
+}
+
+#[test]
+fn argument_survives_after_subroutine_call() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze doeIetsLeuks(a: g32) -> g32 {
+            stel b = 10;
+            bekeer a + b;
+        }
+
+        werkwijze overleef(g: g32) -> g32 {
+            _ = doeIetsLeuks(g);
+            bekeer g;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer overleef(99);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(99));
 }
 
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {

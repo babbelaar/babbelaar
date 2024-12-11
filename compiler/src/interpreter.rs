@@ -142,6 +142,8 @@ impl Interpreter {
                 OperationResult::Continue
             }
 
+            Instruction::InitArg { .. } => OperationResult::Continue,
+
             Instruction::Jump { location } => {
                 OperationResult::Jump(location)
             }

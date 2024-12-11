@@ -190,6 +190,10 @@ impl DeadStoreEliminator {
                     self.notice_normal_write(register, index);
                 }
 
+                Instruction::InitArg { destination, arg_idx: _ } => {
+                    self.notice_normal_write(destination, index);
+                }
+
                 Instruction::Jump { location } => {
                     _ = location;
                 }
