@@ -144,7 +144,7 @@ impl TypeManager {
                 type_id,
             };
 
-            offset += field.stride.next_multiple_of(self.platform_alignment_size());
+            offset += field.stride;
 
             layout.add_field(ast_field.name.value().clone(), field);
         }
