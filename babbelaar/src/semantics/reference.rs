@@ -73,7 +73,36 @@ impl SemanticReference {
     pub fn hover(&self) -> String {
         match self.local_kind {
             SemanticLocalKind::Function | SemanticLocalKind::FunctionReference => {
-                format!("werkwijze {}(..)\n```", self.local_name)
+                match &self.typ {
+                    SemanticType::Function(func) => {
+                        let mut str = String::new();
+
+                        for attrib in &func.attributes {
+                            str += &format!("{}\n", attrib.value());
+                        }
+
+                        str += &format!("werkwijze {}(", self.local_name);
+
+                        for (idx, param) in func.parameters.iter().enumerate() {
+                            if idx != 0 {
+                                str += ", ";
+                            }
+
+                            str += &format!("{}: {}", param.name.value(), param.ty.value());
+                        }
+
+                        str += ")";
+
+                        if !func.return_type.is_null() {
+                            str += " -> ";
+                            str += &func.return_type.to_string();
+                        }
+
+                        str
+                    }
+
+                    _ => format!("werkwijze {}(..)", self.local_name)
+                }
             }
 
             SemanticLocalKind::Method => {

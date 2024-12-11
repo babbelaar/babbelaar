@@ -59,7 +59,7 @@ impl SemanticAnalyzer {
             SemanticAnalysisPhase::Phase3 => {
                 for statement in tree.functions() {
                     if let StatementKind::Function(function) = &statement.kind {
-                        self.analyze_function_declaration(function, statement.range);
+                        self.analyze_function_declaration(function, statement);
                     }
                 }
             }
@@ -93,7 +93,7 @@ impl SemanticAnalyzer {
 
         for statement in statements {
             if let StatementKind::Function(function) = &statement.kind {
-                self.analyze_function_declaration(function, statement.range);
+                self.analyze_function_declaration(function, statement);
             }
         }
 
@@ -103,7 +103,7 @@ impl SemanticAnalyzer {
     }
 
     /// Analyze a function declaration (signature) without analyzing the statements inside
-    fn analyze_function_declaration(&mut self, function: &FunctionStatement, range: FileRange) {
+    fn analyze_function_declaration(&mut self, function: &FunctionStatement, statement: &Statement) {
         if let Some(other) = self.context.current().get_function_mut(&function.name) {
             self.diagnostics.create(||
                 SemanticDiagnostic::new(
@@ -141,6 +141,7 @@ impl SemanticAnalyzer {
 
         self.context.push_function(
             SemanticFunction {
+                attributes: statement.attributes.clone(),
                 name: function.name.clone(),
                 parameters,
                 has_variable_arguments: false,
@@ -148,7 +149,7 @@ impl SemanticAnalyzer {
                 extern_function: None,
                 return_type,
             },
-            range,
+            statement.range,
         );
     }
 
@@ -894,12 +895,12 @@ impl SemanticAnalyzer {
     fn create_semantic_method(&mut self, method: &Method) -> SemanticMethod {
         SemanticMethod {
             range: method.range,
-            function: self.create_semantic_function(&method.function),
+            function: self.create_semantic_function(&method.function, Vec::new()),
         }
     }
 
     #[must_use]
-    fn create_semantic_function(&mut self, function: &FunctionStatement) -> SemanticFunction {
+    fn create_semantic_function(&mut self, function: &FunctionStatement, attributes: Vec<Ranged<Attribute>>) -> SemanticFunction {
         let parameters = function.parameters.iter()
             .map(|param| self.create_semantic_parameter(param))
             .collect();
@@ -912,6 +913,7 @@ impl SemanticAnalyzer {
         );
 
         SemanticFunction {
+            attributes,
             name: function.name.clone(),
             parameters,
             has_variable_arguments: false,

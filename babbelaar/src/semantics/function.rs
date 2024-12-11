@@ -3,7 +3,7 @@
 
 use std::fmt::Display;
 
-use crate::{BabString, FileRange, Ranged};
+use crate::{Attribute, BabString, FileRange, Ranged};
 
 use super::SemanticType;
 
@@ -15,6 +15,7 @@ pub struct SemanticExternFunction {
 
 #[derive(Debug, Clone)]
 pub struct SemanticFunction {
+    pub attributes: Vec<Ranged<Attribute>>,
     pub name: Ranged<BabString>,
     pub parameters: Vec<SemanticParameter>,
 
