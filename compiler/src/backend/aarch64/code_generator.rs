@@ -368,7 +368,7 @@ impl AArch64CodeGenerator {
                         }
                     }
 
-                    _ => todo!("We ondersteunen alleen 4 en 8 byte Laad ARM-instructies, maar kreeg type: {typ:?}"),
+                    _ => todo!("We ondersteunen alleen 1, 2, 4 en 8 byte Laad ARM-instructies, maar kreeg type: {typ:?}"),
                 }
             }
 
@@ -561,20 +561,30 @@ impl AArch64CodeGenerator {
                 let register = self.allocate_register(lhs);
 
                 let immediate = immediate.as_i64();
-                if immediate >= 0 {
-                    assert!(immediate < 4095, "cannot fit comparison {immediate} in an imm12");
+                match immediate {
+                    0..4095 => {
+                        self.instructions.push(ArmInstruction::CmpImmediate {
+                            register,
+                            value: immediate as _,
+                        });
+                    }
 
-                    self.instructions.push(ArmInstruction::CmpImmediate {
-                        register,
-                        value: immediate as _,
-                    });
-                } else {
-                    assert!(-immediate < 4095, "cannot fit comparison {immediate} in an imm12");
+                    -4095..0 => {
+                        self.instructions.push(ArmInstruction::CmnImmediate {
+                            register,
+                            value: -immediate as _,
+                        });
+                    }
 
-                    self.instructions.push(ArmInstruction::CmnImmediate {
-                        register,
-                        value: -immediate as _,
-                    });
+                    _ => {
+                        let rhs = self.register_allocator.hacky_random_available_register().unwrap();
+                        self.add_instruction_mov(rhs, &Operand::Immediate(Immediate::Integer64(immediate)));
+
+                        self.instructions.push(ArmInstruction::CmpRegister {
+                            lhs: register,
+                            rhs,
+                        });
+                    }
                 }
             }
 
@@ -828,7 +838,6 @@ impl AArch64CodeGenerator {
                     dst
                 };
 
-                // TODO: add good mov subroutine for stuff like this
                 self.add_instruction_mov(lhs_reg, &Operand::Immediate(*lhs));
 
                 (lhs_reg, rhs)
