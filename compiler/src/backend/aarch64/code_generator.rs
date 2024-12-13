@@ -303,35 +303,95 @@ impl AArch64CodeGenerator {
             }
 
             Instruction::LoadPtr { destination, base_ptr, offset, typ } => {
-                let is_64_bit = match typ.bytes() {
-                    4 => false,
-                    8 => true,
-                    _ => todo!("We ondersteunen alleen 4 en 8 byte Laad ARM-instructies")
-                };
-
                 let dst = self.allocate_register(destination);
                 let base_ptr = self.allocate_register(base_ptr);
 
-                match offset {
-                    Operand::Immediate(offset) => {
-                        self.instructions.push(ArmInstruction::LdrImmediate {
-                            is_64_bit,
-                            mode: ArmUnsignedAddressingMode::UnsignedOffset,
-                            dst,
-                            base_ptr,
-                            offset: offset.as_i16(),
-                        });
+                match typ.bytes() {
+                    1 => match offset {
+                        Operand::Immediate(offset) => {
+                            self.instructions.push(ArmInstruction::LdrByteImmediate {
+                                mode: ArmUnsignedAddressingMode::UnsignedOffset,
+                                dst,
+                                base_ptr,
+                                offset: offset.as_i16(),
+                            });
+                        }
+
+                        Operand::Register(offset) => {
+                            let offset = self.allocate_register(offset);
+                            self.instructions.push(ArmInstruction::LdrByteRegister {
+                                dst,
+                                base_ptr,
+                                offset,
+                            });
+                        }
                     }
 
-                    Operand::Register(offset) => {
-                        let offset = self.allocate_register(offset);
-                        self.instructions.push(ArmInstruction::LdrRegister {
-                            is_64_bit,
-                            dst,
-                            base_ptr,
-                            offset,
-                        });
+                    2 => match offset {
+                        Operand::Immediate(offset) => {
+                            self.instructions.push(ArmInstruction::LdrHalfImmediate {
+                                mode: ArmUnsignedAddressingMode::UnsignedOffset,
+                                dst,
+                                base_ptr,
+                                offset: offset.as_i16(),
+                            });
+                        }
+
+                        Operand::Register(offset) => {
+                            let offset = self.allocate_register(offset);
+                            self.instructions.push(ArmInstruction::LdrHalfRegister {
+                                dst,
+                                base_ptr,
+                                offset,
+                            });
+                        }
                     }
+
+                    4 => match offset {
+                        Operand::Immediate(offset) => {
+                            self.instructions.push(ArmInstruction::LdrImmediate {
+                                is_64_bit: false,
+                                mode: ArmUnsignedAddressingMode::UnsignedOffset,
+                                dst,
+                                base_ptr,
+                                offset: offset.as_i16(),
+                            });
+                        }
+
+                        Operand::Register(offset) => {
+                            let offset = self.allocate_register(offset);
+                            self.instructions.push(ArmInstruction::LdrRegister {
+                                is_64_bit: false,
+                                dst,
+                                base_ptr,
+                                offset,
+                            });
+                        }
+                    }
+
+                    8 => match offset {
+                        Operand::Immediate(offset) => {
+                            self.instructions.push(ArmInstruction::LdrImmediate {
+                                is_64_bit: true,
+                                mode: ArmUnsignedAddressingMode::UnsignedOffset,
+                                dst,
+                                base_ptr,
+                                offset: offset.as_i16(),
+                            });
+                        }
+
+                        Operand::Register(offset) => {
+                            let offset = self.allocate_register(offset);
+                            self.instructions.push(ArmInstruction::LdrRegister {
+                                is_64_bit: true,
+                                dst,
+                                base_ptr,
+                                offset,
+                            });
+                        }
+                    }
+
+                    _ => todo!("We ondersteunen alleen 4 en 8 byte Laad ARM-instructies, maar kreeg type: {typ:?}"),
                 }
             }
 
@@ -425,7 +485,7 @@ impl AArch64CodeGenerator {
                         }
                     }
 
-                    _ => todo!("We ondersteunen alleen 4 en 8 byte Laad ARM-instructies, maar kreeg type: {typ:?}"),
+                    _ => todo!("We ondersteunen alleen 4 en 8 byte SlaOp ARM-instructies, maar kreeg type: {typ:?}"),
                 }
             }
         }
