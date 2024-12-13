@@ -6,7 +6,7 @@ use std::{collections::HashMap, mem::take};
 use babbelaar::BabString;
 use log::{debug, warn};
 
-use crate::{backend::aarch64::AArch64VarArgsConvention, CodeGenerator, CompiledFunction, Environment, Function, Instruction, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
+use crate::{backend::aarch64::AArch64VarArgsConvention, CodeGenerator, CompiledFunction, Environment, Function, Immediate, Instruction, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
 use super::{AArch64FunctionCharacteristics, AArch64StackAllocator, ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode, POINTER_SIZE, SPACE_NEEDED_FOR_FP_AND_LR};
 
@@ -88,30 +88,7 @@ impl AArch64CodeGenerator {
             Instruction::Move { source, destination } => {
                 let dst = self.allocate_register(destination);
 
-                match source {
-                    Operand::Immediate(immediate) => {
-                        if immediate.as_i64() < 0 {
-                            self.instructions.push(ArmInstruction::MovN {
-                                is_64_bit: false,
-                                register: dst,
-                                unsigned_imm16: (immediate.as_i64().wrapping_neg()) as _,
-                            });
-                        } else {
-                            self.instructions.push(ArmInstruction::MovZ {
-                                register: dst,
-                                imm16: immediate.as_i64() as _,
-                            });
-                        }
-                    }
-
-                    Operand::Register(source) => {
-                        let src = self.allocate_register(source);
-
-                        if dst != src {
-                            self.instructions.push(ArmInstruction::MovRegister64 { dst, src });
-                        }
-                    }
-                }
+                self.add_instruction_mov(dst, source);
             }
 
             Instruction::MoveAddress { destination, offset } => {
@@ -495,11 +472,7 @@ impl AArch64CodeGenerator {
         match (lhs, rhs) {
             (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
                 let imm16 = lhs.as_i64() + rhs.as_i64();
-                debug_assert!(imm16 < (1 << 16));
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: dst,
-                    imm16: imm16 as _,
-                });
+                self.add_instruction_mov(dst, &Operand::Immediate(Immediate::Integer64(imm16)));
             }
 
             (Operand::Register(lhs), Operand::Register(rhs)) => {
@@ -536,11 +509,7 @@ impl AArch64CodeGenerator {
                 warn!("Immediate-SchuifRechts zou gedaan moeten worden door de optimalisator!");
 
                 let imm16 = lhs.as_i64() >> rhs.as_i64();
-                debug_assert!(imm16 < (1 << 16));
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: dst,
-                    imm16: imm16 as _,
-                });
+                self.add_instruction_mov(dst, &Operand::Immediate(Immediate::Integer64(imm16)));
             }
 
             (Operand::Register(lhs), Operand::Register(rhs)) => {
@@ -574,11 +543,7 @@ impl AArch64CodeGenerator {
                     dst
                 };
 
-                // TODO: add good mov subroutine for stuff like this
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: src,
-                    imm16: lhs.as_i64() as _,
-                });
+                self.add_instruction_mov(src, &Operand::Immediate(*lhs));
 
                 self.instructions.push(ArmInstruction::AsrRegister {
                     is_64_bit: true,
@@ -628,11 +593,7 @@ impl AArch64CodeGenerator {
                 warn!("Immediate-SchuifLinks zou gedaan moeten worden door de optimalisator!");
 
                 let imm16 = lhs.as_i64() << rhs.as_i64();
-                debug_assert!(imm16 < (1 << 16));
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: dst,
-                    imm16: imm16 as _,
-                });
+                self.add_instruction_mov(dst, &Operand::Immediate(Immediate::Integer64(imm16)));
             }
 
             (Operand::Register(lhs), Operand::Register(rhs)) => {
@@ -666,11 +627,7 @@ impl AArch64CodeGenerator {
                     dst
                 };
 
-                // TODO: add good mov subroutine for stuff like this
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: src,
-                    imm16: lhs.as_i64() as _,
-                });
+                self.add_instruction_mov(src, &Operand::Immediate(*lhs));
 
                 self.instructions.push(ArmInstruction::LslRegister {
                     is_64_bit: true,
@@ -682,15 +639,38 @@ impl AArch64CodeGenerator {
         }
     }
 
+    fn add_instruction_mov(&mut self, dst: ArmRegister, source: &Operand) {
+        match source {
+            Operand::Immediate(immediate) => {
+                if immediate.as_i64() < 0 {
+                    self.instructions.push(ArmInstruction::MovN {
+                        is_64_bit: false,
+                        register: dst,
+                        unsigned_imm16: (immediate.as_i64().wrapping_neg()) as _,
+                    });
+                } else {
+                    self.instructions.push(ArmInstruction::MovZ {
+                        register: dst,
+                        imm16: immediate.as_i64() as _,
+                    });
+                }
+            }
+
+            Operand::Register(source) => {
+                let src = self.allocate_register(source);
+
+                if dst != src {
+                    self.instructions.push(ArmInstruction::MovRegister64 { dst, src });
+                }
+            }
+        }
+    }
+
     fn add_instruction_mul(&mut self, dst: ArmRegister, lhs: &Operand, rhs: &Operand) {
         match (lhs, rhs) {
             (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
                 let imm16 = lhs.as_i64() * rhs.as_i64();
-                debug_assert!(imm16 < (1 << 16));
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: dst,
-                    imm16: imm16 as _,
-                });
+                self.add_instruction_mov(dst, &Operand::Immediate(Immediate::Integer64(imm16)));
             }
 
             (Operand::Register(lhs), Operand::Register(rhs)) => {
@@ -720,11 +700,7 @@ impl AArch64CodeGenerator {
                 warn!("Immediate-DeelDoor zou gedaan moeten worden door de optimalisator!");
 
                 let imm16 = lhs.as_i64() / rhs.as_i64();
-                debug_assert!(imm16 < (1 << 16));
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: dst,
-                    imm16: imm16 as _,
-                });
+                self.add_instruction_mov(dst, &Operand::Immediate(Immediate::Integer64(imm16)));
             }
 
             (Operand::Register(lhs), Operand::Register(rhs)) => {
@@ -747,11 +723,7 @@ impl AArch64CodeGenerator {
                     dst
                 };
 
-                // TODO: add good mov subroutine for stuff like this
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: lhs_reg,
-                    imm16: lhs.as_i64() as _,
-                });
+                self.add_instruction_mov(lhs_reg, &Operand::Immediate(*lhs));
 
                 self.instructions.push(ArmInstruction::SDiv {
                     is_64_bit: true,
@@ -770,11 +742,7 @@ impl AArch64CodeGenerator {
                     dst
                 };
 
-                // TODO: add good mov subroutine for stuff like this
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: rhs_reg,
-                    imm16: rhs.as_i64() as _,
-                });
+                self.add_instruction_mov(rhs_reg, &Operand::Immediate(*rhs));
 
                 self.instructions.push(ArmInstruction::SDiv {
                     is_64_bit: true,
@@ -790,11 +758,7 @@ impl AArch64CodeGenerator {
         match (lhs, rhs) {
             (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
                 let imm16 = lhs.as_i64() + rhs.as_i64();
-                debug_assert!(imm16 < (1 << 16));
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: dst,
-                    imm16: imm16 as _,
-                });
+                self.add_instruction_mov(dst, &Operand::Immediate(Immediate::Integer64(imm16)));
             }
 
             (Operand::Register(lhs), Operand::Register(rhs)) => {
@@ -845,11 +809,7 @@ impl AArch64CodeGenerator {
 
                 let val = lhs.as_i64() % rhs.as_i64();
 
-                self.instructions.push(ArmInstruction::MovN {
-                    is_64_bit: true,
-                    register: dst,
-                    unsigned_imm16: val as u16,
-                });
+                self.add_instruction_mov(dst, &Operand::Immediate(Immediate::Integer64(val)));
                 return;
             }
 
@@ -869,10 +829,7 @@ impl AArch64CodeGenerator {
                 };
 
                 // TODO: add good mov subroutine for stuff like this
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: lhs_reg,
-                    imm16: lhs.as_i64() as _,
-                });
+                self.add_instruction_mov(lhs_reg, &Operand::Immediate(*lhs));
 
                 (lhs_reg, rhs)
             }
@@ -886,11 +843,7 @@ impl AArch64CodeGenerator {
                     dst
                 };
 
-                // TODO: add good mov subroutine for stuff like this
-                self.instructions.push(ArmInstruction::MovZ {
-                    register: rhs_reg,
-                    imm16: rhs.as_i64() as _,
-                });
+                self.add_instruction_mov(rhs_reg, &Operand::Immediate(*rhs));
 
                 (lhs, rhs_reg)
             }
