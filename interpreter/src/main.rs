@@ -13,12 +13,11 @@ mod ffi;
 mod interpreter;
 mod scope;
 
-use std::{collections::HashMap, fmt::Display, fs::{create_dir_all, read_dir}, path::{Path, PathBuf}, process::{exit, Command, Stdio}, time::Instant};
+use std::{collections::HashMap, fs::{create_dir_all, read_dir}, path::{Path, PathBuf}, process::{exit, Command, Stdio}, time::Instant};
 
 pub use babbelaar::*;
 use babbelaar_compiler::{Pipeline, Platform};
 use clap::Subcommand;
-use colored::Colorize;
 use env_logger::Env;
 use error::ErrorPrinter;
 
@@ -236,8 +235,4 @@ fn init_logger(args: &Args) {
 
 
     builder.init();
-}
-
-fn test(s: &str) {
-    let a = "";
 }
