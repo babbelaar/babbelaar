@@ -615,7 +615,7 @@ mod tests {
     #[rstest]
     #[case(
         Amd64Instruction::MovReg32ToPtrReg64 { base: Amd64Register::Rcx, src: Amd64Register::Rax },
-        [ 0x81, 0x01 ].to_vec(),
+        [ 0x89, 0x01 ].to_vec(),
     )]
     #[case(
         Amd64Instruction::MovImm32ToPtrReg64 { base: Amd64Register::Rdi, src: 8 },
