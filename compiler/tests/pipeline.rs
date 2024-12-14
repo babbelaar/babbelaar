@@ -5,6 +5,7 @@ use std::{error::Error, io::Read, path::Path, process::{Command, Stdio}};
 
 use babbelaar::parse_string_to_tree;
 use babbelaar_compiler::{Pipeline, Platform, Signal};
+use log::info;
 use rstest::rstest;
 use temp_dir::TempDir;
 
@@ -762,6 +763,22 @@ fn string_concat_static() {
     assert_eq!(result.stdout.trim_end_matches(|c| c == '\r' || c == '\n'), "Hallo, wereld!");
 }
 
+#[test]
+fn string_concat_assign_static() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            stel a = "Doei,";
+            a += " gastje!";
+            schrijf(a);
+            bekeer a.lengte();
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(13));
+    assert_eq!(result.stdout.trim_end_matches(|c| c == '\r' || c == '\n'), "Doei, gastje!");
+}
+
 #[rstest]
 #[case("0 == 1", false)]
 #[case("1 == 0", false)]
@@ -818,7 +835,7 @@ fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     dir.leak();
 
     let executable = create_single_object_executable(code, &directory);
-    println!("Running executable {}", executable.display());
+    info!("Running executable {}", executable.display());
     run(executable).unwrap()
 }
 

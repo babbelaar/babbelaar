@@ -186,13 +186,13 @@ impl CompileStatement for Statement {
 
 impl CompileStatement for AssignStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
-        let rhs = self.source.compile(builder).to_readable(builder);
+        let (rhs, rhs_ty) = self.source.compile(builder).to_readable_and_type(builder);
 
         let source = match self.kind.value() {
             AssignKind::Regular => rhs,
             AssignKind::Math(op) => {
-                let lhs = self.destination.compile(builder).to_readable(builder);
-                builder.math(MathOperation::from(*op), lhs, rhs)
+                let lhs = self.destination.compile(builder).to_readable_and_type(builder);
+                compile_math_op(builder, *op, lhs, (rhs, rhs_ty)).to_readable(builder)
             }
         };
 
@@ -396,33 +396,43 @@ impl CompileExpression for BiExpression {
         let (lhs, lhs_ty) = self.lhs.compile(builder).to_readable_and_type(builder);
         let (rhs, rhs_ty) = self.rhs.compile(builder).to_readable_and_type(builder);
 
-        if *self.operator.value() == BiOperator::Math(MathOperator::Add) && lhs_ty.type_id() == TypeId::SLINGER {
-            assert_eq!(rhs_ty.type_id(), TypeId::SLINGER);
-
-            let func = create_mangled_method_name(&BabString::new_static("Slinger"), &BabString::new_static("voegSamen"));
-            let new_str = builder.call(func, [
-                FunctionArgument::new(lhs, lhs_ty, PrimitiveType::new(builder.pointer_size(), false)),
-                FunctionArgument::new(rhs, rhs_ty, PrimitiveType::new(builder.pointer_size(), false)),
-            ].to_vec());
-
-            return ExpressionResult::typed(new_str, TypeId::SLINGER);
-        }
-
-        assert!(lhs_ty.type_id().is_integer(), "Ongeldige type aan de linkerhand: {lhs_ty:?}");
-        assert!(rhs_ty.type_id().is_integer(), "Ongeldige type aan de rechterhand: {rhs_ty:?}");
-
         match self.operator.value() {
             BiOperator::Math(math) => {
-                let math_operation = MathOperation::from(*math);
-                builder.math(math_operation, lhs, rhs).into()
+                compile_math_op(builder, *math, (lhs, lhs_ty), (rhs, rhs_ty))
             }
 
             BiOperator::Comparison(comparison) => {
+                assert!(lhs_ty.type_id().is_integer(), "Ongeldige type aan de linkerhand: {lhs_ty:?}");
+                assert!(rhs_ty.type_id().is_integer(), "Ongeldige type aan de rechterhand: {rhs_ty:?}");
                 builder.compare(lhs, rhs);
                 comparison.into()
             }
         }
     }
+}
+
+#[must_use]
+fn compile_math_op(builder: &mut FunctionBuilder, op: MathOperator, lhs: (Register, TypeInfo), rhs: (Register, TypeInfo)) -> ExpressionResult {
+    let (lhs, lhs_ty) = lhs;
+    let (rhs, rhs_ty) = rhs;
+
+    if op == MathOperator::Add && lhs_ty.type_id() == TypeId::SLINGER {
+        assert_eq!(rhs_ty.type_id(), TypeId::SLINGER);
+
+        let func = create_mangled_method_name(&BabString::new_static("Slinger"), &BabString::new_static("voegSamen"));
+        let new_str = builder.call(func, [
+            FunctionArgument::new(lhs, lhs_ty, PrimitiveType::new(builder.pointer_size(), false)),
+            FunctionArgument::new(rhs, rhs_ty, PrimitiveType::new(builder.pointer_size(), false)),
+        ].to_vec());
+
+        return ExpressionResult::typed(new_str, TypeId::SLINGER);
+    }
+
+    assert!(lhs_ty.type_id().is_integer(), "Ongeldige type aan de linkerhand: {lhs_ty:?}");
+                assert!(rhs_ty.type_id().is_integer(), "Ongeldige type aan de rechterhand: {rhs_ty:?}");
+
+    let math_operation = MathOperation::from(op);
+    builder.math(math_operation, lhs, rhs).into()
 }
 
 impl CompileExpression for PostfixExpression {
