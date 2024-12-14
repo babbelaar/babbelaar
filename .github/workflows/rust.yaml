@@ -1,0 +1,27 @@
+name: Rust
+
+on:
+  push:
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Bouwen
+      run: cargo build --verbose --workspace
+
+    - name: Testen
+      run: cargo test --all --tests --workspace --no-fail-fast
