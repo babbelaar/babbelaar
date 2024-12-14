@@ -228,6 +228,10 @@ fn init_logger(args: &Args) {
         builder.filter(None, log::LevelFilter::Debug);
     }
 
+    if matches!(args.command, Commands::Debug { .. }) {
+        builder.target(env_logger::Target::Stderr);
+    }
+
     let env = Env::default()
         .filter("BABBELAAR_LOG")
         .write_style("BABBELAAR_LOGSTIJL");

@@ -6,8 +6,12 @@ use std::{
     process::{ChildStdin, ChildStdout, Command, Stdio},
 };
 
+use log::info;
+
 #[test]
 fn simple_debugger() {
+    let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
+
     let mut path = std::env::current_exe().unwrap();
     path.pop();
     path.pop();
@@ -27,6 +31,7 @@ fn simple_debugger() {
         .arg(path.display().to_string())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
         .spawn()
         .unwrap();
 
@@ -82,7 +87,13 @@ struct Reader {
 
 impl Reader {
     pub fn read_message(&mut self) {
-        self.reader.read_line(&mut String::new()).unwrap();
-        self.reader.read_line(&mut String::new()).unwrap();
+        let mut header = String::new();
+        let mut message = String::new();
+
+        self.reader.read_line(&mut header).unwrap();
+        info!("Header: \"{header}\"");
+
+        self.reader.read_line(&mut message).unwrap();
+        info!("Bericht: \"{header}\"");
     }
 }
