@@ -327,6 +327,24 @@ impl<'program> FunctionBuilder<'program> {
             TypeInfo::Plain(ty) => self.program_builder.type_manager.layout(*ty).primitive_type(),
         }
     }
+
+    #[must_use]
+    pub fn malloc(&mut self, size: Operand) -> Register {
+        let size_register = match size {
+            Operand::Immediate(imm) => self.load_immediate(imm),
+            Operand::Register(reg) => reg,
+        };
+
+        let size = FunctionArgument::new(
+            size_register,
+            self.program_builder.type_manager.usize_type_info(),
+            self.program_builder.type_manager.usize_primitive_type(),
+        );
+
+        self.call(BabString::new_static("malloc"), [
+            size
+        ].to_vec())
+    }
 }
 
 #[cfg(test)]

@@ -714,6 +714,24 @@ fn store_bigger_value_in_smaller_field() {
     assert_eq!(result.exit_code, Some(0));
 }
 
+
+#[test]
+fn string_concat_static() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            stel a = "Hallo,";
+            stel b = " wereld!";
+            stel c = a + b;
+            schrijf(c);
+            bekeer c.lengte();
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(14));
+    assert_eq!(result.stdout.trim_end_matches(|c| c == '\r' || c == '\n'), "Hallo, wereld!");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();

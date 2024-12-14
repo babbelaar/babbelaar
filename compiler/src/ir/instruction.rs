@@ -346,7 +346,7 @@ pub struct PrimitiveType {
 
 impl PrimitiveType {
     #[must_use]
-    pub fn new(bytes: usize, signed: bool) -> Self {
+    pub const fn new(bytes: usize, signed: bool) -> Self {
         Self {
             signed,
             bytes,

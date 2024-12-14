@@ -385,8 +385,23 @@ impl CompileExpression for Expression {
 
 impl CompileExpression for BiExpression {
     fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
-        let lhs = self.lhs.compile(builder).to_readable(builder);
-        let rhs = self.rhs.compile(builder).to_readable(builder);
+        let (lhs, lhs_ty) = self.lhs.compile(builder).to_readable_and_type(builder);
+        let (rhs, rhs_ty) = self.rhs.compile(builder).to_readable_and_type(builder);
+
+        if *self.operator.value() == BiOperator::Math(MathOperator::Add) && lhs_ty.type_id() == TypeId::SLINGER {
+            assert_eq!(rhs_ty.type_id(), TypeId::SLINGER);
+
+            let func = create_mangled_method_name(&BabString::new_static("Slinger"), &BabString::new_static("voegSamen"));
+            let new_str = builder.call(func, [
+                FunctionArgument::new(lhs, lhs_ty, PrimitiveType::new(builder.pointer_size(), false)),
+                FunctionArgument::new(rhs, rhs_ty, PrimitiveType::new(builder.pointer_size(), false)),
+            ].to_vec());
+
+            return ExpressionResult::typed(new_str, TypeId::SLINGER);
+        }
+
+        assert!(lhs_ty.type_id().is_integer(), "Ongeldige type aan de linkerhand: {lhs_ty:?}");
+        assert!(rhs_ty.type_id().is_integer(), "Ongeldige type aan de rechterhand: {rhs_ty:?}");
 
         match self.operator.value() {
             BiOperator::Math(math) => {

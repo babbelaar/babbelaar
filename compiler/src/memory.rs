@@ -180,6 +180,24 @@ impl TypeManager {
     }
 
     #[must_use]
+    pub fn usize_type_info(&self) -> TypeInfo {
+        let type_id = match self.pointer_size() {
+            1 => TypeId::G8,
+            2 => TypeId::G16,
+            4 => TypeId::G32,
+            8 => TypeId::G64,
+            unsupported_size => unimplemented!("Ongeldige wijzergrootte `{unsupported_size}`!"),
+        };
+
+        TypeInfo::Plain(type_id)
+    }
+
+    #[must_use]
+    pub const fn usize_primitive_type(&self) -> PrimitiveType {
+        PrimitiveType::new(self.pointer_size(), false)
+    }
+
+    #[must_use]
     pub const fn platform_alignment_size(&self) -> usize {
         // TODO: this assumes ARM-based architecture, which requires loads/stores of 4-byte aligned addresses
         4
@@ -270,6 +288,11 @@ impl TypeId {
     pub const G64: Self = Self { index: 4 };
     pub const TEKEN: Self = Self { index: 5 };
     pub const SLINGER: Self = Self { index: 6 };
+
+    #[must_use]
+    pub const fn is_integer(&self) -> bool {
+        self.index == Self::G8.index || self.index == Self::G16.index || self.index == Self::G32.index || self.index == Self::G64.index
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

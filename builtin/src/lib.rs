@@ -14,6 +14,15 @@ pub unsafe extern "C" fn Slinger__lengte(ptr: *const u8) -> u64 {
     len as _
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn Slinger__voegSamen(lhs: *const u8, rhs: *const u8) -> *mut u8 {
+    let lhs = unsafe { load_str(lhs) };
+    let rhs = unsafe { load_str(rhs) };
+
+    let result = format!("{lhs}{rhs}");
+    result.leak().as_mut_ptr()
+}
+
 #[must_use]
 unsafe fn load_str<'a>(data: *const u8) -> Cow<'a, str> {
     let len = strlen(data);
