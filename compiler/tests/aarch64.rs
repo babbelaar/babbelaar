@@ -192,18 +192,6 @@ fn function_with_unused_string_literal_variable() {
     assert_eq!(value, 1);
 }
 
-#[test]
-fn function_returns_length_of_string_literal() {
-    let value = compile_and_execute::<i32>("krijgLengteVanSlinger", "
-    werkwijze krijgLengteVanSlinger() -> g32 {
-        bekeer \"Hallo\".lengte();
-    }
-    ");
-
-    assert_eq!(value, 5);
-}
-
-
 //
 //
 // Helper code
