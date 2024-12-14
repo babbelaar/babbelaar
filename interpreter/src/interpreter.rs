@@ -74,7 +74,16 @@ impl<D> Interpreter<D>
         self.debugger.on_statement(statement);
         match &statement.kind {
             StatementKind::Assignment(assignment) => {
-                let new_value = self.execute_expression(&assignment.source);
+                let rhs = self.execute_expression(&assignment.source);
+
+                let new_value = match assignment.kind.value() {
+                    AssignKind::Regular => rhs,
+                    AssignKind::Math(op) => {
+                        let lhs = self.execute_expression(&assignment.destination);
+                        self.execute_math_expression(*op, lhs, rhs)
+                    }
+                };
+
                 self.execute_assign(&assignment.destination, new_value);
                 StatementResult::Continue
             }
@@ -560,24 +569,32 @@ impl<D> Interpreter<D>
         let rhs = self.execute_expression(&expression.rhs);
 
         match *expression.operator {
-            BiOperator::Math(MathOperator::Add) => self.execute_expression_add(lhs, rhs),
-            BiOperator::Math(MathOperator::Subtract) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a - b),
-            BiOperator::Math(MathOperator::Multiply) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a * b),
-            BiOperator::Math(MathOperator::Modulo) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a % b),
-            BiOperator::Math(MathOperator::Divide) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a / b),
-            BiOperator::Math(MathOperator::BitwiseAnd) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a & b),
-            BiOperator::Math(MathOperator::BitwiseOr) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a | b),
-            BiOperator::Math(MathOperator::BitwiseXor) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a ^ b),
-
-            BiOperator::Math(MathOperator::LeftShift) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a << b),
-            BiOperator::Math(MathOperator::RightShift) => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a << b),
-
-            BiOperator::Math(MathOperator::LogicalAnd) => Value::Bool(lhs == Value::Bool(true) && rhs == Value::Bool(true)),
-            BiOperator::Math(MathOperator::LogicalOr) => Value::Bool(lhs == Value::Bool(true) || rhs == Value::Bool(true)),
+            BiOperator::Math(op) => self.execute_math_expression(op, lhs, rhs),
 
             BiOperator::Comparison(comparison) => {
                 Value::Bool(lhs.compare(&rhs, comparison))
             }
+        }
+    }
+
+    fn execute_math_expression(&mut self, op: MathOperator, lhs: Value, rhs: Value) -> Value {
+        match op {
+            MathOperator::Add => self.execute_expression_add(lhs, rhs),
+            MathOperator::Subtract => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a - b),
+
+            MathOperator::Multiply => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a * b),
+            MathOperator::Modulo => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a % b),
+            MathOperator::Divide => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a / b),
+
+            MathOperator::BitwiseAnd => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a & b),
+            MathOperator::BitwiseOr => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a | b),
+            MathOperator::BitwiseXor => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a ^ b),
+
+            MathOperator::LeftShift => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a << b),
+            MathOperator::RightShift => self.execute_bi_expression_numeric(lhs, rhs, |a, b| a << b),
+
+            MathOperator::LogicalAnd => Value::Bool(lhs == Value::Bool(true) && rhs == Value::Bool(true)),
+            MathOperator::LogicalOr => Value::Bool(lhs == Value::Bool(true) || rhs == Value::Bool(true)),
         }
     }
 

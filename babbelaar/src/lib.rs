@@ -13,6 +13,7 @@ mod util;
 
 pub use self::{
     ast::{
+        AssignKind,
         AssignStatement,
         Attribute,
         AttributeArgument,

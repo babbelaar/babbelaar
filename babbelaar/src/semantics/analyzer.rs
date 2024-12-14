@@ -2676,7 +2676,7 @@ impl SemanticAnalyzer {
     fn analyze_assignment_source_dest(&mut self, assign: &AssignStatement, destination_type: SemanticType, source_type: SemanticType) {
         if source_type != destination_type {
             self.emit_diagnostic(|this|
-                SemanticDiagnostic::new(assign.equals_sign, SemanticDiagnosticKind::IncompatibleAssignmentTypes)
+                SemanticDiagnostic::new(assign.kind.range(), SemanticDiagnosticKind::IncompatibleAssignmentTypes)
                     .with_related(SemanticRelatedInformation::new(assign.destination.range(), SemanticRelatedMessage::DestinationOfType { ty: destination_type.clone() }))
                     .with_related(SemanticRelatedInformation::new(assign.source.range(), SemanticRelatedMessage::SourceOfType { ty: source_type.clone() }))
                     .with_actions(this.try_create_conversion_actions(&destination_type, &source_type, &assign.source))

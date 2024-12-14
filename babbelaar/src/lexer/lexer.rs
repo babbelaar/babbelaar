@@ -51,19 +51,19 @@ impl<'source_code> Lexer<'source_code> {
             ';' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Semicolon)),
             ',' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Comma)),
             '=' => self.consume_single_or_double_char_token(Punctuator::Assignment, Punctuator::Equals),
-            '+' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PlusSign)),
-            '-' => self.consume_minus_or_arrow(),
+            '+' => self.consume_assign_or_normal_token(Punctuator::PlusSign, Punctuator::AddAssign),
+            '-' => self.consume_minus(),
             '/' => self.handle_solidus(),
-            '*' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Asterisk)),
-            '%' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::PercentageSign)),
+            '*' => self.consume_assign_or_normal_token(Punctuator::Asterisk, Punctuator::MultiplyAssign),
+            '%' => self.consume_assign_or_normal_token(Punctuator::PercentageSign, Punctuator::ModuloAssign),
             ':' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Colon)),
             '.' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Period)),
             '@' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::AtSign)),
-            '<' => self.consume_single_or_double_char_token(Punctuator::LessThan, Punctuator::LeftShift),
-            '>' => self.consume_single_or_double_char_token(Punctuator::GreaterThan, Punctuator::RightShift),
+            '<' => self.consume_quadruple(Punctuator::LessThan, Punctuator::LessThanOrEqual, Punctuator::LeftShift, Punctuator::LeftShiftAssign),
+            '>' => self.consume_quadruple(Punctuator::GreaterThan, Punctuator::GreaterThanOrEqual, Punctuator::RightShift, Punctuator::RightShiftAssign),
             '&' => self.consume_single_or_double_char_token(Punctuator::BitwiseAnd, Punctuator::LogicalAnd),
             '|' => self.consume_single_or_double_char_token(Punctuator::BitwiseOr, Punctuator::LogicalOr),
-            '^' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::BitwiseXor)),
+            '^' => self.consume_assign_or_normal_token(Punctuator::BitwiseXor, Punctuator::BitwiseXorAssign),
 
             _ => {
                 let (begin, char) = self.current?;
@@ -116,6 +116,55 @@ impl<'source_code> Lexer<'source_code> {
 
         Some(Token {
             kind,
+            begin,
+            end,
+        })
+    }
+
+    fn consume_assign_or_normal_token(&mut self, normal: Punctuator, assign: Punctuator) -> Option<Token> {
+        let begin = self.current_location();
+        self.consume_char();
+
+        let kind = if self.peek_char() == Some('=') {
+            self.consume_char();
+            TokenKind::Punctuator(assign)
+        } else {
+            TokenKind::Punctuator(normal)
+        };
+
+        let end = self.current_location();
+
+        Some(Token {
+            kind,
+            begin,
+            end,
+        })
+    }
+
+    fn consume_quadruple(&mut self, normal: Punctuator, normal_assign: Punctuator, double: Punctuator, double_assign: Punctuator) -> Option<Token> {
+        let begin = self.current_location();
+        let ch = self.next_char()?;
+
+        let punctuator = if self.peek_char() == Some(ch) {
+            self.consume_char();
+
+            if self.peek_char() == Some('=') {
+                self.consume_char();
+                double_assign
+            } else {
+                double
+            }
+        } else if self.peek_char() == Some('=') {
+            self.consume_char();
+            normal_assign
+        } else {
+            normal
+        };
+
+        let end = self.current_location();
+
+        Some(Token {
+            kind: TokenKind::Punctuator(punctuator),
             begin,
             end,
         })
@@ -427,12 +476,23 @@ impl<'source_code> Lexer<'source_code> {
     fn handle_solidus(&mut self) -> Option<Token> {
         let token = self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Solidus))?;
 
-        if self.peek_char() != Some('/') {
-            return Some(token);
-        }
+        match self.peek_char() {
+            Some('/') => {
+                self.consume_until_end_of_line();
+                self.next()
+            }
 
-        self.consume_until_end_of_line();
-        self.next()
+            Some('=') => {
+                self.consume_char();
+                Some(Token {
+                    kind: TokenKind::Punctuator(Punctuator::DivideAssign),
+                    begin: token.begin,
+                    end: self.current_location(),
+                })
+            }
+
+            _ => Some(token),
+        }
     }
 
     fn consume_until_end_of_line(&mut self) {
@@ -461,16 +521,25 @@ impl<'source_code> Lexer<'source_code> {
         (tokens, self.errors)
     }
 
-    fn consume_minus_or_arrow(&mut self) -> Option<Token> {
+    fn consume_minus(&mut self) -> Option<Token> {
         let begin = self.current_location();
 
         _ = self.next_char()?;
 
-        let kind = if self.peek_char() == Some('>') {
-            self.consume_char();
-            TokenKind::Punctuator(Punctuator::Arrow)
-        } else {
-            TokenKind::Punctuator(Punctuator::HyphenMinus)
+        let kind = match self.peek_char() {
+            Some('>') => {
+                self.consume_char();
+                TokenKind::Punctuator(Punctuator::Arrow)
+            }
+
+            Some('=') => {
+                self.consume_char();
+                TokenKind::Punctuator(Punctuator::AddAssign)
+            }
+
+            _ => {
+                TokenKind::Punctuator(Punctuator::HyphenMinus)
+            }
         };
 
         let end = self.current_location();
@@ -571,6 +640,81 @@ mod tests {
         kind: TokenKind::StringLiteral(BabString::new_static("Hal\r\nlo")),
         begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
         end: FileLocation::new(FileId::INTERNAL, 11, 0, 11),
+    })]
+    #[case("< 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::LessThan),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
+    })]
+    #[case("> 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::GreaterThan),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
+    })]
+    #[case("<= 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::LessThanOrEqual),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 2, 0, 2),
+    })]
+    #[case(">= 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::GreaterThanOrEqual),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 2, 0, 2),
+    })]
+    #[case("<< 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::LeftShift),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 2, 0, 2),
+    })]
+    #[case(">> 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::RightShift),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 2, 0, 2),
+    })]
+    #[case("<<= 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::LeftShiftAssign),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 3, 0, 3),
+    })]
+    #[case(">>= 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::RightShiftAssign),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 3, 0, 3),
+    })]
+    #[case("* 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::Asterisk),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
+    })]
+    #[case("*= 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::MultiplyAssign),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 2, 0, 2),
+    })]
+    #[case("/ 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::Solidus),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
+    })]
+    #[case("/= 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::DivideAssign),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 2, 0, 2),
+    })]
+    #[case("= 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::Assignment),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 1, 0, 1),
+    })]
+    #[case("== 1", Token {
+        kind: TokenKind::Punctuator(Punctuator::Equals),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 2, 0, 2),
+    })]
+    #[case("0x80", Token {
+        kind: TokenKind::Integer(128),
+        begin: FileLocation::new(FileId::INTERNAL, 0, 0, 0),
+        end: FileLocation::new(FileId::INTERNAL, 4, 0, 4),
     })]
     fn next_text(#[case] input: &'static str, #[case] expected: Token) {
         let source_code = SourceCode::new(PathBuf::new(), 0, input.to_string());

@@ -694,12 +694,42 @@ impl AArch64CodeGenerator {
                 });
             }
 
-            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
-                todo!("Mul {lhs}, {rhs}")
+            (Operand::Register(lhs), Operand::Immediate(rhs_val)) => {
+                let lhs = self.allocate_register(lhs);
+
+                let rhs = if lhs == dst {
+                    self.register_allocator.hacky_random_available_register().unwrap()
+                } else {
+                    dst
+                };
+
+                self.add_instruction_mov(rhs, &Operand::Immediate(*rhs_val));
+
+                self.instructions.push(ArmInstruction::Mul {
+                    is_64_bit: true,
+                    dst,
+                    lhs,
+                    rhs,
+                });
             }
 
-            (Operand::Immediate(lhs), Operand::Register(rhs)) => {
-                todo!("Mul {lhs}, {rhs}")
+            (Operand::Immediate(lhs_val), Operand::Register(rhs)) => {
+                let rhs = self.allocate_register(rhs);
+
+                let lhs = if rhs == dst {
+                    self.register_allocator.hacky_random_available_register().unwrap()
+                } else {
+                    dst
+                };
+
+                self.add_instruction_mov(lhs, &Operand::Immediate(*lhs_val));
+
+                self.instructions.push(ArmInstruction::Mul {
+                    is_64_bit: true,
+                    dst,
+                    lhs,
+                    rhs,
+                });
             }
         }
     }

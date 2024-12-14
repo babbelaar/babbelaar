@@ -39,6 +39,7 @@ pub use self::{
         ParseError,
     },
     statement::{
+        AssignKind,
         AssignStatement,
         ExtensionStatement,
         ForIterableKind,

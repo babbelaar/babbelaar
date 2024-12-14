@@ -253,7 +253,7 @@ impl BiOperator {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MathOperator {
     Add,
     Subtract,

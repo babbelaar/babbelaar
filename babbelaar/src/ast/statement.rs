@@ -3,6 +3,8 @@
 
 use crate::{AttributeList, BabString, Expression, FileRange, InterfaceSpecifier, InterfaceStatement, Method, Parameter, RangeExpression, Ranged, Structure, Type, TypeSpecifier};
 
+use super::MathOperator;
+
 #[derive(Debug, Clone)]
 pub struct Statement {
     pub range: FileRange,
@@ -60,9 +62,15 @@ impl StatementKind {
 #[derive(Clone, Debug)]
 pub struct AssignStatement {
     pub range: FileRange,
-    pub equals_sign: FileRange,
+    pub kind: Ranged<AssignKind>,
     pub destination: Ranged<Expression>,
     pub source: Ranged<Expression>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AssignKind {
+    Regular,
+    Math(MathOperator),
 }
 
 #[derive(Debug, Clone)]

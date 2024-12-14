@@ -5,6 +5,7 @@ use std::{error::Error, io::Read, path::Path, process::{Command, Stdio}};
 
 use babbelaar::parse_string_to_tree;
 use babbelaar_compiler::{Pipeline, Platform, Signal};
+use rstest::rstest;
 use temp_dir::TempDir;
 
 #[test]
@@ -17,6 +18,20 @@ fn simple_return_0() {
 
     assert_eq!(result.signal, None);
     assert_eq!(result.exit_code, Some(0));
+}
+
+#[test]
+fn simple_reassign_1_to_2() {
+    let result = create_and_run_single_object_executable("
+        werkwijze hoofd() -> g32 {
+            stel a = 1;
+            a = 2;
+            bekeer a;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(2));
 }
 
 #[test]
@@ -38,6 +53,22 @@ fn simple_return_1_plus_2() {
 
         werkwijze hoofd() -> g32 {
             bekeer een() + 2;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(3));
+}
+
+#[test]
+fn return_1_plus_subroutine_val() {
+    let result = create_and_run_single_object_executable("
+        werkwijze een() -> g32 { bekeer 1; }
+
+        werkwijze hoofd() -> g32 {
+            stel a = 2;
+            a += 0;
+            bekeer een() + a;
         }
     ");
 
@@ -714,7 +745,6 @@ fn store_bigger_value_in_smaller_field() {
     assert_eq!(result.exit_code, Some(0));
 }
 
-
 #[test]
 fn string_concat_static() {
     let result = create_and_run_single_object_executable(r#"
@@ -730,6 +760,52 @@ fn string_concat_static() {
     assert_eq!(result.signal, None);
     assert_eq!(result.exit_code, Some(14));
     assert_eq!(result.stdout.trim_end_matches(|c| c == '\r' || c == '\n'), "Hallo, wereld!");
+}
+
+#[rstest]
+#[case("0 == 1", false)]
+#[case("1 == 0", false)]
+#[case("1 == 1", true)]
+#[case("1 > 0", true)]
+#[case("0 > 1", false)]
+#[case("1 < 0", false)]
+#[case("0 < 1", true)]
+#[case("19 >= 19", true)]
+#[case("16 >= 20", false)]
+fn comparison_immediate(#[case] expr: &str, #[case] expected: bool) {
+    let result = create_and_run_single_object_executable(&format!(r#"
+        werkwijze hoofd() -> g32 {{
+            bekeer {expr};
+        }}
+    "#));
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(expected as _));
+}
+
+#[rstest]
+#[case(0, "+=", 0, 0)]
+#[case(1, "+=", 0, 1)]
+#[case(0, "+=", 1, 1)]
+#[case(31, "+=", 42, 73)]
+#[case(0, "*=", 0, 0)]
+#[case(1, "*=", 1, 1)]
+#[case(31, "*=", 2, 62)]
+fn assign_with_math_operation(#[case] first: i64, #[case] op: &str, #[case] second: i64, #[case] expected: i32) {
+    let result = create_and_run_single_object_executable(&format!(r#"
+        werkwijze krijgWaarde() -> g32 {{
+            bekeer {second};
+        }}
+
+        werkwijze hoofd() -> g32 {{
+            stel waarde = {first};
+            waarde {op} krijgWaarde();
+            bekeer waarde;
+        }}
+    "#));
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(expected));
 }
 
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {

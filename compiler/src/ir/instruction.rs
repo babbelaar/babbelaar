@@ -3,7 +3,7 @@
 
 use std::fmt::{Display, Write};
 
-use babbelaar::BabString;
+use babbelaar::{BabString, MathOperator};
 
 use crate::DataSectionOffset;
 
@@ -328,6 +328,22 @@ impl MathOperation {
             Self::Modulo => "Modulo",
             Self::LeftShift => "SchuifLinks",
             Self::RightShift => "SchuifRechts",
+        }
+    }
+}
+
+impl From<MathOperator> for MathOperation {
+    fn from(value: MathOperator) -> Self {
+        match value {
+            MathOperator::Add => MathOperation::Add,
+            MathOperator::Subtract => MathOperation::Subtract,
+            MathOperator::Multiply => MathOperation::Multiply,
+            MathOperator::Divide => MathOperation::Divide,
+            MathOperator::Modulo => MathOperation::Modulo,
+            MathOperator::LeftShift => MathOperation::LeftShift,
+            MathOperator::RightShift => MathOperation::RightShift,
+
+            _ => todo!("Ondersteun {value:?} als wiskundige operator in de compileerder"),
         }
     }
 }

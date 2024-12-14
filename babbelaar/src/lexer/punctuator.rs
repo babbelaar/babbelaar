@@ -47,11 +47,15 @@ pub enum Punctuator {
     Period,
     #[strum(serialize = "minder-dan")]
     LessThan,
+    #[strum(serialize = "minder-dan-of-gelijk")]
+    LessThanOrEqual,
     #[strum(serialize = "meer-dan")]
     GreaterThan,
+    #[strum(serialize = "meer-dan-of-gelijk")]
+    GreaterThanOrEqual,
     #[strum(serialize = "bitgewijs-en")]
     BitwiseAnd,
-    #[strum(serialize = "bitgewijs-en")]
+    #[strum(serialize = "bitgewijs-inclusieve-of")]
     BitwiseOr,
     #[strum(serialize = "bitgewijs-exclusieve-of")]
     BitwiseXor,
@@ -63,6 +67,27 @@ pub enum Punctuator {
     LeftShift,
     #[strum(serialize = "schuif-rechts")]
     RightShift,
+
+    #[strum(serialize = "plus-is")]
+    AddAssign,
+    #[strum(serialize = "min-is")]
+    SubtractAssign,
+    #[strum(serialize = "keer-is")]
+    MultiplyAssign,
+    #[strum(serialize = "gedeeld-door-is")]
+    DivideAssign,
+    #[strum(serialize = "modulus-is")]
+    ModuloAssign,
+    #[strum(serialize = "bitgewijs-en-is")]
+    BitwiseAndAssign,
+    #[strum(serialize = "bitgewijs-inclusieve-of-is")]
+    BitwiseOrAssign,
+    #[strum(serialize = "bitgewijs-exclusieve-of-is")]
+    BitwiseXorAssign,
+    #[strum(serialize = "schuif-links-is")]
+    LeftShiftAssign,
+    #[strum(serialize = "schuif-links-rechts")]
+    RightShiftAssign,
 }
 
 impl Punctuator {
@@ -89,7 +114,9 @@ impl Punctuator {
             Self::PercentageSign => "%",
             Self::Period => ".",
             Self::LessThan => "<",
+            Self::LessThanOrEqual => "<=",
             Self::GreaterThan => ">",
+            Self::GreaterThanOrEqual => ">=",
             Self::BitwiseAnd => "&",
             Self::BitwiseOr => "|",
             Self::BitwiseXor => "^",
@@ -97,6 +124,16 @@ impl Punctuator {
             Self::LogicalOr => "||",
             Self::LeftShift => "<<",
             Self::RightShift => ">>",
+            Self::AddAssign => "+=",
+            Self::SubtractAssign => "-=",
+            Self::MultiplyAssign => "*=",
+            Self::DivideAssign => "/=",
+            Self::ModuloAssign => "%=",
+            Self::BitwiseAndAssign => "&=",
+            Self::BitwiseOrAssign => "|=",
+            Self::BitwiseXorAssign => "^=",
+            Self::LeftShiftAssign => "<<=",
+            Self::RightShiftAssign => ">>=",
         }
     }
 }

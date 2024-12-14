@@ -186,7 +186,15 @@ impl CompileStatement for Statement {
 
 impl CompileStatement for AssignStatement {
     fn compile(&self, builder: &mut FunctionBuilder) {
-        let source = self.source.compile(builder).to_readable(builder);
+        let rhs = self.source.compile(builder).to_readable(builder);
+
+        let source = match self.kind.value() {
+            AssignKind::Regular => rhs,
+            AssignKind::Math(op) => {
+                let lhs = self.destination.compile(builder).to_readable(builder);
+                builder.math(MathOperation::from(*op), lhs, rhs)
+            }
+        };
 
         if self.destination.value().as_identifier() == Some(&Constants::DISCARDING_IDENT) {
             return;
@@ -405,19 +413,7 @@ impl CompileExpression for BiExpression {
 
         match self.operator.value() {
             BiOperator::Math(math) => {
-
-                let math_operation = match math {
-                    MathOperator::Add => MathOperation::Add,
-                    MathOperator::Subtract => MathOperation::Subtract,
-                    MathOperator::Multiply => MathOperation::Multiply,
-                    MathOperator::Divide => MathOperation::Divide,
-                    MathOperator::Modulo => MathOperation::Modulo,
-                    MathOperator::LeftShift => MathOperation::LeftShift,
-                    MathOperator::RightShift => MathOperation::RightShift,
-
-                    _ => todo!("Ondersteun {:?}", self.operator.value()),
-                };
-
+                let math_operation = MathOperation::from(*math);
                 builder.math(math_operation, lhs, rhs).into()
             }
 
