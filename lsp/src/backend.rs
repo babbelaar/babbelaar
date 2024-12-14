@@ -262,7 +262,7 @@ impl Backend {
                     severity: Some(DiagnosticSeverity::ERROR),
                     code: Some(NumberOrString::String(err.error_code().to_string())),
                     code_description: Some(CodeDescription {
-                        href: Uri::from_str(&format!("http://localhost:3000/docs/documentatie/fouten/{}", err.error_code())).unwrap(),
+                        href: Uri::from_str(&format!("http://babbelaar.dev/docs/documentatie/fouten/{}", err.error_code())).unwrap(),
                     }),
                     source: None,
                     message: err.to_string(),
