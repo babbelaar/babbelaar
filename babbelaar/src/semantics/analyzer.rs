@@ -1088,9 +1088,11 @@ impl SemanticAnalyzer {
             let argument_type = self.analyze_expression(arg).ty;
 
             let Some(parameter_type) = self.resolve_parameter_type(&function, arg_idx) else {
-                if !has_var_args {
-                    warn!("Cannot check type of parameter with index {arg_idx}");
+                if has_var_args {
+                    continue;
                 }
+
+                warn!("Cannot check type of parameter with index {arg_idx}");
                 break;
             };
 
