@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fs::read_dir;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use babbelaar::*;
@@ -259,8 +260,10 @@ impl Backend {
                 diags.entry(range.file_id()).or_default().push(Diagnostic {
                     range: converter.convert_file_range(range),
                     severity: Some(DiagnosticSeverity::ERROR),
-                    code: Some(NumberOrString::String(err.name().to_string())),
-                    code_description: None,
+                    code: Some(NumberOrString::String(err.error_code().to_string())),
+                    code_description: Some(CodeDescription {
+                        href: Uri::from_str(&format!("http://localhost:3000/docs/documentatie/fouten/{}", err.error_code())).unwrap(),
+                    }),
                     source: None,
                     message: err.to_string(),
                     related_information: None,

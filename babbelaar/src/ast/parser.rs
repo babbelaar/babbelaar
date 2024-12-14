@@ -1910,6 +1910,55 @@ pub enum ParseDiagnostic {
 }
 
 impl ParseDiagnostic {
+    #[must_use]
+    pub fn error_code(&self) -> &str {
+        match self {
+            Self::AttributeArgumentExpectedComma { .. } => "p0001",
+            Self::StatementInvalidStart { .. } => "p0002",
+            Self::ExpectedLeftCurlyBracket { .. } => "p0003",
+            Self::ExpectedLeftParen { .. } => "p0004",
+            Self::ExpectedRightParen { .. } => "p0005",
+            Self::ExpectedColon { .. } => "p0006",
+            Self::ExpectedComma { .. } => "p0007",
+            Self::ExpectedCommaOrGreaterThanInGenericTypePack { .. } => "p0008",
+            Self::ExpectedCommaAfterStructureMember { .. } => "p0009",
+            Self::ExpectedExtensionMethodPrefixWerkwijze { .. } => "p0010",
+            Self::ExpectedGenericTypeName { .. } => "p0011",
+            Self::ExpectedGreaterThanForParameterPack { .. } => "p0012",
+            Self::ExpectedKeywordOp { .. } => "p0013",
+            Self::ExpectedNameAfterNieuw { .. } => "p0014",
+            Self::ExpectedNameOfField { .. } => "p0015",
+            Self::ExpectedNameOfInterface { .. } => "p0016",
+            Self::ExpectedNameOfInterfaceOrType { .. } => "p0017",
+            Self::ExpectedNameOfStructuur { .. } => "p0018",
+            Self::ExpectedNameOfVariable { .. } => "p0019",
+            Self::ExpectedEqualsInsideVariable { .. } => "p0020",
+            Self::ExpectedRightCurlyBracket { .. } => "p0021",
+            Self::ExpectedRightSquareBracketForArrayInitializer { .. } => "p0022",
+            Self::ExpectedRightSquareBracketForArrayQualifier { .. } => "p0023",
+            Self::ExpectedRightSquareBracketForSubscript { .. } => "p0024",
+            Self::ExpectedSemicolonAfterStatement { .. } => "p0025",
+            Self::ExpectedSemicolonOrCurlyBracketForFunction { .. } => "p0026",
+            Self::ExpectedStructureMemberPrefixVeld { .. } => "p0027",
+            Self::ExpectedStructureMethodPrefixWerkwijze { .. } => "p0028",
+            Self::FunctionStatementExpectedName { .. } => "p0029",
+            Self::ExpectedIdentifier { .. } => "p0030",
+            Self::ForStatementExpectedIteratorName { .. } => "p0031",
+            Self::ForStatementExpectedInKeyword { .. } => "p0032",
+            Self::ParameterExpectedName { .. } => "p0033",
+            Self::ParameterExpectedComma { .. } => "p0034",
+            Self::PostfixMemberOrReferenceExpectedIdentifier { .. } => "p0035",
+            Self::RangeExpectedKeyword { .. } => "p0036",
+            Self::ResidualTokensInTemplateString { .. } => "p0037",
+            Self::TypeExpectedSpecifierName { .. } => "p0038",
+            Self::UnknownStartOfExpression { .. } => "p0039",
+            Self::UnexpectedTokenAtStartOfStructureMember { .. } => "p0040",
+            Self::UnexpectedTokenAtStartOfStructureInstantiation { .. } => "p0041",
+            Self::UnexpectedTokenInsideStructureInstantiation { .. } => "p0042",
+            Self::FunctionMustHaveDefinition { .. } => "p0043",
+       }
+    }
+
     pub fn token(&self) -> &Token {
         match self {
             Self::AttributeArgumentExpectedComma { token } => token,
