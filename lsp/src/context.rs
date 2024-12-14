@@ -1,18 +1,19 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{collections::HashMap, path::{Path, PathBuf}, sync::Arc};
+use std::{collections::HashMap, path::{Path, PathBuf}, sync::{atomic::{AtomicUsize, Ordering}, Arc}};
 
 use dashmap::DashMap;
 
 use babbelaar::{FileId, Lexer, LexerError, ParseDiagnostic, ParseTree, Parser, SemanticAnalysisPhase, SemanticAnalyzer, SourceCode, Token};
-use tokio::sync::{Mutex, RwLock};
+use tokio::{sync::{Mutex, RwLock}, task::yield_now};
 use tower_lsp::lsp_types::Uri as Url;
 
 use crate::{BabbelaarLspError, UrlExtension};
 
 #[derive(Debug)]
 pub struct BabbelaarContext {
+    change_backlog: AtomicUsize,
     files: DashMap<PathBuf, Arc<Mutex<BabbelaarFile>>>,
     semantic_analysis: RwLock<Option<Arc<SemanticAnalyzer>>>,
 }
@@ -20,6 +21,7 @@ pub struct BabbelaarContext {
 impl BabbelaarContext {
     pub fn new() -> Self {
         Self {
+            change_backlog: Default::default(),
             files: DashMap::new(),
             semantic_analysis: RwLock::new(None),
         }
@@ -68,6 +70,7 @@ impl BabbelaarContext {
     pub async fn with_file<K, F, R>(&self, key: K, f: F) -> Result<R, BabbelaarLspError>
             where K: ContextKey,
                   F: FnOnce(&mut BabbelaarFile) -> Result<R, BabbelaarLspError> {
+        self.wait_available().await;
         let mut path = key.to_context_key().canonicalize()?;
 
         if !self.files.contains_key(&path) {
@@ -82,6 +85,7 @@ impl BabbelaarContext {
 
     pub async fn with_all_files<F>(&self, mut f: F) -> Result<(), BabbelaarLspError>
             where F: FnMut(&mut BabbelaarFile) -> Result<(), BabbelaarLspError> {
+        self.wait_available().await;
         for file in self.files.iter() {
             let mut file = file.lock().await;
             f(&mut file)?;
@@ -90,6 +94,7 @@ impl BabbelaarContext {
     }
 
     pub async fn semantic_analysis(&self) -> Arc<SemanticAnalyzer> {
+        self.wait_available().await;
         let mut analysis = self.semantic_analysis.write().await;
         if let Some(analyzer) = analysis.as_ref() {
             return Arc::clone(&analyzer);
@@ -120,6 +125,7 @@ impl BabbelaarContext {
     }
 
     pub async fn path_of(&self, file_id: FileId) -> Option<PathBuf> {
+        self.wait_available().await;
         for pair in self.files.iter() {
             let file = pair.lock().await;
             if file.source_code.file_id() == file_id {
@@ -132,6 +138,7 @@ impl BabbelaarContext {
     }
 
     pub async fn source_code_of(&self, file_id: FileId) -> SourceCode {
+        self.wait_available().await;
         for file in self.files.iter() {
             let file = file.lock().await;
             if file.source_code().file_id() == file_id {
@@ -139,6 +146,20 @@ impl BabbelaarContext {
             }
         }
         panic!("Illegal file id")
+    }
+
+    pub(super) fn will_change(&self) {
+        self.change_backlog.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(super) fn did_change(&self) {
+        self.change_backlog.fetch_sub(1, Ordering::Relaxed);
+    }
+
+    async fn wait_available(&self) {
+        while self.change_backlog.load(Ordering::SeqCst) != 0 {
+            yield_now().await;
+        }
     }
 }
 

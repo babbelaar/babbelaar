@@ -978,7 +978,7 @@ impl<'tokens> Parser<'tokens> {
 
         let in_keyword = self.consume_token()?;
         if in_keyword.kind != TokenKind::Keyword(Keyword::In) {
-            self.emit_diagnostic(ParseDiagnostic::ForStatementExpectedInKeyword { token: in_keyword, iterator_name: iterator_name.clone() });
+            self.emit_diagnostic(ParseDiagnostic::ForStatementExpectedInKeyword { token: in_keyword, iterator_name: iterator_name.value().clone() });
         }
 
         let iterable = if self.peek_keyword() == Some(Keyword::Reeks) {
@@ -1777,7 +1777,7 @@ impl<'tokens> Parser<'tokens> {
     }
 }
 
-#[derive(Clone, Debug, thiserror::Error, AsRefStr)]
+#[derive(Clone, Debug, thiserror::Error, AsRefStr, PartialEq)]
 pub enum ParseDiagnostic {
     #[error("Komma `,` of gesloten rond haakje `)` verwacht binnen attribuutargumentlijst, maar kreeg: {token}")]
     AttributeArgumentExpectedComma { token: Token },
@@ -1872,8 +1872,8 @@ pub enum ParseDiagnostic {
     #[error("Iteratornaam verwacht na `volg`, maar kreeg: {token}")]
     ForStatementExpectedIteratorName { token: Token },
 
-    #[error("Sleutelwoord 'in' verwacht na `volg {}`, maar kreeg: {token}", iterator_name.value())]
-    ForStatementExpectedInKeyword { token: Token, iterator_name: Ranged<BabString> },
+    #[error("Sleutelwoord 'in' verwacht na `volg {}`, maar kreeg: {token}", iterator_name)]
+    ForStatementExpectedInKeyword { token: Token, iterator_name: BabString },
 
     #[error("Parameternaam verwacht, maar kreeg: {token}")]
     ParameterExpectedName { token: Token },

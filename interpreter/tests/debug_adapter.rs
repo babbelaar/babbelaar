@@ -26,7 +26,7 @@ fn simple_debugger() {
     path.push("tests");
     path.push("debug_adapter.bab");
 
-    let process = Command::new(interpreter)
+    let mut process = Command::new(interpreter)
         .arg("debug")
         .arg(path.display().to_string())
         .stdin(Stdio::piped())
@@ -36,11 +36,11 @@ fn simple_debugger() {
         .unwrap();
 
     let mut reader = Reader {
-        reader: BufReader::new(process.stdout.unwrap()),
+        reader: BufReader::new(process.stdout.take().unwrap()),
     };
 
     let mut writer = Writer {
-        writer: BufWriter::new(process.stdin.unwrap()),
+        writer: BufWriter::new(process.stdin.take().unwrap()),
     };
 
     writer.write(br#"{"command":"initialize","arguments":{"clientID":"vscode","clientName":"Visual Studio Code","adapterID":"babbelaar","pathFormat":"path","linesStartAt1":true,"columnsStartAt1":true,"supportsVariableType":true,"supportsVariablePaging":true,"supportsRunInTerminalRequest":true,"locale":"en","supportsProgressReporting":true,"supportsInvalidatedEvent":true,"supportsMemoryReferences":true,"supportsArgsCanBeInterpretedByShell":true,"supportsMemoryEvent":true,"supportsStartDebuggingRequest":true},"type":"request","seq":1}
@@ -67,6 +67,8 @@ fn simple_debugger() {
 "#);
 
     reader.read_message();
+
+    _ = process.kill();
 }
 
 struct Writer {

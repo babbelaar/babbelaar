@@ -578,11 +578,13 @@ impl Backend {
     }
 
     pub async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
+        self.context.will_change();
         {
             let path = params.text_document.uri.to_path().unwrap();
             let source_code = SourceCode::new(path, params.text_document.version, std::mem::take(&mut params.content_changes[0].text));
             self.context.register_file(source_code).await;
         }
+        self.context.did_change();
 
         self.collect_diagnostics_in_background();
     }

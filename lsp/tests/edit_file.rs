@@ -1,9 +1,9 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{fs::{read_dir, read_to_string}, io::{stdout, BufRead, BufReader, Read, Write}, path::{Path, PathBuf}, process::{Child, ChildStdin, ChildStdout, Command, Stdio}, sync::{mpsc::{sync_channel, Receiver}, Arc}, thread::{spawn, yield_now}, time::Duration};
+use std::{fs::{read_dir, read_to_string}, io::{stdout, BufRead, BufReader, Read, Write}, path::{Path, PathBuf}, process::{Child, ChildStdin, ChildStdout, Command, Stdio}, sync::{atomic::{AtomicUsize, Ordering}, mpsc::{sync_channel, Receiver}, Arc}, thread::{spawn, yield_now}, time::Duration};
 
-use anyhow::{ensure, Error, Result};
+use anyhow::{anyhow, ensure, Error, Result};
 use babbelaar::Constants;
 use dashmap::DashMap;
 use tower_lsp::{jsonrpc::{self, Id}, lsp_types::{notification::*, request::*, *}};
@@ -11,7 +11,7 @@ use url::Url;
 
 const LSP_EXECUTABLE_PATH: &str = env!("CARGO_BIN_EXE_babbelaar-lsp");
 
-const TYPING_SPEED: Duration = Duration::from_millis(50);
+const TYPING_SPEED: Duration = Duration::from_millis(1);
 
 #[test]
 fn character_by_character() {
@@ -77,11 +77,16 @@ fn character_by_character_for_dir(directory: PathBuf) {
             }
         });
 
-        print!("{ch}");
+        _ = ch;
+
         stdout().flush().unwrap();
 
         std::thread::sleep(TYPING_SPEED);
     }
+
+    std::thread::sleep(Duration::from_secs(1));
+
+    assert_eq!((version - 1) as usize, lsp.diagnostics.load(Ordering::SeqCst));
 }
 
 struct LspInterface {
@@ -90,6 +95,7 @@ struct LspInterface {
     responses: Arc<DashMap<Id, jsonrpc::Response>>,
     input: ChildStdin,
     error_receiver: Receiver<Error>,
+    diagnostics: Arc<AtomicUsize>,
 
     state: LspState,
 }
@@ -107,20 +113,25 @@ impl LspInterface {
         let output = process.stdout.take().unwrap();
         let output = BufReader::new(output);
 
+        let diagnostics = Arc::new(AtomicUsize::new(0));
+        let diagnostics2 = Arc::clone(&diagnostics);
+
         let responses = Arc::new(DashMap::new());
 
         let responses2 = Arc::clone(&responses);
 
         let (error_sink, error_receiver) = sync_channel(1);
+
         spawn(move || {
-            let responses = responses2;
             let mut reader = LspReader {
                 output,
-                responses,
+                responses: responses2,
+                diagnostics: diagnostics2,
             };
 
             loop {
                 if let Err(e) = reader.read() {
+                    eprintln!("Testfout: {e}");
                     _ = error_sink.send(e);
                     return;
                 }
@@ -134,6 +145,7 @@ impl LspInterface {
             error_receiver,
             responses,
             input,
+            diagnostics,
             state: LspState::default(),
         }
     }
@@ -180,6 +192,10 @@ impl LspInterface {
     }
 
     pub fn send_notification<N: Notification>(&mut self, body: N::Params) {
+        if let Ok(error) = self.error_receiver.try_recv() {
+            panic!("Receiver got an error: {error:#?}");
+        }
+
         let body = serde_json::to_value(body).unwrap();
 
         let request = jsonrpc::Request::build(N::METHOD)
@@ -203,6 +219,7 @@ impl Drop for LspInterface {
 struct LspReader {
     output: BufReader<ChildStdout>,
     responses: Arc<DashMap<Id, jsonrpc::Response>>,
+    diagnostics: Arc<AtomicUsize>,
 }
 
 impl LspReader {
@@ -210,15 +227,25 @@ impl LspReader {
         let length = self.read_content_length()?;
         self.read_empty_line()?;
 
-        let response = self.read_exact_string(length)?;
-        let response: serde_json::Value = serde_json::from_str(&response)?;
+        let response_str = self.read_exact_string(length)?;
+        let response: serde_json::Value = serde_json::from_str(&response_str)?;
 
-        if !response.as_object().unwrap().contains_key("id") {
-            println!("Got notification...");
+
+        if let Some(method) = response.get("method") {
+            // if it has a method, it is a notification or a request
+
+            if method.as_str() == Some("textDocument/publishDiagnostics") {
+                self.diagnostics.fetch_add(1, Ordering::SeqCst);
+            }
+
             return Ok(());
         }
 
-        let response: jsonrpc::Response = serde_json::from_value(response)?;
+        if !response.as_object().unwrap().contains_key("id") {
+            return Ok(());
+        }
+
+        let response: jsonrpc::Response = serde_json::from_value(response).map_err(|e| anyhow!(e).context(format!("Invoer was: `{response_str}`")))?;
         self.responses.insert(response.id().clone(), response);
         Ok(())
     }

@@ -55,9 +55,7 @@ pub fn interpret_and_return_stdout(input: &str) -> Vec<String> {
             buffer: Arc::clone(&buffer),
         });
 
-        for statement in parse(&input).all() {
-            interpreter.execute(&statement)
-        }
+        interpreter.execute_trees(&[parse(&input)]);
     }
 
 
@@ -70,6 +68,7 @@ struct TestDebugger {
 
 impl Debugger for TestDebugger {
     fn enter_function(&mut self, function: babbelaar_interpreter::DebuggerFunction<'_>, args: &[Value]) {
+        eprintln!("Running func: {:?}", function.name);
         if function.name == "schrijf" {
             self.buffer.lock().unwrap().push(args[0].to_string());
         }

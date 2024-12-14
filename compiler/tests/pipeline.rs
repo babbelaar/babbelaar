@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{error::Error, io::Read, path::Path, process::{Command, Stdio}};
+use std::{error::Error, io::Read, path::{Path, PathBuf}, process::{Command, Stdio}};
 
 use babbelaar::parse_string_to_tree;
 use babbelaar_compiler::{Pipeline, Platform, Signal};
@@ -385,7 +385,7 @@ fn modulo_known_lhs() {
     ");
 
     assert_eq!(result.signal, None);
-    assert_eq!(result.exit_code, Some(4));
+    assert_eq!(result.exit_code, Some(4), "{result:#?}");
 }
 
 #[test]
@@ -867,6 +867,7 @@ fn run(path: impl AsRef<Path>) -> Result<ProgramResult, Box<dyn Error>> {
         exit_code: exit_status.code(),
         signal: None, // only set on UNIX-platforms below
         stdout,
+        path: path.as_ref().into(),
     };
 
     #[cfg(unix)]
@@ -879,8 +880,10 @@ fn run(path: impl AsRef<Path>) -> Result<ProgramResult, Box<dyn Error>> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(unused)]
 struct ProgramResult {
     exit_code: Option<i32>,
     signal: Option<Signal>,
     stdout: String,
+    path: PathBuf,
 }

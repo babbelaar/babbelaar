@@ -114,6 +114,7 @@ name = "babbelaar"
 version = "0.0.3"
 dependencies = [
  "log",
+ "pretty_assertions",
  "rstest 0.23.0",
  "strum",
  "thiserror 2.0.6",

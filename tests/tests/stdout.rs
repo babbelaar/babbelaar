@@ -7,7 +7,9 @@ use tests::interpret_and_return_stdout;
 #[rstest]
 #[case(
     r#"
-        schrijf("Hallo!");
+        werkwijze hoofd() {
+            schrijf("Hallo!");
+        }
     "#,
     &[
         "Hallo!",
@@ -15,8 +17,10 @@ use tests::interpret_and_return_stdout;
 )]
 #[case(
     r#"
-        stel a = 5;
-        schrijf(€"{a}");
+        werkwijze hoofd() {
+            stel a = 5;
+            schrijf(€"{a}");
+        }
     "#,
     &[
         "5",
@@ -28,8 +32,10 @@ use tests::interpret_and_return_stdout;
             schrijf(€"{a * 5}");
         }
 
-        volg i in reeks(0, 10) {
-            hallo(i);
+        werkwijze hoofd() {
+            volg i in reeks(0, 10) {
+                hallo(i);
+            }
         }
     "#,
     &[
