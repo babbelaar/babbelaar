@@ -32,7 +32,7 @@ impl BabbelaarContext {
         let prev = self.files.insert(path, Arc::new(Mutex::new(BabbelaarFile::new(source_code.clone()))));
 
         if prev.is_none() {
-            log::info!("Bestand {} is registreert met nummer {:?}", source_code.path().display(), source_code.file_id());
+            log::info!("Bestand {} is geregistreerd met nummer {:?}", source_code.path().display(), source_code.file_id());
         }
 
         *self.semantic_analysis.write().await = None;
