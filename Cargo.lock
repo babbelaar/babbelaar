@@ -164,7 +164,6 @@ version = "0.0.3"
 dependencies = [
  "anyhow",
  "babbelaar",
- "babbelaar-interpreter",
  "dashmap",
  "log",
  "rand",

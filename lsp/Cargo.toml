@@ -14,7 +14,6 @@ tower-lsp.workspace = true
 url.workspace = true
 
 babbelaar = { path = "../babbelaar" }
-babbelaar-interpreter = { path = "../interpreter" }
 
 
 [dev-dependencies]
