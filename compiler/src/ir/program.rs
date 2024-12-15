@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display, mem::take};
 
 use babbelaar::BabString;
 
@@ -12,6 +12,7 @@ use super::Function;
 #[derive(Debug)]
 pub struct Program {
     functions: Vec<Function>,
+    function_aliases: HashMap<BabString, BabString>,
     function_symbols: Vec<BabString>,
     read_only_data: Option<DataSection>,
 }
@@ -21,6 +22,7 @@ impl Program {
     pub fn new() -> Self {
         Self {
             functions: Vec::new(),
+            function_aliases: HashMap::new(),
             function_symbols: Vec::new(),
             read_only_data: Some(DataSection::new(DataSectionKind::ReadOnly)),
         }
@@ -31,6 +33,10 @@ impl Program {
 
         self.functions.push(function);
         self.function_symbols.push(name);
+    }
+
+    pub fn add_function_alias(&mut self, name: &BabString, actual_name: &BabString) {
+        self.function_aliases.insert(name.clone(), actual_name.clone());
     }
 
     pub fn add_string(&mut self, string: &str) -> DataSectionOffset {
@@ -76,6 +82,11 @@ impl Program {
     #[must_use]
     pub fn take_read_only_data(&mut self) -> DataSection {
         self.read_only_data.take().unwrap()
+    }
+
+    #[must_use]
+    pub fn take_function_aliases(&mut self) -> HashMap<BabString, BabString> {
+        take(&mut self.function_aliases)
     }
 }
 

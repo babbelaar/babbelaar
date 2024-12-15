@@ -76,13 +76,13 @@ impl Compiler {
     fn compile_function(&mut self, func: &FunctionStatement, name: BabString, call_convention: CallingConvention, attributes: &[Ranged<Attribute>]) {
         let Some(body) = &func.body else {
             for attr in attributes {
-                if attr.name.value() == Attribute::NAME_VAR_ARGS {
+                if *attr.name == AttributeName::VarArgs {
                     self.program_builder.add_function_attribute(name.clone(), FunctionAttribute::VarArgs {
                         after_n_normal_params: func.parameters.len(),
                     });
                 }
 
-                if attr.name.value() == Attribute::NAME_EXTERN {
+                if *attr.name == AttributeName::Extern {
                     for arg in attr.arguments.value() {
                         if arg.name.value() == "naam" {
                             if let PrimaryExpression::StringLiteral(actual_name) = arg.value.value() {

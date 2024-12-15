@@ -27,7 +27,6 @@ impl<'program> FunctionBuilder<'program> {
     pub fn call(&mut self, name: BabString, arguments: impl Into<Vec<FunctionArgument>>) -> Register {
         let var_args_after_n = self.program_builder.function_attributes_of(&name).var_args_after_n_normal_params().unwrap_or(usize::MAX);
 
-        let name = self.program_builder.resolve_function_name(name);
         let ret_val_reg = self.register_allocator.next();
 
         let mut arguments: Vec<FunctionArgument> = arguments.into();

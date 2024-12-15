@@ -55,6 +55,14 @@ impl StatementKind {
             Self::Structure(..) => true,
         }
     }
+
+    #[must_use]
+    pub fn is_function(&self) -> bool {
+        match self {
+            Self::Function(..) => true,
+            _ => false,
+        }
+    }
 }
 
 /// In babbelaar, we have Assignment `=` statements instead of expressions,

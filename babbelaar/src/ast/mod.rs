@@ -13,6 +13,7 @@ pub use self::{
     attribute::{
         Attribute,
         AttributeArgument,
+        AttributeName,
         AttributeList,
     },
     expression::{

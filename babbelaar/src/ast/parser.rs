@@ -1574,7 +1574,7 @@ impl<'tokens> Parser<'tokens> {
                 self.handle_error(e);
                 Ranged::new(FileRange::default(), BabString::empty())
             }
-        };
+        }.map(AttributeName::from);
 
         let first_token = self.peek_token()?.range();
         let mut end = first_token.start();

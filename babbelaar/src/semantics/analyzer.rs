@@ -151,6 +151,23 @@ impl SemanticAnalyzer {
             },
             statement.range,
         );
+
+        for attribute in &statement.attributes {
+            if *attribute.name == AttributeName::Extern {
+                self.analyze_attribute_extern(statement, attribute);
+                continue;
+            }
+
+            if *attribute.name == AttributeName::VarArgs {
+                self.analyze_attribute_var_args(statement, attribute);
+                continue;
+            }
+
+            self.diagnostics.create(|| SemanticDiagnostic::new(
+                attribute.name.range(),
+                SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.as_str(), range: attribute.range() },
+            ));
+        }
     }
 
     fn analyze_expression(&mut self, expression: &Ranged<Expression>) -> SemanticValue {
@@ -2012,20 +2029,14 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_attributes_for_statement(&mut self, statement: &Statement) {
+        if statement.kind.is_function() {
+            return;
+        }
+
         for attribute in &statement.attributes {
-            if attribute.name.value() == Attribute::NAME_EXTERN {
-                self.analyze_attribute_extern(statement, attribute);
-                continue;
-            }
-
-            if attribute.name.value() == Attribute::NAME_VAR_ARGS {
-                self.analyze_attribute_var_args(statement, attribute);
-                continue;
-            }
-
             self.diagnostics.create(|| SemanticDiagnostic::new(
                 attribute.name.range(),
-                SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone(), range: attribute.range() },
+                SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().as_str(), range: attribute.range() },
             ));
         }
     }
@@ -2038,7 +2049,7 @@ impl SemanticAnalyzer {
 
                     self.diagnostics.create(|| SemanticDiagnostic::new(
                         attribute.name.range(),
-                        SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone(), range: attribute.range() },
+                        SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.as_str(), range: attribute.range() },
                     ));
                 }
             }
@@ -2052,7 +2063,7 @@ impl SemanticAnalyzer {
                 SemanticDiagnosticKind::AttributeExternOnlyOnFunctions,
             );
             let diag = diag.with_action(BabbelaarCodeAction::new(
-                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.value().clone() },
+                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.as_str() },
                 vec![FileEdit::new(attr.name.range().as_full_line(), "")],
             ));
             self.diagnostics.create(|| diag);
@@ -2082,7 +2093,7 @@ impl SemanticAnalyzer {
                 SemanticDiagnosticKind::AttributeExternOnlyOnce,
             );
             let diag = diag.with_action(BabbelaarCodeAction::new(
-                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.value().clone() },
+                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.as_str() },
                 vec![FileEdit::new(attr.name.range().as_full_line(), "")],
             ));
             self.diagnostics.create(|| diag);
@@ -2152,7 +2163,7 @@ impl SemanticAnalyzer {
                 SemanticDiagnosticKind::AttributeExternOnlyOnFunctions,
             );
             let diag = diag.with_action(BabbelaarCodeAction::new(
-                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.value().clone() },
+                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.as_str() },
                 vec![FileEdit::new(attr.name.range().as_full_line(), "")],
             ));
             self.diagnostics.create(|| diag);
@@ -2178,7 +2189,7 @@ impl SemanticAnalyzer {
                 SemanticDiagnosticKind::AttributeExternOnlyOnce,
             );
             let diag = diag.with_action(BabbelaarCodeAction::new(
-                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.value().clone() },
+                BabbelaarCodeActionType::RemoveAttribute { name: attr.name.as_str() },
                 vec![FileEdit::new(attr.name.range().as_full_line(), "")],
             ));
             self.diagnostics.create(|| diag);
@@ -2192,7 +2203,7 @@ impl SemanticAnalyzer {
         for attribute in &field.attributes {
             self.diagnostics.create(|| SemanticDiagnostic::new(
                 attribute.name.range(),
-                SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.value().clone(), range: attribute.range() },
+                SemanticDiagnosticKind::UnknownAttribute { name: attribute.name.as_str(), range: attribute.range() },
             ));
         }
     }

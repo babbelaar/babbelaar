@@ -12,7 +12,6 @@ use super::{FunctionAttribute, FunctionBuilder, Program, RegisterAllocator};
 #[derive(Debug)]
 pub struct ProgramBuilder {
     pub(super) program: Program,
-    pub(super) function_aliases: HashMap<BabString, BabString>,
     pub(super) function_attributes: HashMap<BabString, Vec<FunctionAttribute>>,
     pub(super) type_manager: TypeManager,
 }
@@ -22,7 +21,6 @@ impl ProgramBuilder {
     pub fn new() -> Self {
         Self {
             program: Program::new(),
-            function_aliases: HashMap::new(),
             function_attributes: HashMap::new(),
             type_manager: TypeManager::new(),
         }
@@ -89,7 +87,7 @@ impl ProgramBuilder {
     }
 
     pub fn add_function_alias(&mut self, name: &BabString, actual_name: &BabString) {
-        self.function_aliases.insert(name.clone(), actual_name.clone());
+        self.program.add_function_alias(name, actual_name);
     }
 
     pub fn add_function_attribute(&mut self, name: BabString, attr: FunctionAttribute) {
@@ -101,15 +99,6 @@ impl ProgramBuilder {
         match self.function_attributes.get(name) {
             Some(attributes) => &attributes,
             None => &[],
-        }
-    }
-
-    #[must_use]
-    pub fn resolve_function_name(&self, name: BabString) -> BabString {
-        if let Some(actual_name) = self.function_aliases.get(&name) {
-            actual_name.clone()
-        } else {
-            name
         }
     }
 }

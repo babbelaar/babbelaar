@@ -56,6 +56,7 @@ pub struct CompiledObject {
     functions: Vec<CompiledFunction>,
     functions_length: usize,
     read_only_data: DataSection,
+    function_aliases: HashMap<BabString, BabString>,
 }
 
 impl CompiledObject {
@@ -66,6 +67,7 @@ impl CompiledObject {
             functions: Vec::new(),
             functions_length: 0,
             read_only_data: DataSection::new(DataSectionKind::ReadOnly),
+            function_aliases: HashMap::new(),
         }
     }
 
@@ -170,6 +172,8 @@ impl CompiledObject {
                         if self.symbol_offsets.get(name).is_some() {
                             continue;
                         }
+
+                        let name = self.function_aliases.get(name).unwrap_or(name);
 
                         let symbol = obj.add_symbol(Symbol {
                             name: name.as_bytes().to_vec(),
@@ -313,6 +317,11 @@ impl CompiledObject {
 
     pub fn set_read_only_data(&mut self, data: DataSection) {
         self.read_only_data = data;
+    }
+
+    pub fn set_function_aliases(&mut self, aliases: HashMap<BabString, BabString>) {
+        assert!(self.function_aliases.is_empty());
+        self.function_aliases = aliases;
     }
 }
 

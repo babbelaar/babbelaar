@@ -17,6 +17,7 @@ pub use self::{
         AssignStatement,
         Attribute,
         AttributeArgument,
+        AttributeName,
         AttributeList,
         BiExpression,
         BiOperator,

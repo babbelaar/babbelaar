@@ -34,6 +34,7 @@ impl Pipeline {
             self.code_gen(function);
         }
 
+        self.object.set_function_aliases(program.take_function_aliases());
         self.object.set_read_only_data(program.take_read_only_data());
     }
 
