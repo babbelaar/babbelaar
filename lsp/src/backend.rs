@@ -625,6 +625,10 @@ impl Backend {
                 }
 
                 for (name, structure) in &scope.structures {
+                    if structure.name.range().file_id() != source_code.file_id() {
+                        continue;
+                    }
+
                     #[allow(deprecated)]
                     symbols.push(SymbolInformation {
                         name: name.to_string(),
