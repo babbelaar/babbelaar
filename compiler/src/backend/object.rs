@@ -5,22 +5,13 @@ use std::{collections::HashMap, error::Error, fs::File, io::Write, path::Path, t
 
 use babbelaar::{BabString, Constants};
 use object::{
-    pe::{IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE, IMAGE_SUBSYSTEM_WINDOWS_CUI},
-    write::{
+    macho::PLATFORM_MACOS, pe::{IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE, IMAGE_SUBSYSTEM_WINDOWS_CUI}, write::{
         pe::{
             NtHeaders,
             SectionRange,
             Writer as PeWriter,
-        },
-        Object,
-        Relocation as ObjectRelocation,
-        StandardSection,
-        Symbol,
-        SymbolSection,
-    },
-    SymbolFlags,
-    SymbolKind,
-    SymbolScope,
+        }, MachOBuildVersion, Object, Relocation as ObjectRelocation, StandardSection, Symbol, SymbolSection
+    }, SymbolFlags, SymbolKind, SymbolScope
 };
 
 use crate::{OperatingSystem, Platform, WindowsVersion};
@@ -107,6 +98,15 @@ impl CompiledObject {
 
         let rodata_section = obj.section_id(StandardSection::ReadOnlyData);
         obj.append_section_data(rodata_section, self.read_only_data.data(), 4);
+
+        if self.platform().operating_system() == OperatingSystem::MacOs {
+            let mut info = MachOBuildVersion::default();
+            info.platform = PLATFORM_MACOS;
+            info.minos = Constants::MACOS_MINIMUM_VERSION.to_macos_nibbles();
+            info.sdk = Constants::MACOS_MINIMUM_VERSION.to_macos_nibbles();
+
+            obj.set_macho_build_version(info);
+        }
 
         let code_section = obj.add_subsection(StandardSection::Text, b"main");
 

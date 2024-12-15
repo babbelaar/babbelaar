@@ -3,6 +3,8 @@
 
 use std::{error::Error, io::Read, path::{Path, PathBuf}, process::{Command, Stdio}};
 
+use babbelaar::Constants;
+
 use crate::LinkerError;
 
 pub struct MacOsLdLinker {
@@ -38,7 +40,9 @@ impl MacOsLdLinker {
 
         command.arg("-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib");
         command.arg("-lSystem");
-        command.args(["-platform_version", "macos", "10.13", "10.13"]);
+
+        let version = format!("{}.{}", Constants::MACOS_MINIMUM_VERSION.major, Constants::MACOS_MINIMUM_VERSION.minor);
+        command.args(["-platform_version", "macos", &version, &version]);
 
         let mut process = command.spawn()?;
         let exit_status = process.wait()?;
