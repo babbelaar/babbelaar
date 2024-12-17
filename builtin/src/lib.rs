@@ -1,11 +1,24 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{borrow::Cow, slice};
+#![feature(breakpoint)]
+
+use std::{arch::breakpoint, borrow::Cow, slice};
 
 #[no_mangle]
 pub unsafe extern "C" fn schrijf(ptr: *const u8) {
     println!("{}", load_str(ptr));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Slinger(ptr: *const u8) -> *const u8 {
+    let str = unsafe { load_str(ptr) }.to_string();
+    str.leak().as_ptr()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn __ingebouwd_stoppunt() {
+    breakpoint();
 }
 
 #[no_mangle]

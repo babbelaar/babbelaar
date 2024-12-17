@@ -94,3 +94,8 @@ pub fn lees(_: &mut dyn Interpreter, _: Vec<Value>, _: Option<Value>) -> Value {
     line.truncate(line.trim_end().len());
     Value::String(line)
 }
+
+pub fn interpreter_deprecated_warn(_: &mut dyn Interpreter, _: Vec<Value>, _: Option<Value>) -> Value {
+    panic!("Interpreteerder krijgt deze functionaliteit niet")
+}
+

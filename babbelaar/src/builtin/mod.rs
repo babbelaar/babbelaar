@@ -58,7 +58,17 @@ impl Builtin {
             parameters: &[],
             return_type: BuiltinType::Null,
             must_use: true,
-        }
+        },
+        BuiltinFunction {
+            name: "__ingebouwd_stoppunt",
+            documentation: "Stop het programma met een stoppuntinstructie.",
+            inline_detail: "Stop het programma",
+            function: &functions::interpreter_deprecated_warn,
+            lsp_completion: None,
+            parameters: &[],
+            return_type: BuiltinType::Null,
+            must_use: false,
+        },
     ];
 
     pub const TYPES: &'static [BuiltinType] = &[
