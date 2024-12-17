@@ -692,6 +692,65 @@ fn printf_with_single_number() {
 }
 
 #[test]
+fn printf_with_three_numbers() {
+    let result = create_and_run_single_object_executable(r#"
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+
+        werkwijze hoofd() -> g32 {
+            printf("%x + %x = %x", 1, 3, 7);
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "1 + 3 = 7");
+}
+
+#[test]
+fn printf_with_string() {
+    let result = create_and_run_single_object_executable(r#"
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+
+        werkwijze hoofd() -> g32 {
+            printf("Hallo, %s", "wereld");
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "Hallo, wereld");
+}
+
+#[test]
+fn printf_with_number_from_subroutine() {
+    let result = create_and_run_single_object_executable(r#"
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+
+        werkwijze krijgGetal() -> g32 {
+            bekeer 100 + 20 + 3;
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel getal = krijgGetal();
+            printf("%d ! %d", 99, getal);
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "99 ! 123");
+}
+
+#[test]
 fn argument_survives_after_subroutine_call() {
     let result = create_and_run_single_object_executable(r#"
         werkwijze doeIetsLeuks(a: g32) -> g32 {

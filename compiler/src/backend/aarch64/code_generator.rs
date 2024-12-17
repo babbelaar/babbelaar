@@ -158,7 +158,7 @@ impl AArch64CodeGenerator {
                                     mode: ArmUnsignedAddressingMode::UnsignedOffset,
                                 });
 
-                                offset += arg.size();
+                                offset += arg.size().next_multiple_of(8);
                             }
                         }
 
@@ -964,7 +964,7 @@ impl AArch64CodeGenerator {
             if let Instruction::Call { variable_arguments, .. } = instruction {
                 if self.var_args_convention == AArch64VarArgsConvention::StackOnly {
                     let size = variable_arguments.iter()
-                        .map(|arg| arg.size())
+                        .map(|arg| arg.size().next_multiple_of(8))
                         .sum();
                     if size != 0 {
                         self.stack_allocator.reserve_variadic_function_call_arguments(instruction_id, size);

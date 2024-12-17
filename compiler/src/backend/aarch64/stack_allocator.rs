@@ -56,6 +56,8 @@ impl AArch64StackAllocator {
     pub fn reserve_variadic_function_call_arguments(&mut self, instruction_id: usize, size: usize) {
         debug_assert!(!self.is_finalized, "Kan de stapel niet aanpassen na finalisering!");
 
+        let size = size.next_multiple_of(8);
+
         self.allocations.push(StackAllocation::VariadicFunctionArguments {
             instruction_id,
             size,
