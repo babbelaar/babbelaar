@@ -189,8 +189,13 @@ impl Display for Instruction {
                     arg.register().fmt(f)?;
                 }
 
-                for arg in variable_arguments {
+                for (idx, arg) in variable_arguments.iter().enumerate() {
                     f.write_str(", ")?;
+
+                    if idx == 0 {
+                        f.write_str("flexArgs: ")?;
+                    }
+
                     arg.register().fmt(f)?;
                 }
 

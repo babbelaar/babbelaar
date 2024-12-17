@@ -25,6 +25,7 @@ impl Compiler {
 
     pub fn compile_trees(&mut self, trees: &[ParseTree]) {
         self.layout_structures(trees);
+        self.add_function_declarations(trees);
         self.compile_methods(trees);
         self.compile_functions(trees);
     }
@@ -39,13 +40,23 @@ impl Compiler {
         }
     }
 
+    fn add_function_declarations(&mut self, trees: &[ParseTree]) {
+        for statement in trees.iter().flat_map(|t| t.functions()) {
+            let StatementKind::Function(func) = &statement.kind else {
+                panic!();
+            };
+
+            self.analyze_function_attributes(func, func.name.value().clone(), &statement.attributes);
+        }
+    }
+
     fn compile_functions(&mut self, trees: &[ParseTree]) {
         for statement in trees.iter().flat_map(|t| t.functions()) {
             let StatementKind::Function(func) = &statement.kind else {
                 panic!();
             };
 
-            self.compile_function(func, func.name.value().clone(), CallingConvention::Regular, &statement.attributes);
+            self.compile_function(func, func.name.value().clone(), CallingConvention::Regular);
         }
     }
 
@@ -61,7 +72,7 @@ impl Compiler {
                 let name = create_mangled_method_name(structure.name.value(), method.function.name.value());
                 self.compile_function(&method.function, name, CallingConvention::Method {
                     this: type_id,
-                }, &[]);
+                });
             }
         }
     }
@@ -73,26 +84,29 @@ impl Compiler {
         program
     }
 
-    fn compile_function(&mut self, func: &FunctionStatement, name: BabString, call_convention: CallingConvention, attributes: &[Ranged<Attribute>]) {
-        let Some(body) = &func.body else {
-            for attr in attributes {
-                if *attr.name == AttributeName::VarArgs {
-                    self.program_builder.add_function_attribute(name.clone(), FunctionAttribute::VarArgs {
-                        after_n_normal_params: func.parameters.len(),
-                    });
-                }
+    fn analyze_function_attributes(&mut self, func: &FunctionStatement, name: BabString, attributes: &[Ranged<Attribute>]) {
+        for attr in attributes {
+            if *attr.name == AttributeName::VarArgs {
+                self.program_builder.add_function_attribute(name.clone(), FunctionAttribute::VarArgs {
+                    after_n_normal_params: func.parameters.len(),
+                });
+            }
 
-                if *attr.name == AttributeName::Extern {
-                    for arg in attr.arguments.value() {
-                        if arg.name.value() == "naam" {
-                            if let PrimaryExpression::StringLiteral(actual_name) = arg.value.value() {
-                                self.program_builder.add_function_alias(&name, actual_name);
-                                break;
-                            }
+            if *attr.name == AttributeName::Extern {
+                for arg in attr.arguments.value() {
+                    if arg.name.value() == "naam" {
+                        if let PrimaryExpression::StringLiteral(actual_name) = arg.value.value() {
+                            self.program_builder.add_function_alias(&name, actual_name);
+                            break;
                         }
                     }
                 }
             }
+        }
+    }
+
+    fn compile_function(&mut self, func: &FunctionStatement, name: BabString, call_convention: CallingConvention) {
+        let Some(body) = &func.body else {
             return;
         };
 
