@@ -751,6 +751,24 @@ fn printf_with_number_from_subroutine() {
 }
 
 #[test]
+fn var_arg_function_after_main() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            printf("Hallo, %s", "wereld");
+            bekeer 0;
+        }
+
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "Hallo, wereld");
+}
+
+#[test]
 fn argument_survives_after_subroutine_call() {
     let result = create_and_run_single_object_executable(r#"
         werkwijze doeIetsLeuks(a: g32) -> g32 {
