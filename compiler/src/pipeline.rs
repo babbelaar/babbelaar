@@ -45,7 +45,7 @@ impl Pipeline {
             }
 
             Architecture::X86_64 => {
-                Amd64CodeGenerator::compile(function)
+                Amd64CodeGenerator::compile(function, self.object.platform().clone())
             }
         };
         self.object.add_function(function);

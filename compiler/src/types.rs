@@ -5,6 +5,8 @@ use std::collections::HashSet;
 
 use object::pe::{IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_ARM64};
 
+use crate::os::linux::Ldd;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Architecture {
     AArch64,
@@ -29,6 +31,19 @@ impl Architecture {
             Self::AArch64 => IMAGE_FILE_MACHINE_ARM64,
             Self::X86_64 => IMAGE_FILE_MACHINE_AMD64,
         }
+    }
+
+    #[must_use]
+    fn try_detect() -> Option<Self> {
+        if cfg!(target_arch = "aarch64") {
+            return Some(Self::AArch64);
+        }
+
+        if cfg!(target_arch = "x86_64") {
+            return Some(Self::X86_64);
+        }
+
+        None
     }
 }
 
@@ -93,8 +108,14 @@ impl Platform {
                 environment: Environment::MsVC,
                 operating_system: OperatingSystem::Windows,
             }
+        } else if cfg!(target_os = "linux") {
+            Self {
+                architecture: Architecture::try_detect().expect("Niet-ondersteunde processorarchitectuur!"),
+                environment: Ldd::try_detect_environment().expect("Niet-ondersteunde omgeving!"),
+                operating_system: OperatingSystem::Linux,
+            }
         } else {
-            todo!()
+            todo!("Hostplatform wordt niet herkend...")
         }
     }
 
