@@ -119,7 +119,7 @@ impl<'program> FunctionBuilder<'program> {
     pub fn associate_register_to_local(&mut self, register: Register, local_name: impl Into<BabString>, type_info: TypeInfo) {
         let local_name = local_name.into();
 
-        debug_assert_eq!(self.locals.get(&local_name), None, "Lokale had al een waarde!");
+        debug_assert_eq!(self.locals.get(&local_name), None, "Lokale `{local_name}` had al een waarde!");
 
         self.locals.insert(local_name, FunctionLocal {
             register,
@@ -343,6 +343,11 @@ impl<'program> FunctionBuilder<'program> {
         self.call(BabString::new_static("malloc"), [
             size
         ].to_vec())
+    }
+
+    #[must_use]
+    pub fn return_type_of(&self, name: &BabString) -> TypeId {
+        self.program_builder.function_return_types.get(name).copied().unwrap_or(TypeId::G32)
     }
 }
 

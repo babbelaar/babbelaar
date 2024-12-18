@@ -13,6 +13,7 @@ use super::{FunctionAttribute, FunctionBuilder, Program, RegisterAllocator};
 pub struct ProgramBuilder {
     pub(super) program: Program,
     pub(super) function_attributes: HashMap<BabString, Vec<FunctionAttribute>>,
+    pub(super) function_return_types: HashMap<BabString, TypeId>,
     pub(super) type_manager: TypeManager,
 }
 
@@ -22,6 +23,7 @@ impl ProgramBuilder {
         Self {
             program: Program::new(),
             function_attributes: HashMap::new(),
+            function_return_types: HashMap::new(),
             type_manager: TypeManager::new(),
         }
     }
@@ -100,5 +102,9 @@ impl ProgramBuilder {
             Some(attributes) => &attributes,
             None => &[],
         }
+    }
+
+    pub fn add_function_return_type(&mut self, name: BabString, type_id: TypeId) {
+        self.function_return_types.insert(name, type_id);
     }
 }

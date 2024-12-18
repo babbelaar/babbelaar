@@ -207,6 +207,14 @@ impl CodeActionsAnalyzable for PrimaryExpression {
 impl CodeActionsAnalyzable for Statement {
     fn analyze(&self, ctx: &mut CodeActionsAnalysisContext<'_>) {
         match &self.kind {
+            StatementKind::Break => {
+                // Kunnen we hier iets leuks doen?
+            }
+
+            StatementKind::Continue => {
+                // Kunnen we hier iets leuks doen?
+            }
+
             StatementKind::Expression(expr) => {
                 expr.analyze(ctx);
                 // TODO check unused value

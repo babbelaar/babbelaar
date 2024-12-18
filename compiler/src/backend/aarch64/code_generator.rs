@@ -72,6 +72,7 @@ impl AArch64CodeGenerator {
     }
 
     fn add_instruction(&mut self, instruction_id: usize, instruction: &Instruction) {
+        println!("Instructie {instruction}");
         match instruction {
             Instruction::Compare { lhs, rhs } => {
                 self.add_instruction_cmp(lhs, rhs);

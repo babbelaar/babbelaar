@@ -9,7 +9,7 @@ use std::rc::Rc;
 use babbelaar::*;
 use log::debug;
 
-use crate::{ir::FunctionArgument, optimize_program, ArgumentList, FunctionAttribute, FunctionBuilder, Immediate, JumpCondition, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId, TypeInfo};
+use crate::{ir::FunctionArgument, optimize_program, ArgumentList, FunctionAttribute, FunctionBuilder, Immediate, JumpCondition, Label, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId, TypeInfo};
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -47,6 +47,11 @@ impl Compiler {
             };
 
             self.analyze_function_attributes(func, func.name.value().clone(), &statement.attributes);
+
+            if let Some(ret) = &func.return_type {
+                let type_id = self.program_builder.type_id_for_structure(&ret.specifier.unqualified_name());
+                self.program_builder.add_function_return_type(func.name.value().clone(), type_id);
+            }
         }
     }
 
@@ -125,8 +130,9 @@ impl Compiler {
         }
 
         self.program_builder.build_function(name, arguments, |builder| {
+            let mut ctx = FunctionContext::default();
             for statement in body {
-                statement.compile(builder);
+                statement.compile(builder, &mut ctx);
             }
 
             // Make sure the main function always returns a known value. If there was a return statement,
@@ -149,42 +155,52 @@ fn create_mangled_method_name(structure: &BabString, method: &BabString) -> BabS
 }
 
 trait CompileStatement {
-    fn compile(&self, builder: &mut FunctionBuilder);
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext);
 }
 
 impl CompileStatement for Statement {
-    fn compile(&self, builder: &mut FunctionBuilder) {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
         match &self.kind {
             StatementKind::Assignment(statement) => {
-                statement.compile(builder);
+                statement.compile(builder, ctx);
+            }
+
+            StatementKind::Break => {
+                let after = ctx.loops.last().expect("kan een `kap` hebben zonder lus!").after.clone();
+                builder.jump(after);
+            }
+
+            StatementKind::Continue => {
+                let body_begin = ctx.loops.last().expect("kan een `vervolg` hebben zonder lus!").next_start.clone();
+                builder.jump(body_begin);
             }
 
             StatementKind::Expression(expression) => {
-                _ = expression.compile(builder);
+                _ = expression.compile(builder, ctx);
             }
 
             StatementKind::Extension(statement) => {
-                statement.compile(builder);
+                statement.compile(builder, ctx);
             }
 
             StatementKind::Function(statement) => {
-                statement.compile(builder);
+                statement.compile(builder, ctx);
             }
 
             StatementKind::For(statement) => {
-                statement.compile(builder);
+                statement.compile(builder, ctx);
             }
 
             StatementKind::If(statement) => {
-                statement.compile(builder);
+                statement.compile(builder, ctx);
             }
 
             StatementKind::Interface(statement) => {
-                statement.compile(builder);
+                statement.compile(builder, ctx);
             }
 
             StatementKind::Return(statement) => {
-                statement.compile(builder);
+                statement.compile(builder, ctx);
             }
 
             StatementKind::Structure(statement) => {
@@ -192,20 +208,20 @@ impl CompileStatement for Statement {
             }
 
             StatementKind::Variable(statement) => {
-                statement.compile(builder);
+                statement.compile(builder, ctx);
             }
         }
     }
 }
 
 impl CompileStatement for AssignStatement {
-    fn compile(&self, builder: &mut FunctionBuilder) {
-        let (rhs, rhs_ty) = self.source.compile(builder).to_readable_and_type(builder);
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
+        let (rhs, rhs_ty) = self.source.compile(builder, ctx).to_readable_and_type(builder);
 
         let source = match self.kind.value() {
             AssignKind::Regular => rhs,
             AssignKind::Math(op) => {
-                let lhs = self.destination.compile(builder).to_readable_and_type(builder);
+                let lhs = self.destination.compile(builder, ctx).to_readable_and_type(builder);
                 compile_math_op(builder, *op, lhs, (rhs, rhs_ty)).to_readable(builder)
             }
         };
@@ -214,7 +230,7 @@ impl CompileStatement for AssignStatement {
             return;
         }
 
-        let dst = self.destination.compile(builder);
+        let dst = self.destination.compile(builder, ctx);
         debug!("Dst is: {dst:#?}");
 
         match dst.kind {
@@ -232,26 +248,36 @@ impl CompileStatement for AssignStatement {
 }
 
 impl CompileStatement for ExtensionStatement {
-    fn compile(&self, builder: &mut FunctionBuilder) {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
         _ = builder;
+        _ = ctx;
         todo!();
     }
 }
 
 impl CompileStatement for FunctionStatement {
-    fn compile(&self, builder: &mut FunctionBuilder) {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
         _ = builder;
+        _ = ctx;
         todo!();
     }
 }
 
 impl CompileStatement for ForStatement {
-    fn compile(&self, builder: &mut FunctionBuilder) {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
         let after = builder.create_label("na-volg");
+        let body = builder.create_label("volg-lichaam");
+        let next_start = builder.create_label("volg-check");
+
+        ctx.loops.push(LoopContext {
+            body,
+            after,
+            next_start,
+        });
 
         match self.iterable.value() {
             ForIterableKind::Expression(expression) => {
-                let (reg, ty) = expression.compile(builder).to_readable_and_type(builder);
+                let (reg, ty) = expression.compile(builder, ctx).to_readable_and_type(builder);
 
                 if ty.type_id() == TypeId::SLINGER {
                     let str_ptr_reg = reg;
@@ -272,16 +298,19 @@ impl CompileStatement for ForStatement {
                     builder.compare(current_value, end);
                     builder.jump_if_greater_or_equal(after);
 
-                    let body = builder.create_label_and_link_here("volg-lichaam");
+                    builder.link_label_here(body);
 
                     let char_reg = builder.load_ptr(str_ptr_reg, Operand::Register(current_value), PrimitiveType::new(4, false));
-                    builder.associate_register_to_local(char_reg, self.iterator_name.value(), ty);
 
-
-                    for statement in &self.body {
-                        statement.compile(builder);
+                    if *self.iterator_name != Constants::DISCARDING_IDENT {
+                        builder.associate_register_to_local(char_reg, self.iterator_name.value(), ty);
                     }
 
+                    for statement in &self.body {
+                        statement.compile(builder, ctx);
+                    }
+
+                    builder.link_label_here(next_start);
                     builder.increment(current_value);
 
                     builder.compare(current_value, end);
@@ -293,21 +322,24 @@ impl CompileStatement for ForStatement {
             }
 
             ForIterableKind::Range(range) => {
-                let (current_value, ty) = range.start.compile(builder).to_readable_and_type(builder);
+                let (current_value, ty) = range.start.compile(builder, ctx).to_readable_and_type(builder);
 
-                builder.associate_register_to_local(current_value, self.iterator_name.value(), ty);
+                if *self.iterator_name != Constants::DISCARDING_IDENT {
+                    builder.associate_register_to_local(current_value, self.iterator_name.value(), ty);
+                }
 
-                let end = range.end.compile(builder).to_readable(builder);
+                let end = range.end.compile(builder, ctx).to_readable(builder);
 
                 builder.compare(current_value, end);
                 builder.jump_if_greater_or_equal(after);
 
-                let body = builder.create_label_and_link_here("volg-lichaam");
+                builder.link_label_here(body);
 
                 for statement in &self.body {
-                    statement.compile(builder);
+                    statement.compile(builder, ctx);
                 }
 
+                builder.link_label_here(next_start);
                 builder.increment(current_value);
 
                 builder.compare(current_value, end);
@@ -316,16 +348,21 @@ impl CompileStatement for ForStatement {
             }
         }
 
+        let loop_ctx = ctx.loops.pop();
+        debug_assert!(loop_ctx.is_some());
+        debug_assert_eq!(loop_ctx.as_ref().unwrap().after, after);
+        debug_assert_eq!(loop_ctx.as_ref().unwrap().body, body);
+
         builder.link_label_here(after);
     }
 }
 
 impl CompileStatement for IfStatement {
-    fn compile(&self, builder: &mut FunctionBuilder) {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
         let after_block = builder.create_label(format!("na-als"));
         let then_block = builder.create_label(format!("als {}", self.condition.value()));
 
-        let comparison = self.condition.compile(builder).to_comparison(builder);
+        let comparison = self.condition.compile(builder, ctx).to_comparison(builder);
 
         match comparison {
             Comparison::Equality => {
@@ -343,7 +380,7 @@ impl CompileStatement for IfStatement {
 
         builder.link_label_here(then_block);
         for statement in &self.body {
-            statement.compile(builder);
+            statement.compile(builder, ctx);
         }
 
         builder.link_label_here(after_block);
@@ -351,17 +388,18 @@ impl CompileStatement for IfStatement {
 }
 
 impl CompileStatement for InterfaceStatement {
-    fn compile(&self, builder: &mut FunctionBuilder) {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
         _ = builder;
+        _ = ctx;
         todo!();
     }
 }
 
 impl CompileStatement for ReturnStatement {
-    fn compile(&self, builder: &mut FunctionBuilder) {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
         match &self.expression {
             Some(expression) => {
-                let register = expression.compile(builder).to_readable(builder);
+                let register = expression.compile(builder, ctx).to_readable(builder);
                 builder.ret_with(register);
             }
 
@@ -373,42 +411,42 @@ impl CompileStatement for ReturnStatement {
 }
 
 impl CompileStatement for VariableStatement {
-    fn compile(&self, builder: &mut FunctionBuilder) {
-        let (register, ty) = self.expression.compile(builder).to_readable_and_type(builder);
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
+        let (register, ty) = self.expression.compile(builder, ctx).to_readable_and_type(builder);
         builder.associate_register_to_local(register, self.name.value(), ty);
     }
 }
 
 trait CompileExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult;
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> ExpressionResult;
 }
 
 impl CompileExpression for Expression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> ExpressionResult {
         match self {
             Expression::BiExpression(expression) => {
-                expression.compile(builder)
+                expression.compile(builder, ctx)
             }
 
             Expression::Postfix(expression) => {
-                expression.compile(builder)
+                expression.compile(builder, ctx)
             }
 
             Expression::Primary(expression) => {
-                expression.compile(builder)
+                expression.compile(builder, ctx)
             }
 
             Expression::Unary(expression) => {
-                expression.compile(builder)
+                expression.compile(builder, ctx)
             }
         }
     }
 }
 
 impl CompileExpression for BiExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
-        let (lhs, lhs_ty) = self.lhs.compile(builder).to_readable_and_type(builder);
-        let (rhs, rhs_ty) = self.rhs.compile(builder).to_readable_and_type(builder);
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> ExpressionResult {
+        let (lhs, lhs_ty) = self.lhs.compile(builder, ctx).to_readable_and_type(builder);
+        let (rhs, rhs_ty) = self.rhs.compile(builder, ctx).to_readable_and_type(builder);
 
         match self.operator.value() {
             BiOperator::Math(math) => {
@@ -431,7 +469,7 @@ fn compile_math_op(builder: &mut FunctionBuilder, op: MathOperator, lhs: (Regist
     let (rhs, rhs_ty) = rhs;
 
     if op == MathOperator::Add && lhs_ty.type_id() == TypeId::SLINGER {
-        assert_eq!(rhs_ty.type_id(), TypeId::SLINGER);
+        assert_eq!(rhs_ty.type_id(), TypeId::SLINGER, "Kan alleen een slinger en een slinger samenvoegen!");
 
         let func = create_mangled_method_name(&BabString::new_static("Slinger"), &BabString::new_static("voegSamen"));
         let new_str = builder.call(func, [
@@ -450,14 +488,16 @@ fn compile_math_op(builder: &mut FunctionBuilder, op: MathOperator, lhs: (Regist
 }
 
 impl CompileExpression for PostfixExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> ExpressionResult {
         match self.kind.value() {
             PostfixExpressionKind::Call(call) => {
-                let arguments = call.arguments.compile(builder);
+                let arguments = call.arguments.compile(builder, ctx);
 
                 match self.lhs.value() {
                     Expression::Primary(PrimaryExpression::Reference(reference)) => {
-                        builder.call(reference.value().clone(), arguments).into()
+                        let reg = builder.call(reference.value().clone(), arguments);
+                        let ty = builder.return_type_of(reference.value());
+                        ExpressionResult::typed(reg, ty)
                     }
 
                     _ => todo!("Ondersteun aanroepexpressies met linkerzijde: {:#?}", self.lhs)
@@ -465,7 +505,7 @@ impl CompileExpression for PostfixExpression {
             }
 
             PostfixExpressionKind::Member(member) => {
-                let lhs = self.lhs.compile(builder);
+                let lhs = self.lhs.compile(builder, ctx);
 
                 let (base_ptr, ty) = lhs.to_readable_and_type(builder);
 
@@ -478,10 +518,10 @@ impl CompileExpression for PostfixExpression {
             }
 
             PostfixExpressionKind::MethodCall(method) => {
-                let lhs = self.lhs.compile(builder);
+                let lhs = self.lhs.compile(builder, ctx);
                 let struct_ty = lhs.type_info.type_id();
 
-                let mut arguments = method.call.arguments.compile(builder);
+                let mut arguments = method.call.arguments.compile(builder, ctx);
 
                 let (this_register, this_type) = lhs.to_readable_and_type(builder);
                 let this_primitive_type = builder.primitive_type_of(&this_type);
@@ -500,13 +540,13 @@ impl CompileExpression for PostfixExpression {
             }
 
             PostfixExpressionKind::Subscript(subscript) => {
-                let base_ptr = self.lhs.compile(builder);
+                let base_ptr = self.lhs.compile(builder, ctx);
 
                 let (base_ptr, ty) = base_ptr.to_readable_and_type(builder);
 
                 match ty {
                     TypeInfo::Array(item_ty) => {
-                        let offset = subscript.compile(builder).to_readable(builder);
+                        let offset = subscript.compile(builder, ctx).to_readable(builder);
 
                         let size = builder.size_of_type_info(&item_ty);
                         let offset = builder.math(MathOperation::Multiply, offset, Immediate::Integer64(size as _));
@@ -524,7 +564,7 @@ impl CompileExpression for PostfixExpression {
 }
 
 impl CompileExpression for PrimaryExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> ExpressionResult {
         match self {
             Self::Boolean(b) => {
                 builder.load_immediate(Immediate::Integer32(*b as i32)).into()
@@ -539,7 +579,7 @@ impl CompileExpression for PrimaryExpression {
             }
 
             Self::Parenthesized(expression) => {
-                expression.compile(builder)
+                expression.compile(builder, ctx)
             }
 
             Self::Reference(ranged) => {
@@ -585,7 +625,7 @@ impl CompileExpression for PrimaryExpression {
             }
 
             Self::StructureInstantiation(expression) => {
-                expression.compile(builder)
+                expression.compile(builder, ctx)
             }
 
             Self::TemplateString { parts } => {
@@ -597,7 +637,7 @@ impl CompileExpression for PrimaryExpression {
 }
 
 impl CompileExpression for StructureInstantiationExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> ExpressionResult {
         let (layout, register) = builder.allocate_structure(self.name.value());
 
         let ty = layout.type_id().clone();
@@ -622,12 +662,12 @@ impl CompileExpression for StructureInstantiationExpression {
             .collect();
 
         for (offset, typ, expression) in default_values {
-            let value = expression.compile(builder).to_readable(builder);
+            let value = expression.compile(builder, ctx).to_readable(builder);
             builder.store_ptr(register, Operand::Immediate(Immediate::Integer64(offset as _)), value, typ);
         }
 
         for (offset, typ,field) in fields {
-            let value = field.value.compile(builder).to_readable(builder);
+            let value = field.value.compile(builder, ctx).to_readable(builder);
             builder.store_ptr(register, Operand::Immediate(Immediate::Integer64(offset as _)), value, typ);
         }
 
@@ -636,8 +676,8 @@ impl CompileExpression for StructureInstantiationExpression {
 }
 
 impl CompileExpression for UnaryExpression {
-    fn compile(&self, builder: &mut FunctionBuilder) -> ExpressionResult {
-        let value = self.rhs.compile(builder);
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> ExpressionResult {
+        let value = self.rhs.compile(builder, ctx);
         match self.kind.value() {
             UnaryExpressionKind::AddressOf => {
                 let (register, _) = value.to_register_and_type(builder);
@@ -829,16 +869,16 @@ impl ExpressionResultKind {
 trait CompileSome {
     type Output;
 
-    fn compile(&self, builder: &mut FunctionBuilder) -> Self::Output;
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> Self::Output;
 }
 
 impl CompileSome for Vec<Ranged<Expression>> {
     type Output = Vec<FunctionArgument>;
 
-    fn compile(&self, builder: &mut FunctionBuilder) -> Self::Output {
+    fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> Self::Output {
         self.iter()
             .map(|x| {
-                x.compile(builder).to_function_argument(builder)
+                x.compile(builder, ctx).to_function_argument(builder)
             })
             .collect()
     }
@@ -850,4 +890,19 @@ enum CallingConvention {
     Method {
         this: TypeId,
     },
+}
+
+#[derive(Debug, Default)]
+struct FunctionContext {
+    loops: Vec<LoopContext>,
+}
+
+#[derive(Debug)]
+struct LoopContext {
+    /// The begin of the loop body
+    body: Label,
+
+    /// Instruction after the loop
+    after: Label,
+    next_start: Label,
 }

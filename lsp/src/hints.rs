@@ -86,6 +86,8 @@ impl InlayHintsEngine {
     fn visit_statement(&mut self, statement: &Statement) {
         match &statement.kind {
             StatementKind::Assignment(assignment) => self.visit_assignment(assignment),
+            StatementKind::Break => (),
+            StatementKind::Continue => (),
             StatementKind::Expression(expression) => self.visit_expression(expression),
             StatementKind::Extension(extension) => self.visit_extension(extension),
             StatementKind::Function(function) => self.visit_function(function),

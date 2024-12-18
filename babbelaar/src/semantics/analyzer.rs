@@ -473,6 +473,14 @@ impl SemanticAnalyzer {
         }
 
         match &statement.kind {
+            StatementKind::Break => {
+
+            }
+
+            StatementKind::Continue => {
+
+            }
+
             StatementKind::Expression(expr) => {
                 let value = self.analyze_expression(expr);
 

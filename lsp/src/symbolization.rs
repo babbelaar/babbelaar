@@ -42,6 +42,8 @@ impl Symbolizer {
 
         match &statement.kind {
             StatementKind::Assignment(statement) => self.add_statement_assign(statement),
+            StatementKind::Break => (),
+            StatementKind::Continue => (),
             StatementKind::Expression(expression) => self.add_expression(expression),
             StatementKind::Extension(extension) => self.add_extension(extension),
             StatementKind::For(statement) => self.add_statement_for(statement),

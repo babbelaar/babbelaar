@@ -89,6 +89,12 @@ impl<'tokens> Parser<'tokens> {
                 StatementKind::Return(self.parse_return_statement(range)?)
             }
 
+            TokenKind::Keyword(Keyword::Kap) => {
+                _ = self.consume_token().ok();
+                self.expect_semicolon_after_statement();
+                StatementKind::Break
+            }
+
             TokenKind::Keyword(Keyword::Koppelvlak) => {
                 _ = self.consume_token().ok();
                 StatementKind::Interface(self.parse_interface_statement()?)
@@ -112,6 +118,12 @@ impl<'tokens> Parser<'tokens> {
             TokenKind::Keyword(Keyword::Uitbreiding) => {
                 _ = self.consume_token().ok();
                 StatementKind::Extension(self.parse_extension_statement()?)
+            }
+
+            TokenKind::Keyword(Keyword::Vervolg) => {
+                _ = self.consume_token().ok();
+                self.expect_semicolon_after_statement();
+                StatementKind::Continue
             }
 
             TokenKind::Keyword(Keyword::Volg) => {

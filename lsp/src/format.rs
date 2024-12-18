@@ -134,6 +134,8 @@ impl Format for StatementKind {
 
         match self {
             Self::Assignment(statement) => statement.format(f),
+            Self::Break => f.write_str(Keyword::Kap.as_ref()),
+            Self::Continue => f.write_str(Keyword::Vervolg.as_ref()),
             Self::Expression(expr) => {
                 expr.format(f);
                 f.write_char(';');

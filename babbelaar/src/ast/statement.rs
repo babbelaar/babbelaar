@@ -22,6 +22,8 @@ impl Statement {
 #[derive(Debug, Clone)]
 pub enum StatementKind {
     Assignment(Ranged<AssignStatement>),
+    Break,
+    Continue,
     Expression(Ranged<Expression>),
     Extension(ExtensionStatement),
     Function(FunctionStatement),
@@ -43,6 +45,8 @@ impl StatementKind {
     pub fn is_freestanding(&self) -> bool {
         match self {
             Self::Assignment(..) => false,
+            Self::Break => false,
+            Self::Continue => false,
             Self::Expression(..) => false,
             Self::For(..) => false,
             Self::If(..) => false,

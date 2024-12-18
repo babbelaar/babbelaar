@@ -902,6 +902,59 @@ fn assign_with_math_operation(#[case] first: i64, #[case] op: &str, #[case] seco
     assert_eq!(result.exit_code, Some(expected));
 }
 
+#[test]
+fn loop_continue_does_nothing() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            volg i in reeks(0, 5) {
+                schrijf("Hallo");
+                vervolg;
+            }
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "Hallo\nHallo\nHallo\nHallo\nHallo\n");
+}
+
+#[test]
+fn loop_break_without_if() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            volg i in reeks(0, 5) {
+                schrijf("Hallo");
+                kap;
+            }
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "Hallo\n");
+}
+
+#[test]
+fn loop_break_with_if_modulo() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            volg i in reeks(0, 5) {
+                als i % 3 == 2 {
+                    kap;
+                }
+                schrijf("Doei");
+            }
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "Doei\nDoei\n");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();

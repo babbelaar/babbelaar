@@ -88,6 +88,9 @@ impl<D> Interpreter<D>
                 StatementResult::Continue
             }
 
+            StatementKind::Break => todo!("Kap"),
+            StatementKind::Continue => todo!("Vervolg"),
+
             StatementKind::Expression(expression) => {
                 self.execute_expression(expression);
                 StatementResult::Continue
