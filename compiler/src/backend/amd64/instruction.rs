@@ -7,7 +7,7 @@ use babbelaar::BabString;
 
 use crate::Label;
 
-use super::register::Amd64Register;
+use super::{Amd64ConditionCode, Amd64Register};
 
 
 /// Intel glossary:
@@ -35,10 +35,9 @@ pub enum Amd64Instruction {
     Inc32 { reg: Amd64Register },
 
     Jmp { location: Label },
-    /// Jump if not equal (short = 8-bit offset)
-    JneShort { location: Label },
-    /// Jump if equal (short = 8-bit offset)
-    JeShort { location: Label },
+
+    /// Jump when condition is met (short = 8-bit offset)
+    JccShort { location: Label, condition: Amd64ConditionCode },
 
     LeaReg32FromReg32 {
         dst: Amd64Register,
@@ -94,8 +93,7 @@ impl Amd64Instruction {
     pub fn uses_label_offsets(&self) -> bool {
         match self {
             Self::Jmp { .. } => true,
-            Self::JeShort { .. } => true,
-            Self::JneShort { .. } => true,
+            Self::JccShort { .. } => true,
             _ => false,
         }
     }
@@ -168,7 +166,7 @@ impl Amd64Instruction {
                 todo!("Very far jump, to be implemented, but is this realistically ever needed in a function?")
             }
 
-            Self::JeShort { location } => {
+            Self::JccShort { location, condition } => {
                 let offset = {
                     let destination = *label_offsets.get(&location).unwrap() as isize;
                     let offset = offset as isize;
@@ -176,25 +174,10 @@ impl Amd64Instruction {
                 };
 
                 let Ok(offset) = i8::try_from(offset) else {
-                    panic!("JeShort past niet, we willen 0x{offset:x}");
+                    panic!("JccShort past niet, we willen 0x{offset:x}");
                 };
 
-                output.push(0x74);
-                output.push(offset as u8);
-            }
-
-            Self::JneShort { location } => {
-                let offset = {
-                    let destination = *label_offsets.get(&location).unwrap() as isize;
-                    let offset = offset as isize;
-                    (destination - offset - 2) as i64
-                };
-
-                let Ok(offset) = i8::try_from(offset) else {
-                    panic!("JneShort past niet, we willen 0x{offset:x}");
-                };
-
-                output.push(0x75);
+                output.push(condition.jcc_short_code());
                 output.push(offset as u8);
             }
 
@@ -369,12 +352,8 @@ impl Display for Amd64Instruction {
                 f.write_fmt(format_args!("jmp {location}"))
             }
 
-            Self::JeShort { location } => {
-                f.write_fmt(format_args!("je {location}"))
-            }
-
-            Self::JneShort { location } => {
-                f.write_fmt(format_args!("jne {location}"))
+            Self::JccShort { location, condition } => {
+                f.write_fmt(format_args!("j{condition} {location}"))
             }
 
             Self::LeaReg32FromReg32 { dst, base } => {

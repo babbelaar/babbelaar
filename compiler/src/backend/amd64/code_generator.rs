@@ -8,7 +8,7 @@ use log::debug;
 
 use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
-use super::{Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
+use super::{Amd64ConditionCode, Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
 
 #[derive(Debug)]
 pub struct Amd64CodeGenerator {
@@ -177,17 +177,17 @@ impl Amd64CodeGenerator {
 
             Instruction::JumpConditional { condition, location } => {
                 let location = *location;
-                match condition {
-                    JumpCondition::Equal => {
-                        self.instructions.push(Amd64Instruction::JeShort { location });
-                    }
 
-                    JumpCondition::NotEqual => {
-                        self.instructions.push(Amd64Instruction::JneShort { location });
-                    }
+                let condition = match condition {
+                    JumpCondition::Equal => Amd64ConditionCode::Equal,
+                    JumpCondition::Greater => Amd64ConditionCode::Greater,
+                    JumpCondition::GreaterOrEqual => Amd64ConditionCode::GreaterOrEqual,
+                    JumpCondition::Less => Amd64ConditionCode::Less,
+                    JumpCondition::LessOrEqual => Amd64ConditionCode::LessOrEqual,
+                    JumpCondition::NotEqual => Amd64ConditionCode::NotEqual,
 
-                    _ => todo!("Ondersteun conditie {condition} voor Spring-locatie {location}"),
-                }
+                };
+                self.instructions.push(Amd64Instruction::JccShort { location, condition });
             }
 
             Instruction::Label(label) => {

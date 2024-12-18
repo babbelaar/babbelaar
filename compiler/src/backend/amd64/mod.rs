@@ -2,6 +2,7 @@
 // All Rights Reserved.
 
 mod code_generator;
+mod condition_code;
 mod function_characteristics;
 mod instruction;
 mod register;
@@ -9,8 +10,9 @@ mod register;
 pub use self::code_generator::Amd64CodeGenerator;
 
 use self::{
-    instruction::Amd64Instruction,
+    condition_code::Amd64ConditionCode,
     function_characteristics::Amd64FunctionCharacteristics,
+    instruction::Amd64Instruction,
     register::{
         Amd64Register,
         Amd64RegisterNameMode,
