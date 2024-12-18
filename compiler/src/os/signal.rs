@@ -100,6 +100,12 @@ pub enum Signal {
 
     #[error("User defined signal 2")]
     SIGUSR2,
+
+    #[error("Stack fault on coprocessor (unused)")]
+    SIGSTKFLT,
+
+    #[error("Power failure (System V)")]
+    SIGPWR,
 }
 
 #[cfg(target_os = "macos")]
@@ -144,13 +150,54 @@ impl Signal {
     }
 }
 
+#[cfg(target_os = "linux")]
+impl Signal {
+    pub const fn new(num: i32) -> Self {
+        match num {
+            1 => Self::SIGHUP,
+            2 => Self::SIGINT,
+            3 => Self::SIGQUIT,
+            4 => Self::SIGILL,
+            5 => Self::SIGTRAP,
+            6 => Self::SIGABRT,
+            7 => Self::SIGBUS,
+            8 => Self::SIGFPE,
+            9 => Self::SIGKILL,
+            10 => Self::SIGUSR1,
+            11 => Self::SIGSEGV,
+            12 => Self::SIGUSR2,
+            13 => Self::SIGPIPE,
+            14 => Self::SIGALRM,
+            15 => Self::SIGTERM,
+            16 => Self::SIGSTKFLT,
+            17 => Self::SIGCHLD,
+            18 => Self::SIGCONT,
+            19 => Self::SIGSTOP,
+            20 => Self::SIGTSTP,
+            21 => Self::SIGTTIN,
+            22 => Self::SIGTTOU,
+            23 => Self::SIGURG,
+            24 => Self::SIGXCPU,
+            25 => Self::SIGXFSZ,
+            26 => Self::SIGVTALRM,
+            27 => Self::SIGPROF,
+            28 => Self::SIGWINCH,
+            29 => Self::SIGIO,
+            30 => Self::SIGPWR,
+            31 => Self::SIGSYS,
+
+            _ => Self::Other(num),
+        }
+    }
+}
+
 impl From<i32> for Signal {
     fn from(value: i32) -> Self {
         Self::new(value)
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 impl Signal {
     #[must_use]
     pub const fn new(num: i32) -> Self {

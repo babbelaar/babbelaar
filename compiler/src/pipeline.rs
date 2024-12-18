@@ -6,7 +6,7 @@ use std::{error::Error, fmt::Display, mem::replace, path::{Path, PathBuf}};
 use babbelaar::ParseTree;
 use log::debug;
 
-use crate::{backend::Amd64CodeGenerator, os::{macos::MacOsLdLinker, windows::WindowsLinkLinker}, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, OperatingSystem, Platform};
+use crate::{backend::Amd64CodeGenerator, os::{linux::LinuxGccLinker, macos::MacOsLdLinker, windows::WindowsLinkLinker}, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, OperatingSystem, Platform};
 
 #[derive(Debug)]
 pub struct Pipeline {
@@ -75,7 +75,15 @@ impl Pipeline {
         path.push(format!("{name}{ext}"));
 
         match self.object.platform().operating_system() {
-            OperatingSystem::Linux => todo!(),
+            OperatingSystem::Linux => {
+                let mut linker = LinuxGccLinker::new(&path);
+
+                for path in &self.paths_to_objects {
+                    linker.add_object(path);
+                }
+
+                linker.run()?;
+            }
 
             OperatingSystem::MacOs => {
                 let mut linker = MacOsLdLinker::new(&path);

@@ -2,5 +2,9 @@
 // All Rights Reserved.
 
 mod ldd;
+mod linker;
 
-pub use self::ldd::Ldd;
+pub use self::{
+    ldd::Ldd,
+    linker::LinuxGccLinker,
+};
