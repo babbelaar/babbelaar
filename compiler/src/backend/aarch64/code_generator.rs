@@ -814,17 +814,24 @@ impl AArch64CodeGenerator {
                 });
             }
 
-            (Operand::Immediate(lhs), Operand::Register(rhs)) => {
-                let src = self.allocate_register(rhs);
+            (Operand::Immediate(lhs_imm), Operand::Register(rhs)) => {
+                let rhs = self.allocate_register(rhs);
 
-                let imm12 = (-lhs.as_i64()) as _;
-                debug_assert!(imm12 < (1 << 12));
+                let lhs = if rhs != dst {
+                    rhs
+                } else {
+                    self.register_allocator.hacky_random_available_register().unwrap()
+                };
 
-                self.instructions.push(ArmInstruction::AddImmediate {
+                self.add_instruction_mov(lhs, &Operand::Immediate(*lhs_imm));
+
+                self.instructions.push(ArmInstruction::SubRegister {
+                    is_64_bit: false,
                     dst,
-                    src,
-                    imm12,
-                    shift: false,
+                    lhs,
+                    rhs,
+                    shift: 0,
+                    shift_mode: ArmShift2::default(),
                 });
             }
 
