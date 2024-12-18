@@ -165,6 +165,34 @@ fn subroutine_for_minus() {
 }
 
 #[test]
+fn negate_immediate() {
+    let result = create_and_run_single_object_executable("
+    werkwijze hoofd() -> g32 {
+        bekeer -8;
+    }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(256 - 8));
+}
+
+#[test]
+fn negate_with_function_call() {
+    let result = create_and_run_single_object_executable("
+    werkwijze keer_negatief(i: g32) -> g32 {
+        bekeer -i;
+    }
+
+    werkwijze hoofd() -> g32 {
+        bekeer keer_negatief(94);
+    }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(256 - 94));
+}
+
+#[test]
 fn method_call() {
     let result = create_and_run_single_object_executable("
         structuur MijnGeavanceerdeStructuur {

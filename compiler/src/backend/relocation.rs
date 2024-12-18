@@ -60,7 +60,7 @@ impl Relocation {
             }
 
             RelocationMethod::Amd64CallNearRelative => {
-                let offset = (offset - self.offset as isize - 5) as u32;
+                let offset = offset as u32 - 5;
                 code[1..5].copy_from_slice(&offset.to_le_bytes());
             }
         }

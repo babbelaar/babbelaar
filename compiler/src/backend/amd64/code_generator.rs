@@ -240,9 +240,14 @@ impl Amd64CodeGenerator {
             }
 
             Instruction::Negate { dst, src } => {
-                _ = dst;
-                _ = src;
-                todo!("Ondersteun {instruction}")
+                let dst = self.allocate_register(dst);
+                let src = self.allocate_register(src);
+
+                if dst != src {
+                    self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src });
+                }
+
+                self.instructions.push(Amd64Instruction::NegReg64 { dst: src });
             }
 
             Instruction::StackAlloc { dst, size } => {

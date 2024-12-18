@@ -22,6 +22,7 @@ use super::{Amd64ConditionCode, Amd64Register};
 /// | REX.W         | Indicates the use of a REX prefix that affects operand size or instruction semantics. The ordering of the REX prefix and other optional/mandatory instruction prefixes are discussed Chapter 2. Note that REX prefixes that promote legacy instructions to 64-bit behavior are not listed explicitly in the opcode column.
 /// | /r            | Indicates that the ModR/M byte of the instruction contains a register operand and an r/m operand.
 #[derive(Debug, Clone, PartialEq)]
+#[allow(unused)]
 pub enum Amd64Instruction {
     AddReg32Imm8 { dst: Amd64Register, src: i8 },
     AddReg32Reg32 { dst: Amd64Register, src: Amd64Register },
@@ -77,6 +78,8 @@ pub enum Amd64Instruction {
     MovReg32Imm32 { dst: Amd64Register, src: i32 },
     MovReg32Reg32 { dst: Amd64Register, src: Amd64Register },
     MovReg64Reg64 { dst: Amd64Register, src: Amd64Register },
+
+    NegReg64 { dst: Amd64Register },
 
     PopReg64 { reg: Amd64Register },
     PushReg64 { reg: Amd64Register },
@@ -282,6 +285,12 @@ impl Amd64Instruction {
                 output.push(mod_rm_byte_reg_reg(*dst, *src));
             }
 
+            Self::NegReg64 { dst } => {
+                output.push(register_extension(true, false, false, false));
+                output.push(0xf7);
+                output.push(mod_rm_byte_extra_op(3, *dst));
+            }
+
             Self::PopReg64 { reg } => {
                 output.push(0x58 + reg.mod_rm_bits());
             }
@@ -424,6 +433,10 @@ impl Display for Amd64Instruction {
                 f.write_fmt(format_args!("mov {}, {}", dst.name64(), src.name64()))
             }
 
+            Self::NegReg64 { dst } => {
+                f.write_fmt(format_args!("neg {}", dst.name64()))
+            }
+
             Self::PopReg64 { reg } => {
                 f.write_fmt(format_args!("pop {}", reg.name64()))
             }
@@ -559,6 +572,10 @@ mod tests {
     #[case(
         Amd64Instruction::SubReg32Reg32 { dst: Amd64Register::Rax, src: Amd64Register::Rsi },
         [ 0x29, 0xf0 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::NegReg64 { dst: Amd64Register::Rsi },
+        [ 0x48, 0xf7, 0xde ].to_vec(),
     )]
     fn check_encoding(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
