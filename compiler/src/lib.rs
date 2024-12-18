@@ -14,6 +14,7 @@ mod types;
 pub use self::{
     backend::{
         AArch64CodeGenerator,
+        Amd64CodeGenerator,
         AllocatableRegister,
         CodeGenerator,
         CompiledFunction,

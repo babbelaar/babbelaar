@@ -6,7 +6,7 @@ use std::{collections::HashMap, mem::take};
 use babbelaar::BabString;
 use log::debug;
 
-use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
+use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
 use super::{Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
 
@@ -24,7 +24,8 @@ pub struct Amd64CodeGenerator {
 
 impl Amd64CodeGenerator {
     #[must_use]
-    pub fn compile(function: &Function) -> CompiledFunction {
+    pub fn compile(function: &Function, platform: Platform) -> CompiledFunction {
+        _ = platform;
         let characteristics = Amd64FunctionCharacteristics::analyze(function);
         let mut this = Self {
             function_name: function.name().clone(),
@@ -498,7 +499,7 @@ impl Amd64CodeGenerator {
 
 impl CodeGenerator for Amd64CodeGenerator {
     fn compile(function: &Function) -> CompiledFunction {
-        Self::compile(function)
+        Self::compile(function, Platform::host_platform())
     }
 }
 
@@ -521,7 +522,7 @@ mod tests {
             label_names: HashMap::new(),
         };
 
-        let actual_bytecode = Amd64CodeGenerator::compile(&function).byte_code;
+        let actual_bytecode = Amd64CodeGenerator::compile(&function, Platform::host_platform()).byte_code;
         assert_eq!(actual_bytecode, expected_bytecode);
     }
 

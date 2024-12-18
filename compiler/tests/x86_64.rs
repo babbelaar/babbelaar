@@ -11,7 +11,7 @@ use core::slice;
 use std::collections::HashMap;
 
 use babbelaar::{parse_string_to_tree, BabString};
-use babbelaar_compiler::{AArch64CodeGenerator, Compiler, Program};
+use babbelaar_compiler::{Amd64CodeGenerator, Compiler, Platform, Program, RelocationType};
 
 #[test]
 fn function_that_returns_0() {
@@ -195,11 +195,11 @@ fn compile_ir_to_arm_and_link(program: &Program, target: &str) -> (Vec<u8>, usiz
     let mut links = Vec::new();
 
     for function in program.functions() {
-        let function = AArch64CodeGenerator::compile(function);
+        let function = Amd64CodeGenerator::compile(function, Platform::host_platform());
         let offset = data.len();
         offsets.insert(function.name().clone(), offset);
 
-        for link in function.link_locations() {
+        for link in function.relocations() {
             links.push((offset, link.clone()));
         }
 
@@ -207,12 +207,20 @@ fn compile_ir_to_arm_and_link(program: &Program, target: &str) -> (Vec<u8>, usiz
     }
 
     for (base_offset, link) in links {
-        let subroutine_offset = *offsets.get(link.name()).unwrap();
+        match link.ty() {
+            RelocationType::Data { .. } => {
+                unimplemented!()
+            }
 
-        let base_offset = base_offset + link.offset();
-        let offset = (subroutine_offset as i32 - base_offset as i32) / 4;
-        let instruction = 0x94000000 + (offset as u32 & 0x3FFFFFF);
-        data[base_offset..base_offset+4].copy_from_slice(&instruction.to_ne_bytes());
+            RelocationType::Function { name } => {
+                let subroutine_offset = *offsets.get(name).unwrap();
+
+                let base_offset = base_offset + link.offset();
+                let offset = (subroutine_offset as i32 - base_offset as i32) / 4;
+                let instruction = 0x94000000 + (offset as u32 & 0x3FFFFFF);
+                data[base_offset..base_offset+4].copy_from_slice(&instruction.to_ne_bytes());
+            }
+        }
     }
 
     let target = *offsets.get(&BabString::from(target.to_string())).unwrap();
