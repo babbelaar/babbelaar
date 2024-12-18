@@ -3,7 +3,7 @@
 
 use std::fmt::Display;
 
-use crate::AllocatableRegister;
+use crate::{AllocatableRegister, Environment, Platform};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -133,51 +133,117 @@ impl Amd64Register {
 }
 
 impl AllocatableRegister for Amd64Register {
-    fn return_register() -> Self {
-        Self::Rax
+    fn return_register(platform: &Platform) -> Self {
+        match platform.environment() {
+            Environment::Darwin => todo!("Darwin AMD64 is nog niet ondersteund"),
+
+            Environment::Gnu => Self::Rax,
+
+            Environment::MsVC => Self::Rax,
+        }
     }
 
     fn count() -> usize {
         todo!()
     }
 
-    fn callee_saved_registers() -> &'static [Amd64Register] {
-        const REGISTERS: &'static [Amd64Register] = &[
-            Amd64Register::Rbx,
-            // Amd64Register::Rbp,
-            Amd64Register::Rdi,
-            Amd64Register::Rsi,
-            // Amd64Register::Rsp,
-            Amd64Register::R12,
-            Amd64Register::R13,
-            Amd64Register::R14,
-            Amd64Register::R15,
-        ];
+    fn callee_saved_registers(platform: &Platform) -> &'static [Amd64Register] {
+        match platform.environment() {
+            Environment::Darwin => todo!("Darwin AMD64 is nog niet ondersteund"),
 
-        REGISTERS
+            Environment::Gnu => {
+                const REGISTERS: &'static [Amd64Register] = &[
+                    Amd64Register::Rbx,
+                    // Amd64Register::Rsp,
+                    // Amd64Register::Rbp,
+                    Amd64Register::R12,
+                    Amd64Register::R13,
+                    Amd64Register::R14,
+                    Amd64Register::R15,
+                ];
+
+                REGISTERS
+            }
+
+            Environment::MsVC => {
+                const REGISTERS: &'static [Amd64Register] = &[
+                    Amd64Register::Rbx,
+                    // Amd64Register::Rbp,
+                    Amd64Register::Rdi,
+                    Amd64Register::Rsi,
+                    // Amd64Register::Rsp,
+                    Amd64Register::R12,
+                    Amd64Register::R13,
+                    Amd64Register::R14,
+                    Amd64Register::R15,
+                ];
+
+                REGISTERS
+            }
+        }
     }
 
-    fn caller_saved_registers() -> &'static [Amd64Register] {
-        const REGISTERS: &'static [Amd64Register] = &[
-            Amd64Register::Rax,
-            Amd64Register::Rcx,
-            Amd64Register::Rdx,
-            Amd64Register::R8,
-            Amd64Register::R9,
-            Amd64Register::R10,
-            Amd64Register::R11,
-        ];
+    fn caller_saved_registers(platform: &Platform) -> &'static [Amd64Register] {
+        match platform.environment() {
+            Environment::Darwin => todo!("Darwin AMD64 is nog niet ondersteund"),
 
-        REGISTERS
+            Environment::Gnu => {
+                const REGISTERS: &'static [Amd64Register] = &[
+                    Amd64Register::Rax,
+                    Amd64Register::Rdi,
+                    Amd64Register::Rsi,
+                    Amd64Register::Rdx,
+                    Amd64Register::Rcx,
+                    Amd64Register::R8,
+                    Amd64Register::R9,
+                    Amd64Register::R10,
+                    Amd64Register::R11,
+                ];
+
+                REGISTERS
+            }
+
+            Environment::MsVC => {
+                const REGISTERS: &'static [Amd64Register] = &[
+                    Amd64Register::Rax,
+                    Amd64Register::Rcx,
+                    Amd64Register::Rdx,
+                    Amd64Register::R8,
+                    Amd64Register::R9,
+                    Amd64Register::R10,
+                    Amd64Register::R11,
+                ];
+
+                REGISTERS
+            }
+        }
     }
 
-    fn argument_nth(n: usize) -> Self {
-        match n {
-            0 => Self::Rcx,
-            1 => Self::Rdx,
-            2 => Self::R8,
-            3 => Self::R9,
-            _ => todo!("Argument {n}?"),
+    fn argument_nth(platform: &Platform, n: usize) -> Self {
+        match platform.environment() {
+            Environment::Darwin => todo!("Darwin AMD64 is nog niet ondersteund"),
+
+            Environment::Gnu => {
+                match n {
+                    0 => Self::Rdi,
+                    1 => Self::Rsi,
+                    2 => Self::Rdx,
+                    3 => Self::Rcx,
+                    4 => Self::R8,
+                    5 => Self::R9,
+                    _ => todo!("Argument {n}?"),
+                }
+            }
+
+            Environment::MsVC => {
+                match n {
+                    0 => Self::Rcx,
+                    1 => Self::Rdx,
+                    2 => Self::R8,
+                    3 => Self::R9,
+                    _ => todo!("Argument {n}?"),
+                }
+            }
         }
     }
 }

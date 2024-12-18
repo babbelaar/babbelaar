@@ -3,7 +3,7 @@
 
 use std::fmt::Display;
 
-use crate::backend::AllocatableRegister;
+use crate::{backend::AllocatableRegister, Platform};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ArmRegister {
@@ -31,7 +31,8 @@ impl ArmRegister {
 }
 
 impl AllocatableRegister for ArmRegister {
-    fn return_register() -> Self {
+    fn return_register(platform: &Platform) -> Self {
+        _ = platform;
         Self::X0
     }
 
@@ -39,7 +40,8 @@ impl AllocatableRegister for ArmRegister {
         31
     }
 
-    fn argument_nth(n: usize) -> Self {
+    fn argument_nth(platform: &Platform, n: usize) -> Self {
+        _ = platform;
         debug_assert!(n < Self::count());
 
         Self {
@@ -47,7 +49,8 @@ impl AllocatableRegister for ArmRegister {
         }
     }
 
-    fn callee_saved_registers() -> &'static [ArmRegister] {
+    fn callee_saved_registers(platform: &Platform) -> &'static [ArmRegister] {
+        _ = platform;
         const REGISTERS: &'static [ArmRegister] = &[
             ArmRegister { number: 19 },
             ArmRegister { number: 20 },
@@ -63,7 +66,8 @@ impl AllocatableRegister for ArmRegister {
         REGISTERS
     }
 
-    fn caller_saved_registers() -> &'static [ArmRegister] {
+    fn caller_saved_registers(platform: &Platform) -> &'static [ArmRegister] {
+        _ = platform;
         const REGISTERS: &'static [ArmRegister] = &[
             ArmRegister { number: 0 },
             ArmRegister { number: 1 },

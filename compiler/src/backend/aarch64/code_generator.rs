@@ -38,7 +38,7 @@ impl AArch64CodeGenerator {
             characteristics,
             instructions: Vec::new(),
             label_offsets: HashMap::new(),
-            register_allocator: RegisterAllocator::new(function),
+            register_allocator: RegisterAllocator::new(platform, function),
             stack_allocator: AArch64StackAllocator::new(),
             relocations: Vec::new(),
             var_args_convention,

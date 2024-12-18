@@ -12,6 +12,7 @@ use super::{Amd64ConditionCode, Amd64FunctionCharacteristics, Amd64Instruction, 
 
 #[derive(Debug)]
 pub struct Amd64CodeGenerator {
+    platform: Platform,
     function_name: BabString,
     characteristics: Amd64FunctionCharacteristics,
     instructions: Vec<Amd64Instruction>,
@@ -25,17 +26,17 @@ pub struct Amd64CodeGenerator {
 impl Amd64CodeGenerator {
     #[must_use]
     pub fn compile(function: &Function, platform: Platform) -> CompiledFunction {
-        _ = platform;
         let characteristics = Amd64FunctionCharacteristics::analyze(function);
         let mut this = Self {
             function_name: function.name().clone(),
             characteristics,
             instructions: Vec::new(),
             label_offsets: HashMap::new(),
-            register_allocator: RegisterAllocator::new(function),
+            register_allocator: RegisterAllocator::new(platform.clone(), function),
             stack_size: 0,
             space_used_on_stack: 0,
             relocations: Vec::new(),
+            platform,
         };
 
         this.add_prologue(function.instructions());
@@ -145,7 +146,7 @@ impl Amd64CodeGenerator {
 
                 for (idx, arg) in arguments.iter().enumerate() {
                     let current_reg = self.allocate_register(&arg.register());
-                    let actual_reg = Amd64Register::argument_nth(idx);
+                    let actual_reg = Amd64Register::argument_nth(&self.platform, idx);
 
                     if current_reg != actual_reg {
                         self.instructions.push(Amd64Instruction::MovReg64Reg64 {
@@ -161,10 +162,10 @@ impl Amd64CodeGenerator {
 
                 if let Some(ret_val_reg) = ret_val_reg {
                     let ret_val_reg = self.allocate_register(ret_val_reg);
-                    if ret_val_reg != Amd64Register::return_register() {
+                    if ret_val_reg != Amd64Register::return_register(&self.platform) {
                         self.instructions.push(Amd64Instruction::MovReg64Reg64 {
                             dst: ret_val_reg,
-                            src: Amd64Register::return_register(),
+                            src: Amd64Register::return_register(&self.platform),
                         });
                     }
                 }
@@ -199,9 +200,9 @@ impl Amd64CodeGenerator {
             Instruction::Return { value_reg } => {
                 if let Some(value_reg) = value_reg {
                     let value_reg = self.allocate_register(value_reg);
-                    if value_reg != Amd64Register::return_register() {
+                    if value_reg != Amd64Register::return_register(&self.platform) {
                         self.instructions.push(Amd64Instruction::MovReg64Reg64 {
-                            dst: Amd64Register::return_register(),
+                            dst: Amd64Register::return_register(&self.platform),
                             src: value_reg,
                         });
                     }

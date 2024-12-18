@@ -5,7 +5,7 @@ use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Debug};
 
 use log::debug;
 
-use crate::{Function, Register as IrRegister};
+use crate::{Function, Platform, Register as IrRegister};
 
 mod allocatable_register;
 mod life_analysis;
@@ -20,6 +20,7 @@ use self::{
 
 #[derive(Debug)]
 pub struct RegisterAllocator<R: AllocatableRegister> {
+    platform: Platform,
     mappings: HashMap<IrRegister, Option<R>>,
     registers_to_save: Vec<R>,
     currently_mapped: HashMap<IrRegister, R>,
@@ -33,13 +34,14 @@ pub struct RegisterAllocator<R: AllocatableRegister> {
 
 impl<R: AllocatableRegister> RegisterAllocator<R> {
     #[must_use]
-    pub fn new(function: &Function) -> Self {
+    pub fn new(platform: Platform, function: &Function) -> Self {
         let mut this = Self {
+            platform: platform.clone(),
             mappings: HashMap::new(),
             registers_to_save: Vec::new(),
             currently_mapped: HashMap::new(),
-            currently_available: R::caller_saved_registers().iter()
-                .chain(R::callee_saved_registers().iter())
+            currently_available: R::caller_saved_registers(&platform).iter()
+                .chain(R::callee_saved_registers(&platform).iter())
                 .copied()
                 .collect::<VecDeque<R>>(),
             only_return_register: None,
@@ -102,7 +104,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                     .collect();
 
                 if lifetime.times_used_between_calls() > 0 {
-                    if let Some((prev_avail_register, available_register)) = register_available_after_this_instruction.iter().find(|(_, reg)| reg.is_callee_saved()) {
+                    if let Some((prev_avail_register, available_register)) = register_available_after_this_instruction.iter().find(|(_, reg)| reg.is_callee_saved(&self.platform)) {
                         self.currently_mapped.remove(prev_avail_register);
 
                         self.map(*reg, *available_register);
@@ -112,7 +114,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                     let available = self.currently_available.iter()
                         .cloned()
                         .enumerate()
-                        .filter(|(_, reg)| reg.is_callee_saved())
+                        .filter(|(_, reg)| reg.is_callee_saved(&self.platform))
                         .next();
 
                     if let Some((idx, available_register)) = available {
@@ -133,7 +135,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
                 // Check if there is a register available, otherwise we should spill
                 if let Some(available_register) = self.currently_available.pop_front() {
-                    if available_register == R::return_register() && self.return_register_will_be_mapped_at.is_some_and(|first_use_return_reg| lifetime.last_use() > first_use_return_reg) {
+                    if available_register == R::return_register(&self.platform) && self.return_register_will_be_mapped_at.is_some_and(|first_use_return_reg| lifetime.last_use() > first_use_return_reg) {
                         if let Some(next_available) = self.currently_available.pop_front() {
                             self.currently_available.push_front(available_register);
 
@@ -171,7 +173,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
     #[must_use]
     pub fn hacky_random_available_register(&self) -> Option<R> {
         let mut available = HashSet::new();
-        available.extend(R::caller_saved_registers().iter().map(|r| *r));
+        available.extend(R::caller_saved_registers(&self.platform).iter().map(|r| *r));
 
         for mapping in self.mappings.values().flatten() {
             available.remove(mapping);
@@ -182,7 +184,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
     fn map_argument_registers(&mut self, function: &Function) {
         for (idx, register) in function.argument_registers().iter().enumerate() {
-            let reg = R::argument_nth(idx);
+            let reg = R::argument_nth(&self.platform, idx);
 
             self.map(*register, reg);
 
@@ -199,21 +201,21 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
             return;
         };
 
-        self.map(return_register, R::return_register());
+        self.map(return_register, R::return_register(&self.platform));
 
         self.return_register_will_be_mapped_at = register_lifetimes.iter()
             .find(|(reg, _)| *reg == return_register)
             .map(|(_, lifetime)| lifetime.first_use());
 
         if self.return_register_will_be_mapped_at.is_none() {
-            if let Some((idx, _)) = self.currently_available.iter().enumerate().find(|(_, r)| **r == R::return_register()) {
+            if let Some((idx, _)) = self.currently_available.iter().enumerate().find(|(_, r)| **r == R::return_register(&self.platform)) {
                 self.currently_available.remove(idx);
             }
         }
     }
 
     fn map(&mut self, ir: IrRegister, isa: R) {
-        if isa.is_callee_saved() {
+        if isa.is_callee_saved(&self.platform) {
             if !self.registers_to_save.contains(&isa) {
                 self.registers_to_save.push(isa);
             }
