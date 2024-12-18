@@ -195,7 +195,16 @@ impl Amd64CodeGenerator {
                 self.label_offsets.insert(*label, self.instructions.len());
             }
 
-            Instruction::InitArg { .. } => (),
+            Instruction::InitArg { destination, arg_idx } => {
+                let src = Amd64Register::argument_nth(&self.platform, *arg_idx);
+                let dst = self.allocate_register(destination);
+                if src != dst {
+                    self.instructions.push(Amd64Instruction::MovReg64Reg64 {
+                        dst,
+                        src,
+                    });
+                }
+            }
 
             Instruction::Return { value_reg } => {
                 if let Some(value_reg) = value_reg {
