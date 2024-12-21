@@ -136,13 +136,8 @@ impl Amd64Register {
 
 impl AllocatableRegister for Amd64Register {
     fn return_register(platform: &Platform) -> Self {
-        match platform.environment() {
-            Environment::Darwin => todo!("Darwin AMD64 is nog niet ondersteund"),
-
-            Environment::Gnu => Self::Rax,
-
-            Environment::MsVC => Self::Rax,
-        }
+        _ = platform;
+        Self::Rax
     }
 
     fn count() -> usize {
@@ -151,7 +146,19 @@ impl AllocatableRegister for Amd64Register {
 
     fn callee_saved_registers(platform: &Platform) -> &'static [Amd64Register] {
         match platform.environment() {
-            Environment::Darwin => todo!("Darwin AMD64 is nog niet ondersteund"),
+            Environment::Darwin => {
+                const REGISTERS: &'static [Amd64Register] = &[
+                    Amd64Register::Rbx,
+                    // Amd64Register::Rsp,
+                    // Amd64Register::Rbp,
+                    Amd64Register::R12,
+                    Amd64Register::R13,
+                    Amd64Register::R14,
+                    Amd64Register::R15,
+                ];
+
+                REGISTERS
+            }
 
             Environment::Gnu => {
                 const REGISTERS: &'static [Amd64Register] = &[
@@ -187,7 +194,21 @@ impl AllocatableRegister for Amd64Register {
 
     fn caller_saved_registers(platform: &Platform) -> &'static [Amd64Register] {
         match platform.environment() {
-            Environment::Darwin => todo!("Darwin AMD64 is nog niet ondersteund"),
+            Environment::Darwin => {
+                const REGISTERS: &'static [Amd64Register] = &[
+                    Amd64Register::Rax,
+                    Amd64Register::Rdi,
+                    Amd64Register::Rsi,
+                    Amd64Register::Rdx,
+                    Amd64Register::Rcx,
+                    Amd64Register::R8,
+                    Amd64Register::R9,
+                    Amd64Register::R10,
+                    Amd64Register::R11,
+                ];
+
+                REGISTERS
+            }
 
             Environment::Gnu => {
                 const REGISTERS: &'static [Amd64Register] = &[
@@ -223,7 +244,17 @@ impl AllocatableRegister for Amd64Register {
 
     fn argument_nth(platform: &Platform, n: usize) -> Self {
         match platform.environment() {
-            Environment::Darwin => todo!("Darwin AMD64 is nog niet ondersteund"),
+            Environment::Darwin => {
+                match n {
+                    0 => Self::Rdi,
+                    1 => Self::Rsi,
+                    2 => Self::Rdx,
+                    3 => Self::Rcx,
+                    4 => Self::R8,
+                    5 => Self::R9,
+                    _ => todo!("Argument {n}?"),
+                }
+            }
 
             Environment::Gnu => {
                 match n {
