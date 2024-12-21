@@ -43,6 +43,27 @@ impl LifeAnalysis {
             }
         }
 
+        for loop_range in this.cfg.loop_ranges() {
+            let mut function_calls = 0;
+            for instruction in &instructions[loop_range.clone()] {
+                if let Instruction::Call { .. } = instruction {
+                    function_calls += 1;
+                }
+            }
+
+            for lifetime in this.result.lifetimes.values_mut() {
+                if !loop_range.contains(&lifetime.first_use()) && !loop_range.contains(&lifetime.last_use()) {
+                    continue;
+                }
+
+                if function_calls != 0 {
+                    lifetime.did_use_between_calls();
+                }
+
+                lifetime.did_use_during_loop(loop_range.clone());
+            }
+        }
+
         this.result
     }
 
@@ -146,15 +167,6 @@ impl LifeAnalysis {
     fn add_lifetime(&mut self, register: &IrRegister, index: usize) -> &mut RegisterLifetime {
         let lifetime = self.result.lifetimes.entry(*register)
             .or_insert(RegisterLifetime::new(index));
-
-        if !lifetime.was_used_during_loops() {
-            for loop_range in self.cfg.loop_ranges() {
-                if loop_range.contains(&index) {
-                    lifetime.did_use_during_loop(loop_range.clone());
-                    break;
-                }
-            }
-        }
 
         lifetime.did_use_at(index);
         lifetime

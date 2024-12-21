@@ -51,11 +51,6 @@ impl RegisterLifetime {
     }
 
     #[must_use]
-    pub fn was_used_during_loops(&self) -> bool {
-        self.last_loop_index.is_some()
-    }
-
-    #[must_use]
     pub fn last_loop_index(&self) -> Option<usize> {
         self.last_loop_index
     }
