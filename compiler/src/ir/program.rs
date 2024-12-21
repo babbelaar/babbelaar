@@ -11,10 +11,10 @@ use super::Function;
 
 #[derive(Debug)]
 pub struct Program {
-    functions: Vec<Function>,
+    pub(crate) functions: Vec<Function>,
     function_aliases: HashMap<BabString, BabString>,
     function_symbols: Vec<BabString>,
-    read_only_data: Option<DataSection>,
+    pub(crate) read_only_data: Option<DataSection>,
 }
 
 impl Program {
@@ -61,11 +61,6 @@ impl Program {
     #[must_use]
     pub fn functions(&self) -> &[Function] {
         &self.functions
-    }
-
-    #[must_use]
-    pub(crate) fn functions_mut(&mut self) -> &mut [Function] {
-        &mut self.functions
     }
 
     #[must_use]

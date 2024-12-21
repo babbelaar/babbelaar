@@ -26,8 +26,14 @@ impl ControlFlowGraph {
         this
     }
 
+    #[must_use]
     pub fn loop_ranges(&self) -> &[Range<usize>] {
         &self.loops
+    }
+
+    #[must_use]
+    pub fn is_start_of_loop(&self, idx: usize) -> bool {
+        self.loops.iter().find(|r| r.start == idx).is_some()
     }
 
     #[must_use]

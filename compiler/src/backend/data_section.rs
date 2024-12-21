@@ -31,6 +31,7 @@ impl DataSection {
         self.data.push(0);
 
         DataSectionOffset::new(self.kind, offset)
+            .with_size(string.len())
     }
 }
 
@@ -65,6 +66,7 @@ impl Display for DataSectionKind {
 pub struct DataSectionOffset {
     kind: DataSectionKind,
     offset: usize,
+    size: Option<usize>
 }
 
 impl DataSectionOffset {
@@ -73,7 +75,21 @@ impl DataSectionOffset {
         Self {
             kind: section,
             offset,
+            size: None,
         }
+    }
+
+    #[must_use]
+    pub const fn with_size(self, size: usize) -> Self {
+        Self {
+            size: Some(size),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub const fn size(&self) -> Option<usize> {
+        self.size
     }
 
     #[must_use]

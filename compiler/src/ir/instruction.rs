@@ -146,6 +146,31 @@ pub enum Instruction {
     },
 }
 
+impl Instruction {
+    #[must_use]
+    pub fn destination_register(&self) -> Option<Register> {
+        match self {
+            Self::Compare { .. } => None,
+            Self::Label(..) => None,
+            Self::Jump { .. } => None,
+            Self::JumpConditional { .. } => None,
+            Self::Return { .. } => None,
+            Self::StorePtr { .. } => None,
+
+            Self::Increment { register, .. } => Some(*register),
+            Self::InitArg { destination, .. } => Some(*destination),
+            Self::Move { destination, .. } => Some(*destination),
+            Self::MoveAddress { destination, .. } => Some(*destination),
+            Self::MoveCondition { destination, .. } => Some(*destination),
+            Self::MathOperation { destination, .. } => Some(*destination),
+            Self::Negate { dst, .. } => Some(*dst),
+            Self::StackAlloc { dst, .. } => Some(*dst),
+            Self::LoadPtr { destination, .. } => Some(*destination),
+            Self::Call { ret_val_reg, .. } => *ret_val_reg,
+        }
+    }
+}
+
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

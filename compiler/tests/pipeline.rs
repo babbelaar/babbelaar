@@ -496,9 +496,29 @@ fn loop_string_length() {
     let result = create_and_run_single_object_executable(r#"
         werkwijze hoofd() -> g32 {
             stel totaal = 0;
-            stel s = "hallo".lengte();
-            volg i in reeks(0, s) {
+            volg i in reeks(0, "hallo".lengte()) {
                 totaal = totaal + 1;
+            }
+
+            bekeer totaal;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(5));
+}
+
+#[test]
+fn loop_string_length_from_subroutine() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze krijgSlinger() -> Slinger {
+            bekeer "hallo";
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel totaal = 0;
+            volg i in reeks(0, krijgSlinger().lengte()) {
+                totaal += 1;
             }
 
             bekeer totaal;
@@ -746,6 +766,26 @@ fn printf_with_string() {
 
         werkwijze hoofd() -> g32 {
             printf("Hallo, %s", "wereld");
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "Hallo, wereld");
+}
+
+#[test]
+fn printf_with_concatenated_string() {
+    let result = create_and_run_single_object_executable(r#"
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+
+        werkwijze hoofd() -> g32 {
+            stel wereld = "wereld";
+            stel hallo = "Hallo";
+            printf(hallo + ", " + wereld);
             bekeer 0;
         }
     "#);

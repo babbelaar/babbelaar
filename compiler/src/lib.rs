@@ -56,7 +56,7 @@ pub use self::{
     },
     optimization::{
         FunctionOptimizer,
-        optimize_function,
+        OptimizationContext,
         optimize_program,
     },
     os::Signal,
