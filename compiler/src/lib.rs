@@ -1,6 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+mod analysis;
 mod backend;
 mod compiler;
 mod interpreter;
@@ -12,6 +13,7 @@ mod pipeline;
 mod types;
 
 pub use self::{
+    analysis::ControlFlowGraph,
     backend::{
         AArch64CodeGenerator,
         Amd64CodeGenerator,
@@ -65,6 +67,7 @@ pub use self::{
     types::{
         Architecture,
         Environment,
+        Graph,
         OperatingSystem,
         Platform,
         WindowsVersion,

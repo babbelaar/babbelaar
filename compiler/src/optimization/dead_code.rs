@@ -5,78 +5,22 @@ use std::collections::HashMap;
 
 use log::debug;
 
-use crate::{types::Graph, Function, FunctionOptimizer, Instruction, Label, Operand, Register};
+use crate::{ControlFlowGraph, Function, FunctionOptimizer, Instruction, Operand, Register};
 
 #[derive(Debug, Default)]
-pub struct DeadCodeEliminator {
-    control_flow_graph: Graph<usize>,
-}
+pub struct DeadCodeEliminator;
 
 impl FunctionOptimizer for DeadCodeEliminator {
     fn optimize(&mut self, function: &mut Function) {
-        for instruction_index in 0..function.instructions().len() {
-            self.control_flow_graph.add_node(instruction_index);
-        }
-
-        self.control_flow_graph.add_edge(0, 0);
-
-        self.visit_section(function.instructions(), 0);
+        let cfg = ControlFlowGraph::build(function);
 
         for index in (0..function.instructions().len()).rev() {
-            if self.control_flow_graph.has_edges_to(&index) {
+            if cfg.is_instruction_reachable(index) {
                 continue;
             }
 
             let instr = function.instructions.remove(index);
             debug!("[DeadCode] Removing {instr}");
-        }
-    }
-}
-
-impl DeadCodeEliminator {
-    fn position_of_label(&mut self, instructions: &[Instruction], label: &Label) -> usize {
-        for (index, instruction) in instructions.iter().enumerate() {
-            if let Instruction::Label(l) = instruction {
-                if l == label {
-                    return index;
-                }
-            }
-        }
-
-        panic!("Illegal label {label:?}")
-    }
-
-    fn visit_section(&mut self, instructions: &[Instruction], mut index: usize) {
-        while index < instructions.len() {
-            match &instructions[index] {
-                Instruction::Jump { location } => {
-                    let position = self.position_of_label(instructions, location);
-                    if self.control_flow_graph.add_edge(index, position) {
-                        self.visit_section(instructions, position);
-                    }
-                    return;
-                }
-
-                Instruction::JumpConditional { location, .. } => {
-                    let position = self.position_of_label(instructions, location);
-                    if self.control_flow_graph.add_edge(index, position) {
-                        self.visit_section(instructions, position);
-                    }
-                }
-
-                Instruction::Return { .. } => {
-                    return;
-                }
-
-                _ => (),
-            }
-
-            let next = index + 1;
-            if next < instructions.len() {
-                self.control_flow_graph.add_edge(index, next);
-            }
-
-            index += 1;
         }
     }
 }
@@ -310,7 +254,7 @@ enum StoreKind {
 mod tests {
     use babbelaar::BabString;
 
-    use crate::Immediate;
+    use crate::{Immediate, Label};
 
     use super::*;
     use rstest::rstest;
