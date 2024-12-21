@@ -13,8 +13,5 @@ use self::{
     condition_code::Amd64ConditionCode,
     function_characteristics::Amd64FunctionCharacteristics,
     instruction::Amd64Instruction,
-    register::{
-        Amd64Register,
-        Amd64RegisterNameMode,
-    },
+    register::Amd64Register,
 };

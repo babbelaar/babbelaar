@@ -32,6 +32,7 @@ impl AArch64FunctionCharacteristics {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AArch64VarArgsConvention {
+    #[allow(unused)] // in de toekomst moet ARM64 op Linux dit gebruiken
     RegistersAndStack,
     StackOnly,
 }

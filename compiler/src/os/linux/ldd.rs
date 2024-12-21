@@ -3,7 +3,7 @@
 
 //! LDD - print shared dependencies
 
-use std::{marker::PhantomData, process::{Command, Stdio}};
+use std::{marker::PhantomData, process::Command};
 
 use log::warn;
 

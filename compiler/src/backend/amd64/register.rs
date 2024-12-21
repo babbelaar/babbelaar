@@ -38,11 +38,13 @@ impl Amd64Register {
     }
 
     #[must_use]
+    #[allow(unused)]
     pub const fn name16(&self) -> &'static str {
         self.name(Amd64RegisterNameMode::Word)
     }
 
     #[must_use]
+    #[allow(unused)]
     pub const fn name8(&self) -> &'static str {
         self.name(Amd64RegisterNameMode::Byte)
     }
