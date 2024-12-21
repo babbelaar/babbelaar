@@ -72,8 +72,6 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         self.only_return_register = analysis.find_only_return_register();
         let register_lifetimes = analysis.into_sorted_vec();
 
-        // self.map_argument_registers(function);
-
         self.map_only_return_register(&register_lifetimes);
         self.map_registers(function, register_lifetimes);
 
@@ -180,18 +178,6 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         }
 
         available.into_iter().next()
-    }
-
-    fn map_argument_registers(&mut self, function: &Function) {
-        for (idx, register) in function.argument_registers().iter().enumerate() {
-            let reg = R::argument_nth(&self.platform, idx);
-
-            self.map(*register, reg);
-
-            if let Some((index, _)) = self.currently_available.iter().enumerate().find(|(_, avail_reg)| **avail_reg == reg) {
-                self.currently_available.remove(index);
-            }
-        }
     }
 
     /// This is an optimization where we try to find the IR registers that are used as the return value,
