@@ -983,6 +983,80 @@ fn loop_break_with_if_modulo() {
     assert_eq!(result.stdout, "Doei\nDoei\n");
 }
 
+/// Deze test checkt of de MADD-optimalisatie voor AArch64 goed werkt en dus
+/// dat platform of andere platforms niet breekt.
+#[test]
+fn opt_multiply_then_add() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze keer_en_plus(a: g32, b: g32, c: g32) -> g32 {
+            bekeer a * b + c;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer keer_en_plus(3, 5, 6);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(21));
+    assert_eq!(result.stdout, "");
+}
+
+#[test]
+fn opt_add_then_multiply() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze plus_en_keer(a: g32, b: g32, c: g32) -> g32 {
+            bekeer a + b * c;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer plus_en_keer(12, 5, 6);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(42));
+    assert_eq!(result.stdout, "");
+}
+
+/// Deze test checkt of de MSUB-optimalisatie voor AArch64 goed werkt en dus
+/// dat platform of andere platforms niet breekt.
+#[test]
+fn opt_multiply_then_sub() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze keer_en_min(a: g32, b: g32, c: g32) -> g32 {
+            bekeer a * b - c;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer keer_en_min(3, 5, 6);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(9));
+    assert_eq!(result.stdout, "");
+}
+
+/// Deze test checkt of de MSUB-optimalisatie voor AArch64 goed werkt en dus
+/// dat platform of andere platforms niet breekt.
+#[test]
+fn opt_sub_then_multiply() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze keer_en_min(a: g32, b: g32, c: g32) -> g32 {
+            bekeer a - b * c;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer keer_en_min(19, 3, 5);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(4));
+    assert_eq!(result.stdout, "");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();

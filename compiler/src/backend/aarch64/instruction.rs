@@ -165,6 +165,16 @@ pub enum ArmInstruction {
         amount: ArmRegister,
     },
 
+    /// Vermenigvuldig twee getallen met elkaar, en tel er daarna een ander getal bij op.
+    /// Altijd registers.
+    MAdd {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        mul_lhs: ArmRegister,
+        mul_rhs: ArmRegister,
+        addend: ArmRegister,
+    },
+
     MovN {
         is_64_bit: bool,
         register: ArmRegister,
@@ -575,6 +585,20 @@ impl ArmInstruction {
 
                 instruction |= (amount.number as u32) << 16;
                 instruction |= (src.number as u32) << 5;
+                instruction |= dst.number as u32;
+
+                instruction
+            }
+
+            Self::MAdd { is_64_bit, dst, mul_lhs, mul_rhs, addend } => {
+                let mut instruction = 0x1b000000;
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
+                instruction |= (mul_rhs.number as u32) << 16;
+                instruction |= (addend.number as u32) << 10;
+                instruction |= (mul_lhs.number as u32) << 5;
                 instruction |= dst.number as u32;
 
                 instruction
@@ -1106,6 +1130,11 @@ impl Display for ArmInstruction {
                 f.write_fmt(format_args!("lsl {dst}, {src}, {amount}"))
             }
 
+            Self::MAdd { is_64_bit, dst, mul_lhs, mul_rhs, addend } => {
+                _ = is_64_bit;
+                f.write_fmt(format_args!("madd {dst}, {mul_lhs}, {mul_rhs}, {addend}"))
+            }
+
             Self::MovN { is_64_bit, register, unsigned_imm16 } => {
                 _ = is_64_bit;
                 f.write_fmt(format_args!("mov {register}, #-{unsigned_imm16}"))
@@ -1470,6 +1499,20 @@ mod tests {
         register: ArmRegister::X0,
         value: 1,
     }, 0xB100041f)]
+    #[case(ArmInstruction::MAdd {
+        is_64_bit: false,
+        dst: ArmRegister::X0,
+        mul_lhs: ArmRegister::X0,
+        mul_rhs: ArmRegister::X0,
+        addend: ArmRegister::X0,
+    }, 0x1b000000)]
+    #[case(ArmInstruction::MAdd {
+        is_64_bit: false,
+        dst: ArmRegister::X0,
+        mul_lhs: ArmRegister::X0,
+        mul_rhs: ArmRegister::X1,
+        addend: ArmRegister::X2,
+    }, 0x1b010800)]
     fn encode_instruction(#[case] input: ArmInstruction, #[case] expected: u32) {
         let actual = input.encode(0, &HashMap::new());
         assert_eq!(expected, actual, "actual was: 0x{actual:x}");

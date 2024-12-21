@@ -8,7 +8,7 @@ use log::{debug, warn};
 
 use crate::{backend::aarch64::AArch64VarArgsConvention, CodeGenerator, CompiledFunction, Environment, Function, Immediate, Instruction, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
-use super::{AArch64FunctionCharacteristics, AArch64StackAllocator, ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode, POINTER_SIZE, SPACE_NEEDED_FOR_FP_AND_LR};
+use super::{AArch64FunctionCharacteristics, AArch64Optimizer, AArch64StackAllocator, ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode, POINTER_SIZE, SPACE_NEEDED_FOR_FP_AND_LR};
 
 #[derive(Debug)]
 pub struct AArch64CodeGenerator {
@@ -49,6 +49,8 @@ impl AArch64CodeGenerator {
         for (index, instruction) in function.instructions().iter().enumerate() {
             this.add_instruction(index, instruction);
         }
+
+        AArch64Optimizer::optimize(&mut this.instructions, &mut this.label_offsets);
 
         this.dump_instructions();
 

@@ -12,6 +12,7 @@ mod code_generator;
 mod condition_code;
 mod function_characteristics;
 mod instruction;
+mod optimizer;
 mod register;
 mod stack_allocator;
 
@@ -36,6 +37,7 @@ pub use self::{
         ArmInstruction,
         ArmShift2,
     },
+    optimizer::AArch64Optimizer,
     register::ArmRegister,
     stack_allocator::AArch64StackAllocator,
 };
