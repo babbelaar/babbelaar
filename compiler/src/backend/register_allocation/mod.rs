@@ -97,7 +97,8 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                 }
 
                 let register_available_after_this_instruction: Vec<_> = register_lifetimes.iter()
-                    .filter(|(_, lifetime)| lifetime.last_use() == index)
+                    .filter(|(_, lifetime)| lifetime.last_use() <= index)
+                    .filter(|(_, lifetime)| lifetime.last_loop_index().is_none_or(|loop_end| loop_end < index))
                     .filter_map(|(reg, _)| Some((*reg, *self.currently_mapped.get(reg)?)))
                     .collect();
 

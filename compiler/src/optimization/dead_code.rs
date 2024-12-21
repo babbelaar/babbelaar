@@ -12,7 +12,7 @@ pub struct DeadCodeEliminator;
 
 impl FunctionOptimizer for DeadCodeEliminator {
     fn optimize(&mut self, function: &mut Function) {
-        let cfg = ControlFlowGraph::build(function);
+        let cfg = ControlFlowGraph::new(function.instructions());
 
         for index in (0..function.instructions().len()).rev() {
             if cfg.is_instruction_reachable(index) {

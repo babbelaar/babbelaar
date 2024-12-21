@@ -206,6 +206,11 @@ impl<N: Eq> Graph<N> {
             .find(|x| x.to == pos)
             .is_some()
     }
+
+    #[must_use]
+    pub fn edges(&self) -> impl Iterator<Item = &GraphEdge> {
+        self.edges.iter()
+    }
 }
 
 impl<N: Eq> Default for Graph<N> {
@@ -218,9 +223,21 @@ impl<N: Eq> Default for Graph<N> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct GraphEdge {
+pub struct GraphEdge {
     from: usize,
     to: usize,
+}
+
+impl GraphEdge {
+    #[must_use]
+    pub const fn from(&self) -> usize {
+        self.from
+    }
+
+    #[must_use]
+    pub const fn to(&self) -> usize {
+        self.to
+    }
 }
 
 /// See [Microsoft Learn: Operating System Version](https://learn.microsoft.com/nl-nl/windows/win32/sysinfo/operating-system-version?redirectedfrom=MSDN)

@@ -5,20 +5,29 @@ use std::collections::BTreeMap;
 
 use log::debug;
 
-use crate::{Instruction, Operand, Register as IrRegister};
+use crate::{ControlFlowGraph, Instruction, Operand, Register as IrRegister};
 
 use super::RegisterLifetime;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct LifeAnalysis {
     result: LifeAnalysisResult,
     function_calls: Vec<usize>,
+
+    cfg: ControlFlowGraph,
 }
 
 impl LifeAnalysis {
     #[must_use]
     pub fn analyze(argument_registers: &[IrRegister], instructions: &[Instruction]) -> LifeAnalysisResult {
-        let mut this = Self::default();
+        let mut this = Self {
+            result: Default::default(),
+            function_calls: Default::default(),
+
+            cfg: ControlFlowGraph::new(instructions),
+        };
+
+        this.cfg.dump();
 
         this.add_argument_registers(argument_registers);
 
@@ -138,6 +147,15 @@ impl LifeAnalysis {
         let lifetime = self.result.lifetimes.entry(*register)
             .or_insert(RegisterLifetime::new(index));
 
+        if !lifetime.was_used_during_loops() {
+            for loop_range in self.cfg.loop_ranges() {
+                if loop_range.contains(&index) {
+                    lifetime.did_use_during_loop(loop_range.clone());
+                    break;
+                }
+            }
+        }
+
         lifetime.did_use_at(index);
         lifetime
     }
@@ -210,6 +228,9 @@ impl LifeAnalysisResult {
             }
             if lifetime.times_used_between_calls() != 0 {
                 debug!("    and was used {}x between subroutine calls", lifetime.times_used_between_calls());
+            }
+            if let Some(idx) = lifetime.last_loop_index() {
+                debug!("    and was used during loop ending at {idx}");
             }
         }
     }

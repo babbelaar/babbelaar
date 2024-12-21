@@ -1,26 +1,51 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::ops::Range;
 
-use crate::{Graph, Function, Instruction, Label};
+use log::debug;
+
+use crate::{Graph, Instruction, Label};
 
 #[derive(Debug, Clone)]
 pub struct ControlFlowGraph {
     graph: Graph<usize>,
+    loops: Vec<Range<usize>>,
 }
 
 impl ControlFlowGraph {
     #[must_use]
-    pub fn build(function: &Function) -> Self {
+    pub fn new(instructions: &[Instruction]) -> Self {
         let mut this = Self {
             graph: Graph::default(),
+            loops: Vec::new(),
         };
 
-        this.visit_function(function);
+        this.visit_function(instructions);
 
         this
     }
 
+    pub fn loop_ranges(&self) -> &[Range<usize>] {
+        &self.loops
+    }
+
+    #[must_use]
+    pub fn is_instruction_reachable(&self, index: usize) -> bool {
+        self.graph.has_edges_to(&index)
+    }
+
+    #[allow(unused)]
+    pub fn dump(&self) {
+        debug!("Loops of ControlFlowGraph:");
+        for loop_range in &self.loops {
+            debug!("    From {} to {}", loop_range.start, loop_range.end);
+        }
+    }
+}
+
+// private methods
+impl ControlFlowGraph {
     fn position_of_label(&mut self, instructions: &[Instruction], label: &Label) -> usize {
         for (index, instruction) in instructions.iter().enumerate() {
             if let Instruction::Label(l) = instruction {
@@ -33,14 +58,15 @@ impl ControlFlowGraph {
         panic!("Illegal label {label:?}")
     }
 
-    fn visit_function(&mut self, function: &Function) {
-        for instruction_index in 0..function.instructions().len() {
+    fn visit_function(&mut self, instructions: &[Instruction]) {
+        for instruction_index in 0..instructions.len() {
             self.graph.add_node(instruction_index);
         }
 
         self.graph.add_edge(0, 0);
 
-        self.visit_section(function.instructions(), 0);
+        self.visit_section(instructions, 0);
+        self.analyze_loops();
     }
 
     fn visit_section(&mut self, instructions: &[Instruction], mut index: usize) {
@@ -77,8 +103,11 @@ impl ControlFlowGraph {
         }
     }
 
-    #[must_use]
-    pub fn is_instruction_reachable(&self, index: usize) -> bool {
-        self.graph.has_edges_to(&index)
+    fn analyze_loops(&mut self) {
+        for edge in self.graph.edges() {
+            if edge.to() < edge.from() {
+                self.loops.push(edge.to()..edge.from());
+            }
+        }
     }
 }
