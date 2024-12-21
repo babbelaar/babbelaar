@@ -81,7 +81,12 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
     fn map_registers(&mut self, function: &Function, register_lifetimes: Vec<(IrRegister, RegisterLifetime)>) {
         for (index, _) in function.instructions().iter().enumerate() {
             for (reg, lifetime) in &register_lifetimes {
-                if !lifetime.is_active_at(index) && lifetime.first_use() < index {
+                if !lifetime.is_active_at(index) {
+                    if lifetime.first_use() >= index {
+                        // nog niet aan de orde.
+                        continue;
+                    }
+
                     if let Some(mapped) = self.currently_mapped.remove(reg) {
                         if !self.currently_available.contains(&mapped) {
                             self.currently_available.push_front(mapped);
