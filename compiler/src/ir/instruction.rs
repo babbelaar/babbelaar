@@ -3,7 +3,7 @@
 
 use std::fmt::{Display, Write};
 
-use babbelaar::{BabString, MathOperator};
+use babbelaar::{BabString, Comparison, MathOperator};
 
 use crate::DataSectionOffset;
 
@@ -333,6 +333,19 @@ impl JumpCondition {
 impl Display for JumpCondition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.name())
+    }
+}
+
+impl From<Comparison> for JumpCondition {
+    fn from(value: Comparison) -> Self {
+        match value {
+            Comparison::Equality => JumpCondition::Equal,
+            Comparison::GreaterThan => JumpCondition::Greater,
+            Comparison::GreaterThanOrEqual => JumpCondition::GreaterOrEqual,
+            Comparison::Inequality => JumpCondition::NotEqual,
+            Comparison::LessThan => JumpCondition::Less,
+            Comparison::LessThanOrEqual => JumpCondition::LessOrEqual,
+        }
     }
 }
 

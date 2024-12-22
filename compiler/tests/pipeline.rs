@@ -946,6 +946,30 @@ fn comparison_immediate(#[case] expr: &str, #[case] expected: bool) {
 }
 
 #[rstest]
+#[case("0 == 1", false)]
+#[case("1 == 0", false)]
+#[case("1 == 1", true)]
+#[case("1 > 0", true)]
+#[case("0 > 1", false)]
+#[case("1 < 0", false)]
+#[case("0 < 1", true)]
+#[case("19 >= 19", true)]
+#[case("16 >= 20", false)]
+fn if_with_comparison_immediate(#[case] expr: &str, #[case] expected: bool) {
+    let result = create_and_run_single_object_executable(&format!(r#"
+        werkwijze hoofd() -> g32 {{
+            als {expr} {{
+                bekeer 1;
+            }}
+            bekeer 0;
+        }}
+    "#));
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(expected as _));
+}
+
+#[rstest]
 #[case(0, "+=", 0, 0)]
 #[case(1, "+=", 0, 1)]
 #[case(0, "+=", 1, 1)]

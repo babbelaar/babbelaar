@@ -91,6 +91,10 @@ impl<'program> FunctionBuilder<'program> {
         self.instructions.push(Instruction::JumpConditional { condition, location });
     }
 
+    pub fn jump_if(&mut self, location: Label, condition: JumpCondition) {
+        self.instructions.push(Instruction::JumpConditional { condition, location });
+    }
+
     #[must_use]
     pub fn load_immediate(&mut self, immediate: Immediate) -> Register {
         let destination = self.register_allocator.next();

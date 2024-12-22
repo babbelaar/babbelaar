@@ -9,7 +9,7 @@ use std::rc::Rc;
 use babbelaar::*;
 use log::debug;
 
-use crate::{ir::FunctionArgument, optimize_program, ArgumentList, FunctionAttribute, FunctionBuilder, Immediate, JumpCondition, Label, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId, TypeInfo};
+use crate::{ir::FunctionArgument, optimize_program, ArgumentList, FunctionAttribute, FunctionBuilder, Immediate, Label, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId, TypeInfo};
 
 #[derive(Debug)]
 pub struct Compiler {
@@ -364,19 +364,8 @@ impl CompileStatement for IfStatement {
 
         let comparison = self.condition.compile(builder, ctx).to_comparison(builder);
 
-        match comparison {
-            Comparison::Equality => {
-                builder.jump_if_equal(then_block);
-                builder.jump(after_block);
-            }
-
-            Comparison::Inequality => {
-                builder.jump_if_not_equal(then_block);
-                builder.jump(after_block);
-            }
-
-            _ => todo!(),
-        };
+        builder.jump_if(then_block, comparison.into());
+        builder.jump(after_block);
 
         builder.link_label_here(then_block);
         for statement in &self.body {
@@ -847,14 +836,7 @@ impl ExpressionResultKind {
     fn to_register(self, builder: &mut FunctionBuilder<'_>) -> Register {
         match self {
             Self::Comparison(comparison) => {
-                builder.load_condition(match comparison {
-                    Comparison::Equality => JumpCondition::Equal,
-                    Comparison::GreaterThan => JumpCondition::Greater,
-                    Comparison::GreaterThanOrEqual => JumpCondition::GreaterOrEqual,
-                    Comparison::Inequality => JumpCondition::NotEqual,
-                    Comparison::LessThan => JumpCondition::Less,
-                    Comparison::LessThanOrEqual => JumpCondition::LessOrEqual,
-                })
+                builder.load_condition(comparison.into())
             }
 
             Self::Register(reg) => reg,
