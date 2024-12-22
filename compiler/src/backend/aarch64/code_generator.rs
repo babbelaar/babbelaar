@@ -84,7 +84,7 @@ impl AArch64CodeGenerator {
                 let src = dst;
                 let imm12 = 1;
                 let shift = false;
-                self.instructions.push(ArmInstruction::AddImmediate { dst, src, imm12, shift });
+                self.instructions.push(ArmInstruction::AddImmediate { is_64_bit: true, dst, src, imm12, shift });
             }
 
             Instruction::Move { source, destination } => {
@@ -107,6 +107,7 @@ impl AArch64CodeGenerator {
                 });
 
                 self.instructions.push(ArmInstruction::Adrp {
+                    is_64_bit: true,
                     dst,
                     imm: 0,
                 });
@@ -121,6 +122,7 @@ impl AArch64CodeGenerator {
                 });
 
                 self.instructions.push(ArmInstruction::AddImmediate {
+                    is_64_bit: true,
                     dst,
                     src: dst,
                     imm12: 0,
@@ -274,6 +276,7 @@ impl AArch64CodeGenerator {
                 let offset = self.stack_allocator.offset_of_reg(instruction_id);
 
                 self.instructions.push(ArmInstruction::AddImmediate {
+                    is_64_bit: true,
                     dst,
                     src: ArmRegister::SP,
                     imm12: offset as _,
@@ -481,6 +484,7 @@ impl AArch64CodeGenerator {
                 let lhs = self.allocate_register(lhs);
                 let rhs = self.allocate_register(rhs);
                 self.instructions.push(ArmInstruction::AddRegister {
+                    is_64_bit: true,
                     dst,
                     lhs,
                     rhs,
@@ -495,6 +499,7 @@ impl AArch64CodeGenerator {
                 let imm12 = imm.as_i64() as _;
                 debug_assert!(imm12 < (1 << 12));
                 self.instructions.push(ArmInstruction::AddImmediate {
+                    is_64_bit: true,
                     dst,
                     src,
                     imm12,
@@ -566,6 +571,7 @@ impl AArch64CodeGenerator {
                 match immediate {
                     0..4095 => {
                         self.instructions.push(ArmInstruction::CmpImmediate {
+                            is_64_bit: true,
                             register,
                             value: immediate as _,
                         });
@@ -573,6 +579,7 @@ impl AArch64CodeGenerator {
 
                     -4095..0 => {
                         self.instructions.push(ArmInstruction::CmnImmediate {
+                            is_64_bit: true,
                             register,
                             value: -immediate as _,
                         });
@@ -583,6 +590,7 @@ impl AArch64CodeGenerator {
                         self.add_instruction_mov(rhs, &Operand::Immediate(Immediate::Integer64(immediate)));
 
                         self.instructions.push(ArmInstruction::CmpRegister {
+                            is_64_bit: true,
                             lhs: register,
                             rhs,
                         });
@@ -593,7 +601,7 @@ impl AArch64CodeGenerator {
             Operand::Register(rhs) => {
                 let lhs = self.allocate_register(lhs);
                 let rhs = self.allocate_register(rhs);
-                self.instructions.push(ArmInstruction::CmpRegister { lhs, rhs });
+                self.instructions.push(ArmInstruction::CmpRegister { is_64_bit: true, lhs, rhs });
             }
         }
     }
@@ -842,6 +850,7 @@ impl AArch64CodeGenerator {
                 let rhs_imm12 = rhs.as_i64() as _;
                 debug_assert!(rhs_imm12 < (1 << 12));
                 self.instructions.push(ArmInstruction::SubImmediate {
+                    is_64_bit: true,
                     dst,
                     lhs,
                     rhs_imm12,
@@ -1000,6 +1009,7 @@ impl AArch64CodeGenerator {
         }
 
         self.instructions.push(ArmInstruction::SubImmediate {
+            is_64_bit: true,
             dst: ArmRegister::SP,
             lhs: ArmRegister::SP,
             rhs_imm12: self.stack_allocator.total_size() as _,
@@ -1088,6 +1098,7 @@ impl AArch64CodeGenerator {
         }
 
         self.instructions.push(ArmInstruction::AddImmediate {
+            is_64_bit: true,
             dst: ArmRegister::SP,
             src: ArmRegister::SP,
             imm12: self.stack_allocator.total_size() as _,

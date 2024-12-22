@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 
 use crate::{backend::AllocatableRegister, Platform};
 
@@ -28,6 +28,32 @@ impl ArmRegister {
 
     /// Stack Pointer
     pub const SP: Self = Self { number: 31 };
+}
+
+impl ArmRegister {
+    #[must_use]
+    pub fn name(&self, is_64_bit: &bool) -> impl Display {
+        ArmRegisterDisplay {
+            mode: if *is_64_bit { ArmRegisterMode::Bit64 } else { ArmRegisterMode::Bit64 },
+            reg: *self
+        }
+    }
+
+    #[must_use]
+    pub const fn name32(&self) -> impl Display {
+        ArmRegisterDisplay {
+            mode: ArmRegisterMode::Bit32,
+            reg: *self
+        }
+    }
+
+    #[must_use]
+    pub const fn name64(&self) -> impl Display {
+        ArmRegisterDisplay {
+            mode: ArmRegisterMode::Bit64,
+            reg: *self
+        }
+    }
 }
 
 impl AllocatableRegister for ArmRegister {
@@ -88,19 +114,37 @@ impl AllocatableRegister for ArmRegister {
         ];
         REGISTERS
     }
+
+    fn display(&self) -> impl Display {
+        self.name64()
+    }
 }
 
-impl Display for ArmRegister {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            Self::FP => f.write_str("fp"),
-            Self::LR => f.write_str("lr"),
-            Self::SP => f.write_str("sp"),
+struct ArmRegisterDisplay {
+    mode: ArmRegisterMode,
+    reg: ArmRegister,
+}
 
-            _ => {
-                f.write_str("x")?;
-                self.number.fmt(f)
-            }
+impl Display for ArmRegisterDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.mode {
+            ArmRegisterMode::Bit32 => f.write_char('w')?,
+            ArmRegisterMode::Bit64 => f.write_char('x')?,
+        }
+
+        match self.reg {
+            ArmRegister::FP => f.write_str("fp"),
+            ArmRegister::LR => f.write_str("lr"),
+            ArmRegister::SP => f.write_str("sp"),
+
+            _ => self.reg.number.fmt(f)
         }
     }
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ArmRegisterMode {
+    Bit32,
+    Bit64,
 }

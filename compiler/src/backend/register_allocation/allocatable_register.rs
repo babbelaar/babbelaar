@@ -5,7 +5,7 @@ use std::{fmt::{Debug, Display}, hash::Hash};
 
 use crate::Platform;
 
-pub trait AllocatableRegister: Debug + Display + Clone + Copy + PartialEq + Eq + Hash + 'static {
+pub trait AllocatableRegister: Debug + Clone + Copy + PartialEq + Eq + Hash + 'static {
     /// Return what register is the return value for this architecture / platform (e.g. x0 on ARM64).
     #[must_use]
     fn return_register(platform: &Platform) -> Self;
@@ -32,4 +32,6 @@ pub trait AllocatableRegister: Debug + Display + Clone + Copy + PartialEq + Eq +
     fn is_callee_saved(&self, platform: &Platform) -> bool {
         Self::callee_saved_registers(platform).contains(self)
     }
+
+    fn display(&self) -> impl Display;
 }

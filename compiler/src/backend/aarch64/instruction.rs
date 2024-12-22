@@ -17,6 +17,7 @@ use super::{
 pub enum ArmInstruction {
     /// It can be in place if src == dst, but it doesn't have to be
     AddImmediate {
+        is_64_bit: bool,
         dst: ArmRegister,
         src: ArmRegister,
         imm12: u16,
@@ -24,6 +25,7 @@ pub enum ArmInstruction {
     },
 
     AddRegister {
+        is_64_bit: bool,
         dst: ArmRegister,
         lhs: ArmRegister,
         rhs: ArmRegister,
@@ -32,6 +34,7 @@ pub enum ArmInstruction {
     },
 
     Adrp {
+        is_64_bit: bool,
         dst: ArmRegister,
         imm: u32,
     },
@@ -69,6 +72,7 @@ pub enum ArmInstruction {
 
     /// Compare Negative (immediate)
     CmnImmediate {
+        is_64_bit: bool,
         register: ArmRegister,
         value: u16,
     },
@@ -76,18 +80,21 @@ pub enum ArmInstruction {
     /// Compare (shifted register)
     #[allow(unused)] // I added this for completeness, but when is this ever needed?
     CmnRegister {
+        is_64_bit: bool,
         lhs: ArmRegister,
         rhs: ArmRegister,
     },
 
     /// Compare Negative (immediate)
     CmpImmediate {
+        is_64_bit: bool,
         register: ArmRegister,
         value: u16,
     },
 
     /// Compare (shifted register)
     CmpRegister {
+        is_64_bit: bool,
         lhs: ArmRegister,
         rhs: ArmRegister,
     },
@@ -276,6 +283,7 @@ pub enum ArmInstruction {
     },
 
     SubImmediate {
+        is_64_bit: bool,
         dst: ArmRegister,
         lhs: ArmRegister,
         rhs_imm12: u16,
@@ -297,10 +305,15 @@ impl ArmInstruction {
     #[must_use]
     pub fn encode(self, offset: usize, label_offsets: &HashMap<Label, usize>) -> u32 {
         match self {
-            Self::AddImmediate { dst, src, imm12, shift } => {
+            Self::AddImmediate { is_64_bit, dst, src, imm12, shift } => {
                 debug_assert!(imm12 < (1 << 12));
 
-                let mut instruction = 0x91000000;
+                let mut instruction = 0x11000000;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
                 instruction |= (shift as u32) << 22;
                 instruction |= (imm12 as u32) << 10;
                 instruction |= (src.number as u32) << 5;
@@ -309,10 +322,14 @@ impl ArmInstruction {
                 instruction
             }
 
-            Self::AddRegister { dst, lhs, rhs, shift, imm } => {
+            Self::AddRegister { is_64_bit, dst, lhs, rhs, shift, imm } => {
                 debug_assert!(imm <= 0b11);
 
-                let mut instruction = 0x8B000000;
+                let mut instruction = 0xB000000;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
 
                 instruction |= dst.number as u32;
                 instruction |= (lhs.number as u32) << 5;
@@ -324,10 +341,15 @@ impl ArmInstruction {
                 instruction
             }
 
-            Self::Adrp { dst, imm } => {
+            Self::Adrp { is_64_bit, dst, imm } => {
                 debug_assert_eq!(imm % 0xFFF, 0, "bottom 12 bits should've been");
 
-                let mut instruction = 0x90000000;
+                let mut instruction = 0x10000000;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
                 instruction |= dst.number as u32;
 
                 // immhi 5 to 29
@@ -428,8 +450,8 @@ impl ArmInstruction {
                     instruction |= 1 << 31;
                 }
 
-                assert!(condition != ArmConditionCode::AL, "Kan geen AL gebruiken voor CSET (waarom is er geen `mov {dst}, #1` gebruikt?)");
-                assert!(condition != ArmConditionCode::NV, "Kan geen NV gebruiken voor CSET (waarom is er geen `mov {dst}, #0` gebruikt?)");
+                assert!(condition != ArmConditionCode::AL, "Kan geen AL gebruiken voor CSET (waarom is er geen `mov {}, #1` gebruikt?)", dst.name64());
+                assert!(condition != ArmConditionCode::NV, "Kan geen NV gebruiken voor CSET (waarom is er geen `mov {}, #0` gebruikt?)", dst.name64());
 
                 instruction |= (condition.invert() as u32) << 12;
                 instruction |= dst.number as u32;
@@ -437,8 +459,13 @@ impl ArmInstruction {
                 instruction
             }
 
-            Self::CmnImmediate { register, value } => {
-                let mut instruction = 0xB100001F;
+            Self::CmnImmediate { is_64_bit, register, value } => {
+                let mut instruction = 0x3100001F;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
                 // NOTE: sf is 1
                 instruction |= (register.number as u32) << 5;
                 instruction |= (value as u32) << 10;
@@ -446,8 +473,13 @@ impl ArmInstruction {
                 instruction
             }
 
-            Self::CmnRegister { lhs, rhs } => {
-                let mut instruction = 0xAB00001F;
+            Self::CmnRegister { is_64_bit, lhs, rhs } => {
+                let mut instruction = 0x2B00001F;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
                 instruction |= (lhs.number as u32) << 5;
                 instruction |= (rhs.number as u32) << 16;
                 // NOTE: sf is 1
@@ -456,8 +488,11 @@ impl ArmInstruction {
                 instruction
             }
 
-            Self::CmpImmediate { register, value } => {
-                let mut instruction = 0xF100001F;
+            Self::CmpImmediate { is_64_bit, register, value } => {
+                let mut instruction = 0x7100001F;
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
                 // NOTE: sf is 1
                 instruction |= (register.number as u32) << 5;
                 instruction |= (value as u32) << 10;
@@ -465,8 +500,11 @@ impl ArmInstruction {
                 instruction
             }
 
-            Self::CmpRegister { lhs, rhs } => {
-                let mut instruction = 0xEB00001F;
+            Self::CmpRegister { is_64_bit, lhs, rhs } => {
+                let mut instruction = 0x6B00001F;
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
                 instruction |= (lhs.number as u32) << 5;
                 instruction |= (rhs.number as u32) << 16;
                 // NOTE: sf is 1
@@ -770,10 +808,14 @@ impl ArmInstruction {
                 encode_store_offset_register(size, src, base_ptr, offset)
             }
 
-            Self::SubImmediate { dst, lhs, rhs_imm12 } => {
+            Self::SubImmediate { is_64_bit, dst, lhs, rhs_imm12 } => {
                 debug_assert!(rhs_imm12 < (1 << 12));
 
-                let mut instruction = 0xD1000000;
+                let mut instruction = 0x51000000;
+
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
 
                 instruction |= dst.number as u32;
                 instruction |= (lhs.number as u32) << 5;
@@ -980,8 +1022,8 @@ const fn take_bits(i: u32, n: u32) -> u32  {
 impl Display for ArmInstruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::AddImmediate { dst, src, imm12, shift } => {
-                f.write_fmt(format_args!("add {dst}, {src} + #{imm12}"))?;
+            Self::AddImmediate { is_64_bit, dst, src, imm12, shift } => {
+                f.write_fmt(format_args!("add {}, {} + #{imm12}", dst.name(is_64_bit), src.name(is_64_bit)))?;
 
                 if *shift {
                     f.write_str(", shift 12")?;
@@ -990,22 +1032,20 @@ impl Display for ArmInstruction {
                 Ok(())
             }
 
-            Self::AddRegister { dst, lhs, rhs, imm, shift } => {
-                f.write_fmt(format_args!("add {dst}, {lhs} + {rhs} + #{imm} ({shift:?})"))
+            Self::AddRegister { is_64_bit, dst, lhs, rhs, imm, shift } => {
+                f.write_fmt(format_args!("add {}, {} + {} + #{imm} ({shift:?})", dst.name(is_64_bit), lhs.name(is_64_bit), rhs.name(is_64_bit)))
             }
 
-            Self::Adrp { dst, imm } => {
-                f.write_fmt(format_args!("adrp {dst}, 0x{imm:x}"))
+            Self::Adrp { is_64_bit, dst, imm } => {
+                f.write_fmt(format_args!("adrp {}, 0x{imm:x}", dst.name(is_64_bit)))
             }
 
             Self::AsrImmediate { is_64_bit, dst, src, amount } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("asr {dst}, {src}, #{amount}"))
+                f.write_fmt(format_args!("asr {}, {}, #{amount}", dst.name(is_64_bit), src.name(is_64_bit)))
             }
 
             Self::AsrRegister { is_64_bit, dst, src, amount } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("asr {dst}, {src}, {amount}"))
+                f.write_fmt(format_args!("asr {}, {}, {}", dst.name(is_64_bit), src.name(is_64_bit), amount.name(is_64_bit)))
             }
 
             Self::B { location } => {
@@ -1020,153 +1060,145 @@ impl Display for ArmInstruction {
                 f.write_fmt(format_args!("bl {offset}   ({symbol_name})"))
             }
 
-            Self::CmpImmediate { register, value } => {
-                f.write_fmt(format_args!("cmp {register}, #{value}"))
+            Self::CmpImmediate { is_64_bit, register, value } => {
+                f.write_fmt(format_args!("cmp {}, #{value}", register.name(is_64_bit)))
             }
 
-            Self::CmpRegister { lhs, rhs } => {
-                f.write_fmt(format_args!("cmp {lhs}, {rhs}"))
+            Self::CmpRegister { is_64_bit, lhs, rhs } => {
+                f.write_fmt(format_args!("cmp {}, {}", lhs.name(is_64_bit), rhs.name(is_64_bit)))
             }
 
-            Self::CmnImmediate { register, value } => {
-                f.write_fmt(format_args!("cmn {register}, #{value}"))
+            Self::CmnImmediate { is_64_bit, register, value } => {
+                f.write_fmt(format_args!("cmn {}, #{value}", register.name(is_64_bit)))
             }
 
-            Self::CmnRegister { lhs, rhs } => {
-                f.write_fmt(format_args!("cmn {lhs}, {rhs}"))
+            Self::CmnRegister { is_64_bit, lhs, rhs } => {
+                f.write_fmt(format_args!("cmn {}, {}", lhs.name(is_64_bit), rhs.name(is_64_bit)))
             }
 
             Self::CSet { is_64_bit, dst, condition } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("cset {dst}, {condition}"))
+                f.write_fmt(format_args!("cset {}, {condition}", dst.name(is_64_bit)))
             }
 
             Self::Ldp { is_64_bit, mode, first, second, src, offset } => {
-                _ = is_64_bit;
                 match mode {
                     ArmSignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("ldp {first}, {second}, {src}, #{offset}"))
+                        f.write_fmt(format_args!("ldp {}, {}, {}, #{offset}", first.name(is_64_bit), second.name(is_64_bit), src.name(is_64_bit)))
                     }
 
                     ArmSignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("ldp {first}, {second}, [{src}, #{offset}]!"))
+                        f.write_fmt(format_args!("ldp {}, {}, [{}, #{offset}]!", first.name(is_64_bit), second.name(is_64_bit), src.name(is_64_bit)))
                     }
 
                     ArmSignedAddressingMode::SignedOffset => {
-                        f.write_fmt(format_args!("ldp {first}, {second}, [{src}, #{offset}]"))
+                        f.write_fmt(format_args!("ldp {}, {}, [{}, #{offset}]", first.name(is_64_bit), second.name(is_64_bit), src.name(is_64_bit)))
                     }
                 }
             }
 
             Self::LdrByteImmediate { mode, dst, base_ptr, offset } => {
+                let is_64_bit = &true;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("ldrb {dst}, {base_ptr}, #{offset}"))
+                        f.write_fmt(format_args!("ldrb {}, {}, #{offset}", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("ldrb {dst}, [{base_ptr}, #{offset}]!"))
+                        f.write_fmt(format_args!("ldrb {}, [{}, #{offset}]!", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("ldrb {dst}, [{base_ptr}, #{offset}]"))
+                        f.write_fmt(format_args!("ldrb {}, [{}, #{offset}]", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
 
             Self::LdrByteRegister { dst, base_ptr, offset } => {
-                f.write_fmt(format_args!("ldrb {dst}, [{base_ptr}, {offset}]"))
+                let is_64_bit = &true;
+                f.write_fmt(format_args!("ldrb {}, [{}, {}]", dst.name(is_64_bit), base_ptr.name(is_64_bit), offset.name(is_64_bit)))
             }
 
             Self::LdrHalfImmediate { mode, dst, base_ptr, offset } => {
+                let is_64_bit = &true;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("ldrh {dst}, {base_ptr}, #{offset}"))
+                        f.write_fmt(format_args!("ldrh {}, {}, #{offset}", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("ldrh {dst}, [{base_ptr}, #{offset}]!"))
+                        f.write_fmt(format_args!("ldrh {}, [{}, #{offset}]!", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("ldrh {dst}, [{base_ptr}, #{offset}]"))
+                        f.write_fmt(format_args!("ldrh {}, [{}, #{offset}]", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
 
             Self::LdrHalfRegister { dst, base_ptr, offset } => {
-                f.write_fmt(format_args!("ldrh {dst}, [{base_ptr}, {offset}]"))
+                let is_64_bit = true;
+                f.write_fmt(format_args!("ldrh {}, [{}, {}]", dst.name(&is_64_bit), base_ptr.name(&is_64_bit), offset.name(&is_64_bit)))
             }
 
             Self::LdrImmediate { is_64_bit, mode, dst, base_ptr, offset } => {
-                _ = is_64_bit;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("ldr {dst}, {base_ptr}, #{offset}"))
+                        f.write_fmt(format_args!("ldr {}, {}, #{offset}", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("ldr {dst}, [{base_ptr}, #{offset}]!"))
+                        f.write_fmt(format_args!("ldr {}, [{}, #{offset}]!", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("ldr {dst}, [{base_ptr}, #{offset}]"))
+                        f.write_fmt(format_args!("ldr {}, [{}, #{offset}]", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
 
             Self::LdrRegister { is_64_bit, dst, base_ptr, offset } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("ldr {dst}, [{base_ptr}, {offset}]"))
+                f.write_fmt(format_args!("ldr {}, [{}, {}]", dst.name(is_64_bit), base_ptr.name(is_64_bit), offset.name(is_64_bit)))
             }
 
             Self::LslImmediate { is_64_bit, dst, src, amount } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("lsl {dst}, {src}, #{amount}"))
+                f.write_fmt(format_args!("lsl {}, {}, #{amount}", dst.name(is_64_bit), src.name(is_64_bit)))
             }
 
             Self::LslRegister { is_64_bit, dst, src, amount } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("lsl {dst}, {src}, {amount}"))
+                f.write_fmt(format_args!("lsl {}, {}, {}", dst.name(is_64_bit), src.name(is_64_bit), amount.name(is_64_bit)))
             }
 
             Self::MAdd { is_64_bit, dst, mul_lhs, mul_rhs, addend } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("madd {dst}, {mul_lhs}, {mul_rhs}, {addend}"))
+                f.write_fmt(format_args!("madd {}, {}, {}, {}", dst.name(is_64_bit), mul_lhs.name(is_64_bit), mul_rhs.name(is_64_bit), addend.name(is_64_bit)))
             }
 
             Self::MovN { is_64_bit, register, unsigned_imm16 } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("mov {register}, #-{unsigned_imm16}"))
+                f.write_fmt(format_args!("mov {}, #-{unsigned_imm16}", register.name(is_64_bit)))
             }
 
             Self::MovRegister32 { dst, src } => {
-                let dst = dst.number;
-                let src = src.number;
-                f.write_fmt(format_args!("mov w{dst}, w{src}"))
+                f.write_fmt(format_args!("mov {}, {}", dst.name32(), src.name32()))
             }
 
             Self::MovRegister64 { dst, src } => {
-                f.write_fmt(format_args!("mov {dst}, {src}"))
+                f.write_fmt(format_args!("mov {}, {}", dst.name64(), src.name64()))
             }
 
             Self::MovZ { register, imm16 } => {
-                f.write_fmt(format_args!("mov {register}, #{imm16}"))
+                let is_64_bit = &true;
+                f.write_fmt(format_args!("mov {}, #{imm16}", register.name(is_64_bit)))
             }
 
             Self::MSub { is_64_bit, dst, lhs, rhs, minuend } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("msub {dst}, {lhs}, {rhs}, {minuend}"))
+                f.write_fmt(format_args!("msub {}, {}, {}, {}", dst.name(is_64_bit), lhs.name(is_64_bit), rhs.name(is_64_bit), minuend.name(is_64_bit)))
             }
 
             Self::Mul { is_64_bit, dst, lhs, rhs } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("mul {dst}, {lhs}, {rhs}"))
+                f.write_fmt(format_args!("mul {}, {}, {}", dst.name(is_64_bit), lhs.name(is_64_bit), rhs.name(is_64_bit)))
             }
 
             Self::Neg { is_64_bit, shift, shift_amount, dst, src } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("neg {dst}, {src}"))?;
+                f.write_fmt(format_args!("neg {}, {}", dst.name(is_64_bit), src.name(is_64_bit)))?;
 
                 if *shift_amount != 0 {
                     f.write_fmt(format_args!(", {shift:?}, 0x{shift_amount:x}"))?;
@@ -1180,97 +1212,96 @@ impl Display for ArmInstruction {
             }
 
             Self::SDiv { is_64_bit, dst, lhs, rhs } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("sdiv {dst}, {lhs}, {rhs}"))
+                f.write_fmt(format_args!("sdiv {}, {}, {}", dst.name(is_64_bit), lhs.name(is_64_bit), rhs.name(is_64_bit)))
             }
 
             Self::Stp { is_64_bit, dst, offset, first, second, mode } => {
-                _ = is_64_bit;
                 match mode {
                     ArmSignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("stp {first}, {second}, {dst}, #{offset}"))
+                        f.write_fmt(format_args!("stp {}, {}, {}, #{offset}", first.name(is_64_bit), second.name(is_64_bit), dst.name(is_64_bit)))
                     }
 
                     ArmSignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #{offset}]!"))
+                        f.write_fmt(format_args!("stp {}, {}, [{}, #{offset}]!", first.name(is_64_bit), second.name(is_64_bit), dst.name(is_64_bit)))
                     }
 
                     ArmSignedAddressingMode::SignedOffset => {
-                        f.write_fmt(format_args!("stp {first}, {second}, [{dst}, #{offset}]"))
+                        f.write_fmt(format_args!("stp {}, {}, [{}, #{offset}]", first.name(is_64_bit), second.name(is_64_bit), dst.name(is_64_bit)))
                     }
                 }
             }
 
             Self::StrByteImmediate { mode, src, base_ptr, offset } => {
+                let is_64_bit = &true;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("strb {src}, {base_ptr}, #{offset}"))
+                        f.write_fmt(format_args!("strb {}, {}, #{offset}", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("strb {src}, [{base_ptr}, #{offset}]!"))
+                        f.write_fmt(format_args!("strb {}, [{}, #{offset}]!", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("strb {src}, [{base_ptr}, #{offset}]"))
+                        f.write_fmt(format_args!("strb {}, [{}, #{offset}]", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
 
             Self::StrByteRegister { src, base_ptr, offset } => {
-                f.write_fmt(format_args!("strb {src}, [{base_ptr}, {offset}]"))
+                let is_64_bit = &true;
+                f.write_fmt(format_args!("strb {}, [{}, {}]", src.name(is_64_bit), base_ptr.name(is_64_bit), offset.name(is_64_bit)))
             }
 
             Self::StrHalfImmediate { mode, src, base_ptr, offset } => {
+                let is_64_bit = &true;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("strb {src}, {base_ptr}, #{offset}"))
+                        f.write_fmt(format_args!("strb {}, {}, #{offset}", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("strb {src}, [{base_ptr}, #{offset}]!"))
+                        f.write_fmt(format_args!("strb {}, [{}, #{offset}]!", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("strb {src}, [{base_ptr}, #{offset}]"))
+                        f.write_fmt(format_args!("strb {}, [{}, #{offset}]", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
 
             Self::StrHalfRegister { src, base_ptr, offset } => {
-                f.write_fmt(format_args!("strh {src}, [{base_ptr}, {offset}]"))
+                let is_64_bit = &true;
+                f.write_fmt(format_args!("strh {}, [{}, {}]", src.name(is_64_bit), base_ptr.name(is_64_bit), offset.name(is_64_bit)))
             }
 
             Self::StrImmediate { is_64_bit, mode, src, base_ptr, offset } => {
-                _ = is_64_bit;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("str {src}, {base_ptr}, #{offset}"))
+                        f.write_fmt(format_args!("str {}, {}, #{offset}", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("str {src}, [{base_ptr}, #{offset}]!"))
+                        f.write_fmt(format_args!("str {}, [{}, #{offset}]!", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("str {src}, [{base_ptr}, #{offset}]"))
+                        f.write_fmt(format_args!("str {}, [{}, #{offset}]", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
 
             Self::StrRegister { is_64_bit, src, base_ptr, offset } => {
-                _ = is_64_bit;
-                f.write_fmt(format_args!("str {src}, [{base_ptr}, {offset}]"))
+                f.write_fmt(format_args!("str {}, [{}, {}]", src.name(is_64_bit), base_ptr.name(is_64_bit), offset.name(is_64_bit)))
             }
 
-            Self::SubImmediate { dst, lhs, rhs_imm12 } => {
-                f.write_fmt(format_args!("sub {dst}, {lhs}, #{rhs_imm12}"))
+            Self::SubImmediate { is_64_bit, dst, lhs, rhs_imm12 } => {
+                f.write_fmt(format_args!("sub {}, {}, #{rhs_imm12}", dst.name(is_64_bit), lhs.name(is_64_bit)))
             }
 
             Self::SubRegister { is_64_bit, dst, lhs, rhs, shift, shift_mode } => {
-                _ = is_64_bit;
 
-                f.write_fmt(format_args!("sub {dst}, {lhs}, {rhs}"))?;
+                f.write_fmt(format_args!("sub {}, {}, {}", dst.name(is_64_bit), lhs.name(is_64_bit), rhs.name(is_64_bit)))?;
 
                 if *shift != 0 {
                     f.write_fmt(format_args!(", {shift_mode:?}, #{shift}"))?;
@@ -1317,6 +1348,7 @@ mod tests {
     )]
     #[case(
         ArmInstruction::SubImmediate {
+            is_64_bit: true,
             dst: ArmRegister::SP,
             lhs: ArmRegister::SP,
             rhs_imm12: 0x20,
@@ -1496,6 +1528,7 @@ mod tests {
         offset: 8,
     }, 0xb9000841)]
     #[case(ArmInstruction::CmnImmediate {
+        is_64_bit: true,
         register: ArmRegister::X0,
         value: 1,
     }, 0xB100041f)]

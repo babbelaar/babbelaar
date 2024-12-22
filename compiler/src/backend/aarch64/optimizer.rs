@@ -29,8 +29,8 @@ impl<'i> AArch64Optimizer<'i> {
             }
 
             match self.instructions[idx] {
-                ArmInstruction::AddRegister { dst, lhs, rhs, imm, shift } => {
-                    self.handle_add(idx, true, dst, lhs, rhs, imm, shift);
+                ArmInstruction::AddRegister { is_64_bit: add_64bit, dst, lhs, rhs, imm, shift } => {
+                    self.handle_add(idx, add_64bit, dst, lhs, rhs, imm, shift);
                 }
 
                 ArmInstruction::Mul { is_64_bit, dst, lhs, rhs } => {
@@ -66,10 +66,7 @@ impl<'i> AArch64Optimizer<'i> {
         let Some(next_instruction) = self.instructions.get(idx + 1).cloned() else { return };
 
         match next_instruction {
-            ArmInstruction::AddRegister { dst: add_dst, lhs: add_lhs, rhs: add_rhs, imm: add_imm, shift: add_shift } => {
-                // TODO: ADD should encode this behavior
-                let add_64bit = true;
-
+            ArmInstruction::AddRegister { is_64_bit: add_64bit, dst: add_dst, lhs: add_lhs, rhs: add_rhs, imm: add_imm, shift: add_shift } => {
                 if let Some(instr) = try_madd(add_64bit, add_dst, add_lhs, add_rhs, add_imm, add_shift, mul_64bit, mul_dst, mul_lhs, mul_rhs) {
                     self.instructions[idx] = instr;
                     self.instructions.remove(idx + 1);

@@ -279,6 +279,10 @@ impl AllocatableRegister for Amd64Register {
             }
         }
     }
+
+    fn display(&self) -> impl Display {
+        self.name64()
+    }
 }
 
 impl Display for Amd64Register {

@@ -164,7 +164,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         debug!("Register mappings:");
         for (virtual_reg, physical_reg) in &self.mappings {
             if let Some(physical_reg) = physical_reg {
-                debug!("    IR {virtual_reg} is mapped to {physical_reg}");
+                debug!("    IR {virtual_reg} is mapped to {}", physical_reg.display());
             } else {
                 debug!("    IR {virtual_reg} is spilled");
             }
