@@ -33,7 +33,8 @@ impl Compiler {
     fn layout_structures(&mut self, trees: &[ParseTree]) {
         for statement in trees.iter().flat_map(|t| t.structures()) {
             let StatementKind::Structure(structure) = &statement.kind else {
-                panic!();
+                debug_assert!(false, "Verwachtte alleen `structuren`");
+                continue;
             };
 
             self.program_builder.add_structure(structure);
@@ -43,7 +44,8 @@ impl Compiler {
     fn add_function_declarations(&mut self, trees: &[ParseTree]) {
         for statement in trees.iter().flat_map(|t| t.functions()) {
             let StatementKind::Function(func) = &statement.kind else {
-                panic!();
+                debug_assert!(false, "Verwachtte alleen `werkwijzen`");
+                continue;
             };
 
             self.analyze_function_attributes(func, func.name.value().clone(), &statement.attributes);
@@ -58,7 +60,8 @@ impl Compiler {
     fn compile_functions(&mut self, trees: &[ParseTree]) {
         for statement in trees.iter().flat_map(|t| t.functions()) {
             let StatementKind::Function(func) = &statement.kind else {
-                panic!();
+                debug_assert!(false, "Verwachtte alleen `werkwijzen`");
+                continue;
             };
 
             self.compile_function(func, func.name.value().clone(), CallingConvention::Regular);
@@ -68,7 +71,8 @@ impl Compiler {
     fn compile_methods(&mut self, trees: &[ParseTree]) {
         for statement in trees.iter().flat_map(|t| t.structures()) {
             let StatementKind::Structure(structure) = &statement.kind else {
-                panic!();
+                debug_assert!(false, "Verwachtte alleen `structuren`");
+                continue;
             };
 
             let type_id = self.program_builder.type_id_for_structure(structure.name.value());

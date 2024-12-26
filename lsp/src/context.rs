@@ -9,7 +9,7 @@ use babbelaar::{FileId, Lexer, LexerError, ParseDiagnostic, ParseTree, Parser, S
 use tokio::{sync::{Mutex, RwLock}, task::yield_now};
 use tower_lsp::lsp_types::Uri as Url;
 
-use crate::{BabbelaarLspError, UrlExtension};
+use crate::{BabbelaarLspError, BabbelaarLspResult, UrlExtension};
 
 #[derive(Debug)]
 pub struct BabbelaarContext {
@@ -137,15 +137,16 @@ impl BabbelaarContext {
         None
     }
 
-    pub async fn source_code_of(&self, file_id: FileId) -> SourceCode {
+    pub async fn source_code_of(&self, file_id: FileId) -> BabbelaarLspResult<SourceCode> {
         self.wait_available().await;
         for file in self.files.iter() {
             let file = file.lock().await;
             if file.source_code().file_id() == file_id {
-                return file.source_code().clone();
+                return Ok(file.source_code().clone());
             }
         }
-        panic!("Illegal file id")
+
+        Err(BabbelaarLspError::IllegalFileId { file_id })
     }
 
     pub(super) fn will_change(&self) {

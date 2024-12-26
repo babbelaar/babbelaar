@@ -584,13 +584,21 @@ impl LspSymbol {
             return None;
         }
 
+        let location = match symbolizer.converter.convert_file_range_to_location(symbolizer.uri.clone(), self.range) {
+            Ok(location) => location,
+            Err(err) => {
+                error!("Kan locatie {:?} niet converteren: {}", self.range, err);
+                return None;
+            }
+        };
+
         #[allow(deprecated)]
         Some(SymbolInformation {
             name: self.name.to_string(),
             kind: self.kind.into(),
             tags: None,
             deprecated: None,
-            location: symbolizer.converter.convert_file_range_to_location(symbolizer.uri.clone(), self.range),
+            location,
             container_name: None,
         })
     }

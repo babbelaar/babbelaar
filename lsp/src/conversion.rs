@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use babbelaar::{BabbelaarCommand, FileLocation, FileRange, SourceCode, Token};
+use log::warn;
 use tower_lsp::lsp_types::{Command, Location, Position, Range, Uri as Url};
 
 use crate::{BabbelaarLspError, BabbelaarLspResult};
@@ -23,31 +24,31 @@ impl Converter {
     }
 
     #[must_use]
-    pub fn convert_file_range_to_location(&self, uri: Url, range: FileRange) -> Location {
-        Location {
+    pub fn convert_file_range_to_location(&self, uri: Url, range: FileRange) -> BabbelaarLspResult<Location> {
+        Ok(Location {
             uri,
-            range: self.convert_file_range(range),
-        }
+            range: self.convert_file_range(range)?,
+        })
     }
 
     #[must_use]
-    pub fn convert_token_range(&self, token: &Token) -> Range {
+    pub fn convert_token_range(&self, token: &Token) -> BabbelaarLspResult<Range> {
         self.convert_file_range(token.range())
     }
 
     #[must_use]
-    pub fn convert_file_range(&self, range: FileRange) -> Range {
-        Range {
-            start: self.convert_position(range.start()),
-            end: self.convert_position(range.end()),
-        }
+    pub fn convert_file_range(&self, range: FileRange) -> BabbelaarLspResult<Range> {
+        Ok(Range {
+            start: self.convert_position(range.start())?,
+            end: self.convert_position(range.end())?,
+        })
     }
 
     #[must_use]
-    pub fn convert_position(&self, location: FileLocation) -> Position {
+    pub fn convert_position(&self, location: FileLocation) -> BabbelaarLspResult<Position> {
         debug_assert_eq!(location.file_id(), self.source_code.file_id(), "Incompatible file IDs!");
 
-        match self.encoding {
+        let position = match self.encoding {
             TextEncoding::Utf8 => {
                 Position {
                     line: location.line() as _,
@@ -65,7 +66,13 @@ impl Converter {
                             // we always have an empty trailing line
                             ""
                         } else {
-                            panic!("Illegal line {}, we have {line_count} lines!", location.line());
+                            warn!("Illegal line {}, we have {line_count} lines!", location.line());
+
+                            return Err(BabbelaarLspError::IllegalLine {
+                                path: self.source_code.path().display().to_string(),
+                                requested_line: location.line(),
+                                line_count,
+                            });
                         }
                     }
                 };
@@ -82,10 +89,12 @@ impl Converter {
                     character: utf16_column as _,
                 }
             }
-        }
+        };
+
+        Ok(position)
     }
 
-    pub fn convert_location(&self, position: Position) -> FileLocation {
+    pub fn convert_location(&self, position: Position) -> BabbelaarLspResult<FileLocation> {
         let offset = 0; // TODO: it would be nice to encode this :)
         let line = position.line as usize;
         let column = position.character as usize;
@@ -97,8 +106,14 @@ impl Converter {
                 let line = match self.source_code.lines().nth(line) {
                     Some(line) => line,
                     None => {
-                        if self.source_code.lines().count() < line {
-                            panic!("Illegal position given, line index={line} while file {} has {} line(s)", self.source_code.path().display(), self.source_code.lines().count());
+                        let line_count = self.source_code.lines().count();
+                        if line_count < line {
+                            warn!("Illegal position given, line index={line} while file {} has {line_count} line(s)", self.source_code.path().display());
+                            return Err(BabbelaarLspError::IllegalLine {
+                                path: self.source_code.path().display().to_string(),
+                                requested_line: line,
+                                line_count,
+                            });
                         }
 
                         ""
@@ -121,7 +136,7 @@ impl Converter {
             }
         };
 
-        FileLocation::new(self.source_code.file_id(), offset, line, column)
+        Ok(FileLocation::new(self.source_code.file_id(), offset, line, column))
     }
 }
 

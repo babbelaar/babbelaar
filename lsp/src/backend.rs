@@ -40,8 +40,8 @@ impl Backend {
         Converter::new(source_code.clone(), encoding)
     }
 
-    async fn converter_for(&self, file_id: FileId) -> Converter {
-        self.converter(&self.context.source_code_of(file_id).await)
+    async fn converter_for(&self, file_id: FileId) -> Result<Converter> {
+        Ok(self.converter(&self.context.source_code_of(file_id).await?))
     }
 
     pub async fn find_tokens_at<F, R>(&self, params: &TextDocumentPositionParams, mut f: F) -> Result<Option<R>>
@@ -119,7 +119,7 @@ impl Backend {
             for scope in semantics.context.previous_scopes.iter().chain(semantics.context.scope.iter()) {
                 if let Some(main_func) = scope.locals.get(&BabString::new_static(Constants::MAIN_FUNCTION)) {
                     if main_func.kind.is_function() && main_func.name_declaration_range.file_id() == source_code.file_id() {
-                        let range = self.converter(source_code).convert_file_range(main_func.name_declaration_range);
+                        let range = self.converter(source_code).convert_file_range(main_func.name_declaration_range)?;
                         lenses.push(CodeLens {
                             range,
                             command: Some(Command {
@@ -192,15 +192,15 @@ impl Backend {
         });
     }
 
-    pub async fn all_converters(&self) -> HashMap<FileId, Converter> {
+    pub async fn all_converters(&self) -> Result<HashMap<FileId, Converter>> {
         let mut map = HashMap::new();
 
         self.context.with_all_files(|file| {
             map.insert(file.source_code().file_id(), self.converter(file.source_code()));
             Ok(())
-        }).await.unwrap();
+        }).await?;
 
-        map
+        Ok(map)
     }
 
     pub async fn collect_diagnostics(&self) -> Result<()> {
@@ -220,7 +220,7 @@ impl Backend {
             let source_code = file.source_code().clone();
             for err in file.lexer_diagnostics() {
                 diags.entry(err.location.file_id()).or_default().push(Diagnostic {
-                    range: converter.convert_file_range(err.location.as_zero_range()),
+                    range: converter.convert_file_range(err.location.as_zero_range())?,
                     severity: Some(DiagnosticSeverity::ERROR),
                     code: Some(NumberOrString::String(err.kind.name().to_string())),
                     code_description: None,
@@ -258,7 +258,7 @@ impl Backend {
                     .collect();
 
                 diags.entry(range.file_id()).or_default().push(Diagnostic {
-                    range: converter.convert_file_range(range),
+                    range: converter.convert_file_range(range)?,
                     severity: Some(DiagnosticSeverity::ERROR),
                     code: Some(NumberOrString::String(err.error_code().to_string())),
                     code_description: Some(CodeDescription {
@@ -287,8 +287,16 @@ impl Backend {
                         .iter()
                         .filter_map(|x| {
                             let (converter, version) = file_infos.get(&x.range().file_id())?;
+                            let location = match converter.convert_file_range_to_location(version.uri.clone(), x.range()) {
+                                Ok(location) => location,
+                                Err(e) => {
+                                    log::warn!("Kan locatie {e} van gerelateerde informatie {x:?} niet converteren");
+                                    return None;
+                                }
+                            };
+
                             Some(DiagnosticRelatedInformation {
-                                location: converter.convert_file_range_to_location(version.uri.clone(), x.range()),
+                                location,
                                 message: x.message().to_string(),
                             })
                         })
@@ -311,7 +319,7 @@ impl Backend {
                 .collect();
 
             diags.entry(e.range().file_id()).or_default().push(Diagnostic {
-                range: converter.convert_file_range(e.range()),
+                range: converter.convert_file_range(e.range())?,
                 severity: Some(match e.severity() {
                     SemanticDiagnosticSeverity::Error => DiagnosticSeverity::ERROR,
                     SemanticDiagnosticSeverity::Warning => DiagnosticSeverity::WARNING,
@@ -338,7 +346,7 @@ impl Backend {
 
         self.lexed_document(&params.text_document_position_params.text_document, |tokens, source_code| {
             let converter = self.converter(source_code);
-            let location = converter.convert_location(params.text_document_position_params.position);
+            let location = converter.convert_location(params.text_document_position_params.position)?;
             let caret_line = location.line();
             let caret_column = location.column();
 
@@ -625,7 +633,7 @@ impl Backend {
                 }
 
                 for (name, structure) in &scope.structures {
-                    if structure.name.range().file_id() != source_code.file_id() {
+                    if structure.name.range().file_id() != source_code.file_id() || name.is_empty(){
                         continue;
                     }
 
@@ -638,18 +646,21 @@ impl Backend {
                         location: converter.convert_file_range_to_location(params.text_document.uri.clone(), FileRange::new(
                             structure.name.range().start(),
                             structure.right_curly_range.end(),
-                        )),
+                        ))?,
                         container_name: None,
                     });
 
                     for field in &structure.fields {
+                        if field.name.is_empty() {
+                            continue;
+                        }
                         #[allow(deprecated)]
                         symbols.push(SymbolInformation {
                             name: field.name.to_string(),
                             kind: SymbolKind::FIELD,
                             tags: None,
                             deprecated: None,
-                            location: converter.convert_file_range_to_location(params.text_document.uri.clone(), field.name.range()),
+                            location: converter.convert_file_range_to_location(params.text_document.uri.clone(), field.name.range())?,
                             container_name: None,
                         });
                     }
@@ -657,13 +668,17 @@ impl Backend {
 
                 match &scope.kind {
                     SemanticScopeKind::Function { name, .. } => {
+                        if name.is_empty() {
+                            continue;
+                        }
+
                         #[allow(deprecated)]
                         symbols.push(SymbolInformation {
                             name: name.to_string(),
                             kind: SymbolKind::FUNCTION,
                             tags: None,
                             deprecated: None,
-                            location: converter.convert_file_range_to_location(params.text_document.uri.clone(), scope.range),
+                            location: converter.convert_file_range_to_location(params.text_document.uri.clone(), scope.range)?,
                             container_name: None,
                         })
                     }
@@ -683,14 +698,14 @@ impl Backend {
     pub async fn document_highlight(&self, params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
         let res = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
             let converter = self.converter(source_code);
-            let location = converter.convert_location(params.text_document_position_params.position);
+            let location = converter.convert_location(params.text_document_position_params.position)?;
 
             let Some((_, reference)) = analyzer.find_reference_at(location) else {
                 if let Some((range, ..)) = analyzer.find_declaration_range_at(location) {
                     if range.file_id() == source_code.file_id() {
                         return Ok(Some([
                             DocumentHighlight {
-                                range: converter.convert_file_range(range),
+                                range: converter.convert_file_range(range)?,
                                 kind: None,
                             }
                         ].to_vec()));
@@ -703,7 +718,7 @@ impl Backend {
             let mut highlights = Vec::new();
             if reference.declaration_range.file_id() == source_code.file_id() {
                 highlights.push(DocumentHighlight {
-                    range: converter.convert_file_range(reference.declaration_range),
+                    range: converter.convert_file_range(reference.declaration_range)?,
                     kind: None,
                 });
             }
@@ -718,7 +733,7 @@ impl Backend {
                 }
 
                 highlights.push(DocumentHighlight {
-                    range: converter.convert_file_range(reference),
+                    range: converter.convert_file_range(reference)?,
                     kind: None,
                 });
             }
@@ -743,7 +758,7 @@ impl Backend {
                                 kind: MarkupKind::Markdown,
                                 value: builtin_function.documentation.to_string(),
                             }),
-                            range: Some(converter.convert_token_range(&token)),
+                            range: Some(converter.convert_token_range(&token)?),
                         });
                     }
 
@@ -753,7 +768,7 @@ impl Backend {
                                 kind: MarkupKind::Markdown,
                                 value: builtin_typ.documentation().to_string(),
                             }),
-                            range: Some(converter.convert_token_range(&token)),
+                            range: Some(converter.convert_token_range(&token)?),
                         });
                     }
                 }
@@ -764,7 +779,7 @@ impl Backend {
                             kind: MarkupKind::Markdown,
                             value: keyword.provide_documentation().into_owned(),
                         }),
-                        range: Some(converter.convert_token_range(&token)),
+                        range: Some(converter.convert_token_range(&token)?),
                     });
                 }
 
@@ -777,7 +792,7 @@ impl Backend {
         if hover.is_none() {
             let (reference, source_code) = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
                 let pos = params.text_document_position_params.position;
-                let location = self.converter(source_code).convert_location(pos);
+                let location = self.converter(source_code).convert_location(pos)?;
                 Ok((analyzer.find_reference_at(location), source_code.clone()))
             }).await?;
 
@@ -791,7 +806,7 @@ impl Backend {
                         kind: MarkupKind::Markdown,
                         value: format!("```babbelaar\n// In bestand {file_name}\n{text}\n```"),
                     }),
-                    range: Some(self.converter(&source_code).convert_file_range(range)),
+                    range: Some(self.converter(&source_code).convert_file_range(range)?),
                 });
             }
         }
@@ -810,7 +825,7 @@ impl Backend {
     pub async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
         let (reference, source_code) = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
             let pos = params.text_document_position_params.position;
-            let location = self.converter(source_code).convert_location(pos);
+            let location = self.converter(source_code).convert_location(pos)?;
             if let Some(reference) = analyzer.find_reference_at(location) {
                 return Ok((Some(reference), source_code.clone()));
             }
@@ -825,7 +840,8 @@ impl Backend {
                     return Ok(None);
                 }
 
-                let target_range = self.converter_for(reference.declaration_range.file_id()).await.convert_file_range(reference.declaration_range);
+                let converter = self.converter_for(reference.declaration_range.file_id()).await?;
+                let target_range = converter.convert_file_range(reference.declaration_range)?;
 
                 let Some(path) = self.context.path_of(file_id).await else {
                     log::warn!("Bestand is onbekend");
@@ -836,7 +852,7 @@ impl Backend {
 
                 Some(GotoDefinitionResponse::Link(vec![
                     LocationLink {
-                        origin_selection_range: Some(self.converter(&source_code).convert_file_range(origin_range)),
+                        origin_selection_range: Some(self.converter(&source_code).convert_file_range(origin_range)?),
                         target_uri,
                         target_range,
                         target_selection_range: target_range,
@@ -851,26 +867,27 @@ impl Backend {
     pub async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         let mut actions = vec![];
 
-        self.create_code_actions_by_diagnostics(&mut actions, &params.context.diagnostics).await;
+        self.create_code_actions_by_diagnostics(&mut actions, &params.context.diagnostics).await?;
         self.create_code_actions_based_on_semantics(&mut actions, &params).await?;
 
         Ok(Some(actions))
     }
 
-    async fn create_code_actions_by_diagnostics(&self, result: &mut Vec<CodeActionOrCommand>, diagnostics: &[Diagnostic]) {
+    async fn create_code_actions_by_diagnostics(&self, result: &mut Vec<CodeActionOrCommand>, diagnostics: &[Diagnostic]) -> Result<()> {
         for diagnostic in diagnostics {
-            self.create_code_actions_by_diagnostic(result, diagnostic).await;
+            self.create_code_actions_by_diagnostic(result, diagnostic).await?;
         }
+        Ok(())
     }
 
-    async fn create_code_actions_by_diagnostic(&self, result: &mut Vec<CodeActionOrCommand>, diagnostic: &Diagnostic) {
+    async fn create_code_actions_by_diagnostic(&self, result: &mut Vec<CodeActionOrCommand>, diagnostic: &Diagnostic) -> Result<()> {
         if diagnostic.data.is_none() {
-            return;
+            return Ok(());
         }
 
         let Some(serde_json::Value::Array(action_ids)) = &diagnostic.data else {
             warn!("Invalid CodeAction data: {:#?}", diagnostic.data);
-            return;
+            return Ok(());
         };
 
         for id in action_ids {
@@ -878,27 +895,29 @@ impl Backend {
             let Some(id) = id.as_u64() else { continue };
 
             let diagnostic = Some(diagnostic.clone());
-            let action = self.create_code_action_by_id(id, diagnostic).await;
+            let action = self.create_code_action_by_id(id, diagnostic).await?;
             if let Some(action) = action {
                 result.push(action);
             }
         }
+
+        Ok(())
     }
 
-    async fn create_code_action_by_id(&self, id: u64, diagnostic: Option<Diagnostic>) -> Option<CodeActionOrCommand> {
+    async fn create_code_action_by_id(&self, id: u64, diagnostic: Option<Diagnostic>) -> Result<Option<CodeActionOrCommand>> {
         let repo = self.code_actions.read().await;
 
         let Some(item) = repo.get(id as usize) else {
             warn!("Could not find CodeAction in the repository with id {id}");
-            return None;
+            return Ok(None);
         };
 
         // If this Code Action is created by a diagnostic, it is preferred.
         let is_preferred = Some(diagnostic.is_some());
         let diagnostics = diagnostic.map(|diagnostic| vec![diagnostic.clone()]);
-        let edit = Some(self.create_workspace_edit_by_code_action_item(&item.action).await);
+        let edit = Some(self.create_workspace_edit_by_code_action_item(&item.action).await?);
 
-        Some(CodeActionOrCommand::CodeAction(CodeAction {
+        Ok(Some(CodeActionOrCommand::CodeAction(CodeAction {
             title: item.action.type_().to_string(),
             kind: Some(match item.action.fix_kind() {
                 BabbelaarFixKind::QuickFix => CodeActionKind::QUICKFIX,
@@ -910,26 +929,26 @@ impl Backend {
             is_preferred,
             disabled: None,
             data: None,
-        }))
+        })))
     }
 
-    async fn create_workspace_edit_by_code_action_item(&self, action: &BabbelaarCodeAction) -> WorkspaceEdit {
+    async fn create_workspace_edit_by_code_action_item(&self, action: &BabbelaarCodeAction) -> Result<WorkspaceEdit> {
         let document_changes = if action.edits().is_empty() {
             None
         } else {
             let edits = self.create_document_change_operation_for_action(action).await;
-            let edits = DocumentChanges::Operations(edits);
+            let edits = DocumentChanges::Operations(edits?);
             Some(edits)
         };
 
-        WorkspaceEdit {
+        Ok(WorkspaceEdit {
             changes: None,
             document_changes,
             change_annotations: None
-        }
+        })
     }
 
-    async fn create_document_change_operation_for_action(&self, action: &BabbelaarCodeAction) -> Vec<DocumentChangeOperation> {
+    async fn create_document_change_operation_for_action(&self, action: &BabbelaarCodeAction) -> Result<Vec<DocumentChangeOperation>> {
         let mut operations = Vec::new();
 
         for edit in action.edits() {
@@ -948,13 +967,13 @@ impl Backend {
                 })));
                 SourceCode::new(new_file_path.to_string_lossy().to_string(), 0, edit.new_text().to_string())
             } else {
-                self.context.source_code_of(edit.replacement_range().file_id()).await
+                self.context.source_code_of(edit.replacement_range().file_id()).await?
             };
 
             let converter = self.converter(&source_code);
 
             let edit = TextEdit {
-                range: converter.convert_file_range(edit.replacement_range()),
+                range: converter.convert_file_range(edit.replacement_range())?,
                 new_text: edit.new_text().to_string(),
                 insert_text_format: Some(InsertTextFormat::SNIPPET),
             };
@@ -965,7 +984,10 @@ impl Backend {
                 Some(uri) => uri,
                 None => match self.context.path_of(file_id).await {
                     Some(path) => path.to_uri(),
-                    None => panic!("Failed to find path of {file_id:?} for action {action:#?}"),
+                    None => {
+                        // panic!("Failed to find path of {file_id:?} for action {action:#?}")
+                        return Err(BabbelaarLspError::FailedToFindPathForAction { file_id, action: action.clone() });
+                    }
                 }
             };
 
@@ -978,7 +1000,7 @@ impl Backend {
             }));
         }
 
-        operations
+        Ok(operations)
     }
 
     async fn create_code_actions_based_on_semantics(&self, actions: &mut Vec<CodeActionOrCommand>, params: &CodeActionParams) -> Result<()> {
@@ -986,8 +1008,8 @@ impl Backend {
 
         let mut items = self.with_syntax(&params.text_document, |tree, source_code| {
             let converter = self.converter(source_code);
-            let start = converter.convert_location(params.range.start);
-            let end = converter.convert_location(params.range.end);
+            let start = converter.convert_location(params.range.start)?;
+            let end = converter.convert_location(params.range.end)?;
 
             let mut ctx = CodeActionsAnalysisContext {
                 semantics: &analyzer,
@@ -1013,7 +1035,7 @@ impl Backend {
         }).await?;
 
         for action in items {
-            let edit = self.create_workspace_edit_by_code_action_item(&action).await;
+            let edit = self.create_workspace_edit_by_code_action_item(&action).await?;
             actions.push(CodeActionOrCommand::CodeAction(CodeAction {
                 title: action.type_().to_string(),
                 kind: Some(CodeActionKind::QUICKFIX),
@@ -1037,11 +1059,11 @@ impl Backend {
 
         let pos = params.text_document_position.position;
 
-        let converters = self.all_converters().await;
+        let converters = self.all_converters().await?;
 
         self.with_semantics(&params.text_document_position.text_document, |analyzer, source_code| {
             let converter = self.converter(source_code);
-            let location = converter.convert_location(pos);
+            let location = converter.convert_location(pos)?;
 
             let Some((declaration_range, _)) = analyzer.find_declaration_range_at(location) else {
                 return Ok(None);
@@ -1051,17 +1073,19 @@ impl Backend {
                 return Ok(None);
             };
 
-            let edits = references.into_iter()
-                    .chain(std::iter::once(declaration_range))
-                    .map(|range| {
-                        let converter = converters.get(&range.file_id()).unwrap();
-                        OneOf::Left(TextEdit {
-                            range: converter.convert_file_range(range),
-                            new_text: params.new_name.clone(),
-                            insert_text_format: Some(InsertTextFormat::SNIPPET),
-                        })
-                    })
-                    .collect();
+            let mut edits = Vec::new();
+
+            for range in references.into_iter().chain(std::iter::once(declaration_range)) {
+                let Some(converter) = converters.get(&range.file_id()) else {
+                    warn!("Omzetter voor bestandsnummer {:?} niet gevonden", range.file_id());
+                    continue;
+                };
+                edits.push(OneOf::Left(TextEdit {
+                    range: converter.convert_file_range(range)?,
+                    new_text: params.new_name.clone(),
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                }));
+            }
 
             let edits = TextDocumentEdit {
                 text_document,

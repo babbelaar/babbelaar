@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use babbelaar::*;
+use log::warn;
 use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintParams};
 
 use crate::{BabbelaarLspResult as Result, Backend, Converter};
@@ -71,8 +72,16 @@ impl InlayHintsEngine {
             SemanticLocalKind::ReferenceThis => (),
         }
 
+        let position = match self.converter.convert_position(reference.declaration_range.end()) {
+            Ok(position) => position,
+            Err(e) => {
+                warn!("Kon positie {} niet converteren: {e}", reference.declaration_range.end());
+                return;
+            }
+        };
+
         self.hints.push(InlayHint {
-            position: self.converter.convert_position(reference.declaration_range.end()),
+            position,
             label: format!(": {}", reference.typ).into(),
             kind: Some(InlayHintKind::TYPE),
             text_edits: None,
@@ -161,8 +170,16 @@ impl InlayHintsEngine {
                     let Some(method) = base.methods.iter().find(|x| x.function.name.value() == method_call.method_name.value()) else { return };
 
                     for (argument, parameter) in method_call.call.arguments.iter().zip(method.function.parameters.iter()) {
+                        let position = match self.converter.convert_position(argument.range().start()) {
+                            Ok(position) => position,
+                            Err(e) => {
+                                warn!("Kon positie {} niet converteren: {e}", argument.range().start());
+                                continue;
+                            }
+                        };
+
                         self.hints.push(InlayHint {
-                            position: self.converter.convert_position(argument.range().start()),
+                            position,
                             label: format!("{}: ", parameter.name.value()).into(),
                             kind: Some(InlayHintKind::PARAMETER),
                             text_edits: None,
@@ -262,8 +279,16 @@ impl InlayHintsEngine {
         match function {
             SemanticType::Function(func) => {
                 for (argument, parameter) in call.arguments.iter().zip(func.parameters.iter()) {
+                    let position = match self.converter.convert_position(argument.range().start()) {
+                        Ok(position) => position,
+                        Err(e) => {
+                            warn!("Kon positie {} niet converteren: {e}", argument.range().start());
+                            continue;
+                        }
+                    };
+
                     self.hints.push(InlayHint {
-                        position: self.converter.convert_position(argument.range().start()),
+                        position,
                         label: format!("{}: ", parameter.name.value()).into(),
                         kind: Some(InlayHintKind::PARAMETER),
                         text_edits: None,

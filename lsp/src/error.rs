@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use babbelaar::ParseDiagnostic;
+use babbelaar::{BabbelaarCodeAction, FileId, ParseDiagnostic};
 use thiserror::Error;
 use tower_lsp::jsonrpc::ErrorCode;
 
@@ -34,6 +34,15 @@ pub enum BabbelaarLspError {
 
     #[error("Ongeldig commando: \"{name}\"")]
     InvalidCommand { name: String },
+
+    #[error("Ongeldig bestandsnummer: {file_id:?}")]
+    IllegalFileId { file_id: FileId },
+
+    #[error("Kon geen pad vinden voor actie: {action:?} in bestand {file_id:?}")]
+    FailedToFindPathForAction { file_id: FileId, action: BabbelaarCodeAction },
+
+    #[error("Ongeldige regel: {requested_line} in bestand \"{path}\" (totaal {line_count} regels)")]
+    IllegalLine { path: String, requested_line: usize, line_count: usize },
 }
 
 impl From<IoError> for BabbelaarLspError {
