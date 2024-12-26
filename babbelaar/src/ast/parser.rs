@@ -285,19 +285,28 @@ impl<'tokens> Parser<'tokens> {
         Ok(extension)
     }
 
-    pub fn parse_function(&mut self, ctx: FunctionParsingContext) -> Result<FunctionStatement, ParseError> {
-        let name = self.consume_token()?;
+    fn parse_function_name(&mut self) -> Result<Ranged<BabString>, ParseError> {
+        let name = self.peek_token()?;
         let name_range = name.range();
-        let name = match name.kind {
-            TokenKind::Identifier(name) => name,
+
+        match &name.kind {
+            TokenKind::Identifier(name) => {
+                let name = name.clone();
+                _ = self.consume_token();
+                Ok(Ranged::new(name_range, name))
+            }
+
             _ => {
                 self.emit_diagnostic(ParseDiagnostic::FunctionStatementExpectedName { token: name.clone() });
-                BabString::empty()
+                Ok(Ranged::new(name_range.start().as_zero_range(), BabString::empty()))
             }
-        };
-        let name = Ranged::new(name_range, name);
+        }
+    }
 
-        self.expect_left_paren("werkwijzenaam")?;
+    pub fn parse_function(&mut self, ctx: FunctionParsingContext) -> Result<FunctionStatement, ParseError> {
+        let name = self.parse_function_name()?;
+
+        self.expect_left_paren("werkwijzenaam");
 
         let mut parameters = Vec::new();
         while self.peek_punctuator() != Some(Punctuator::RightParenthesis) {
@@ -383,7 +392,7 @@ impl<'tokens> Parser<'tokens> {
             None
         };
 
-        let range = FileRange::new(name_range.start(), self.previous_end());
+        let range = FileRange::new(name.range().start(), self.previous_end());
 
         Ok(FunctionStatement {
             name,
@@ -1085,7 +1094,7 @@ impl<'tokens> Parser<'tokens> {
             self.emit_diagnostic(ParseDiagnostic::RangeExpectedKeyword { token: range_keyword });
         }
 
-        self.expect_left_paren("reeks")?;
+        self.expect_left_paren("reeks");
 
         let start = Box::new(self.parse_expression()?);
 
@@ -1474,14 +1483,21 @@ impl<'tokens> Parser<'tokens> {
         Ok(token)
     }
 
-    fn expect_left_paren(&mut self, context: &'static str) -> Result<FileRange, ParseError> {
-        let token = self.consume_token()?;
+    fn expect_left_paren(&mut self, context: &'static str) -> FileRange {
+        let Ok(token) = self.peek_token() else {
+            self.emit_diagnostic(ParseDiagnostic::ExpectedLeftParen { token: self.tokens.last().unwrap().clone(), context });
+            return self.token_end.as_zero_range();
+        };
+
+        let range = token.range();
 
         if token.kind != TokenKind::Punctuator(Punctuator::LeftParenthesis) {
             self.emit_diagnostic(ParseDiagnostic::ExpectedLeftParen { token: token.clone(), context });
+        } else {
+            _ = self.consume_token();
         }
 
-        Ok(token.range())
+        range
     }
 
     fn expect_right_paren(&mut self, context: &'static str) -> FileRange {
@@ -1494,9 +1510,9 @@ impl<'tokens> Parser<'tokens> {
 
         if token.kind != TokenKind::Punctuator(Punctuator::RightParenthesis) {
             self.emit_diagnostic(ParseDiagnostic::ExpectedRightParen { token: token.clone(), context });
+        } else {
+            _ = self.consume_token();
         }
-
-        _ = self.consume_token();
 
         range
     }
@@ -2035,6 +2051,7 @@ impl ParseDiagnostic {
             Self::FunctionMustHaveDefinition { range, .. } => *range,
             Self::PostfixMemberOrReferenceExpectedIdentifier { period, .. } => period.range(),
             Self::ResidualTokensInTemplateString { range, .. } => *range,
+            Self::FunctionStatementExpectedName { token } => token.range().start().as_zero_range(),
             _ => self.token().range(),
         }
     }

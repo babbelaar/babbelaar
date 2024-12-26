@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use std::{fs::File, io::Write, pin::Pin};
 
-use log::LevelFilter;
+use log::{info, LevelFilter};
 use logger::Logger;
 use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -150,6 +150,8 @@ pub async fn run<I, O>(stdin: I, stdout: O)
             code_actions: Arc::new(RwLock::new(CodeActionRepository::new()))
         }
     });
+
+    info!("Babbelaar LSP-dienst starten... Versie: {}", env!("CARGO_PKG_VERSION"));
 
     Server::new(stdin, stdout, socket).serve(service).await;
 }

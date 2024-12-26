@@ -2638,6 +2638,10 @@ impl SemanticAnalyzer {
                     continue;
                 }
 
+                if name.is_empty() {
+                    continue;
+                }
+
                 let diag = self.create_diagnostic_unused_local(name, local);
                 self.diagnostics.create(|| diag);
             }
