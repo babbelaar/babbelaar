@@ -1222,6 +1222,30 @@ fn not_from_parameter() {
     assert_eq!(result.stdout, "");
 }
 
+#[test]
+fn fill_array_using_subroutine() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze vulOpeenvolging(a: g32[]) {
+            a[0] = 1;
+            a[1] = 2;
+            a[2] = 3;
+            a[3] = 4;
+            a[4] = 5;
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel x = nieuw g32[5];
+            vulOpeenvolging(x);
+
+            bekeer x[0] + x[1] + x[2] + x[3] + x[4];
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(15));
+    assert_eq!(result.stdout, "");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();

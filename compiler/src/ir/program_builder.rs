@@ -44,7 +44,7 @@ impl ProgramBuilder {
             label_positions: HashMap::new(),
         };
 
-        for (idx, (name, type_id)) in arguments.iter().cloned().enumerate() {
+        for (idx, (name, type_info)) in arguments.iter().cloned().enumerate() {
             let register = builder.register_allocator.next();
             builder.argument_registers.push(register);
 
@@ -52,13 +52,13 @@ impl ProgramBuilder {
                 ArgumentName::Name(name) => {
                     builder.locals.insert(name, FunctionLocal {
                         register,
-                        type_info: type_id.into(),
+                        type_info,
                     });
                 }
 
                 ArgumentName::This => {
                     debug_assert_eq!(builder.this, None);
-                    builder.this = Some((type_id, register));
+                    builder.this = Some((type_info, register));
                 }
             }
 

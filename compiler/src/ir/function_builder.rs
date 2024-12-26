@@ -14,7 +14,7 @@ pub struct FunctionBuilder<'program> {
     pub(super) program_builder: &'program mut ProgramBuilder,
     pub(super) name: BabString,
     pub(super) register_allocator: RegisterAllocator,
-    pub(super) this: Option<(TypeId, Register)>,
+    pub(super) this: Option<(TypeInfo, Register)>,
     pub(super) argument_registers: Vec<Register>,
     pub(super) instructions: Vec<Instruction>,
     pub(super) locals: HashMap<BabString, FunctionLocal>,
@@ -271,7 +271,7 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     #[must_use]
-    pub fn load_this(&self) -> Option<(TypeId, Register)> {
+    pub fn load_this(&self) -> Option<(TypeInfo, Register)> {
         self.this.clone()
     }
 
@@ -313,6 +313,11 @@ impl<'program> FunctionBuilder<'program> {
     #[must_use]
     pub fn size_of_type_id(&self, ty: TypeId) -> usize {
         self.program_builder.type_manager.layout(ty).size()
+    }
+
+    #[must_use]
+    pub fn name_of_type_id(&self, ty: TypeId) -> &BabString {
+        self.program_builder.type_manager.layout(ty).name()
     }
 
     #[must_use]

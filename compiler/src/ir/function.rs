@@ -5,7 +5,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use babbelaar::BabString;
 
-use crate::TypeId;
+use crate::{TypeId, TypeInfo};
 
 use super::{Instruction, Label, Register};
 
@@ -17,7 +17,7 @@ pub enum ArgumentName {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArgumentList {
-    items: Vec<(ArgumentName, TypeId)>,
+    items: Vec<(ArgumentName, TypeInfo)>,
 }
 
 impl ArgumentList {
@@ -28,17 +28,17 @@ impl ArgumentList {
         }
     }
 
-    pub fn add(&mut self, name: impl Into<BabString>, ty: TypeId) {
+    pub fn add(&mut self, name: impl Into<BabString>, ty: TypeInfo) {
         let name = name.into();
         self.items.push((ArgumentName::Name(name), ty));
     }
 
     pub fn add_this(&mut self, ty: TypeId) {
-        self.items.push((ArgumentName::This, ty));
+        self.items.push((ArgumentName::This, TypeInfo::Plain(ty)));
     }
 
     #[must_use]
-    pub fn iter(&self) -> impl Iterator<Item = &(ArgumentName, TypeId)> {
+    pub fn iter(&self) -> impl Iterator<Item = &(ArgumentName, TypeInfo)> {
         self.items.iter()
     }
 }

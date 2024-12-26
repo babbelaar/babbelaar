@@ -130,7 +130,17 @@ impl Compiler {
 
         for parameter in &func.parameters {
             let type_id = self.program_builder.type_id_for_structure(&parameter.ty.specifier.unqualified_name());
-            arguments.add(parameter.name.value(), type_id);
+            let mut type_info = TypeInfo::Plain(type_id);
+
+            for qualifier in &parameter.ty.qualifiers {
+                match qualifier.value() {
+                    TypeQualifier::Array | TypeQualifier::Pointer => {
+                        type_info = TypeInfo::Array(Box::new(type_info));
+                    }
+                }
+            }
+
+            arguments.add(parameter.name.value(), type_info);
         }
 
         self.program_builder.build_function(name, arguments, |builder| {
@@ -549,7 +559,10 @@ impl CompileExpression for PostfixExpression {
                         ExpressionResult::pointer(base_ptr, offset, *item_ty, typ)
                     }
 
-                    TypeInfo::Plain(..) => todo!("Subscript for types"),
+                    TypeInfo::Plain(inner) => {
+                        todo!("Ondersteun indexering van niet-opeenvolgingen. Type: {}. Locatie: {}",
+                            builder.name_of_type_id(inner), self.lhs.range().start())
+                    }
                 }
             }
         }
