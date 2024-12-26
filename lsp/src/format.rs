@@ -445,6 +445,7 @@ impl Format for UnaryExpression {
         match self.kind.value() {
             UnaryExpressionKind::AddressOf => f.write_char('&'),
             UnaryExpressionKind::Negate => f.write_char('-'),
+            UnaryExpressionKind::Not => f.write_char('!'),
         }
 
         self.rhs.format(f);

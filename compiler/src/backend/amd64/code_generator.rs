@@ -232,6 +232,7 @@ impl Amd64CodeGenerator {
                     MathOperation::Modulo => todo!("Ondersteun Modulo op AMD64"),
                     MathOperation::LeftShift => todo!("Voeg SchuifLinks toe"),
                     MathOperation::RightShift => todo!("Voeg SchuifRechts toe"),
+                    MathOperation::Xor => todo!("Voeg ExclusieveOf toe"),
                 }
             }
 

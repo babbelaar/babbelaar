@@ -105,6 +105,20 @@ pub enum ArmInstruction {
         condition: ArmConditionCode,
     },
 
+    EorImmediate {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        reg: ArmRegister,
+        imm: u16,
+    },
+
+    EorRegister {
+        is_64_bit: bool,
+        dst: ArmRegister,
+        lhs: ArmRegister,
+        rhs: ArmRegister,
+    },
+
     /// Load pair
     Ldp {
         is_64_bit: bool,
@@ -510,6 +524,28 @@ impl ArmInstruction {
                 // NOTE: sf is 1
                 // NOTE: imm6 is 0
                 // NOTE: shift is 0
+                instruction
+            }
+
+            Self::EorImmediate { is_64_bit, dst, reg, imm } => {
+                let mut instruction = 0x52000000;
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+                instruction |= (reg.number as u32) << 5;
+                instruction |= (imm as u32) << 10;
+                instruction |= dst.number as u32;
+                instruction
+            }
+
+            Self::EorRegister { is_64_bit, dst, lhs, rhs } => {
+                let mut instruction = 0x4A000000;
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+                instruction |= (rhs.number as u32) << 16;
+                instruction |= (lhs.number as u32) << 5;
+                instruction |= dst.number as u32;
                 instruction
             }
 
@@ -1078,6 +1114,14 @@ impl Display for ArmInstruction {
 
             Self::CSet { is_64_bit, dst, condition } => {
                 f.write_fmt(format_args!("cset {}, {condition}", dst.name(is_64_bit)))
+            }
+
+            Self::EorImmediate { is_64_bit, dst, reg, imm } => {
+                f.write_fmt(format_args!("eor {}, {}, #{imm}", dst.name(is_64_bit), reg.name(is_64_bit)))
+            }
+
+            Self::EorRegister { is_64_bit, dst, lhs, rhs } => {
+                f.write_fmt(format_args!("eor {}, {}, {}", dst.name(is_64_bit), lhs.name(is_64_bit), rhs.name(is_64_bit)))
             }
 
             Self::Ldp { is_64_bit, mode, first, second, src, offset } => {

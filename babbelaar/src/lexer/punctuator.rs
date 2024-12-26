@@ -88,6 +88,10 @@ pub enum Punctuator {
     LeftShiftAssign,
     #[strum(serialize = "schuif-links-rechts")]
     RightShiftAssign,
+    #[strum(serialize = "niet")]
+    Not,
+    #[strum(serialize = "niet-gelijk-aan")]
+    NotEquals,
 }
 
 impl Punctuator {
@@ -134,6 +138,8 @@ impl Punctuator {
             Self::BitwiseXorAssign => "^=",
             Self::LeftShiftAssign => "<<=",
             Self::RightShiftAssign => ">>=",
+            Self::Not => "!",
+            Self::NotEquals => "!=",
         }
     }
 }

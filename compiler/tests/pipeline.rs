@@ -1121,6 +1121,107 @@ fn opt_sub_then_multiply() {
     assert_eq!(result.stdout, "");
 }
 
+#[test]
+fn not_immediate_bool() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            stel s = onwaar;
+
+            als !s {
+                bekeer 1;
+            }
+
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(1));
+    assert_eq!(result.stdout, "");
+}
+
+#[test]
+fn not_not_immediate_bool() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            stel s = onwaar;
+
+            als !!s {
+                bekeer 1;
+            }
+
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "");
+}
+
+#[test]
+fn not_from_subroutine() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze krijgBooleaan() -> bool {
+            bekeer onwaar;
+        }
+
+        werkwijze hoofd() -> g32 {
+            als !krijgBooleaan() {
+                bekeer 1;
+            }
+
+            bekeer 2;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(1));
+    assert_eq!(result.stdout, "");
+}
+
+#[test]
+fn not_not_from_subroutine() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze krijgBooleaan() -> bool {
+            bekeer onwaar;
+        }
+
+        werkwijze hoofd() -> g32 {
+            als !!krijgBooleaan() {
+                bekeer 1;
+            }
+
+            bekeer 2;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(2));
+    assert_eq!(result.stdout, "");
+}
+
+#[test]
+fn not_from_parameter() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze keerOm(a: bool) -> bool {
+            bekeer !a;
+        }
+
+        werkwijze hoofd() -> g32 {
+            als keerOm(onwaar) {
+                bekeer 1;
+            }
+
+            bekeer 2;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(1));
+    assert_eq!(result.stdout, "");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();

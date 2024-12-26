@@ -269,6 +269,7 @@ impl Interpreter {
                     MathOperation::Modulo => Immediate::Integer64(lhs.as_i64() % rhs.as_i64()),
                     MathOperation::LeftShift => Immediate::Integer64(lhs.as_i64() << rhs.as_i64()),
                     MathOperation::RightShift => Immediate::Integer64(lhs.as_i64() >> rhs.as_i64()),
+                    MathOperation::Xor => Immediate::Integer64(lhs.as_i64() ^ rhs.as_i64()),
                 };
 
                 self.frame().set_register(destination, value);

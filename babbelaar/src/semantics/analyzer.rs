@@ -1406,6 +1406,16 @@ impl SemanticAnalyzer {
 
                 ty
             }
+
+            UnaryExpressionKind::Not => {
+                if ty != SemanticType::Builtin(BuiltinType::Bool) {
+                    self.diagnostics.create(|| {
+                        SemanticDiagnostic::new(operator_range, SemanticDiagnosticKind::CannotLogicalNotNonBool)
+                    });
+                }
+
+                ty
+            }
         };
 
         SemanticValue {

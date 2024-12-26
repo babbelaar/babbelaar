@@ -64,6 +64,7 @@ impl<'source_code> Lexer<'source_code> {
             '&' => self.consume_single_or_double_char_token(Punctuator::BitwiseAnd, Punctuator::LogicalAnd),
             '|' => self.consume_single_or_double_char_token(Punctuator::BitwiseOr, Punctuator::LogicalOr),
             '^' => self.consume_assign_or_normal_token(Punctuator::BitwiseXor, Punctuator::BitwiseXorAssign),
+            '!' => self.consume_exclamation_mark(),
 
             _ => {
                 let (begin, char) = self.current?;
@@ -130,6 +131,26 @@ impl<'source_code> Lexer<'source_code> {
             TokenKind::Punctuator(assign)
         } else {
             TokenKind::Punctuator(normal)
+        };
+
+        let end = self.current_location();
+
+        Some(Token {
+            kind,
+            begin,
+            end,
+        })
+    }
+
+    fn consume_exclamation_mark(&mut self) -> Option<Token> {
+        let begin = self.current_location();
+        self.consume_char();
+
+        let kind = if self.peek_char() == Some('=') {
+            self.consume_char();
+            TokenKind::Punctuator(Punctuator::NotEquals)
+        } else {
+            TokenKind::Punctuator(Punctuator::Not)
         };
 
         let end = self.current_location();

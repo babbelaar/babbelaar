@@ -1177,11 +1177,11 @@ impl<'tokens> Parser<'tokens> {
     fn parse_equality_expression(&mut self) -> Result<Ranged<Expression>, ParseError> {
         self.parse_bi_expression(Self::parse_relational_expression, &[
             (Punctuator::Equals, Comparison::Equality.into()),
+            (Punctuator::NotEquals, Comparison::Inequality.into()),
             (Punctuator::GreaterThan, Comparison::GreaterThan.into()),
             (Punctuator::GreaterThanOrEqual, Comparison::GreaterThanOrEqual.into()),
             (Punctuator::LessThan, Comparison::LessThan.into()),
             (Punctuator::LessThanOrEqual, Comparison::LessThanOrEqual.into()),
-            // TODO: not equal
         ])
     }
 
@@ -1254,6 +1254,11 @@ impl<'tokens> Parser<'tokens> {
 
                 TokenKind::Punctuator(Punctuator::HyphenMinus) => {
                     kinds.push(Ranged::new(token.range(), UnaryExpressionKind::Negate));
+                    _ = self.consume_token();
+                }
+
+                TokenKind::Punctuator(Punctuator::Not) => {
+                    kinds.push(Ranged::new(token.range(), UnaryExpressionKind::Not));
                     _ = self.consume_token();
                 }
 

@@ -255,6 +255,7 @@ impl AArch64CodeGenerator {
                     MathOperation::Modulo => self.add_operation_modulo(dst, lhs, rhs),
                     MathOperation::LeftShift => self.add_instruction_lsl(dst, lhs, rhs),
                     MathOperation::RightShift => self.add_instruction_asr(dst, lhs, rhs),
+                    MathOperation::Xor => self.add_instruction_eor(dst, lhs, rhs),
                 }
             }
 
@@ -602,6 +603,58 @@ impl AArch64CodeGenerator {
                 let lhs = self.allocate_register(lhs);
                 let rhs = self.allocate_register(rhs);
                 self.instructions.push(ArmInstruction::CmpRegister { is_64_bit: true, lhs, rhs });
+            }
+        }
+    }
+
+    fn add_instruction_eor(&mut self, dst: ArmRegister, lhs: &Operand, rhs: &Operand) {
+        match (lhs, rhs) {
+            (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
+                warn!("Immediate-ExclusieveOf zou gedaan moeten worden door de optimalisator!");
+
+                let imm16 = lhs.as_i64() ^ rhs.as_i64();
+                self.add_instruction_mov(dst, &Operand::Immediate(Immediate::Integer64(imm16)));
+            }
+
+            (Operand::Register(lhs), Operand::Register(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+                let rhs = self.allocate_register(rhs);
+                self.instructions.push(ArmInstruction::EorRegister {
+                    is_64_bit: true,
+                    dst,
+                    lhs,
+                    rhs,
+                });
+            }
+
+            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
+                let reg = self.allocate_register(lhs);
+
+                self.instructions.push(ArmInstruction::EorImmediate {
+                    is_64_bit: true,
+                    dst,
+                    reg,
+                    imm: rhs.as_i16() as _,
+                });
+            }
+
+            (Operand::Immediate(lhs_imm), Operand::Register(rhs)) => {
+                let rhs = self.allocate_register(rhs);
+
+                let lhs = if rhs == dst {
+                    self.register_allocator.hacky_random_available_register().unwrap()
+                } else {
+                    dst
+                };
+
+                self.add_instruction_mov(lhs, &Operand::Immediate(*lhs_imm));
+
+                self.instructions.push(ArmInstruction::EorRegister {
+                    is_64_bit: true,
+                    dst,
+                    lhs,
+                    rhs,
+                });
             }
         }
     }

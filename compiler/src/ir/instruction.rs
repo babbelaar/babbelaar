@@ -358,6 +358,7 @@ pub enum MathOperation {
     Modulo,
     LeftShift,
     RightShift,
+    Xor,
 }
 
 impl MathOperation {
@@ -371,6 +372,7 @@ impl MathOperation {
             Self::Modulo => "Modulo",
             Self::LeftShift => "SchuifLinks",
             Self::RightShift => "SchuifRechts",
+            Self::Xor => "ExclusieveOf",
         }
     }
 }

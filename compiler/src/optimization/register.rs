@@ -394,6 +394,10 @@ impl RegisterInliner {
             MathOperation::RightShift => {
                 Immediate::Integer64((lhs.as_u64() >> rhs.as_u64()) as _)
             }
+
+            MathOperation::Xor => {
+                Immediate::Integer64((lhs.as_u64() ^ rhs.as_u64()) as _)
+            }
         };
 
         self.values.insert(destination.clone(), value);

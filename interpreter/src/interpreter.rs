@@ -409,6 +409,15 @@ impl<D> Interpreter<D>
                     _ => panic!("Kan waarde {rhs:?} niet omkeren"),
                 }
             }
+
+            UnaryExpressionKind::Not => {
+                let rhs = self.execute_expression(&expression.rhs);
+
+                match rhs {
+                    Value::Bool(boolean) => Value::Bool(!boolean),
+                    _ => panic!("Kan waarde {rhs:?} niet nieten `!`"),
+                }
+            }
         }
     }
 

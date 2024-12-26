@@ -677,6 +677,12 @@ impl CompileExpression for UnaryExpression {
                 let value = value.to_readable(builder);
                 builder.unary_negate(value).into()
             }
+
+            UnaryExpressionKind::Not => {
+                let value = value.to_readable(builder);
+                let reg = builder.math(MathOperation::Xor, value, Operand::Immediate(Immediate::Integer8(1)));
+                ExpressionResult::typed(reg, TypeId::BOOL)
+            }
         }
     }
 }

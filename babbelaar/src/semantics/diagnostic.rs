@@ -340,6 +340,9 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Deze statement mag alleen binnen werkwijzen gebruikt worden.")]
     StatementOutsideFunction,
+
+    #[error("Kan `!` alleen gebruiken om `bool` om te keren (`!waar` = `onwaar`, `!onwaar` = `waar`).")]
+    CannotLogicalNotNonBool,
 }
 
 impl SemanticDiagnosticKind {

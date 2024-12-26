@@ -176,6 +176,7 @@ impl Display for UnaryExpression {
         match self.kind.value() {
             UnaryExpressionKind::AddressOf => f.write_char('&')?,
             UnaryExpressionKind::Negate => f.write_char('-')?,
+            UnaryExpressionKind::Not => f.write_char('!')?,
         }
 
         Display::fmt(self.rhs.value(), f)
@@ -186,6 +187,7 @@ impl Display for UnaryExpression {
 pub enum UnaryExpressionKind {
     AddressOf,
     Negate,
+    Not,
 }
 
 #[derive(Clone, Debug)]
