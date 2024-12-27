@@ -170,12 +170,12 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn analyze_expression(&mut self, expression: &Ranged<Expression>) -> SemanticValue {
+    fn analyze_expression(&mut self, expression: &Ranged<Expression>, resolution: &SemanticTypeResolution) -> SemanticValue {
         let value = match expression.value() {
-            Expression::BiExpression(bi) => self.analyze_bi_expression(bi),
-            Expression::Postfix(postfix) => self.analyze_postfix_expression(postfix),
-            Expression::Primary(primary) => self.analyze_primary_expression(primary, expression.range()),
-            Expression::Unary(unary) => self.analyze_unary_expression(unary),
+            Expression::BiExpression(bi) => self.analyze_bi_expression(bi, resolution),
+            Expression::Postfix(postfix) => self.analyze_postfix_expression(postfix, resolution),
+            Expression::Primary(primary) => self.analyze_primary_expression(primary, expression.range(), resolution),
+            Expression::Unary(unary) => self.analyze_unary_expression(unary, resolution),
         };
 
         if let Some(value_type_tracker) = &mut self.context.value_type_tracker {
@@ -482,7 +482,7 @@ impl SemanticAnalyzer {
             }
 
             StatementKind::Expression(expr) => {
-                let value = self.analyze_expression(expr);
+                let value = self.analyze_expression(expr, &SemanticTypeResolution::default());
 
                 if let SemanticUsage::Pure(pure) = value.usage {
                     let diag = SemanticDiagnostic::new(expr.range(), SemanticDiagnosticKind::UnusedPureValue { ty: value.ty.to_string().into() })
@@ -525,20 +525,18 @@ impl SemanticAnalyzer {
                 self.analyze_extension_statement(extension, statement.range);
             }
             StatementKind::Assignment(assign) => {
-                let source_type = self.analyze_expression(&assign.source).ty;
+                let destination_type = if assign.destination.value().as_identifier() == Some(&Constants::DISCARDING_IDENT) {
+                    SemanticType::null()
+                } else {
+                    self.analyze_expression(&assign.destination, &SemanticTypeResolution::basic_hints_from_expression(assign.source.value())).ty
+                };
 
-                self.context.statements_state.push(StatementAnalysisState {
-                    assignment_type: Some(source_type.clone()),
-                    ..Default::default()
-                });
+                let source_type = self.analyze_expression(&assign.source, &SemanticTypeResolution::with_type_hint(destination_type.clone())).ty;
 
-                if assign.destination.value().as_identifier() != Some(&Constants::DISCARDING_IDENT) {
-                    let destination_type = self.analyze_expression(&assign.destination).ty;
+                if !destination_type.is_null() {
                     self.analyze_assignment_destination(assign.range(), &assign.destination);
                     self.analyze_assignment_source_dest(assign, destination_type, source_type);
                 }
-
-                self.context.statements_state.pop();
             }
             StatementKind::For(statement) => self.analyze_for_statement(statement),
             StatementKind::Function(function) => {
@@ -578,13 +576,12 @@ impl SemanticAnalyzer {
     fn analyze_for_statement(&mut self, statement: &ForStatement) {
         let ty = match statement.iterable.value() {
             ForIterableKind::Expression(expression) => {
-                let ty = self.analyze_expression(expression).ty;
+                let ty = self.analyze_expression(expression, &SemanticTypeResolution::default()).ty;
                 self.analyze_for_statement_iterable_expression(expression, ty)
             }
 
             ForIterableKind::Range(range) => {
-                self.analyze_range(range);
-                SemanticType::Builtin(BuiltinType::G32)
+                self.analyze_range(range)
             }
         };
 
@@ -649,31 +646,47 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn analyze_range(&mut self, range: &RangeExpression) {
-        self.analyze_range_param("Startwaarde", &range.start);
-        self.analyze_range_param("Eindwaarde", &range.end);
-    }
+    #[must_use]
+    fn analyze_range(&mut self, range: &RangeExpression) -> SemanticType {
+        let mut resolution = SemanticTypeResolution::with_getal_type_hints();
+        let start_ty = self.analyze_range_param("Startwaarde", &range.start, &resolution);
 
-    fn analyze_range_param(&mut self, name: &'static str, expression: &Ranged<Expression>) {
-        let ty = self.analyze_expression(expression).ty;
-
-        if ty == SemanticType::null() {
-            return;
+        if !start_ty.is_null() {
+            resolution.type_hints = vec![start_ty];
         }
 
-        if ty != SemanticType::Builtin(BuiltinType::G32) {
+        let end_ty = self.analyze_range_param("Eindwaarde", &range.end, &resolution);
+
+        if !end_ty.is_null() {
+            return end_ty;
+        }
+
+        resolution.type_hints.remove(0)
+    }
+
+    #[must_use]
+    fn analyze_range_param(&mut self, name: &'static str, expression: &Ranged<Expression>, resolution: &SemanticTypeResolution) -> SemanticType {
+        let ty = self.analyze_expression(expression, resolution).ty;
+
+        if ty == SemanticType::null() {
+            return ty;
+        }
+
+        if !ty.is_primitive_number() {
             let conversion_actions = self.try_create_conversion_actions(&SemanticType::Builtin(BuiltinType::G32), &ty, expression);
             self.diagnostics.create(||
-                SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::RangeExpectsInteger { name, ty })
+                SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::RangeExpectsInteger { name, ty: ty.clone() })
                     .with_actions(conversion_actions)
             );
         }
+
+        ty
     }
 
     fn analyze_if_statement(&mut self, statement: &IfStatement) {
         self.context.push_block_scope(statement.range);
 
-        self.analyze_expression(&statement.condition);
+        self.analyze_expression(&statement.condition, &SemanticTypeResolution::with_type_hint(SemanticType::Builtin(BuiltinType::Bool)));
 
         self.analyze_statements(&statement.body);
 
@@ -683,7 +696,7 @@ impl SemanticAnalyzer {
     fn analyze_return_statement(&mut self, statement: &ReturnStatement) {
         match (&statement.expression, self.context.current().return_type.clone()) {
             (Some(actual), Some(expected)) => {
-                let actual_type = self.analyze_expression(actual);
+                let actual_type = self.analyze_expression(actual, &SemanticTypeResolution::with_type_hint(expected.value().clone()));
                 let conversion_actions = self.try_create_conversion_actions(&expected, &actual_type.ty, actual);
 
                 if actual_type.ty == SemanticType::Builtin(BuiltinType::Null) {
@@ -719,7 +732,7 @@ impl SemanticAnalyzer {
             }
 
             (Some(actual), None) => {
-                let actual_type = self.analyze_expression(actual);
+                let actual_type = self.analyze_expression(actual, &SemanticTypeResolution::default());
 
                 if actual_type.ty == SemanticType::Builtin(BuiltinType::Null) {
                     return;
@@ -872,9 +885,9 @@ impl SemanticAnalyzer {
 
         self.context.push_structure(Arc::clone(&semantic_structure));
 
-        for field in &structure.fields {
+        for (idx, field) in structure.fields.iter().enumerate() {
             if let Some(default_value) = &field.default_value {
-                self.analyze_expression(default_value);
+                self.analyze_expression(default_value, &SemanticTypeResolution::with_type_hint(semantic_structure.fields[idx].ty.clone()));
             }
         }
 
@@ -957,7 +970,7 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_variable_statement(&mut self, statement: &VariableStatement, stmt: &Statement) {
-        let typ = self.analyze_expression(&statement.expression).ty;
+        let typ = self.analyze_expression(&statement.expression, &SemanticTypeResolution::default()).ty;
 
         if statement.name.value() == &Constants::DISCARDING_IDENT {
             return;
@@ -974,9 +987,9 @@ impl SemanticAnalyzer {
         self.context.push_local(&statement.name, local);
     }
 
-    fn analyze_bi_expression(&mut self, expression: &BiExpression) -> SemanticValue {
-        let lhs_type = self.analyze_expression(&expression.lhs).ty;
-        let rhs_type = self.analyze_expression(&expression.rhs).ty;
+    fn analyze_bi_expression(&mut self, expression: &BiExpression, resolution: &SemanticTypeResolution) -> SemanticValue {
+        let lhs_type = self.analyze_expression(&expression.lhs, resolution).ty;
+        let rhs_type = self.analyze_expression(&expression.rhs, resolution).ty;
 
         if !lhs_type.is_null() && !rhs_type.is_null() && !lhs_type.is_compatible_with(&rhs_type) {
             self.diagnostics.create(|| SemanticDiagnostic::new(
@@ -1074,7 +1087,7 @@ impl SemanticAnalyzer {
                         params += ", ";
                     }
 
-                    let argument_type = self.analyze_expression(arg).ty;
+                    let argument_type = self.analyze_expression(arg, &SemanticTypeResolution::default()).ty;
                     params += &format!("param{idx}: {argument_type}");
                 }
 
@@ -1110,8 +1123,6 @@ impl SemanticAnalyzer {
         }
 
         for (arg_idx, arg) in expression.arguments.iter().enumerate() {
-            let argument_type = self.analyze_expression(arg).ty;
-
             let Some(parameter_type) = self.resolve_parameter_type(&function, arg_idx) else {
                 if has_var_args {
                     continue;
@@ -1120,6 +1131,8 @@ impl SemanticAnalyzer {
                 warn!("Cannot check type of parameter with index {arg_idx}");
                 break;
             };
+
+            let argument_type = self.analyze_expression(arg, &SemanticTypeResolution::with_type_hint(parameter_type.clone())).ty;
 
             let parameter_type = match this_structure {
                 Some(this) => parameter_type.resolve_against(this),
@@ -1144,7 +1157,7 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn analyze_primary_expression(&mut self, expression: &PrimaryExpression, range: FileRange) -> SemanticValue {
+    fn analyze_primary_expression(&mut self, expression: &PrimaryExpression, range: FileRange, resolution: &SemanticTypeResolution) -> SemanticValue {
         let ty = match expression {
             PrimaryExpression::CharacterLiteral(..) => {
                 SemanticType::Builtin(BuiltinType::Teken)
@@ -1155,7 +1168,10 @@ impl SemanticAnalyzer {
             }
 
             PrimaryExpression::IntegerLiteral(..) => {
-                SemanticType::Builtin(BuiltinType::G32)
+                resolution.type_hints.iter()
+                    .find(|x| x.is_primitive_number())
+                    .cloned()
+                    .unwrap_or(SemanticType::Builtin(BuiltinType::G32))
             }
 
             PrimaryExpression::StringLiteral(..) => {
@@ -1197,7 +1213,7 @@ impl SemanticAnalyzer {
                 for part in parts {
                     match part {
                         TemplateStringExpressionPart::Expression(expr) => {
-                            self.analyze_expression(expr);
+                            self.analyze_expression(expr, &&SemanticTypeResolution::with_type_hint(SemanticType::Builtin(BuiltinType::Slinger)));
                             // TODO analyze string convertible.
                         }
 
@@ -1242,11 +1258,11 @@ impl SemanticAnalyzer {
                 typ
             }
 
-            PrimaryExpression::Parenthesized(expr) => return self.analyze_expression(expr),
+            PrimaryExpression::Parenthesized(expr) => return self.analyze_expression(expr, &SemanticTypeResolution::default()),
 
             PrimaryExpression::SizedArrayInitializer { typ, size } => {
-                let size_value = self.analyze_expression(&size);
-                if size_value.ty != SemanticType::Builtin(BuiltinType::G32) {
+                let size_value = self.analyze_expression(&size, &SemanticTypeResolution::with_getal_type_hints());
+                if !size_value.ty.is_primitive_number(){
                     self.diagnostics.create(|| SemanticDiagnostic::new(
                         size.range(),
                         SemanticDiagnosticKind::SizedArrayInitializerInvalidSize,
@@ -1293,7 +1309,7 @@ impl SemanticAnalyzer {
             match fields_left.remove(name.value()) {
                 Some(field) => {
                     let declaration_type = field.ty.clone().resolve_against(&ty);
-                    let definition_type = self.analyze_expression(&field_instantiation.value).ty;
+                    let definition_type = self.analyze_expression(&field_instantiation.value, &SemanticTypeResolution::with_type_hint(declaration_type.clone())).ty;
                     if !declaration_type.is_compatible_with(&definition_type) {
                         let actions = self.try_create_conversion_actions(&declaration_type, &definition_type, &field_instantiation.value);
 
@@ -1331,7 +1347,7 @@ impl SemanticAnalyzer {
 
                         self.diagnostics.create(|| diag.with_related(field_def_hint).with_related(struct_hint.clone()));
                     } else {
-                        let definition_type = self.analyze_expression(&field_instantiation.value).ty;
+                        let definition_type = self.analyze_expression(&field_instantiation.value, &SemanticTypeResolution::default()).ty;
                         let create_field_actions = self.create_actions_create_field(&ty, &field_instantiation.name, definition_type);
 
                         self.diagnostics.create(||
@@ -1381,8 +1397,8 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn analyze_unary_expression(&mut self, unary: &UnaryExpression) -> SemanticValue {
-        let ty = self.analyze_expression(&unary.rhs).ty;
+    fn analyze_unary_expression(&mut self, unary: &UnaryExpression, resolution: &SemanticTypeResolution) -> SemanticValue {
+        let ty = self.analyze_expression(&unary.rhs, resolution).ty;
 
         let operator_range = unary.kind.range();
 
@@ -1756,17 +1772,17 @@ impl SemanticAnalyzer {
         })
     }
 
-    fn analyze_postfix_expression(&mut self, postfix: &PostfixExpression) -> SemanticValue {
-        let lhs = self.analyze_expression(&postfix.lhs).ty;
+    fn analyze_postfix_expression(&mut self, postfix: &PostfixExpression, resolution: &SemanticTypeResolution) -> SemanticValue {
+        let lhs = self.analyze_expression(&postfix.lhs, resolution).ty;
         match postfix.kind.value() {
             PostfixExpressionKind::Call(call) => self.analyze_function_call_expression(lhs, call, postfix),
-            PostfixExpressionKind::Member(member) => self.analyze_member_expression(lhs, member),
+            PostfixExpressionKind::Member(member) => self.analyze_member_expression(lhs, member, resolution),
             PostfixExpressionKind::MethodCall(method) => self.analyze_method_expression(lhs, method),
             PostfixExpressionKind::Subscript(expr) => self.analyze_subscript_expression(lhs, &expr, postfix.kind.range()),
         }
     }
 
-    fn analyze_member_expression(&mut self, typ: SemanticType, member: &Ranged<BabString>) -> SemanticValue {
+    fn analyze_member_expression(&mut self, typ: SemanticType, member: &Ranged<BabString>, resolution: &SemanticTypeResolution) -> SemanticValue {
         let typ = match typ {
             SemanticType::Pointer(inner) => *inner,
             other => other,
@@ -1809,12 +1825,11 @@ impl SemanticAnalyzer {
             SemanticRelatedMessage::StructureDefinedHere { name: base.name.value().clone() }
         );
 
-        let actions = self.context.statements_state.last()
-            .and_then(|x| x.assignment_type.as_ref())
-            .map(|ty| {
-                self.create_actions_create_field(&typ, &member, ty.clone())
-            })
-            .unwrap_or_default();
+        let actions = if let Some(ty) = resolution.type_hints.first() {
+            self.create_actions_create_field(&typ, &member, ty.clone())
+        } else {
+            Vec::new()
+        };
 
         let diag = SemanticDiagnostic::new(
             member.range(),
@@ -1860,7 +1875,7 @@ impl SemanticAnalyzer {
                     return value;
                 }
 
-                let args: Vec<SemanticType> = expression.call.arguments.iter().map(|x| self.analyze_expression(x).ty).collect();
+                let args: Vec<SemanticType> = expression.call.arguments.iter().map(|x| self.analyze_expression(x, &SemanticTypeResolution::default()).ty).collect();
                 let create_method_extension_actions = self.create_actions_create_method_extension(&typ, expression, &args);
 
                 self.diagnostics.create(|| SemanticDiagnostic::new(
@@ -1908,7 +1923,7 @@ impl SemanticAnalyzer {
                     SemanticRelatedMessage::StructureDefinedHere { name: base.name.value().clone() }
                 );
 
-                let args: Vec<SemanticType> = expression.call.arguments.iter().map(|x| self.analyze_expression(x).ty).collect();
+                let args: Vec<SemanticType> = expression.call.arguments.iter().map(|x| self.analyze_expression(x, &SemanticTypeResolution::default()).ty).collect();
                 let create_method_action = self.create_action_create_method(base.as_ref(), expression, &args);
                 let create_method_extension_actions = self.create_actions_create_method_extension(&typ, expression, &args);
                 let diag = SemanticDiagnostic::new(
@@ -1972,7 +1987,7 @@ impl SemanticAnalyzer {
                     SemanticRelatedMessage::StructureDefinedHere { name: base.name.value().clone() }
                 );
 
-                let args: Vec<SemanticType> = expression.call.arguments.iter().map(|x| self.analyze_expression(x).ty).collect();
+                let args: Vec<SemanticType> = expression.call.arguments.iter().map(|x| self.analyze_expression(x, &SemanticTypeResolution::default()).ty).collect();
                 let create_method_action = self.create_action_create_method(base.as_ref(), expression, &args);
                 let create_method_extension_actions = self.create_actions_create_method_extension(&typ, expression, &args);
                 let diag = SemanticDiagnostic::new(
@@ -2552,7 +2567,7 @@ impl SemanticAnalyzer {
                 text += ", ";
             }
 
-            let ty = self.analyze_expression(arg).ty;
+            let ty = self.analyze_expression(arg, &SemanticTypeResolution::default()).ty;
 
             let name = match self.find_canonical_name_for_variable(arg.value()) {
                 Some(name) => {
@@ -2695,8 +2710,8 @@ impl SemanticAnalyzer {
             return SemanticValue::null();
         };
 
-        let index_value = self.analyze_expression(expression);
-        if index_value.ty != SemanticType::Builtin(BuiltinType::G32) {
+        let index_value = self.analyze_expression(expression, &SemanticTypeResolution::with_getal_type_hints());
+        if !index_value.ty.is_primitive_number() {
             self.diagnostics.create(||
                 SemanticDiagnostic::new(range, SemanticDiagnosticKind::CannotIndexArrayWithNonInteger { ty: index_value.ty })
             );
@@ -2770,7 +2785,7 @@ impl SemanticAnalyzer {
             body += "    veld ";
             body += &field.name;
             body += ": ";
-            body += &self.analyze_expression(&field.value).ty.name();
+            body += &self.analyze_expression(&field.value, &SemanticTypeResolution::default()).ty.name();
             body += ",";
         }
 

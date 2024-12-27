@@ -24,8 +24,3 @@ impl SemanticAnalysisPhase {
         <Self as IntoEnumIterator>::iter()
     }
 }
-
-#[derive(Default, Debug)]
-pub struct StatementAnalysisState {
-    pub assignment_type: Option<SemanticType>,
-}

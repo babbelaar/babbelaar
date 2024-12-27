@@ -3,7 +3,7 @@
 
 use std::{fmt::{Display, Write}, sync::Arc};
 
-use crate::{BabString, BuiltinType, FileRange};
+use crate::{BabString, BuiltinType, Expression, FileRange, PrimaryExpression, UnaryExpressionKind};
 
 use super::{FunctionReference, SemanticFunction, SemanticInterface, SemanticStructure};
 
@@ -164,6 +164,7 @@ impl SemanticType {
             Self::Builtin(BuiltinType::G8) => true,
             Self::Builtin(BuiltinType::G16) => true,
             Self::Builtin(BuiltinType::G32) => true,
+            Self::Builtin(BuiltinType::G64) => true,
             _ => false,
         }
     }
@@ -239,5 +240,76 @@ impl Display for SemanticType {
 impl PartialEq<BuiltinType> for SemanticType {
     fn eq(&self, other: &BuiltinType) -> bool {
         self == &Self::Builtin(*other)
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct SemanticTypeResolution {
+    pub type_hints: Vec<SemanticType>,
+}
+
+impl SemanticTypeResolution {
+    #[must_use]
+    pub fn with_type_hint(ty: SemanticType) -> Self {
+        Self {
+            type_hints: vec![ty],
+        }
+    }
+
+    #[must_use]
+    pub fn with_type_hints(types: impl Into<Vec<SemanticType>>) -> Self {
+        Self {
+            type_hints: types.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_getal_type_hints() -> Self {
+        Self::with_type_hints([
+            SemanticType::Builtin(BuiltinType::G64),
+            SemanticType::Builtin(BuiltinType::G32),
+            SemanticType::Builtin(BuiltinType::G16),
+            SemanticType::Builtin(BuiltinType::G8),
+        ])
+    }
+
+    /// Het is beter om de Semantische Analysator dit te laten doen, maar we kunnen uit de
+    /// expressie wel soms aanwijzingen genereren.
+    #[must_use]
+    pub fn basic_hints_from_expression(expression: &Expression) -> Self {
+        match expression {
+            Expression::Primary(PrimaryExpression::SizedArrayInitializer { .. }) => Self::default(),
+            Expression::Primary(PrimaryExpression::Reference { .. }) => Self::default(),
+            Expression::Primary(PrimaryExpression::ReferenceThis) => Self::default(),
+            Expression::Primary(PrimaryExpression::StructureInstantiation(..)) => Self::default(),
+
+            Expression::Primary(PrimaryExpression::Boolean(..)) => Self::with_type_hint(SemanticType::Builtin(BuiltinType::Bool)),
+            Expression::Primary(PrimaryExpression::CharacterLiteral(..)) => Self::with_type_hint(SemanticType::Builtin(BuiltinType::Teken)),
+            Expression::Primary(PrimaryExpression::IntegerLiteral(..)) => Self::with_getal_type_hints(),
+            Expression::Primary(PrimaryExpression::StringLiteral(..)) => Self::with_type_hint(SemanticType::Builtin(BuiltinType::Slinger)),
+            Expression::Primary(PrimaryExpression::TemplateString { .. }) => Self::with_type_hint(SemanticType::Builtin(BuiltinType::Slinger)),
+
+
+            Expression::BiExpression(bi) => Self::basic_hints_from_expression(&bi.lhs),
+            Expression::Primary(PrimaryExpression::Parenthesized(expr)) => Self::basic_hints_from_expression(expr.value()),
+            Expression::Postfix(expr) => Self::basic_hints_from_expression(&expr.lhs),
+            Expression::Unary(expr) => {
+                let mut this = Self::basic_hints_from_expression(&expr.rhs);
+
+                match expr.kind.value() {
+                    UnaryExpressionKind::AddressOf => (),
+
+                    UnaryExpressionKind::Negate => {
+                        this.type_hints.append(&mut Self::with_getal_type_hints().type_hints);
+                    }
+
+                    UnaryExpressionKind::Not => {
+                        this.type_hints.push(SemanticType::Builtin(BuiltinType::Bool));
+                    }
+                }
+
+                this
+            },
+        }
     }
 }

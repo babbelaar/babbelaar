@@ -924,6 +924,53 @@ fn string_concat_assign_static() {
     assert_eq!(result.stdout.trim_end_matches(|c| c == '\r' || c == '\n'), "Doei, gastje!");
 }
 
+#[test]
+fn type_resolution_return_g8() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g8 {
+            bekeer 10;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(10));
+    assert_eq!(result.stdout, "");
+}
+
+#[test]
+fn type_resolution_pass_g32() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze krijgG8(g: g8) -> g8 {
+            bekeer g;
+        }
+
+        werkwijze hoofd() -> g8 {
+            bekeer krijgG8(8);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(8));
+    assert_eq!(result.stdout, "");
+}
+
+#[test]
+fn type_resolution_array_g8() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g8 {
+            stel s = nieuw g8[2];
+            s[0] = 5;
+            s[1] = 4;
+
+            bekeer s[0] * s[1];
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(20));
+    assert_eq!(result.stdout, "");
+}
+
 #[rstest]
 #[case("0 == 1", false)]
 #[case("1 == 0", false)]
@@ -1243,6 +1290,34 @@ fn fill_array_using_subroutine() {
 
     assert_eq!(result.signal, None);
     assert_eq!(result.exit_code, Some(15));
+    assert_eq!(result.stdout, "");
+}
+
+#[test]
+fn fill_array_g8() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze vulOpeenvolging(a: g8[]) {
+            a[0] = 1;
+            a[1] = 2;
+            a[2] = 3;
+            a[3] = 4;
+            a[4] = 5;
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel x = nieuw g8[5];
+            vulOpeenvolging(x);
+
+            als x[2] == 3 {
+                bekeer 1;
+            }
+
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(1));
     assert_eq!(result.stdout, "");
 }
 

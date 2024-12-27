@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{BabString, Constants, ExtensionStatement, FileId, FileLocation, FileRange, FunctionStatement, InterfaceStatement, ParseTree, Ranged, Structure};
 
-use super::{SemanticLocal, SemanticReference, scope::SemanticScope, FunctionReference, SemanticFunction, SemanticGenericType, SemanticInterface, SemanticLocalKind, SemanticScopeKind, SemanticStructure, SemanticType, StatementAnalysisState};
+use super::{SemanticLocal, SemanticReference, scope::SemanticScope, FunctionReference, SemanticFunction, SemanticGenericType, SemanticInterface, SemanticLocalKind, SemanticScopeKind, SemanticStructure, SemanticType};
 
 #[derive(Debug)]
 pub struct SemanticContext {
@@ -15,8 +15,6 @@ pub struct SemanticContext {
     pub definition_tracker: Option<HashMap<FileRange, SemanticReference>>,
     pub declaration_tracker: Option<Vec<SemanticReference>>,
     pub value_type_tracker: Option<HashMap<FileRange, SemanticType>>,
-
-    pub statements_state: Vec<StatementAnalysisState>,
 }
 
 impl SemanticContext {
@@ -29,7 +27,6 @@ impl SemanticContext {
             definition_tracker: Some(HashMap::new()),
             declaration_tracker: Some(Vec::new()),
             value_type_tracker: Some(HashMap::new()),
-            statements_state: Vec::new(),
         }
     }
 

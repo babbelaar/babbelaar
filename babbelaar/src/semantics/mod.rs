@@ -23,7 +23,6 @@ pub use self::{
     analysis::{
         SemanticAnalysisPhase,
         SemanticFunctionAnalysis,
-        StatementAnalysisState,
     },
     analyzer::SemanticAnalyzer,
     context::SemanticContext,
@@ -63,6 +62,7 @@ pub use self::{
     type_::{
         SemanticGenericType,
         SemanticType,
+        SemanticTypeResolution,
     },
     value::{
         PureValue,
