@@ -91,7 +91,7 @@
             {
                 "command": "babbelaar.uitvoeren",
                 "icon": "$(run)",
-                "title": "Babbelaar: Bestand uitvoeren"
+                "title": "Babbelaar: Project uitvoeren"
             },
             {
                 "command": "babbelaar.stortAbstracteSyntaxisboom",

@@ -13,11 +13,12 @@ mod ffi;
 mod interpreter;
 mod scope;
 
-use std::{collections::HashMap, fs::{create_dir_all, read_dir}, path::{Path, PathBuf}, process::{exit, Command, Stdio}, time::Instant};
+use std::{collections::HashMap, fs::{create_dir_all, read_dir}, io, path::{Path, PathBuf}, process::{exit, Command, Stdio}, time::Instant};
 
 pub use babbelaar::*;
 use babbelaar_compiler::{Pipeline, Platform};
 use clap::Subcommand;
+use colored::Colorize;
 use env_logger::Env;
 use error::ErrorPrinter;
 
@@ -63,13 +64,13 @@ impl Args {
 #[derive(Subcommand, Debug)]
 enum Commands {
     Bouwen {
-        bestand: PathBuf,
+        map: Option<PathBuf>,
     },
     Debug {
         bestand: PathBuf,
     },
     Uitvoeren {
-        bestand: PathBuf,
+        map: Option<PathBuf>,
     },
 }
 
@@ -78,10 +79,10 @@ fn main() {
     init_logger(&args);
 
     match args.command {
-        Commands::Bouwen { bestand } => {
+        Commands::Bouwen { map } => {
             let start = Instant::now();
 
-            let path = compile(bestand);
+            let path = compile(create_valid_project_directory(map));
 
             println!("Gecompileerd in {}ms naar {}", start.elapsed().as_millis(), path.display());
         }
@@ -89,9 +90,9 @@ fn main() {
         Commands::Debug { bestand } => {
             interpret(&bestand, DebugAdapter::new(bestand.to_string_lossy().to_string()));
         }
-        Commands::Uitvoeren { bestand } => {
-            // interpret(&bestand, ());
-            let path = compile(bestand);
+
+        Commands::Uitvoeren { map } => {
+            let path = compile(create_valid_project_directory(map));
             Command::new(path)
                 .stderr(Stdio::inherit())
                 .stdout(Stdio::inherit())
@@ -101,13 +102,55 @@ fn main() {
     }
 }
 
-fn compile(bestand: PathBuf) -> PathBuf {
-    let files: Vec<(SourceCode, ParseTree)> = read_dir(&bestand.parent().unwrap())
+#[must_use]
+fn create_valid_project_directory(map: Option<PathBuf>) -> PathBuf {
+    let result = if let Some(dir) = map {
+        if !dir.is_dir() {
+            eprintln!("{} Gegeven pad is geen map: {}", "fout:".red().bold(), dir.display());
+            exit(1);
+        }
+
+        dir.canonicalize()
+    } else {
+        std::env::current_dir().and_then(|x| x.canonicalize())
+    };
+
+    match result {
+        Ok(dir) => dir,
+        Err(e) => {
+            eprintln!("{} {e}", "fout:".red().bold());
+
+            match e.kind() {
+                io::ErrorKind::NotFound => {
+                    eprintln!("{} Projectmap bestaat niet. Heb je de huidige map verwijderd?", "tip".blue().bold());
+                }
+
+                _ => (),
+            }
+
+            exit(1);
+        }
+    }
+}
+
+fn compile(map: PathBuf) -> PathBuf {
+    if !map.is_dir() {
+        eprintln!("{} Pad naar projectmap is geen map: {}", "fout:".red().bold(), map.display());
+        exit(1);
+    }
+
+    let files: Vec<(SourceCode, ParseTree)> = read_dir(&map)
         .unwrap()
         .flatten()
         .filter(|x| x.file_name().to_string_lossy().ends_with(".bab"))
         .map(|x| parse(&x.path()))
         .collect();
+
+    if files.is_empty() {
+        eprintln!("{} Geen Babbelaar-bestanden gevonden in deze projectmap.", "fout:".red().bold());
+        eprintln!("{} Map: {}", "fout:".red().bold(), map.display());
+        exit(1);
+    }
 
     analyze(&files);
 
@@ -119,7 +162,7 @@ fn compile(bestand: PathBuf) -> PathBuf {
     pipeline.compile_trees(&trees);
 
     let dir = output_dir();
-    let exec_name = bestand.file_stem().unwrap().to_string_lossy();
+    let exec_name = map.file_name().unwrap().to_string_lossy();
 
     pipeline.create_object(&dir, &exec_name).unwrap();
     pipeline.link_to_executable(&dir, &exec_name).unwrap()
