@@ -19,6 +19,19 @@ class BabbelaarTaskProvider implements TaskProvider<Task> {
 		return [];
 	}
 
+	async createBuild(path: string): Promise<Task> {
+		const task = new Task(
+			{
+				type: "babbelaar",
+				path,
+			},
+			TaskScope.Workspace,
+			path,
+			"babbelaar",
+		);
+		return this.resolveTaskImpl(task, "bouwen");
+	}
+
 	async createRun(path: string): Promise<Task> {
 		const task = new Task(
 			{
@@ -29,18 +42,18 @@ class BabbelaarTaskProvider implements TaskProvider<Task> {
 			path,
 			"babbelaar",
 		);
-		return this.resolveTaskImpl(task);
+		return this.resolveTaskImpl(task, "uitvoeren");
 	}
 
 	resolveTask(task: Task, _token: CancellationToken): ProviderResult<Task> {
-		return this.resolveTaskImpl(task);
+		return this.resolveTaskImpl(task, "uitvoeren");
 	}
 
-	async resolveTaskImpl(task: Task): Promise<Task> {
+	async resolveTaskImpl(task: Task, subcommand: string): Promise<Task> {
 		const command = await ensureCli(this.babbelaar) ?? "babbelaar";
 
 		const path = task.definition["path"] as string;
-		const execution = new ShellExecution(`clear; \"${command.replaceAll(/(?<!\\)"/g, "\"")}\" uitvoeren \"${path.replaceAll(/(?<!\\)"/g, "\"")}\"`, {
+		const execution = new ShellExecution(`clear; \"${command.replaceAll(/(?<!\\)"/g, "\"")}\" ${subcommand} \"${path.replaceAll(/(?<!\\)"/g, "\"")}\"`, {
 			env: {
 				"RUST_BACKTRACE": "1"
 			}
@@ -54,7 +67,7 @@ class BabbelaarTaskProvider implements TaskProvider<Task> {
 			path,
 			'babbelaar',
 			execution
-		  );
+		);
 	}
 }
 

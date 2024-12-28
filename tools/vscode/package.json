@@ -89,6 +89,11 @@
         ],
         "commands": [
             {
+                "command": "babbelaar.bouwen",
+                "icon": "assets/free-icons/hammer.svg",
+                "title": "Babbelaar: Project bouwen"
+            },
+            {
                 "command": "babbelaar.uitvoeren",
                 "icon": "$(run)",
                 "title": "Babbelaar: Project uitvoeren"
@@ -149,6 +154,11 @@
         ],
         "menus": {
             "editor/title": [
+                {
+                    "when": "resourceLangId == babbelaar",
+                    "command": "babbelaar.bouwen",
+                    "group": "navigation"
+                },
                 {
                     "when": "resourceLangId == babbelaar",
                     "command": "babbelaar.uitvoeren",

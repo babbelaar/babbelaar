@@ -18,6 +18,14 @@ const BabbelaarCommands = {
         );
 
         context.ext.subscriptions.push(
+            commands.registerCommand("babbelaar.bouwen", async uri => {
+                let path = workspace.textDocuments[0].uri.fsPath;
+                path = dirname(path);
+                tasks.executeTask(await context.taskProvider!.createBuild(path));
+            })
+        );
+
+        context.ext.subscriptions.push(
             commands.registerCommand("babbelaar.uitvoeren", async uri => {
                 let path = workspace.textDocuments[0].uri.fsPath;
                 path = dirname(path);
