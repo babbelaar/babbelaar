@@ -26,6 +26,8 @@ pub struct AArch64CodeGenerator {
 impl AArch64CodeGenerator {
     #[must_use]
     pub fn compile(function: &Function, platform: Platform) -> CompiledFunction {
+        debug!("Werkwijze `{}` aan het compileren...", function.name());
+
         let characteristics = AArch64FunctionCharacteristics::analyze(function);
 
         let var_args_convention = match platform.environment() {

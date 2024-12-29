@@ -12,9 +12,11 @@ log.workspace = true
 
 babbelaar = { path = "../babbelaar" }
 babbelaar-compiler = { path = "../compiler" }
+anyhow = "1"
 clap.workspace = true
 colored.workspace = true
 env_logger.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 rstest = "0.23"

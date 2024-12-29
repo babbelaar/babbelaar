@@ -517,6 +517,8 @@ fn modulo_known_lhs() {
     assert_eq!(result.exit_code, Some(4), "{result:#?}");
 }
 
+/// TODO: investigate why this test is flaky
+/// run solely it works, but running all tests lets this test specifically crash sometimes
 #[test]
 fn modulo_known_rhs() {
     let result = create_and_run_single_object_executable("

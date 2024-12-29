@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+serde.workspace = true
 strum.workspace = true
 log.workspace = true
 

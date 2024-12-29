@@ -15,6 +15,7 @@ mod scope;
 
 use std::{collections::HashMap, fs::{create_dir_all, read_dir}, io, path::{Path, PathBuf}, process::{exit, Command, Stdio}, time::Instant};
 
+use anyhow::Result;
 pub use babbelaar::*;
 use babbelaar_compiler::{Pipeline, Platform};
 use clap::Subcommand;
@@ -51,13 +52,23 @@ struct Args {
     verbose: bool,
 
     #[arg(short, long)]
-    debug: bool,
+    debug: Option<bool>,
 }
 
 impl Args {
+    #[must_use]
     pub fn parse_args() -> Self {
         use clap::Parser;
         Self::parse()
+    }
+
+    #[must_use]
+    pub fn map(&self) -> Option<&Path> {
+        let map = match &self.command {
+            Commands::Bouwen { map } => map,
+            Commands::Uitvoeren { map } => map,
+        };
+        Some(map.as_ref()?.as_path())
     }
 }
 
@@ -66,9 +77,7 @@ enum Commands {
     Bouwen {
         map: Option<PathBuf>,
     },
-    Debug {
-        bestand: PathBuf,
-    },
+
     Uitvoeren {
         map: Option<PathBuf>,
     },
@@ -76,23 +85,22 @@ enum Commands {
 
 fn main() {
     let args = Args::parse_args();
-    init_logger(&args);
+    let map = create_valid_project_directory(args.map());
+    let config = read_config_file(&map, &args);
+
+    init_logger(&config);
 
     match args.command {
-        Commands::Bouwen { map } => {
+        Commands::Bouwen { .. } => {
             let start = Instant::now();
 
-            let path = compile(create_valid_project_directory(map));
+            let path = compile(map, &config);
 
             println!("Gecompileerd in {}ms naar {}", start.elapsed().as_millis(), path.display());
         }
 
-        Commands::Debug { bestand } => {
-            interpret(&bestand, DebugAdapter::new(bestand.to_string_lossy().to_string()));
-        }
-
-        Commands::Uitvoeren { map } => {
-            let path = compile(create_valid_project_directory(map));
+        Commands::Uitvoeren { .. } => {
+            let path = compile(map, &config);
             Command::new(path)
                 .stderr(Stdio::inherit())
                 .stdout(Stdio::inherit())
@@ -103,7 +111,7 @@ fn main() {
 }
 
 #[must_use]
-fn create_valid_project_directory(map: Option<PathBuf>) -> PathBuf {
+fn create_valid_project_directory(map: Option<&Path>) -> PathBuf {
     let result = if let Some(dir) = map {
         if !dir.is_dir() {
             eprintln!("{} Gegeven pad is geen map: {}", "fout:".red().bold(), dir.display());
@@ -133,7 +141,7 @@ fn create_valid_project_directory(map: Option<PathBuf>) -> PathBuf {
     }
 }
 
-fn compile(map: PathBuf) -> PathBuf {
+fn compile(map: PathBuf, config: &ConfigRoot) -> PathBuf {
     if !map.is_dir() {
         eprintln!("{} Pad naar projectmap is geen map: {}", "fout:".red().bold(), map.display());
         exit(1);
@@ -162,10 +170,9 @@ fn compile(map: PathBuf) -> PathBuf {
     pipeline.compile_trees(&trees);
 
     let dir = output_dir();
-    let exec_name = map.file_name().unwrap().to_string_lossy();
 
-    pipeline.create_object(&dir, &exec_name).unwrap();
-    pipeline.link_to_executable(&dir, &exec_name).unwrap()
+    pipeline.create_object(&dir, &config.project.naam).unwrap();
+    pipeline.link_to_executable(&dir, &config.project.naam).unwrap()
 }
 
 pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
@@ -264,15 +271,11 @@ fn output_dir() -> PathBuf {
     dir
 }
 
-fn init_logger(args: &Args) {
+fn init_logger(config: &ConfigRoot) {
     let mut builder = env_logger::builder();
 
-    if args.debug {
+    if config.log.debug {
         builder.filter(None, log::LevelFilter::Debug);
-    }
-
-    if matches!(args.command, Commands::Debug { .. }) {
-        builder.target(env_logger::Target::Stderr);
     }
 
     let env = Env::default()
@@ -282,4 +285,71 @@ fn init_logger(args: &Args) {
 
 
     builder.init();
+}
+
+#[must_use]
+fn read_config_file(root: &Path, args: &Args) -> ConfigRoot {
+    let mut config = read_config_file_in(root).unwrap();
+
+    if config.project.naam.is_empty() {
+        config.project.naam = root.file_name().unwrap().to_string_lossy().into_owned();
+    }
+
+    if let Some(debug) = args.debug {
+        config.log.debug = debug;
+    }
+
+    config
+}
+
+#[must_use]
+fn read_config_file_in(root: &Path) -> Result<ConfigRoot> {
+    let mut path = root.to_path_buf();
+    path.push("Babbelaar.toml");
+
+    let from_root = try_config_file(&path);
+
+    path.pop();
+    path.push("config");
+    path.push("Babbelaar.toml");
+    let from_config_dir = try_config_file(&path);
+
+    if from_root.as_ref().is_ok_and(Option::is_some) && from_config_dir.as_ref().is_ok_and(Option::is_some) {
+        eprintln!("{} `Babbelaar.toml` bestaat in de hoofdmap en in `config/Babbelaar.toml`!", "fout:     ".red().bold());
+        eprintln!("{} Kies een van de twee opties, allebei kan niet.", "opmerking:".yellow().bold());
+        exit(1);
+    }
+
+    if let Ok(Some(config)) = from_root {
+        return Ok(config);
+    }
+
+    if let Ok(Some(config)) = from_config_dir {
+        return Ok(config);
+    }
+
+    _ = from_root?;
+    _ = from_config_dir?;
+
+    Ok(ConfigRoot::default())
+}
+
+fn try_config_file(path: &Path) -> Result<Option<ConfigRoot>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    match std::fs::read_to_string(&path) {
+        Ok(input) => {
+            Ok(Some(toml::from_str(&input)?))
+        }
+
+        Err(e) => {
+            if e.kind() == io::ErrorKind::NotFound {
+                Ok(None)
+            } else {
+                Err(e.into())
+            }
+        }
+    }
 }

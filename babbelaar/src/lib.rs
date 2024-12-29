@@ -5,6 +5,7 @@
 
 mod ast;
 mod builtin;
+mod config;
 mod constants;
 mod interpreter;
 mod lexer;
@@ -66,6 +67,11 @@ pub use self::{
         BuiltinFunction,
         BuiltinMethodReference,
         BuiltinType,
+    },
+    config::{
+        ConfigRoot,
+        ConfigSectionLog,
+        ConfigSectionProject,
     },
     constants::Constants,
     interpreter::Interpreter,
