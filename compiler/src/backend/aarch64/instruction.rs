@@ -1059,7 +1059,12 @@ impl Display for ArmInstruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AddImmediate { is_64_bit, dst, src, imm12, shift } => {
-                f.write_fmt(format_args!("add {}, {} + #{imm12}", dst.name(is_64_bit), src.name(is_64_bit)))?;
+                f.write_fmt(format_args!("add {}, {}", dst.name(is_64_bit), src.name(is_64_bit)))?;
+
+                if *imm12 != 0 {
+                    f.write_str(" + #")?;
+                    imm12.fmt(f)?;
+                }
 
                 if *shift {
                     f.write_str(", shift 12")?;
@@ -1069,7 +1074,13 @@ impl Display for ArmInstruction {
             }
 
             Self::AddRegister { is_64_bit, dst, lhs, rhs, imm, shift } => {
-                f.write_fmt(format_args!("add {}, {} + {} + #{imm} ({shift:?})", dst.name(is_64_bit), lhs.name(is_64_bit), rhs.name(is_64_bit)))
+                f.write_fmt(format_args!("add {}, {} + {}", dst.name(is_64_bit), lhs.name(is_64_bit), rhs.name(is_64_bit)))?;
+
+                if *imm != 0 {
+                    f.write_fmt(format_args!(" + #{imm} ({shift:?})"))?;
+                }
+
+                Ok(())
             }
 
             Self::Adrp { is_64_bit, dst, imm } => {
@@ -1125,34 +1136,36 @@ impl Display for ArmInstruction {
             }
 
             Self::Ldp { is_64_bit, mode, first, second, src, offset } => {
+                let suffix_offset = FormatSuffixOffset(*offset);
                 match mode {
                     ArmSignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("ldp {}, {}, {}, #{offset}", first.name(is_64_bit), second.name(is_64_bit), src.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldp {}, {}, {}{suffix_offset}", first.name(is_64_bit), second.name(is_64_bit), src.name(is_64_bit)))
                     }
 
                     ArmSignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("ldp {}, {}, [{}, #{offset}]!", first.name(is_64_bit), second.name(is_64_bit), src.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldp {}, {}, [{}{suffix_offset}]!", first.name(is_64_bit), second.name(is_64_bit), src.name(is_64_bit)))
                     }
 
                     ArmSignedAddressingMode::SignedOffset => {
-                        f.write_fmt(format_args!("ldp {}, {}, [{}, #{offset}]", first.name(is_64_bit), second.name(is_64_bit), src.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldp {}, {}, [{}{suffix_offset}]", first.name(is_64_bit), second.name(is_64_bit), src.name(is_64_bit)))
                     }
                 }
             }
 
             Self::LdrByteImmediate { mode, dst, base_ptr, offset } => {
+                let suffix_offset = FormatSuffixOffset(*offset);
                 let is_64_bit = &true;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("ldrb {}, {}, #{offset}", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldrb {}, {}{suffix_offset}", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("ldrb {}, [{}, #{offset}]!", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldrb {}, [{}{suffix_offset}]!", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("ldrb {}, [{}, #{offset}]", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldrb {}, [{}{suffix_offset}]", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
@@ -1163,18 +1176,19 @@ impl Display for ArmInstruction {
             }
 
             Self::LdrHalfImmediate { mode, dst, base_ptr, offset } => {
+                let suffix_offset = FormatSuffixOffset(*offset);
                 let is_64_bit = &true;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("ldrh {}, {}, #{offset}", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldrh {}, {}{suffix_offset}", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("ldrh {}, [{}, #{offset}]!", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldrh {}, [{}{suffix_offset}]!", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("ldrh {}, [{}, #{offset}]", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldrh {}, [{}{suffix_offset}]", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
@@ -1185,17 +1199,18 @@ impl Display for ArmInstruction {
             }
 
             Self::LdrImmediate { is_64_bit, mode, dst, base_ptr, offset } => {
+                let suffix_offset = FormatSuffixOffset(*offset);
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("ldr {}, {}, #{offset}", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldr {}, {}{suffix_offset}", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("ldr {}, [{}, #{offset}]!", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldr {}, [{}{suffix_offset}]!", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("ldr {}, [{}, #{offset}]", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("ldr {}, [{}{suffix_offset}]", dst.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
@@ -1260,34 +1275,36 @@ impl Display for ArmInstruction {
             }
 
             Self::Stp { is_64_bit, dst, offset, first, second, mode } => {
+                let suffix_offset = FormatSuffixOffset(*offset);
                 match mode {
                     ArmSignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("stp {}, {}, {}, #{offset}", first.name(is_64_bit), second.name(is_64_bit), dst.name(is_64_bit)))
+                        f.write_fmt(format_args!("stp {}, {}, {}{suffix_offset}", first.name(is_64_bit), second.name(is_64_bit), dst.name(is_64_bit)))
                     }
 
                     ArmSignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("stp {}, {}, [{}, #{offset}]!", first.name(is_64_bit), second.name(is_64_bit), dst.name(is_64_bit)))
+                        f.write_fmt(format_args!("stp {}, {}, [{}{suffix_offset}]!", first.name(is_64_bit), second.name(is_64_bit), dst.name(is_64_bit)))
                     }
 
                     ArmSignedAddressingMode::SignedOffset => {
-                        f.write_fmt(format_args!("stp {}, {}, [{}, #{offset}]", first.name(is_64_bit), second.name(is_64_bit), dst.name(is_64_bit)))
+                        f.write_fmt(format_args!("stp {}, {}, [{}{suffix_offset}]", first.name(is_64_bit), second.name(is_64_bit), dst.name(is_64_bit)))
                     }
                 }
             }
 
             Self::StrByteImmediate { mode, src, base_ptr, offset } => {
+                let suffix_offset = FormatSuffixOffset(*offset);
                 let is_64_bit = &true;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("strb {}, {}, #{offset}", src.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("strb {}, {}{suffix_offset}", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("strb {}, [{}, #{offset}]!", src.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("strb {}, [{}{suffix_offset}]!", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("strb {}, [{}, #{offset}]", src.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("strb {}, [{}{suffix_offset}]", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
@@ -1298,18 +1315,19 @@ impl Display for ArmInstruction {
             }
 
             Self::StrHalfImmediate { mode, src, base_ptr, offset } => {
+                let suffix_offset = FormatSuffixOffset(*offset);
                 let is_64_bit = &true;
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("strb {}, {}, #{offset}", src.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("strb {}, {}{suffix_offset}", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("strb {}, [{}, #{offset}]!", src.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("strb {}, [{}{suffix_offset}]!", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("strb {}, [{}, #{offset}]", src.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("strb {}, [{}{suffix_offset}]", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
@@ -1320,17 +1338,18 @@ impl Display for ArmInstruction {
             }
 
             Self::StrImmediate { is_64_bit, mode, src, base_ptr, offset } => {
+                let suffix_offset = FormatSuffixOffset(*offset);
                 match mode {
                     ArmUnsignedAddressingMode::PostIndex => {
-                        f.write_fmt(format_args!("str {}, {}, #{offset}", src.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("str {}, {}{suffix_offset}", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::PreIndex => {
-                        f.write_fmt(format_args!("str {}, [{}, #{offset}]!", src.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("str {}, [{}{suffix_offset}]!", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
 
                     ArmUnsignedAddressingMode::UnsignedOffset => {
-                        f.write_fmt(format_args!("str {}, [{}, #{offset}]", src.name(is_64_bit), base_ptr.name(is_64_bit)))
+                        f.write_fmt(format_args!("str {}, [{}{suffix_offset}]", src.name(is_64_bit), base_ptr.name(is_64_bit)))
                     }
                 }
             }
@@ -1353,6 +1372,20 @@ impl Display for ArmInstruction {
 
                 Ok(())
             }
+        }
+    }
+}
+
+struct FormatSuffixOffset<T>(T);
+
+impl<T> Display for FormatSuffixOffset<T>
+        where T: Display + Default + PartialEq + Eq {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0 == T::default() {
+            Ok(())
+        } else {
+            f.write_str(", #")?;
+            self.0.fmt(f)
         }
     }
 }
