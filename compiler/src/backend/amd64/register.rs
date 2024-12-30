@@ -196,15 +196,15 @@ impl AllocatableRegister for Amd64Register {
         match platform.environment() {
             Environment::Darwin => {
                 const REGISTERS: &'static [Amd64Register] = &[
-                    Amd64Register::Rax,
                     Amd64Register::Rdi,
                     Amd64Register::Rsi,
                     Amd64Register::Rdx,
                     Amd64Register::Rcx,
                     Amd64Register::R8,
                     Amd64Register::R9,
-                    Amd64Register::R10,
+                    Amd64Register::Rax,
                     Amd64Register::R11,
+                    Amd64Register::R10,
                 ];
 
                 REGISTERS
@@ -212,15 +212,15 @@ impl AllocatableRegister for Amd64Register {
 
             Environment::Gnu => {
                 const REGISTERS: &'static [Amd64Register] = &[
-                    Amd64Register::Rax,
                     Amd64Register::Rdi,
                     Amd64Register::Rsi,
                     Amd64Register::Rdx,
                     Amd64Register::Rcx,
                     Amd64Register::R8,
                     Amd64Register::R9,
-                    Amd64Register::R10,
+                    Amd64Register::Rax,
                     Amd64Register::R11,
+                    Amd64Register::R10,
                 ];
 
                 REGISTERS

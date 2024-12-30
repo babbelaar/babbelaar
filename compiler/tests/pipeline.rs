@@ -313,6 +313,66 @@ fn return_comparison_value() {
 }
 
 #[test]
+fn multiply_immediate() {
+    let result = create_and_run_single_object_executable("
+        werkwijze hoofd() -> g32 {
+            bekeer 12 * 2;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(24));
+}
+
+#[test]
+fn multiply_unknown_lhs_and_rhs() {
+    let result = create_and_run_single_object_executable("
+        werkwijze keer(a: g32, b: g32) -> g32 {
+            bekeer a * b;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer keer(9, 3);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(27));
+}
+
+#[test]
+fn multiply_known_lhs() {
+    let result = create_and_run_single_object_executable("
+        werkwijze zevenKeerIets(a: g32) -> g32 {
+            bekeer 7 * a;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer zevenKeerIets(5);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(35));
+}
+
+#[test]
+fn multiply_known_rhs() {
+    let result = create_and_run_single_object_executable("
+        werkwijze ietsKeer5(a: g32) -> g32 {
+            bekeer a * 5;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer ietsKeer5(40);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(200));
+}
+
+#[test]
 fn divide_immediate() {
     let result = create_and_run_single_object_executable("
         werkwijze hoofd() -> g32 {

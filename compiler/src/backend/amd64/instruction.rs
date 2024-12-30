@@ -33,6 +33,10 @@ pub enum Amd64Instruction {
     CmpReg32Imm32 { lhs: Amd64Register, rhs: i32 },
     CmpReg32Reg32 { lhs: Amd64Register, rhs: Amd64Register },
 
+    IMulReg32Imm8 { dst: Amd64Register, lhs: Amd64Register, rhs: i8 },
+    IMulReg32Imm32 { dst: Amd64Register, lhs: Amd64Register, rhs: i32 },
+    IMulReg32Reg32 { lhs: Amd64Register, rhs: Amd64Register },
+
     Inc32 { reg: Amd64Register },
 
     Jmp { location: Label },
@@ -136,6 +140,24 @@ impl Amd64Instruction {
             Self::CmpReg32Reg32 { lhs, rhs } => {
                 output.push(0x39);
                 output.push(mod_rm_byte_reg_reg(*lhs, *rhs));
+            }
+
+            Self::IMulReg32Imm8 { dst, lhs, rhs } => {
+                output.push(0x6b);
+                output.push(mod_rm_byte_reg_reg(*lhs, *dst));
+                output.extend_from_slice(&rhs.to_le_bytes());
+            }
+
+            Self::IMulReg32Imm32 { dst, lhs, rhs } => {
+                output.push(0x69);
+                output.push(mod_rm_byte_reg_reg(*lhs, *dst));
+                output.extend_from_slice(&rhs.to_le_bytes());
+            }
+
+            Self::IMulReg32Reg32 { lhs, rhs } => {
+                output.push(0x0F);
+                output.push(0xAF);
+                output.push(mod_rm_byte_reg_reg(*rhs, *lhs));
             }
 
             Self::Inc32 { reg } => {
@@ -347,6 +369,21 @@ impl Display for Amd64Instruction {
 
             Self::CmpReg32Reg32 { lhs, rhs } => {
                 f.write_str("cmp ")?;
+                f.write_str(lhs.name32())?;
+                f.write_str(", ")?;
+                f.write_str(rhs.name32())
+            }
+
+            Self::IMulReg32Imm8 { dst, lhs, rhs } => {
+                f.write_fmt(format_args!("imul {}, {}, 0x{rhs:x}", dst.name32(), lhs.name32()))
+            }
+
+            Self::IMulReg32Imm32 { dst, lhs, rhs } => {
+                f.write_fmt(format_args!("imul {}, {}, 0x{rhs:x}", dst.name32(), lhs.name32()))
+            }
+
+            Self::IMulReg32Reg32 { lhs, rhs } => {
+                f.write_str("imul ")?;
                 f.write_str(lhs.name32())?;
                 f.write_str(", ")?;
                 f.write_str(rhs.name32())
@@ -577,11 +614,41 @@ mod tests {
         Amd64Instruction::NegReg64 { dst: Amd64Register::Rsi },
         [ 0x48, 0xf7, 0xde ].to_vec(),
     )]
+    #[case(
+        Amd64Instruction::IMulReg32Reg32 {
+            lhs: Amd64Register::Rax,
+            rhs: Amd64Register::Rsi,
+        },
+        [ 0x0f, 0xaf, 0xc6 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::IMulReg32Reg32 {
+            lhs: Amd64Register::Rax,
+            rhs: Amd64Register::Rdi,
+        },
+        [ 0x0f, 0xaf, 0xc7 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::IMulReg32Imm8 {
+            dst: Amd64Register::Rax,
+            lhs: Amd64Register::Rdi,
+            rhs: 0x34
+        },
+        [ 0x6b, 0xc7, 0x34 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::IMulReg32Imm32 {
+            dst: Amd64Register::Rax,
+            lhs: Amd64Register::Rdi,
+            rhs: 0x12345678
+        },
+        [ 0x69, 0xc7, 0x78, 0x56, 0x34, 0x12 ].to_vec(),
+    )]
     fn check_encoding(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
         input.encode(&mut actual, 0, &HashMap::new());
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual, expected, "{actual:#x?}");
     }
 
     #[rstest]
