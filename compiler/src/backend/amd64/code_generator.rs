@@ -446,11 +446,14 @@ impl Amd64CodeGenerator {
                 let lhs = self.allocate_register(lhs);
                 let rhs = self.allocate_register(rhs);
 
-                if lhs != dst {
+                if rhs == dst {
+                    self.instructions.push(Amd64Instruction::AddReg32Reg32 { dst, src: lhs })
+                } else if lhs == dst {
+                    self.instructions.push(Amd64Instruction::AddReg32Reg32 { dst, src: rhs })
+                } else {
                     self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
+                    self.instructions.push(Amd64Instruction::AddReg32Reg32 { dst, src: rhs })
                 }
-
-                self.instructions.push(Amd64Instruction::AddReg32Reg32 { dst, src: rhs })
             }
 
             _ => todo!("Support add of {lhs}, {rhs}"),
