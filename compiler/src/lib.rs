@@ -51,6 +51,7 @@ pub use self::{
     },
     memory::{
         FieldLayout,
+        StackAllocator,
         StructureLayout,
         TypeId,
         TypeInfo,

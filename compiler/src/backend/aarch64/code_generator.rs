@@ -6,9 +6,9 @@ use std::{collections::HashMap, mem::take};
 use babbelaar::BabString;
 use log::{debug, warn};
 
-use crate::{backend::aarch64::AArch64VarArgsConvention, CodeGenerator, CompiledFunction, Environment, Function, Immediate, Instruction, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
+use crate::{backend::aarch64::AArch64VarArgsConvention, CodeGenerator, CompiledFunction, Environment, Function, Immediate, Instruction, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType, StackAllocator};
 
-use super::{AArch64FunctionCharacteristics, AArch64Optimizer, AArch64StackAllocator, ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode, POINTER_SIZE, SPACE_NEEDED_FOR_FP_AND_LR};
+use super::{AArch64FunctionCharacteristics, AArch64Optimizer, ArmBranchLocation, ArmConditionCode, ArmInstruction, ArmRegister, ArmShift2, ArmSignedAddressingMode, ArmUnsignedAddressingMode, POINTER_SIZE, SPACE_NEEDED_FOR_FP_AND_LR};
 
 #[derive(Debug)]
 pub struct AArch64CodeGenerator {
@@ -17,7 +17,7 @@ pub struct AArch64CodeGenerator {
     instructions: Vec<ArmInstruction>,
     label_offsets: HashMap<Label, usize>,
     register_allocator: RegisterAllocator<ArmRegister>,
-    stack_allocator: AArch64StackAllocator,
+    stack_allocator: StackAllocator,
     relocations: Vec<Relocation>,
 
     var_args_convention: AArch64VarArgsConvention,
@@ -38,8 +38,8 @@ impl AArch64CodeGenerator {
             characteristics,
             instructions: Vec::new(),
             label_offsets: HashMap::new(),
-            register_allocator: RegisterAllocator::new(platform, function),
-            stack_allocator: AArch64StackAllocator::new(),
+            register_allocator: RegisterAllocator::new(platform.clone(), function),
+            stack_allocator: StackAllocator::new(platform),
             relocations: Vec::new(),
             var_args_convention,
         };

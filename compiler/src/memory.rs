@@ -1,11 +1,15 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+mod stack_allocator;
+
 use std::{collections::HashMap, rc::Rc};
 
 use babbelaar::{BabString, Builtin, BuiltinType, Expression, Structure, Type};
 
 use crate::PrimitiveType;
+
+pub use self::stack_allocator::StackAllocator;
 
 #[derive(Debug, Clone)]
 pub struct FieldLayout {

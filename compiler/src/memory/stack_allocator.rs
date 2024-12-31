@@ -3,24 +3,21 @@
 
 use log::debug;
 
-use crate::Register;
-
-use super::{
-    POINTER_SIZE,
-    STACK_ALIGNMENT,
-};
+use crate::{Platform, Register};
 
 #[derive(Debug)]
-pub struct AArch64StackAllocator {
+pub struct StackAllocator {
+    platform: Platform,
     allocations: Vec<StackAllocation>,
     total_size: usize,
     is_finalized: bool,
 }
 
-impl AArch64StackAllocator {
+impl StackAllocator {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(platform: Platform) -> Self {
         Self {
+            platform,
             allocations: Vec::new(),
             total_size: 0,
             is_finalized: false,
@@ -68,7 +65,7 @@ impl AArch64StackAllocator {
     pub fn reserve_callee_saved_registers(&mut self, registers_to_save: usize) {
         debug_assert!(!self.is_finalized, "Kan de stapel niet aanpassen na finalisering!");
 
-        let size = (registers_to_save * POINTER_SIZE).next_multiple_of(STACK_ALIGNMENT);
+        let size = (registers_to_save * self.platform.architecture().pointer_size()).next_multiple_of(self.platform.architecture().stack_alignment());
 
         self.allocations.push(StackAllocation::CalleeRegisterSave {
             size,
@@ -149,7 +146,7 @@ impl AArch64StackAllocator {
     }
 }
 
-impl AArch64StackAllocator {
+impl StackAllocator {
     fn lay_out_var_args(&mut self) {
         let mut max_size = 0;
 
@@ -188,7 +185,7 @@ impl AArch64StackAllocator {
     }
 
     fn lay_out_register_saves(&mut self) {
-        self.total_size = self.total_size.next_multiple_of(STACK_ALIGNMENT);
+        self.total_size = self.total_size.next_multiple_of(self.platform.architecture().stack_alignment());
 
         let mut max_size = 0;
 
@@ -205,7 +202,7 @@ impl AArch64StackAllocator {
             }
         }
 
-        let size = max_size.next_multiple_of(STACK_ALIGNMENT);
+        let size = max_size.next_multiple_of(self.platform.architecture().stack_alignment());
         debug!("Stapelallocatie: aangeroepenregisters worden opgeslagen op afstand {} met grootte {size}", self.total_size);
         self.total_size += size;
     }

@@ -45,6 +45,22 @@ impl Architecture {
 
         None
     }
+
+    #[must_use]
+    pub const fn pointer_size(&self) -> usize {
+        match self {
+            Self::AArch64 => 8,
+            Self::X86_64 => 8,
+        }
+    }
+
+    #[must_use]
+    pub const fn stack_alignment(&self) -> usize {
+        match self {
+            Self::AArch64 => 16,
+            Self::X86_64 => 4,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

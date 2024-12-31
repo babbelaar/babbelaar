@@ -14,10 +14,8 @@ mod function_characteristics;
 mod instruction;
 mod optimizer;
 mod register;
-mod stack_allocator;
 
 const POINTER_SIZE: usize = 8;
-const STACK_ALIGNMENT: usize = 16;
 
 const SPACE_NEEDED_FOR_FP_AND_LR: usize = 2 * POINTER_SIZE;
 
@@ -39,5 +37,4 @@ pub use self::{
     },
     optimizer::AArch64Optimizer,
     register::ArmRegister,
-    stack_allocator::AArch64StackAllocator,
 };
