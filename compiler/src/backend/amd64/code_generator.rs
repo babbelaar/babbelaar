@@ -6,7 +6,7 @@ use std::{collections::HashMap, mem::take};
 use babbelaar::BabString;
 use log::{debug, warn};
 
-use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, Immediate, Instruction, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
+use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, Immediate, Instruction, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType, StackAllocator};
 
 use super::{Amd64ConditionCode, Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
 
@@ -18,8 +18,7 @@ pub struct Amd64CodeGenerator {
     instructions: Vec<Amd64Instruction>,
     label_offsets: HashMap<Label, usize>,
     register_allocator: RegisterAllocator<Amd64Register>,
-    stack_size: usize,
-    space_used_on_stack: usize,
+    stack_allocator: StackAllocator,
     relocations: Vec<Relocation>,
 }
 
@@ -33,16 +32,15 @@ impl Amd64CodeGenerator {
             instructions: Vec::new(),
             label_offsets: HashMap::new(),
             register_allocator: RegisterAllocator::new(platform.clone(), function),
-            stack_size: 0,
-            space_used_on_stack: 0,
+            stack_allocator: StackAllocator::new(platform.clone()),
             relocations: Vec::new(),
             platform,
         };
 
         this.add_prologue(function.instructions());
 
-        for instruction in function.instructions() {
-            this.add_instruction(instruction);
+        for (instruction_id, instruction) in function.instructions().iter().enumerate() {
+            this.add_instruction(instruction, instruction_id);
         }
 
         this.dump_instructions();
@@ -66,7 +64,7 @@ impl Amd64CodeGenerator {
         }
     }
 
-    fn add_instruction(&mut self, instruction: &Instruction) {
+    fn add_instruction(&mut self, instruction: &Instruction, instruction_id: usize) {
         match instruction {
             Instruction::Compare { lhs, rhs } => {
                 let lhs = self.allocate_register(lhs);
@@ -224,8 +222,8 @@ impl Amd64CodeGenerator {
             }
 
             Instruction::StackAlloc { dst, size } => {
-                let offset = self.space_used_on_stack;
-                self.space_used_on_stack += size;
+                let offset = self.stack_allocator.offset_of_reg(instruction_id);
+                _ = size;
 
                 let dst = self.allocate_register(dst);
 
@@ -308,36 +306,47 @@ impl Amd64CodeGenerator {
     }
 
     fn add_prologue(&mut self, instructions: &[Instruction]) {
-        self.stack_size = 0;
+        for reg in self.register_allocator.callee_saved_registers_to_save().iter().cloned() {
+            self.instructions.push(Amd64Instruction::PushReg64 { reg });
+        }
 
-        for instruction in instructions {
-            if let Instruction::StackAlloc { size, .. } = instruction {
-                self.stack_size += *size;
+        for (instruction_id, instruction) in instructions.iter().enumerate() {
+            if let Instruction::StackAlloc { dst, size, .. } = instruction {
+                self.stack_allocator.reserve_stack_allocation(instruction_id, *dst, *size);
             }
         }
 
-        if self.stack_size == 0 && self.characteristics.is_leaf_function() {
-            // Omit frame pointer
-            return;
+        self.stack_allocator.finalize();
+
+        if !self.characteristics.is_leaf_function() {
+            self.instructions.push(Amd64Instruction::PushReg64 { reg: Amd64Register::Rbp });
+            self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: Amd64Register::Rbp, src: Amd64Register::Rsp });
         }
 
-        self.instructions.push(Amd64Instruction::PushReg64 { reg: Amd64Register::Rbp });
-        self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: Amd64Register::Rbp, src: Amd64Register::Rsp });
-
-        if self.stack_size == 0 {
-            return;
+        if self.stack_allocator.total_size() != 0 {
+            self.instructions.push(Amd64Instruction::SubReg64Imm8 {
+                dst: Amd64Register::Rsp,
+                src: self.stack_allocator.total_size().try_into().unwrap(),
+            });
         }
-
-        self.instructions.push(Amd64Instruction::SubReg64Imm8 { dst: Amd64Register::Rsp, src: self.stack_size.try_into().unwrap() });
     }
 
     fn add_epilogue(&mut self) {
-        if self.stack_size == 0 && self.characteristics.is_leaf_function() {
-            return;
+        if self.stack_allocator.total_size() != 0 {
+            self.instructions.push(Amd64Instruction::SubReg64Imm8 {
+                dst: Amd64Register::Rsp,
+                src: self.stack_allocator.total_size().try_into().unwrap(),
+            });
         }
 
-        self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: Amd64Register::Rsp, src: Amd64Register::Rbp });
-        self.instructions.push(Amd64Instruction::PopReg64 { reg: Amd64Register::Rbp });
+        if !self.characteristics.is_leaf_function() {
+            self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: Amd64Register::Rsp, src: Amd64Register::Rbp });
+            self.instructions.push(Amd64Instruction::PopReg64 { reg: Amd64Register::Rbp });
+        }
+
+        for reg in self.register_allocator.callee_saved_registers_to_save().iter().rev().cloned() {
+            self.instructions.push(Amd64Instruction::PopReg64 { reg });
+        }
     }
 
     #[must_use]

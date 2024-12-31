@@ -149,9 +149,21 @@ impl LifetimeBasedCodeMover {
         for info in register_info.values() {
             let Some(first_read) = info.first_read else { continue };
 
+            let mut to = first_read;
+
+            for write_idx in &info.writes {
+                if *write_idx > first_read {
+                    continue;
+                }
+
+                if to > *write_idx {
+                    to = *write_idx;
+                }
+            }
+
             if self.can_move_writing_register(info, first_read, &cfg, &function) {
                 moves.push(Motion {
-                    to: first_read,
+                    to,
                     from: info.first_init,
                 });
             }

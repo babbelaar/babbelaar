@@ -196,6 +196,10 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
             }
         }
         debug!("");
+        debug!("We moeten {} registers opslaan:", self.registers_to_save.len());
+        for reg in &self.registers_to_save {
+            debug!("    {}", reg.display());
+        }
     }
 
     /// TODO: this is a hack! We should instead try to avoid situations in which
