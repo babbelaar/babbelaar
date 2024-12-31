@@ -1,11 +1,13 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+mod code_motion;
 mod dead_code;
 mod register;
 mod strength;
 mod string;
 
+use code_motion::LifetimeBasedCodeMover;
 use dead_code::DeadCodeEliminator;
 use log::debug;
 use strength::StrengthReductor;
@@ -57,7 +59,9 @@ pub fn optimize_program(program: &mut Program) {
 }
 
 fn optimize_function(function: &mut Function, ctx: &mut OptimizationContext) {
+    debug!("Optimizing function `{}`", function.name());
     run_optimization::<RegisterInliner>(function, ctx);
+    run_optimization::<LifetimeBasedCodeMover>(function, ctx);
     run_optimization::<StringOptimizer>(function, ctx);
     run_optimization::<RegisterInliner>(function, ctx);
     run_optimization::<StrengthReductor>(function, ctx);

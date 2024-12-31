@@ -9,6 +9,8 @@ pub struct RegisterLifetime {
     last_use: usize,
     times_used_as_return: usize,
     times_used_between_calls: usize,
+    times_used_as_argument: usize,
+    used_as_nth_argument: Option<usize>,
     last_loop_index: Option<usize>,
 }
 
@@ -20,6 +22,8 @@ impl RegisterLifetime {
             last_use: index,
             times_used_as_return: 0,
             times_used_between_calls: 0,
+            times_used_as_argument: 0,
+            used_as_nth_argument: None,
             last_loop_index: None,
         }
     }
@@ -51,6 +55,16 @@ impl RegisterLifetime {
     }
 
     #[must_use]
+    pub fn times_used_as_argument(&self) -> usize {
+        self.times_used_as_argument
+    }
+
+    #[must_use]
+    pub fn used_as_nth_argument(&self) -> Option<usize> {
+        self.used_as_nth_argument
+    }
+
+    #[must_use]
     pub fn last_loop_index(&self) -> Option<usize> {
         self.last_loop_index
     }
@@ -61,6 +75,16 @@ impl RegisterLifetime {
 
     pub fn did_use_between_calls(&mut self) {
         self.times_used_between_calls += 1;
+    }
+
+    pub fn did_use_for_argument(&mut self, arg_idx: usize) {
+        self.times_used_as_argument += 1;
+
+        self.used_as_nth_argument = if self.times_used_as_argument == 1 {
+            Some(arg_idx)
+        } else {
+            None
+        };
     }
 
     pub fn did_use_during_loop(&mut self, range: Range<usize>) {

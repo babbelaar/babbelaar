@@ -169,6 +169,134 @@ impl Instruction {
             Self::Call { ret_val_reg, .. } => *ret_val_reg,
         }
     }
+
+    /// TODO: investigate if the use of a Vec here is slow.
+    #[must_use]
+    pub fn source_registers(&self) -> Vec<Register> {
+        let mut result = Vec::new();
+
+        match self {
+            Self::Compare { lhs, rhs } => {
+                result.push(*lhs);
+                if let Operand::Register(rhs) = rhs {
+                    result.push(*rhs);
+                }
+            }
+
+            Self::Increment { register } => {
+                _ = register;
+            }
+
+            Self::InitArg { destination, arg_idx } => {
+                _ = arg_idx;
+                _ = destination;
+            }
+
+            Self::Move { destination, source } => {
+                _ = destination;
+
+                if let Operand::Register(source) = source {
+                    result.push(*source);
+                }
+            }
+
+            Self::MoveAddress { destination, offset } => {
+                _ = offset;
+                _ = destination;
+            }
+
+            Self::MoveCondition { destination, condition } => {
+                _ = condition;
+                _ = destination;
+            }
+
+            Self::Call { name, arguments, variable_arguments, ret_val_reg } => {
+                _ = name;
+
+                for arg in arguments {
+                    result.push(arg.register());
+                }
+
+                for arg in variable_arguments {
+                    result.push(arg.register());
+                }
+
+                _ = ret_val_reg;
+            }
+
+            Self::Jump { location } => {
+                _ = location;
+            }
+
+            Self::JumpConditional { condition, location } => {
+                _ = condition;
+                _ = location;
+            }
+
+            Self::Label(label) => {
+                _ = label;
+            }
+
+            Self::Return { value_reg } => {
+                if let Some(value_reg) = value_reg {
+                    result.push(*value_reg);
+                }
+            }
+
+            Self::MathOperation { operation, destination, lhs, rhs } => {
+                _ = operation;
+
+                _ = destination;
+
+                if let Operand::Register(lhs) = lhs {
+                    result.push(*lhs);
+                }
+
+                if let Operand::Register(rhs) = rhs {
+                    result.push(*rhs);
+                }
+            }
+
+            Self::Negate { dst, src } => {
+                _ = dst;
+                result.push(*src);
+            }
+
+            Self::StackAlloc { dst, size } => {
+                _ = dst;
+                _ = size;
+            }
+
+            Self::LoadPtr { destination, base_ptr, offset, typ } => {
+                _ = typ;
+                _ = destination;
+                result.push(*base_ptr);
+
+                if let Operand::Register(offset) = offset {
+                    result.push(*offset);
+                }
+            }
+
+            Self::StorePtr { base_ptr, offset, value, typ } => {
+                _ = typ;
+
+                result.push(*base_ptr);
+
+                if let Operand::Register(offset) = offset {
+                    result.push(*offset);
+                }
+
+                result.push(*value);
+            }
+        }
+
+        result
+    }
+
+    #[must_use]
+    pub fn is_call(&self) -> bool {
+        matches!(self, Self::Call { .. })
+    }
 }
 
 impl Display for Instruction {

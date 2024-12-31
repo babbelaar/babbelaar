@@ -24,7 +24,9 @@ pub use self::{
     },
     register_allocation::{
         AllocatableRegister,
+        LifeAnalysis,
         RegisterAllocator,
+        RegisterLifetime,
     },
     relocation::{
         Relocation,

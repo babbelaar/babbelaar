@@ -104,8 +104,9 @@ impl LifeAnalysis {
                 if let Some(ret_val_reg) = ret_val_reg {
                     self.add_lifetime(ret_val_reg, index);
                 }
-                for arg in arguments.iter().chain(variable_arguments.iter()) {
-                    self.add_lifetime(&arg.register(), index);
+                for (idx, arg) in arguments.iter().chain(variable_arguments.iter()).enumerate() {
+                    self.add_lifetime(&arg.register(), index)
+                        .did_use_for_argument(idx);
                 }
 
                 self.add_call(index);
@@ -240,6 +241,9 @@ impl LifeAnalysisResult {
             }
             if lifetime.times_used_between_calls() != 0 {
                 debug!("    and was used {}x between subroutine calls", lifetime.times_used_between_calls());
+            }
+            if lifetime.times_used_as_argument() != 0 {
+                debug!("    and was used {}x as an argument to a function", lifetime.times_used_as_argument());
             }
             if let Some(idx) = lifetime.last_loop_index() {
                 debug!("    and was used during loop ending at {idx}");

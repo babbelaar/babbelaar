@@ -11,9 +11,8 @@ mod allocatable_register;
 mod life_analysis;
 mod register_lifetime;
 
-pub use self::allocatable_register::AllocatableRegister;
-
-use self::{
+pub use self::{
+    allocatable_register::AllocatableRegister,
     life_analysis::LifeAnalysis,
     register_lifetime::RegisterLifetime,
 };
@@ -128,6 +127,33 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                     }
 
                     panic!("Spilled!")
+                }
+
+                if let Some(argument_idx) = lifetime.used_as_nth_argument() {
+                    let arg = R::argument_nth(&self.platform, argument_idx);
+
+                    if let Some((prev_avail_register, _)) = register_available_after_this_instruction.iter().find(|(_, reg)| *reg == arg) {
+                        self.currently_mapped.remove(prev_avail_register);
+
+                        self.map(*reg, arg);
+                        debug!("Nicely mapping argument to register {arg:?} ({reg})");
+                        continue;
+                    }
+
+                    let available = self.currently_available.iter()
+                        .enumerate()
+                        .filter(|(_, reg)| **reg == arg)
+                        .map(|(idx, _)| idx)
+                        .next();
+
+                    if let Some(available_idx) = available {
+                        self.currently_available.remove(available_idx);
+                        self.map(*reg, arg);
+                        debug!("Nicely mapping argument to register {arg:?} ({reg})");
+                        continue;
+                    } else {
+                        debug!("Argument not nicely mapped because it isn't available: {arg:?} ({reg})");
+                    }
                 }
 
                 if let Some((prev_avail_register, available_register)) = register_available_after_this_instruction.first() {
