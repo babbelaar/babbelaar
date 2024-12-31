@@ -6,7 +6,7 @@ use std::{collections::HashMap, mem::take};
 use babbelaar::BabString;
 use log::{debug, warn};
 
-use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
+use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, Immediate, Instruction, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType};
 
 use super::{Amd64ConditionCode, Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
 
@@ -112,9 +112,11 @@ impl Amd64CodeGenerator {
             }
 
             Instruction::MoveCondition { destination, condition } => {
-                _ = destination;
-                _ = condition;
-                todo!("Maak AMD64-ondersteuning voor: {instruction}");
+                let dst = self.allocate_register(destination);
+                self.instructions.push(Amd64Instruction::SetCC {
+                    dst,
+                    condition: Amd64ConditionCode::from(*condition),
+                })
             }
 
             Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
@@ -156,15 +158,7 @@ impl Amd64CodeGenerator {
             Instruction::JumpConditional { condition, location } => {
                 let location = *location;
 
-                let condition = match condition {
-                    JumpCondition::Equal => Amd64ConditionCode::Equal,
-                    JumpCondition::Greater => Amd64ConditionCode::Greater,
-                    JumpCondition::GreaterOrEqual => Amd64ConditionCode::GreaterOrEqual,
-                    JumpCondition::Less => Amd64ConditionCode::Less,
-                    JumpCondition::LessOrEqual => Amd64ConditionCode::LessOrEqual,
-                    JumpCondition::NotEqual => Amd64ConditionCode::NotEqual,
-
-                };
+                let condition = Amd64ConditionCode::from(*condition);
                 self.instructions.push(Amd64Instruction::JccShort { location, condition });
             }
 
@@ -176,6 +170,7 @@ impl Amd64CodeGenerator {
                 let src = Amd64Register::argument_nth(&self.platform, *arg_idx);
                 let dst = self.allocate_register(destination);
                 if src != dst {
+                    println!("InitArg {destination}, {arg_idx} => mov {dst}, {src}");
                     self.instructions.push(Amd64Instruction::MovReg64Reg64 {
                         dst,
                         src,
@@ -416,7 +411,8 @@ impl Amd64CodeGenerator {
 
     fn add_instruction_add(&mut self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
         match (lhs, rhs) {
-            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
+            (Operand::Register(lhs), Operand::Immediate(rhs))
+                | (Operand::Immediate(rhs), Operand::Register(lhs))=> {
                 let lhs = self.allocate_register(lhs);
 
                 if lhs != dst {

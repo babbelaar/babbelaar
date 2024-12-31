@@ -3,6 +3,8 @@
 
 use std::fmt::Display;
 
+use crate::JumpCondition;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Amd64ConditionCode {
     Equal,
@@ -25,6 +27,18 @@ impl Amd64ConditionCode {
             Self::NotEqual => 0x75,
         }
     }
+
+    #[must_use]
+    pub const fn setcc_op_code_part(&self) -> u8 {
+        match self {
+            Self::Equal => 0x94,
+            Self::Greater => 0x9F,
+            Self::GreaterOrEqual => 0x9D,
+            Self::Less => 0x9C,
+            Self::LessOrEqual => 0x9E,
+            Self::NotEqual => 0x95,
+        }
+    }
 }
 
 impl Display for Amd64ConditionCode {
@@ -36,6 +50,19 @@ impl Display for Amd64ConditionCode {
             Self::Less => f.write_str("l"),
             Self::LessOrEqual => f.write_str("le"),
             Self::NotEqual => f.write_str("ne"),
+        }
+    }
+}
+
+impl From<JumpCondition> for Amd64ConditionCode {
+    fn from(value: JumpCondition) -> Self {
+        match value {
+            JumpCondition::Equal => Amd64ConditionCode::Equal,
+            JumpCondition::Greater => Amd64ConditionCode::Greater,
+            JumpCondition::GreaterOrEqual => Amd64ConditionCode::GreaterOrEqual,
+            JumpCondition::Less => Amd64ConditionCode::Less,
+            JumpCondition::LessOrEqual => Amd64ConditionCode::LessOrEqual,
+            JumpCondition::NotEqual => Amd64ConditionCode::NotEqual,
         }
     }
 }

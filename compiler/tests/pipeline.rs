@@ -128,6 +128,27 @@ fn return_1_plus_1_with_subroutine_in_between() {
 }
 
 #[test]
+fn use_variables_after_subroutine() {
+    let result = create_and_run_single_object_executable("
+        werkwijze krijgB() -> g32 { bekeer 2; }
+        werkwijze krijgC() -> g32 { bekeer 3; }
+        werkwijze krijgE() -> g32 { bekeer 5; }
+
+        werkwijze hoofd() -> g32 {
+            stel a = 1;
+            stel b = krijgB();
+            stel c = krijgC();
+            stel d = 4;
+            stel e = krijgE();
+            bekeer a + c + b + d + e + 6;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(21));
+}
+
+#[test]
 fn return_8_if_5_is_equal_to_5() {
     let result = create_and_run_single_object_executable("
         werkwijze hoofd() -> g32 {
@@ -301,6 +322,26 @@ fn return_comparison_value() {
     let result = create_and_run_single_object_executable("
         werkwijze bekeerAls5(a: g32) -> g32 {
             bekeer a == 5;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer bekeerAls5(5234) + bekeerAls5(5) + bekeerAls5(550);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(1));
+}
+
+#[test]
+fn pass_comparison_value() {
+    let result = create_and_run_single_object_executable("
+        werkwijze bekeerResultaat(_negeer: g32, a: g32) -> g32 {
+            bekeer a;
+        }
+
+        werkwijze bekeerAls5(a: g32) -> g32 {
+            bekeer bekeerResultaat(123, a == 5);
         }
 
         werkwijze hoofd() -> g32 {

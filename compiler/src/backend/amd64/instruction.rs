@@ -90,6 +90,8 @@ pub enum Amd64Instruction {
 
     ReturnNear,
 
+    SetCC { dst: Amd64Register, condition: Amd64ConditionCode },
+
     SubReg32Imm8 { dst: Amd64Register, src: i8 },
     SubReg64Imm8 { dst: Amd64Register, src: i8 },
     SubReg32Reg32 { dst: Amd64Register, src: Amd64Register },
@@ -323,6 +325,12 @@ impl Amd64Instruction {
 
             Self::ReturnNear => output.push(0xc3),
 
+            Self::SetCC { dst, condition } => {
+                output.push(0x0f);
+                output.push(condition.setcc_op_code_part());
+                output.push(mod_rm_byte_reg(*dst));
+            }
+
             Self::SubReg32Imm8 { dst, src } => {
                 output.push(0x83);
                 output.push(mod_rm_byte_extra_op(5, *dst));
@@ -483,6 +491,10 @@ impl Display for Amd64Instruction {
             }
 
             Self::ReturnNear => f.write_str("ret"),
+
+            Self::SetCC { dst, condition } => {
+                f.write_fmt(format_args!("set{condition}, {}", dst.name8()))
+            }
 
             Self::SubReg32Imm8 { dst, src } => {
                 f.write_fmt(format_args!("sub {}, 0x{src:x}", dst.name32()))
