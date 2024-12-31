@@ -132,6 +132,11 @@ impl Amd64Register {
             (Amd64RegisterNameMode::Byte, Self::R15) => "r15b",
         }
     }
+
+    #[must_use]
+    pub fn is_64_extended_register(&self) -> bool {
+        *self as u8 >= Self::R8 as u8
+    }
 }
 
 impl AllocatableRegister for Amd64Register {
