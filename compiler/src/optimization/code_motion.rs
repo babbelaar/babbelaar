@@ -76,6 +76,10 @@ impl LifetimeBasedCodeMover {
             debug!("We checken: {instruction}");
             let loops_of_this_instruction: Vec<&Range<usize>> = cfg.loop_ranges().iter().filter(|range| range.contains(&index)).collect();
 
+            if instruction.source_registers().is_empty() {
+                continue;
+            }
+
             let mut minimum_pos = 0;
 
             if instruction.is_call() {
@@ -104,6 +108,18 @@ impl LifetimeBasedCodeMover {
                     debug!("    Nieuwe pos: {minimum_pos} wegens register {register}");
                 } else {
                     debug_assert!(false, "Deze register zou geschreven moeten zijn voordat hij gebruikt kan worden?");
+                }
+            }
+
+            // Check that we don't screw up other insertions
+            if let Some(dst_info) = instruction.destination_register().and_then(|reg| register_info.get(&reg)) {
+                for write in &dst_info.writes {
+                    // It is earlier than this one, so we're good
+                    if *write < minimum_pos {
+                        continue;
+                    }
+
+                    minimum_pos = *write;
                 }
             }
 
@@ -151,8 +167,13 @@ impl LifetimeBasedCodeMover {
 
             let mut to = first_read;
 
+            // if there are other writes, we can't move them further down...
             for write_idx in &info.writes {
                 if *write_idx > first_read {
+                    continue;
+                }
+
+                if *write_idx == info.first_init {
                     continue;
                 }
 
