@@ -6,7 +6,6 @@
 pub use babbelaar::*;
 
 mod data;
-mod debug_adapter;
 mod debugger;
 mod error;
 mod ffi;
@@ -20,7 +19,6 @@ pub use self::{
         InterpreterInterface,
         InterpreterStructure,
     },
-    debug_adapter::DebugAdapter,
     debugger::{
         Debugger,
         DebuggerFunction,
