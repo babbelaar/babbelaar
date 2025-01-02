@@ -146,7 +146,7 @@ impl AllocatableRegister for Amd64Register {
     }
 
     fn count() -> usize {
-        todo!()
+        24
     }
 
     fn callee_saved_registers(platform: &Platform) -> &'static [Amd64Register] {
