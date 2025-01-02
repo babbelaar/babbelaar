@@ -1059,12 +1059,7 @@ impl Display for ArmInstruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AddImmediate { is_64_bit, dst, src, imm12, shift } => {
-                f.write_fmt(format_args!("add {}, {}", dst.name(is_64_bit), src.name(is_64_bit)))?;
-
-                if *imm12 != 0 {
-                    f.write_str(" + #")?;
-                    imm12.fmt(f)?;
-                }
+                f.write_fmt(format_args!("add {}, {} + #{imm12}", dst.name(is_64_bit), src.name(is_64_bit)))?;
 
                 if *shift {
                     f.write_str(", shift 12")?;

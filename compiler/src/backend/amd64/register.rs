@@ -247,8 +247,8 @@ impl AllocatableRegister for Amd64Register {
         }
     }
 
-    fn argument_nth(platform: &Platform, n: usize) -> Self {
-        match platform.environment() {
+    fn argument_nth_opt(platform: &Platform, n: usize) -> Option<Self> {
+        Some(match platform.environment() {
             Environment::Darwin => {
                 match n {
                     0 => Self::Rdi,
@@ -257,7 +257,7 @@ impl AllocatableRegister for Amd64Register {
                     3 => Self::Rcx,
                     4 => Self::R8,
                     5 => Self::R9,
-                    _ => todo!("Argument {n}?"),
+                    _ => return None,
                 }
             }
 
@@ -269,7 +269,7 @@ impl AllocatableRegister for Amd64Register {
                     3 => Self::Rcx,
                     4 => Self::R8,
                     5 => Self::R9,
-                    _ => todo!("Argument {n}?"),
+                    _ => return None,
                 }
             }
 
@@ -279,10 +279,10 @@ impl AllocatableRegister for Amd64Register {
                     1 => Self::Rdx,
                     2 => Self::R8,
                     3 => Self::R9,
-                    _ => todo!("Argument {n}?"),
+                    _ => return None,
                 }
             }
-        }
+        })
     }
 
     fn display(&self) -> impl Display {

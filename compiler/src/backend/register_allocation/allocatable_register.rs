@@ -21,7 +21,12 @@ pub trait AllocatableRegister: Debug + Clone + Copy + PartialEq + Eq + Hash + 's
     fn caller_saved_registers(platform: &Platform) -> &'static [Self];
 
     #[must_use]
-    fn argument_nth(platform: &Platform, n: usize) -> Self;
+    fn argument_nth(platform: &Platform, n: usize) -> Self {
+        Self::argument_nth_opt(platform, n).unwrap()
+    }
+
+    #[must_use]
+    fn argument_nth_opt(platform: &Platform, n: usize) -> Option<Self>;
 
     #[must_use]
     fn is_caller_saved(&self, platform: &Platform) -> bool {

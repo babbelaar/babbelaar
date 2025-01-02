@@ -20,6 +20,7 @@ pub struct Amd64CodeGenerator {
     register_allocator: RegisterAllocator<Amd64Register>,
     stack_allocator: StackAllocator,
     relocations: Vec<Relocation>,
+    current_instruction_id: usize,
 }
 
 impl Amd64CodeGenerator {
@@ -35,6 +36,7 @@ impl Amd64CodeGenerator {
             stack_allocator: StackAllocator::new(platform.clone()),
             relocations: Vec::new(),
             platform,
+            current_instruction_id: 0,
         };
 
         this.add_prologue(function.instructions());
@@ -65,6 +67,8 @@ impl Amd64CodeGenerator {
     }
 
     fn add_instruction(&mut self, instruction: &Instruction, instruction_id: usize) {
+        self.current_instruction_id = instruction_id;
+
         match instruction {
             Instruction::Compare { lhs, rhs } => {
                 let lhs = self.allocate_register(lhs);
@@ -306,7 +310,7 @@ impl Amd64CodeGenerator {
     }
 
     fn add_prologue(&mut self, instructions: &[Instruction]) {
-        for reg in self.register_allocator.callee_saved_registers_to_save().iter().cloned() {
+        for reg in self.register_allocator.callee_saved_registers_to_save() {
             self.instructions.push(Amd64Instruction::PushReg64 { reg });
         }
 
@@ -344,14 +348,14 @@ impl Amd64CodeGenerator {
             self.instructions.push(Amd64Instruction::PopReg64 { reg: Amd64Register::Rbp });
         }
 
-        for reg in self.register_allocator.callee_saved_registers_to_save().iter().rev().cloned() {
+        for reg in self.register_allocator.callee_saved_registers_to_save().rev() {
             self.instructions.push(Amd64Instruction::PopReg64 { reg });
         }
     }
 
     #[must_use]
     fn allocate_register(&mut self, register: &Register) -> Amd64Register {
-        match self.register_allocator.get_mapping(register) {
+        match self.register_allocator.get_mapping(register, self.current_instruction_id) {
             Some(register) => register,
             None => {
                 // TODO: allocate on the stack in this case.

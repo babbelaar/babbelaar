@@ -48,6 +48,37 @@ fn simple_return_123() {
 }
 
 #[test]
+fn simple_return_with_discard_result_of_subroutine() {
+    let result = create_and_run_single_object_executable("
+        werkwijze krijgLeukGetal() -> g32 { bekeer 12; }
+
+        werkwijze hoofd() -> g32 {
+            stel _a = krijgLeukGetal();
+            bekeer 123;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(123));
+}
+
+#[test]
+fn simple_return_with_discard_result_of_subroutine2() {
+    let result = create_and_run_single_object_executable("
+        werkwijze krijgLeukGetal() -> g32 { bekeer 12; }
+
+        werkwijze hoofd() -> g32 {
+            stel a = 8;
+            stel _a = krijgLeukGetal();
+            bekeer a;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(8));
+}
+
+#[test]
 fn simple_return_1_plus_2() {
     let result = create_and_run_single_object_executable("
         werkwijze een() -> g32 { bekeer 1; }

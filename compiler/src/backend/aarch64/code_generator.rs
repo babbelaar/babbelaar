@@ -21,6 +21,7 @@ pub struct AArch64CodeGenerator {
     relocations: Vec<Relocation>,
 
     var_args_convention: AArch64VarArgsConvention,
+    current_instruction_id: usize,
 }
 
 impl AArch64CodeGenerator {
@@ -44,6 +45,7 @@ impl AArch64CodeGenerator {
             stack_allocator: StackAllocator::new(platform),
             relocations: Vec::new(),
             var_args_convention,
+            current_instruction_id: 0,
         };
 
         this.add_prologue(function.instructions());
@@ -76,6 +78,8 @@ impl AArch64CodeGenerator {
     }
 
     fn add_instruction(&mut self, instruction_id: usize, instruction: &Instruction) {
+        self.current_instruction_id = instruction_id;
+
         match instruction {
             Instruction::Compare { lhs, rhs } => {
                 self.add_instruction_cmp(lhs, rhs);
@@ -985,7 +989,7 @@ impl AArch64CodeGenerator {
 
     #[must_use]
     fn allocate_register(&mut self, register: &Register) -> ArmRegister {
-        match self.register_allocator.get_mapping(register) {
+        match self.register_allocator.get_mapping(register, self.current_instruction_id) {
             Some(register) => register,
             None => {
                 // TODO: allocate on the stack in this case.
@@ -1026,7 +1030,7 @@ impl AArch64CodeGenerator {
             self.stack_allocator.reserve_save_frame_pointer(SPACE_NEEDED_FOR_FP_AND_LR);
         }
 
-        self.stack_allocator.reserve_callee_saved_registers(self.register_allocator.callee_saved_registers_to_save().len());
+        self.stack_allocator.reserve_callee_saved_registers(self.register_allocator.callee_saved_registers_to_save().count());
 
         // ignoring possible optimizations, count up the needed stack size when the StackAlloc instruction is used.
         for (instruction_id, instruction) in instructions.iter().enumerate() {
@@ -1100,29 +1104,31 @@ impl AArch64CodeGenerator {
 
         let mut offset = self.stack_allocator.offset_of_callee_register_saves();
 
-        // TODO: use `array_chunks()` when it is stabilized
-        let pairs = self.register_allocator.callee_saved_registers_to_save().chunks(2);
-        for register_pair in pairs {
-            if register_pair.len() == 1 {
+        let mut chunks = self.register_allocator.callee_saved_registers_to_save().array_chunks::<2>();
+        for register_pair in chunks.by_ref() {
+            self.instructions.push(ArmInstruction::Stp {
+                is_64_bit: true,
+                mode: ArmSignedAddressingMode::SignedOffset,
+                dst: ArmRegister::SP,
+                first: register_pair[0],
+                second: register_pair[1],
+                offset: offset as _,
+            });
+
+            offset += POINTER_SIZE * 2;
+        }
+        if let Some(remainder) = chunks.into_remainder() {
+            for reg in remainder {
                 self.instructions.push(ArmInstruction::StrImmediate {
                     is_64_bit: true,
                     mode: ArmUnsignedAddressingMode::UnsignedOffset,
-                    src: register_pair[0],
+                    src: reg,
                     base_ptr: ArmRegister::SP,
                     offset: offset as _,
                 });
-            } else {
-                self.instructions.push(ArmInstruction::Stp {
-                    is_64_bit: true,
-                    mode: ArmSignedAddressingMode::SignedOffset,
-                    dst: ArmRegister::SP,
-                    first: register_pair[0],
-                    second: register_pair[1],
-                    offset: offset as _,
-                })
-            }
 
-            offset += POINTER_SIZE * 2;
+                offset += POINTER_SIZE;
+            }
         }
     }
 
@@ -1179,29 +1185,31 @@ impl AArch64CodeGenerator {
 
         let mut offset = self.stack_allocator.offset_of_callee_register_saves();
 
-        // TODO: use `array_chunks()` when it is stabilized
-        let pairs = self.register_allocator.callee_saved_registers_to_save().chunks(2);
-        for register_pair in pairs {
-            if register_pair.len() == 1 {
+        let mut chunks = self.register_allocator.callee_saved_registers_to_save().array_chunks::<2>();
+        for register_pair in chunks.by_ref() {
+            self.instructions.push(ArmInstruction::Ldp {
+                is_64_bit: true,
+                mode: ArmSignedAddressingMode::SignedOffset,
+                src: ArmRegister::SP,
+                first: register_pair[0],
+                second: register_pair[1],
+                offset: offset as _,
+            });
+
+            offset += POINTER_SIZE * 2;
+        }
+        if let Some(remainder) = chunks.into_remainder() {
+            for reg in remainder {
                 self.instructions.push(ArmInstruction::LdrImmediate {
                     is_64_bit: true,
                     mode: ArmUnsignedAddressingMode::UnsignedOffset,
-                    dst: register_pair[0],
+                    dst: reg,
                     base_ptr: ArmRegister::SP,
                     offset: offset as _,
                 });
-            } else {
-                self.instructions.push(ArmInstruction::Ldp {
-                    is_64_bit: true,
-                    mode: ArmSignedAddressingMode::SignedOffset,
-                    src: ArmRegister::SP,
-                    first: register_pair[0],
-                    second: register_pair[1],
-                    offset: offset as _,
-                })
-            }
 
-            offset += POINTER_SIZE * 2;
+                offset += POINTER_SIZE;
+            }
         }
     }
 }

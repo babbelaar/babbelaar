@@ -66,13 +66,17 @@ impl AllocatableRegister for ArmRegister {
         31
     }
 
-    fn argument_nth(platform: &Platform, n: usize) -> Self {
+    fn argument_nth_opt(platform: &Platform, n: usize) -> Option<Self> {
         _ = platform;
         debug_assert!(n < Self::count());
 
-        Self {
-            number: n as _,
+        if n > 7 {
+            return None;
         }
+
+        Some(Self {
+            number: n as _,
+        })
     }
 
     fn callee_saved_registers(platform: &Platform) -> &'static [ArmRegister] {
