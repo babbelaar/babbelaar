@@ -12,7 +12,7 @@ object.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-rstest = "0.23"
+rstest.workspace = true
 region = "3"
 signal-hook = "0.3"
 temp-dir = "0.1"

@@ -17,6 +17,6 @@ babbelaar = { path = "../babbelaar" }
 
 
 [dev-dependencies]
-rstest = "0.23"
+rstest.workspace = true
 rand = "0.8"
 anyhow = "1"

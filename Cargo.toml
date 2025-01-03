@@ -33,3 +33,4 @@ toml = "0.8"
 tower-lsp = { git = "https://github.com/babbelaar/tower-lsp.git", rev = "cce815536edb201b5082b8310227796ec40e09d4" }
 url = "2"
 env_logger = "0.11"
+rstest = "0.24"
