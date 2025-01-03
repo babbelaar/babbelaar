@@ -14,7 +14,7 @@ pub struct FunctionBuilder<'program> {
     pub(super) program_builder: &'program mut ProgramBuilder,
     pub(super) name: BabString,
     pub(super) register_allocator: RegisterAllocator,
-    pub(super) this: Option<(TypeInfo, Register)>,
+    pub(super) this: Option<(TypeInfo, Register, PrimitiveType)>,
     pub(super) argument_registers: Vec<Register>,
     pub(super) instructions: Vec<Instruction>,
     pub(super) locals: HashMap<BabString, FunctionLocal>,
@@ -124,27 +124,27 @@ impl<'program> FunctionBuilder<'program> {
         let local_name = local_name.into();
 
         debug_assert_eq!(self.locals.get(&local_name), None, "Lokale `{local_name}` had al een waarde!");
+        let primitive = self.primitive_type_of(&type_info);
 
         self.locals.insert(local_name, FunctionLocal {
             register,
             type_info,
+            primitive,
         });
     }
 
     #[must_use]
-    pub fn load_string(&mut self, string: &str) -> (TypeInfo, Register) {
+    pub fn load_string(&mut self, string: &str) -> (TypeInfo, Register, PrimitiveType) {
         let offset = self.program_builder.program.add_string(string);
         let reg = self.load_effective_address(offset);
-        (TypeInfo::Plain(TypeId::SLINGER), reg)
+        (TypeInfo::Plain(TypeId::SLINGER), reg, PrimitiveType::new(self.pointer_size(), false))
     }
 
     #[must_use]
-    pub fn load_local(&mut self, name: &BabString) -> (TypeInfo, Register) {
-        let Some(src) = self.locals.get(name).cloned() else {
-            panic!("Ongeldige lokale variabele: `{name}`");
-        };
-
-        (src.type_info, src.register)
+    pub fn load_local(&mut self, name: &BabString) -> Option<(TypeInfo, Register, PrimitiveType)> {
+        let src = self.locals.get(name).cloned()?;
+        log::debug!("Loading {name} = {src:#?}");
+        Some((src.type_info, src.register, src.primitive))
     }
 
     #[must_use]
@@ -241,6 +241,20 @@ impl<'program> FunctionBuilder<'program> {
         (layout, dst)
     }
 
+    pub fn allocate_array_type_id(&mut self, item_ty_id: TypeId, size: usize) -> (&StructureLayout, Register) {
+        let layout = self.program_builder.type_manager.layout(item_ty_id);
+        let size = layout.size() * size;
+
+        let dst = self.register_allocator.next();
+
+        self.instructions.push(Instruction::StackAlloc {
+            dst,
+            size,
+        });
+
+        (layout, dst)
+    }
+
     /// Stores a value at the `base_ptr` offset by `offset`.
     pub fn store_ptr(&mut self, base_ptr: Register, offset: Operand, value: impl Into<Register>, typ: PrimitiveType) {
         self.instructions.push(Instruction::StorePtr {
@@ -271,7 +285,7 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     #[must_use]
-    pub fn load_this(&self) -> Option<(TypeInfo, Register)> {
+    pub fn load_this(&self) -> Option<(TypeInfo, Register, PrimitiveType)> {
         self.this.clone()
     }
 
@@ -324,6 +338,7 @@ impl<'program> FunctionBuilder<'program> {
     pub fn size_of_type_info(&self, ty: &TypeInfo) -> usize {
         match ty {
             TypeInfo::Array(..) => self.pointer_size(),
+            TypeInfo::Pointer(..) => self.pointer_size(),
             TypeInfo::Plain(ty) => self.size_of_type_id(*ty),
         }
     }
@@ -332,6 +347,7 @@ impl<'program> FunctionBuilder<'program> {
     pub fn primitive_type_of(&self, ty: &TypeInfo) -> PrimitiveType {
         match ty {
             TypeInfo::Array(..) => PrimitiveType::new(self.pointer_size(), false),
+            TypeInfo::Pointer(..) => PrimitiveType::new(self.pointer_size(), false),
             TypeInfo::Plain(ty) => self.program_builder.type_manager.layout(*ty).primitive_type(),
         }
     }
@@ -358,6 +374,30 @@ impl<'program> FunctionBuilder<'program> {
     pub fn return_type_of(&self, name: &BabString) -> TypeId {
         self.program_builder.function_return_types.get(name).copied().unwrap_or(TypeId::G32)
     }
+
+    pub fn promote_to_stack(&mut self, variable: BabString) -> (Register, PrimitiveType) {
+        let local = self.locals.get(&variable).unwrap();
+        let original_reg = local.register;
+        let ty = local.type_info.clone();
+
+        let TypeInfo::Plain(type_id) = ty else {
+            panic!("Ongeldige stackpromotie van `{variable}`!");
+        };
+
+        let primitive_typ = self.primitive_type_of(&TypeInfo::Plain(type_id));
+
+        let dst = self.register_allocator.next();
+        self.instructions.push(Instruction::StackAlloc { dst, size: primitive_typ.bytes() });
+        self.instructions.push(Instruction::StorePtr { base_ptr: dst, offset: Operand::zero(), value: original_reg, typ: primitive_typ });
+
+        self.locals.insert(variable, FunctionLocal {
+            register: dst,
+            type_info: TypeInfo::Pointer(Box::new(ty)),
+            primitive: primitive_typ,
+        });
+
+        (dst, primitive_typ)
+    }
 }
 
 #[cfg(test)]
@@ -381,4 +421,5 @@ mod tests {
 pub struct FunctionLocal {
     pub(super) register: Register,
     pub(super) type_info: TypeInfo,
+    pub(super) primitive: PrimitiveType,
 }

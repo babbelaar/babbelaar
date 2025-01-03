@@ -7,7 +7,7 @@
 use std::rc::Rc;
 
 use babbelaar::*;
-use log::debug;
+use log::{debug, error};
 
 use crate::{ir::FunctionArgument, optimize_program, ArgumentList, FunctionAttribute, FunctionBuilder, Immediate, Label, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId, TypeInfo};
 
@@ -118,6 +118,8 @@ impl Compiler {
         let Some(body) = &func.body else {
             return;
         };
+
+        debug!("IR-code aan het genereren voor werkwijze `{name}`");
 
         let mut arguments = ArgumentList::new();
 
@@ -548,7 +550,7 @@ impl CompileExpression for PostfixExpression {
                 let (base_ptr, ty) = base_ptr.to_readable_and_type(builder);
 
                 match ty {
-                    TypeInfo::Array(item_ty) => {
+                    TypeInfo::Array(item_ty) | TypeInfo::Pointer(item_ty) => {
                         let offset = subscript.compile(builder, ctx).to_readable(builder);
 
                         let size = builder.size_of_type_info(&item_ty);
@@ -588,8 +590,14 @@ impl CompileExpression for PrimaryExpression {
                 expression.compile(builder, ctx)
             }
 
-            Self::Reference(ranged) => {
-                builder.load_local(ranged.value()).into()
+            Self::Reference(name) => {
+                match builder.load_local(name.value()) {
+                    Some(local) => local.into(),
+                    None => {
+                        error!("Ongeldige lokale variabele: {}", name.value());
+                        builder.load_immediate(Immediate::Integer64(0)).into()
+                    }
+                }
             }
 
             Self::ReferenceThis => {
@@ -686,7 +694,13 @@ impl CompileExpression for UnaryExpression {
         let value = self.rhs.compile(builder, ctx);
         match self.kind.value() {
             UnaryExpressionKind::AddressOf => {
-                let (register, _) = value.to_register_and_type(builder);
+                let (register, type_info) = value.to_register_and_type(builder);
+                if let Expression::Primary(PrimaryExpression::Reference(reference)) = self.rhs.value() {
+                    if let TypeInfo::Plain(_) = type_info {
+                        let (reg, _) = builder.promote_to_stack(reference.value().clone());
+                        return ExpressionResult::array(reg, type_info);
+                    }
+                }
                 ExpressionResult::typed(register, TypeInfo::Plain(TypeId::G64))
             }
 
@@ -808,9 +822,23 @@ impl From<(TypeId, Register)> for ExpressionResult {
     }
 }
 
-impl From<(TypeInfo, Register)> for ExpressionResult {
-    fn from(value: (TypeInfo, Register)) -> Self {
-        Self::typed(value.1, value.0)
+impl From<(TypeInfo, Register, PrimitiveType)> for ExpressionResult {
+    fn from(value: (TypeInfo, Register, PrimitiveType)) -> Self {
+        let (type_info, register, primitive) = value;
+
+        match type_info {
+            TypeInfo::Array(el_ty) => {
+                Self::array(register, *el_ty)
+            }
+
+            TypeInfo::Pointer(type_info) => {
+                Self::pointer(register, Operand::zero(), *type_info, primitive)
+            }
+
+            TypeInfo::Plain(..) => {
+                Self::typed(register, type_info)
+            }
+        }
     }
 }
 

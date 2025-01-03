@@ -1495,6 +1495,31 @@ fn variable_statement_type_specifier() {
     assert_eq!(result.stdout, "");
 }
 
+#[test]
+fn fill_local_by_ptr() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze krijgGetal() -> g32 {
+            bekeer 5;
+        }
+
+        @uitheems(naam: "memcpy")
+        werkwijze memcpy(bestemming: g32*, bron: g32*, size: g64);
+
+        werkwijze hoofd() -> g32 {
+            stel a = 1;
+            stel g = krijgGetal();
+
+            memcpy(&a, &g, 4);
+
+            bekeer a;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(5));
+    assert_eq!(result.stdout, "");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();

@@ -140,6 +140,11 @@ pub enum Operand {
 
 impl Operand {
     #[must_use]
+    pub const fn zero() -> Self {
+        Self::Immediate(Immediate::Integer8(0))
+    }
+
+    #[must_use]
     pub fn shrink_if_possible(&self) -> Self {
         match self {
             Self::Immediate(immediate) => Self::Immediate(immediate.shrink_if_possible()),

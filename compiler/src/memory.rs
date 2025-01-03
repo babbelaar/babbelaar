@@ -294,6 +294,11 @@ impl TypeId {
     pub const SLINGER: Self = Self { index: 6 };
 
     #[must_use]
+    pub const fn is_primitive(&self) -> bool {
+        self.index <= 6
+    }
+
+    #[must_use]
     pub const fn is_integer(&self) -> bool {
         self.index == Self::G8.index || self.index == Self::G16.index || self.index == Self::G32.index || self.index == Self::G64.index
     }
@@ -302,6 +307,7 @@ impl TypeId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeInfo {
     Array(Box<TypeInfo>),
+    Pointer(Box<TypeInfo>),
     Plain(TypeId),
 }
 
@@ -310,6 +316,7 @@ impl TypeInfo {
     pub fn type_id(&self) -> TypeId {
         match self {
             Self::Array(info) => info.type_id(),
+            Self::Pointer(info) => info.type_id(),
             Self::Plain(ty) => *ty,
         }
     }
