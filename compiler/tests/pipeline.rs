@@ -1059,6 +1059,27 @@ fn string_concat_assign_static() {
 }
 
 #[test]
+fn string_concat_loop() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            stel a = "Doei";
+
+            volg _ in reeks(0, 5) {
+                a += "!";
+            }
+
+            schrijf(a);
+
+            bekeer a.lengte();
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.stdout.trim_end_matches(|c| c == '\r' || c == '\n'), "Doei!!!!!");
+    assert_eq!(result.exit_code, Some(9));
+}
+
+#[test]
 fn type_resolution_return_g8() {
     let result = create_and_run_single_object_executable(r#"
         werkwijze hoofd() -> g8 {

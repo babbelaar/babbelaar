@@ -12,6 +12,13 @@ pub struct DeadCodeEliminator;
 
 impl FunctionOptimizer for DeadCodeEliminator {
     fn optimize(&mut self, function: &mut Function) {
+        self.remove_useless_jumps(function);
+        self.remove_using_cfg(function);
+    }
+}
+
+impl DeadCodeEliminator {
+    fn remove_using_cfg(&self, function: &mut Function) {
         let cfg = ControlFlowGraph::new(function.instructions());
 
         for index in (0..function.instructions().len()).rev() {
@@ -21,6 +28,46 @@ impl FunctionOptimizer for DeadCodeEliminator {
 
             let instr = function.instructions.remove(index);
             debug!("[DeadCode] Removing {instr}");
+        }
+    }
+
+    fn remove_useless_jumps(&self, function: &mut Function) {
+        let mut indices_to_remove = Vec::new();
+
+        for (instruction_id, instruction) in function.instructions().iter().enumerate() {
+            if let Instruction::Jump { location: target_location } = instruction {
+                let mut can_remove = true;
+
+                for instruction in function.instructions().iter().skip(instruction_id) {
+                    match instruction {
+                        Instruction::Label(label) => {
+                            if label == target_location {
+                                break;
+                            }
+                        }
+
+                        Instruction::Jump { location } | Instruction::JumpConditional { location, .. } => {
+                            if location == target_location {
+                                continue;
+                            }
+                        }
+
+                        _ => (),
+                    }
+
+                    can_remove = false;
+                    break;
+                }
+
+                if can_remove {
+                    indices_to_remove.push(instruction_id);
+                }
+            }
+        }
+
+        for index in indices_to_remove.into_iter().rev() {
+            let instr = function.instructions.remove(index);
+            debug!("[UselessJumps] Removing {instr}");
         }
     }
 }
