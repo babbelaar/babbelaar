@@ -970,7 +970,42 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_variable_statement(&mut self, statement: &VariableStatement, stmt: &Statement) {
-        let typ = self.analyze_expression(&statement.expression, &SemanticTypeResolution::default()).ty;
+        let mut resolution = SemanticTypeResolution::default();
+
+        let typ = match &statement.typ {
+            Some(type_spec) => {
+                resolution.type_hints.push(self.resolve_type(type_spec));
+
+                let actual_ty = self.analyze_expression(&statement.expression, &resolution).ty;
+                let expected_ty = resolution.type_hints.remove(0);
+
+                if expected_ty != actual_ty {
+                    self.diagnostics.create(||
+                        SemanticDiagnostic::new(
+                            statement.expression.range(),
+                            SemanticDiagnosticKind::VariableStatementIncompatibleTypes {
+                                actual: actual_ty.clone(),
+                                expected: expected_ty.clone(),
+                            },
+                        )
+                        .with_action(BabbelaarCodeAction::new(
+                            BabbelaarCodeActionType::ChangeVariableType {
+                                typ: actual_ty.name(),
+                            },
+                            vec![
+                                FileEdit::new(type_spec.range(), actual_ty.name().to_string())
+                            ]
+                        ))
+                    );
+                }
+
+                expected_ty
+            }
+
+            None => {
+                self.analyze_expression(&statement.expression, &resolution).ty
+            }
+        };
 
         if statement.name.value() == &Constants::DISCARDING_IDENT {
             return;

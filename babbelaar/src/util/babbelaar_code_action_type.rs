@@ -33,6 +33,9 @@ pub enum BabbelaarCodeActionType {
     #[error("Verander bekeertype naar `{typ}`")]
     ChangeReturnType { typ: BabString },
 
+    #[error("Verander steltype naar `{typ}`")]
+    ChangeVariableType { typ: BabString },
+
     #[error("Zet Slinger `\"{number}\"` om naar getal `{number}`")]
     ChangeStringToNumber { number: isize },
 

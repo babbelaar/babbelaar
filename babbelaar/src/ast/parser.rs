@@ -699,6 +699,13 @@ impl<'tokens> Parser<'tokens> {
 
         let name = Ranged::new(name_range, name);
 
+        let typ = if self.peek_punctuator() == Some(Punctuator::Colon) {
+            _ = self.consume_token();
+            Some(self.parse_type())
+        } else {
+            None
+        };
+
         let equals = self.peek_token()?.clone();
         if equals.kind != TokenKind::Punctuator(Punctuator::Assignment) {
             self.emit_diagnostic(ParseDiagnostic::ExpectedEqualsInsideVariable { token: equals });
@@ -713,6 +720,7 @@ impl<'tokens> Parser<'tokens> {
             range: FileRange::new(name.range().start(), expression.range().end()),
             name,
             expression,
+            typ,
         })
     }
 

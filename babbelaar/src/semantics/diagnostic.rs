@@ -343,6 +343,12 @@ pub enum SemanticDiagnosticKind {
 
     #[error("Kan `!` alleen gebruiken om `bool` om te keren (`!waar` = `onwaar`, `!onwaar` = `waar`).")]
     CannotLogicalNotNonBool,
+
+    #[error("`stel` heeft type `{expected}`, maar expressie is van type `{actual}`")]
+    VariableStatementIncompatibleTypes {
+        expected: SemanticType,
+        actual: SemanticType,
+    },
 }
 
 impl SemanticDiagnosticKind {

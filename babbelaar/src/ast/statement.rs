@@ -137,4 +137,5 @@ pub struct VariableStatement {
     pub range: FileRange,
     pub name: Ranged<BabString>,
     pub expression: Ranged<Expression>,
+    pub typ: Option<Ranged<Type>>,
 }

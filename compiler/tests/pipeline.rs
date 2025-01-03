@@ -1455,6 +1455,25 @@ fn fill_array_g8() {
     assert_eq!(result.stdout, "");
 }
 
+#[test]
+fn variable_statement_type_specifier() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze krijg(a: g8) -> g8 {
+            bekeer a;
+        }
+
+        werkwijze hoofd() -> g8 {
+            stel a: g8 = 15;
+            stel b = krijg(a);
+            bekeer b;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(15));
+    assert_eq!(result.stdout, "");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
