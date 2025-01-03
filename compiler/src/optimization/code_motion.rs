@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, mem::take, ops::Range};
 
-use log::debug;
+use log::{debug, warn};
 
 use crate::{ControlFlowGraph, Function, Instruction, Register};
 
@@ -121,6 +121,11 @@ impl LifetimeBasedCodeMover {
 
                     minimum_pos = *write;
                 }
+            }
+
+            if minimum_pos > index {
+                warn!("Verplaatsen van {instruction} was eerst {index}, maar we wilden het later zetten op {index}");
+                continue;
             }
 
             minimum_pos += find_minimum_non_disturbing_point(&function.instructions()[minimum_pos..index]);
