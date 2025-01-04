@@ -75,6 +75,16 @@ impl Immediate {
     pub const fn as_u64(&self) -> u64 {
         self.as_i64() as u64
     }
+
+    #[must_use]
+    pub const fn bits(&self) -> u8 {
+        match self {
+            Self::Integer8(..) => 8,
+            Self::Integer16(..) => 16,
+            Self::Integer32(..) => 32,
+            Self::Integer64(..) => 64,
+        }
+    }
 }
 
 impl Display for Immediate {

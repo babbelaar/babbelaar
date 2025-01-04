@@ -11,10 +11,10 @@ use object::{
             SectionRange,
             Writer as PeWriter,
         }, MachOBuildVersion, Object, Relocation as ObjectRelocation, StandardSection, Symbol, SymbolSection
-    }, SymbolFlags, SymbolKind, SymbolScope
+    }, SubArchitecture, SymbolFlags, SymbolKind, SymbolScope
 };
 
-use crate::{OperatingSystem, Platform, WindowsVersion};
+use crate::{Architecture, OperatingSystem, Platform, WindowsVersion};
 
 use super::{DataSection, DataSectionKind, Relocation, RelocationType};
 
@@ -108,6 +108,10 @@ impl CompiledObject {
             info.sdk = Constants::MACOS_MINIMUM_VERSION.to_macos_nibbles();
 
             obj.set_macho_build_version(info);
+        }
+
+        if self.platform().options().arm64e() && self.platform().architecture() == Architecture::AArch64 {
+            obj.set_sub_architecture(Some(SubArchitecture::Arm64E));
         }
 
         let code_section = obj.add_subsection(StandardSection::Text, b"main");
@@ -340,7 +344,7 @@ mod tests {
 
     #[test]
     fn aarch64_link_test() {
-        let mut object = CompiledObject::new(Platform::new(Architecture::AArch64, Environment::Darwin, OperatingSystem::MacOs));
+        let mut object = CompiledObject::new(Platform::new(Architecture::AArch64, Environment::Darwin, OperatingSystem::MacOs, Default::default()));
 
         object.add_function(CompiledFunction {
             name: BabString::new_static("a"),

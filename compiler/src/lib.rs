@@ -75,6 +75,7 @@ pub use self::{
         Graph,
         OperatingSystem,
         Platform,
+        PlatformOptions,
         WindowsVersion,
     },
 };

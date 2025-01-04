@@ -107,6 +107,7 @@ pub struct Platform {
     architecture: Architecture,
     environment: Environment,
     operating_system: OperatingSystem,
+    options: PlatformOptions,
 }
 
 impl Platform {
@@ -117,18 +118,21 @@ impl Platform {
                 architecture: Architecture::AArch64,
                 environment: Environment::Darwin,
                 operating_system: OperatingSystem::MacOs,
+                options: PlatformOptions::default(),
             }
         } else if cfg!(target_os = "windows") {
             Self {
                 architecture: Architecture::X86_64,
                 environment: Environment::MsVC,
                 operating_system: OperatingSystem::Windows,
+                options: PlatformOptions::default(),
             }
         } else if cfg!(target_os = "linux") {
             Self {
                 architecture: Architecture::try_detect().expect("Niet-ondersteunde processorarchitectuur!"),
                 environment: Ldd::try_detect_environment().expect("Niet-ondersteunde omgeving!"),
                 operating_system: OperatingSystem::Linux,
+                options: PlatformOptions::default(),
             }
         } else {
             todo!("Hostplatform wordt niet herkend...")
@@ -136,11 +140,12 @@ impl Platform {
     }
 
     #[must_use]
-    pub fn new(architecture: Architecture, environment: Environment, operating_system: OperatingSystem) -> Self {
+    pub fn new(architecture: Architecture, environment: Environment, operating_system: OperatingSystem, options: PlatformOptions) -> Self {
         Self {
             architecture,
             environment,
             operating_system,
+            options,
         }
     }
 
@@ -158,6 +163,11 @@ impl Platform {
     pub fn operating_system(&self) -> OperatingSystem {
         self.operating_system
     }
+
+    #[must_use]
+    pub fn options(&self) -> PlatformOptions {
+        self.options
+    }
 }
 
 impl From<Architecture> for object::Architecture {
@@ -174,6 +184,36 @@ impl From<Endianness> for object::Endianness {
         match value {
             Endianness::Big => object::Endianness::Big,
             Endianness::Little => object::Endianness::Little,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PlatformOptions {
+    arm64e: bool,
+}
+
+impl PlatformOptions {
+    /// Currently, not supported on macOS by default.
+    ///
+    /// ## See also
+    /// - <https://github.com/lelegard/arm-cpusysregs/blob/main/docs/arm64e-on-macos.md>
+    /// - <https://developer.apple.com/documentation/security/preparing-your-app-to-work-with-pointer-authentication>
+    #[must_use]
+    pub const fn arm64e(&self) -> bool {
+        self.arm64e
+    }
+
+    /// Currently, not supported on macOS by default.
+    ///
+    /// ## See also
+    /// - <https://github.com/lelegard/arm-cpusysregs/blob/main/docs/arm64e-on-macos.md>
+    /// - <https://developer.apple.com/documentation/security/preparing-your-app-to-work-with-pointer-authentication>
+    #[must_use]
+    pub const fn with_arm64e(self) -> Self{
+        Self {
+            arm64e: true,
+            ..self
         }
     }
 }

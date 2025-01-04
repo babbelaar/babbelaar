@@ -164,7 +164,7 @@ fn compile(map: PathBuf, config: &ConfigRoot) -> PathBuf {
         .map(|(_, tree)| tree)
         .collect();
 
-    let mut pipeline = Pipeline::new(Platform::host_platform());
+    let mut pipeline = Pipeline::new(create_platform_from_config(config));
     pipeline.compile_trees(&trees);
 
     let dir = output_dir();
@@ -283,6 +283,18 @@ fn init_logger(config: &ConfigRoot) {
 
 
     builder.init();
+}
+
+#[must_use]
+fn create_platform_from_config(config: &ConfigRoot) -> Platform {
+    let platform = Platform::host_platform();
+    let mut options = platform.options();
+
+    if config.arch.aarch64.arm64e {
+        options = options.with_arm64e();
+    }
+
+    Platform::new(platform.architecture(), platform.environment(), platform.operating_system(), options)
 }
 
 #[must_use]

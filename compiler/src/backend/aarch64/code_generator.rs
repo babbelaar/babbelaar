@@ -22,6 +22,9 @@ pub struct AArch64CodeGenerator {
 
     var_args_convention: AArch64VarArgsConvention,
     current_instruction_id: usize,
+
+    // Should use Pointer Authentication Code for RET/LR?
+    is_pac_ret: bool,
 }
 
 impl AArch64CodeGenerator {
@@ -42,10 +45,11 @@ impl AArch64CodeGenerator {
             instructions: Vec::new(),
             label_offsets: HashMap::new(),
             register_allocator: RegisterAllocator::new(platform.clone(), function),
-            stack_allocator: StackAllocator::new(platform),
+            stack_allocator: StackAllocator::new(platform.clone()),
             relocations: Vec::new(),
             var_args_convention,
             current_instruction_id: 0,
+            is_pac_ret: platform.options().arm64e(),
         };
 
         this.add_prologue(function.instructions());
@@ -1026,6 +1030,10 @@ impl AArch64CodeGenerator {
     }
 
     fn add_prologue(&mut self, instructions: &[Instruction]) {
+        if self.is_pac_ret {
+            self.instructions.push(ArmInstruction::PacIASp);
+        }
+
         if !self.characteristics.is_leaf_function() {
             self.stack_allocator.reserve_save_frame_pointer(SPACE_NEEDED_FOR_FP_AND_LR);
         }
@@ -1143,6 +1151,10 @@ impl AArch64CodeGenerator {
             self.add_epilogue_instructions_stack_frame_optimization();
         } else {
             self.add_epilogue_instructions_general();
+        }
+
+        if self.is_pac_ret {
+            self.instructions.push(ArmInstruction::AutIASp);
         }
     }
 

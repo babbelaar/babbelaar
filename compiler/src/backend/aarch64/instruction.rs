@@ -55,6 +55,9 @@ pub enum ArmInstruction {
         amount: ArmRegister,
     },
 
+    /// Authenticate Instruction Address (SP)
+    AutIASp,
+
     B {
         location: ArmBranchLocation,
     },
@@ -233,6 +236,9 @@ pub enum ArmInstruction {
         src: ArmRegister,
     },
 
+    /// Pointer Authentication Code Instruction Address (SP)
+    PacIASp,
+
     Ret,
 
     /// Signed divide
@@ -410,6 +416,8 @@ impl ArmInstruction {
 
                 instruction
             }
+
+            Self::AutIASp => 0xd50323bf,
 
             Self::B { location } => {
                 let pc_relative_offset = match location {
@@ -753,6 +761,8 @@ impl ArmInstruction {
                 instruction
             }
 
+            Self::PacIASp => 0xD50233BF,
+
             Self::Ret => {
                 let rn = ArmRegister::X30;
                 let mut instruction = 0xD65F0000;
@@ -1090,6 +1100,8 @@ impl Display for ArmInstruction {
                 f.write_fmt(format_args!("asr {}, {}, {}", dst.name(is_64_bit), src.name(is_64_bit), amount.name(is_64_bit)))
             }
 
+            Self::AutIASp => f.write_str("autiasp"),
+
             Self::B { location } => {
                 f.write_fmt(format_args!("b {location}"))
             }
@@ -1260,6 +1272,8 @@ impl Display for ArmInstruction {
 
                 Ok(())
             }
+
+            Self::PacIASp => f.write_str("paciasp"),
 
             Self::Ret => {
                 f.write_str("ret")
