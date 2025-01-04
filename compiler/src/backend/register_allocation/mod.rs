@@ -163,6 +163,7 @@ struct Allocation<R: AllocatableRegister> {
     register: Option<R>,
 }
 
+#[derive(Debug)]
 struct PlatformRegisterSchedule<R: AllocatableRegister> {
     reg: R,
     is_callee_saved: bool,
@@ -197,6 +198,6 @@ impl<R: AllocatableRegister> PlatformRegisterSchedule<R> {
     /// Is this register used at least once?
     #[must_use]
     fn is_used(&self) -> bool {
-        self.availability.iter().all(|x| !x)
+        self.availability.iter().any(|x| !x)
     }
 }
