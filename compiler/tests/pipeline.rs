@@ -1509,7 +1509,7 @@ fn fill_local_by_ptr() {
             stel a = 1;
             stel g = krijgGetal();
 
-            memcpy(&a, &g, 4);
+            memcpy(&a, &a, 4);
 
             bekeer a;
         }
@@ -1521,9 +1521,8 @@ fn fill_local_by_ptr() {
 }
 
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
-    if !std::env::args().nth(1).unwrap_or_default().is_empty() {
-        let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
-    }
+    println!("{:#?}", std::env::vars());
+    let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
 
     let dir = TempDir::new().unwrap().panic_on_cleanup_error();
     let directory = dir.path().to_path_buf();
