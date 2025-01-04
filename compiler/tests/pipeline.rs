@@ -992,6 +992,37 @@ fn argument_survives_after_subroutine_call() {
     assert_eq!(result.exit_code, Some(99));
 }
 
+/// This test ensures that we keep good care of callee-saved registers, if it fails with a
+/// SIGSEGV or incorrect exit code, look at whether or not registers are saved correctly.
+#[test]
+fn callee_saved_registers_correct_with_two_calls() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze doeIetsLeuks(a: g32) -> g32 {
+            stel b = 10;
+            bekeer a + b;
+        }
+
+        werkwijze overleef() -> g32 {
+            stel b = doeIetsLeuks(5);
+            stel a = doeIetsLeuks(9);
+            bekeer a + b;
+        }
+
+        werkwijze doeIets() -> g32 {
+            stel a = overleef();
+            stel b = overleef();
+            bekeer a + b;
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer doeIets();
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(68));
+}
+
 #[test]
 fn store_bigger_value_in_smaller_field() {
     let result = create_and_run_single_object_executable(r#"
