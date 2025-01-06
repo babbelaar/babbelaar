@@ -385,6 +385,25 @@ fn pass_comparison_value() {
 }
 
 #[test]
+fn check_returned_negative_one() {
+    let result = create_and_run_single_object_executable("
+        werkwijze krijgSocket() -> g32 {
+            bekeer -1;
+        }
+
+        werkwijze hoofd() -> g32 {
+            als krijgSocket() == -1 {
+                bekeer 2;
+            }
+            bekeer 3;
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(2));
+}
+
+#[test]
 fn multiply_immediate() {
     let result = create_and_run_single_object_executable("
         werkwijze hoofd() -> g32 {

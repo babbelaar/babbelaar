@@ -298,6 +298,7 @@ impl CompileStatement for ForStatement {
                 if ty.type_id() == TypeId::SLINGER {
                     let str_ptr_reg = reg;
                     let current_value = builder.load_immediate(Immediate::Integer64(0));
+                    let indexer_typ = builder.pointer_primitive_type();
 
                     let end = builder.call(
                         create_mangled_method_name(&BuiltinType::Slinger.name(),
@@ -311,7 +312,7 @@ impl CompileStatement for ForStatement {
                         ],
                     );
 
-                    builder.compare(current_value, end);
+                    builder.compare(current_value, end, indexer_typ);
                     builder.jump_if_greater_or_equal(after);
 
                     builder.link_label_here(body);
@@ -327,9 +328,9 @@ impl CompileStatement for ForStatement {
                     }
 
                     builder.link_label_here(next_start);
-                    builder.increment(current_value);
+                    builder.increment(current_value, indexer_typ);
 
-                    builder.compare(current_value, end);
+                    builder.compare(current_value, end, indexer_typ);
                     builder.jump_if_less(body);
                 } else {
                     println!("{builder:#?}");
@@ -339,6 +340,7 @@ impl CompileStatement for ForStatement {
 
             ForIterableKind::Range(range) => {
                 let (current_value, ty) = range.start.compile(builder, ctx).to_readable_and_type(builder);
+                let indexer_typ = builder.pointer_primitive_type();
 
                 if *self.iterator_name != Constants::DISCARDING_IDENT {
                     builder.associate_register_to_local(current_value, self.iterator_name.value(), ty);
@@ -346,7 +348,7 @@ impl CompileStatement for ForStatement {
 
                 let end = range.end.compile(builder, ctx).to_readable(builder);
 
-                builder.compare(current_value, end);
+                builder.compare(current_value, end, indexer_typ);
                 builder.jump_if_greater_or_equal(after);
 
                 builder.link_label_here(body);
@@ -356,9 +358,9 @@ impl CompileStatement for ForStatement {
                 }
 
                 builder.link_label_here(next_start);
-                builder.increment(current_value);
+                builder.increment(current_value, builder.pointer_primitive_type());
 
-                builder.compare(current_value, end);
+                builder.compare(current_value, end, indexer_typ);
                 builder.jump_if_less(body);
                 // otherwise, fall through to the after the for-statement
             }
@@ -452,6 +454,7 @@ impl CompileExpression for BiExpression {
     fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> ExpressionResult {
         let (lhs, lhs_ty) = self.lhs.compile(builder, ctx).to_readable_and_type(builder);
         let (rhs, rhs_ty) = self.rhs.compile(builder, ctx).to_readable_and_type(builder);
+        let ty = builder.primitive_type_of(&lhs_ty);
 
         match self.operator.value() {
             BiOperator::Math(math) => {
@@ -461,7 +464,7 @@ impl CompileExpression for BiExpression {
             BiOperator::Comparison(comparison) => {
                 assert!(lhs_ty.type_id().is_integer(), "Ongeldige type aan de linkerhand: {lhs_ty:?}");
                 assert!(rhs_ty.type_id().is_integer(), "Ongeldige type aan de rechterhand: {rhs_ty:?}");
-                builder.compare(lhs, rhs);
+                builder.compare(lhs, rhs, ty);
                 comparison.into()
             }
         }
@@ -489,7 +492,8 @@ fn compile_math_op(builder: &mut FunctionBuilder, op: MathOperator, lhs: (Regist
                 assert!(rhs_ty.type_id().is_integer(), "Ongeldige type aan de rechterhand: {rhs_ty:?}");
 
     let math_operation = MathOperation::from(op);
-    builder.math(math_operation, lhs, rhs).into()
+    let typ = builder.primitive_type_of(&lhs_ty);
+    builder.math(math_operation, typ, lhs, rhs).into()
 }
 
 impl CompileExpression for PostfixExpression {
@@ -554,7 +558,8 @@ impl CompileExpression for PostfixExpression {
                         let offset = subscript.compile(builder, ctx).to_readable(builder);
 
                         let size = builder.size_of_type_info(&item_ty);
-                        let offset = builder.math(MathOperation::Multiply, offset, Immediate::Integer64(size as _));
+                        let offset_typ = builder.pointer_primitive_type();
+                        let offset = builder.math(MathOperation::Multiply, offset_typ, offset, Immediate::Integer64(size as _));
                         let offset = Operand::Register(offset);
 
                         let typ = builder.primitive_type_of(&item_ty);
@@ -705,13 +710,15 @@ impl CompileExpression for UnaryExpression {
             }
 
             UnaryExpressionKind::Negate => {
-                let value = value.to_readable(builder);
-                builder.unary_negate(value).into()
+                let (value, typ) = value.to_readable_and_type(builder);
+                let typ = builder.primitive_type_of(&typ);
+                builder.unary_negate(typ, value).into()
             }
 
             UnaryExpressionKind::Not => {
-                let value = value.to_readable(builder);
-                let reg = builder.math(MathOperation::Xor, value, Operand::Immediate(Immediate::Integer8(1)));
+                let (value, typ) = value.to_readable_and_type(builder);
+                let typ = builder.primitive_type_of(&typ);
+                let reg = builder.math(MathOperation::Xor, typ, value, Operand::Immediate(Immediate::Integer8(1)));
                 ExpressionResult::typed(reg, TypeId::BOOL)
             }
         }
@@ -751,7 +758,7 @@ impl ExpressionResult {
 
     #[must_use]
     pub fn to_comparison(self, builder: &mut FunctionBuilder) -> Comparison {
-        self.kind.to_comparison(builder)
+        self.kind.to_comparison(builder, &self.type_info)
     }
 
     #[must_use]
@@ -851,18 +858,19 @@ enum ExpressionResultKind {
 
 impl ExpressionResultKind {
     #[must_use]
-    fn to_comparison(self, builder: &mut FunctionBuilder<'_>) -> Comparison {
+    fn to_comparison(self, builder: &mut FunctionBuilder<'_>, type_info: &TypeInfo) -> Comparison {
+        let typ = builder.primitive_type_of(type_info);
         match self {
             Self::Comparison(comparison) => comparison,
             Self::Register(register) => {
                 // if the value is a register, we want to branch/jump when the value isn't 0 (false)
-                builder.compare(register, Operand::Immediate(Immediate::Integer64(0)));
+                builder.compare(register, Operand::Immediate(Immediate::Integer64(0)), typ);
                 Comparison::Inequality
             }
             Self::PointerRegister { base_ptr, offset, typ } => {
                 // if the value is a register, we want to branch/jump when the value isn't 0 (false)
                 let register = builder.load_ptr(base_ptr, offset, typ);
-                builder.compare(register, Operand::Immediate(Immediate::Integer64(0)));
+                builder.compare(register, Operand::Immediate(Immediate::Integer64(0)), typ);
                 Comparison::Inequality
             }
         }
@@ -893,7 +901,8 @@ impl ExpressionResultKind {
             Self::Register(reg) => reg,
 
             Self::PointerRegister { base_ptr, offset, .. } => {
-                builder.math(MathOperation::Add, base_ptr, offset)
+                let typ = builder.pointer_primitive_type();
+                builder.math(MathOperation::Add, typ, base_ptr, offset)
             }
         }
     }

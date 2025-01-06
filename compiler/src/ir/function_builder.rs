@@ -46,15 +46,16 @@ impl<'program> FunctionBuilder<'program> {
         ret_val_reg
     }
 
-    pub fn compare(&mut self, lhs: Register, rhs: impl Into<Operand>) {
+    pub fn compare(&mut self, lhs: Register, rhs: impl Into<Operand>, typ: PrimitiveType) {
         self.instructions.push(Instruction::Compare {
+            typ,
             lhs,
             rhs: rhs.into()
         });
     }
 
-    pub fn increment(&mut self, register: Register) {
-        self.instructions.push(Instruction::Increment { register });
+    pub fn increment(&mut self, register: Register, typ: PrimitiveType) {
+        self.instructions.push(Instruction::Increment { register, typ });
     }
 
     pub fn jump(&mut self, location: Label) {
@@ -148,13 +149,13 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     #[must_use]
-    pub fn math(&mut self, operation: MathOperation, lhs: impl Into<Operand>, rhs: impl Into<Operand>) -> Register {
+    pub fn math(&mut self, operation: MathOperation, typ: PrimitiveType, lhs: impl Into<Operand>, rhs: impl Into<Operand>) -> Register {
         let destination = self.register_allocator.next();
 
         let lhs = lhs.into();
         let rhs = rhs.into();
 
-        self.instructions.push(Instruction::MathOperation { operation, destination, lhs, rhs });
+        self.instructions.push(Instruction::MathOperation { operation, typ, destination, lhs, rhs });
 
         destination
     }
@@ -295,10 +296,11 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     #[must_use]
-    pub fn unary_negate(&mut self, src: Register) -> Register {
+    pub fn unary_negate(&mut self, typ: PrimitiveType, src: Register) -> Register {
         let dst = self.register_allocator.next();
 
         self.instructions.push(Instruction::Negate {
+            typ,
             dst,
             src,
         });
@@ -322,6 +324,11 @@ impl<'program> FunctionBuilder<'program> {
     pub const fn pointer_size(&self) -> usize {
         // TODO: depends on platform
         8
+    }
+
+    #[must_use]
+    pub const fn pointer_primitive_type(&self) -> PrimitiveType {
+        PrimitiveType::new(self.pointer_size(), false)
     }
 
     #[must_use]

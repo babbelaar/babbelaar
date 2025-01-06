@@ -70,8 +70,10 @@ impl Amd64CodeGenerator {
         self.current_instruction_id = instruction_id;
 
         match instruction {
-            Instruction::Compare { lhs, rhs } => {
+            Instruction::Compare { lhs, rhs, typ } => {
                 let lhs = self.allocate_register(lhs);
+
+                assert_eq!(typ.bytes(), 4);
 
                 match rhs {
                     Operand::Immediate(immediate) => {
@@ -102,7 +104,9 @@ impl Amd64CodeGenerator {
                 }
             }
 
-            Instruction::Increment { register } => {
+            Instruction::Increment { register, typ } => {
+                assert_eq!(typ.bytes(), 4);
+
                 let reg = self.allocate_register(register);
                 self.instructions.push(Amd64Instruction::Inc32 { reg });
             }
@@ -195,7 +199,7 @@ impl Amd64CodeGenerator {
                 self.instructions.push(Amd64Instruction::ReturnNear);
             }
 
-            Instruction::MathOperation { operation, destination, lhs, rhs } => {
+            Instruction::MathOperation { operation, typ: _, destination, lhs, rhs } => {
                 let dst = self.allocate_register(destination);
 
                 match operation {
@@ -214,7 +218,7 @@ impl Amd64CodeGenerator {
                 todo!("Bereken datasectie adres {offset} en zet hem in {destination}")
             }
 
-            Instruction::Negate { dst, src } => {
+            Instruction::Negate { typ: _, dst, src } => {
                 let dst = self.allocate_register(dst);
                 let src = self.allocate_register(src);
 

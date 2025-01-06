@@ -177,7 +177,7 @@ impl DeadStoreEliminator {
                     }
                 }
 
-                Instruction::Increment { register } => {
+                Instruction::Increment { register, typ: _ } => {
                     self.notice_normal_write(register, index);
                 }
 
@@ -219,7 +219,7 @@ impl DeadStoreEliminator {
                     self.notice_normal_write(destination, index);
                 }
 
-                Instruction::MathOperation { operation, destination, lhs, rhs } => {
+                Instruction::MathOperation { operation, typ: _, destination, lhs, rhs } => {
                     _ = operation;
 
                     if let Operand::Register(lhs) = lhs {
@@ -233,7 +233,7 @@ impl DeadStoreEliminator {
                     self.notice_normal_write(destination, index);
                 }
 
-                Instruction::Negate { dst, src } => {
+                Instruction::Negate { typ: _, dst, src } => {
                     self.notice_normal_write(dst, index);
                     self.notice_read(src);
                 }

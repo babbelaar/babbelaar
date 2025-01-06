@@ -43,6 +43,7 @@ pub enum Instruction {
     //
 
     Compare {
+        typ: PrimitiveType,
         lhs: Register,
         rhs: Operand,
     },
@@ -53,6 +54,7 @@ pub enum Instruction {
 
     /// Adds `1` to the value of the register.
     Increment {
+        typ: PrimitiveType,
         register: Register,
     },
 
@@ -111,6 +113,7 @@ pub enum Instruction {
     //
 
     MathOperation {
+        typ: PrimitiveType,
         operation: MathOperation,
         destination: Register,
         lhs: Operand,
@@ -118,6 +121,7 @@ pub enum Instruction {
     },
 
     Negate {
+        typ: PrimitiveType,
         dst: Register,
         src: Register,
     },
@@ -176,15 +180,17 @@ impl Instruction {
         let mut result = Vec::new();
 
         match self {
-            Self::Compare { lhs, rhs } => {
+            Self::Compare { lhs, rhs, typ } => {
+                _ = typ;
                 result.push(*lhs);
                 if let Operand::Register(rhs) = rhs {
                     result.push(*rhs);
                 }
             }
 
-            Self::Increment { register } => {
+            Self::Increment { register, typ } => {
                 _ = register;
+                _ = typ;
             }
 
             Self::InitArg { destination, arg_idx } => {
@@ -243,9 +249,9 @@ impl Instruction {
                 }
             }
 
-            Self::MathOperation { operation, destination, lhs, rhs } => {
+            Self::MathOperation { operation, typ, destination, lhs, rhs } => {
                 _ = operation;
-
+                _ = typ;
                 _ = destination;
 
                 if let Operand::Register(lhs) = lhs {
@@ -257,7 +263,8 @@ impl Instruction {
                 }
             }
 
-            Self::Negate { dst, src } => {
+            Self::Negate { typ, dst, src } => {
+                _ = typ;
                 _ = dst;
                 result.push(*src);
             }
@@ -302,11 +309,8 @@ impl Instruction {
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instruction::Compare { lhs, rhs } => {
-                f.write_str("Vergelijk ")?;
-                lhs.fmt(f)?;
-                f.write_str(", ")?;
-                rhs.fmt(f)
+            Instruction::Compare { lhs, rhs, typ } => {
+                f.write_fmt(format_args!("Vergelijk {typ}, {lhs}, {rhs}"))
             }
 
             Instruction::Move { source, destination } => {
@@ -355,9 +359,8 @@ impl Display for Instruction {
                 Ok(())
             }
 
-            Instruction::Increment { register } => {
-                f.write_str("Verhoog ")?;
-                register.fmt(f)
+            Instruction::Increment { register, typ } => {
+                f.write_fmt(format_args!("Verhoog {typ}, {register}"))
             }
 
             Instruction::InitArg { destination, arg_idx } => {
@@ -389,9 +392,12 @@ impl Display for Instruction {
                 Ok(())
             }
 
-            Instruction::MathOperation { operation, destination, lhs, rhs } => {
+            Instruction::MathOperation { operation, typ, destination, lhs, rhs } => {
                 operation.fmt(f)?;
                 f.write_char(' ')?;
+
+                typ.fmt(f)?;
+                f.write_str(", ")?;
 
                 destination.fmt(f)?;
                 f.write_str(", ")?;
@@ -404,8 +410,8 @@ impl Display for Instruction {
                 Ok(())
             }
 
-            Instruction::Negate { dst, src } => {
-                f.write_fmt(format_args!("KeerNegatief {dst}, {src}"))
+            Instruction::Negate { typ, dst, src } => {
+                f.write_fmt(format_args!("KeerNegatief {typ}, {dst}, {src}"))
             }
 
             Instruction::StackAlloc { dst, size } => {
@@ -551,10 +557,20 @@ impl PrimitiveType {
     pub const fn bytes(&self) -> usize {
         self.bytes
     }
+
+    #[must_use]
+    pub const fn is_arm_64_bit(&self) -> bool {
+        self.bytes >= 8
+    }
 }
 
 impl Display for PrimitiveType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
+        if self.is_signed() {
+            f.write_char('s')?;
+        } else {
+            f.write_char('u')?;
+        }
+        self.bytes.fmt(f)
     }
 }

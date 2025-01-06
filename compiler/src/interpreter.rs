@@ -115,9 +115,11 @@ impl Interpreter {
                 OperationResult::Continue
             }
 
-            Instruction::Compare { lhs, rhs } => {
+            Instruction::Compare { typ, lhs, rhs } => {
                 let lhs = self.register(&lhs);
                 let rhs = self.operand_to_immediate(&rhs);
+
+                _ = typ;
 
                 // TODO: honor the size of the immediate (this matters for e.g. carry, overflow)
                 let lhs = lhs.as_i64();
@@ -136,7 +138,8 @@ impl Interpreter {
                 OperationResult::Continue
             }
 
-            Instruction::Increment { register } => {
+            Instruction::Increment { register, typ } => {
+                _ = typ;
                 let value = Immediate::Integer64(self.register(&register).as_i64() + 1);
                 self.frame().set_register(register, value);
                 OperationResult::Continue
@@ -257,7 +260,7 @@ impl Interpreter {
                 }
             }
 
-            Instruction::MathOperation { operation, destination, lhs, rhs } => {
+            Instruction::MathOperation { operation, typ: _, destination, lhs, rhs } => {
                 let lhs = self.operand_to_immediate(&lhs);
                 let rhs = self.operand_to_immediate(&rhs);
 
@@ -276,7 +279,7 @@ impl Interpreter {
                 OperationResult::Continue
             }
 
-            Instruction::Negate { dst, src } => {
+            Instruction::Negate { typ: _, dst, src } => {
                 let value = match self.register(&src) {
                     Immediate::Integer8(i) => Immediate::Integer8(-i),
                     Immediate::Integer16(i) => Immediate::Integer16(-i),

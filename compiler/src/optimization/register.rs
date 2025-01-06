@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crate::{Function, FunctionOptimizer, Immediate, Instruction, MathOperation, Operand, Register};
+use crate::{Function, FunctionOptimizer, Immediate, Instruction, MathOperation, Operand, PrimitiveType, Register};
 
 #[derive(Debug, Default)]
 pub struct RegisterDeduplicator {
@@ -54,7 +54,7 @@ impl FunctionOptimizer for RegisterDeduplicator {
 
                 Instruction::Compare { .. } => (),
 
-                Instruction::Increment { register } => {
+                Instruction::Increment { register, typ: _ } => {
                     self.set_value_changed(register);
                 }
 
@@ -98,7 +98,7 @@ impl FunctionOptimizer for RegisterDeduplicator {
                     self.set_value_unknown(destination);
                 }
 
-                Instruction::MathOperation { operation, destination, lhs, rhs } => {
+                Instruction::MathOperation { operation, typ: _, destination, lhs, rhs } => {
                     _ = operation;
 
                     if let Operand::Register(reg) = lhs {
@@ -116,7 +116,7 @@ impl FunctionOptimizer for RegisterDeduplicator {
                     self.set_value_unknown(destination);
                 }
 
-                Instruction::Negate { dst, src } => {
+                Instruction::Negate { typ: _, dst, src } => {
                     if let Some(other_reg) = self.unchanged_moves.get(&src).cloned() {
                         *dst = other_reg;
                     }
@@ -189,17 +189,18 @@ impl FunctionOptimizer for RegisterInliner {
                     }
                 }
 
-                Instruction::Compare { lhs, rhs } => {
+                Instruction::Compare { lhs, rhs, typ } => {
                     let lhs = lhs.clone();
+                    let typ = *typ;
 
                     let Operand::Register(register) = rhs else { continue };
                     let Some(rhs) = self.values.get(register) else { continue };
                     let rhs = Operand::Immediate(*rhs);
 
-                    *instruction = Instruction::Compare { lhs, rhs };
+                    *instruction = Instruction::Compare { lhs, rhs, typ };
                 }
 
-                Instruction::Increment { register } => {
+                Instruction::Increment { register, typ: _ } => {
                     if let Some(value) = self.values.get(register) {
                         self.values.insert(register.clone(), Immediate::Integer64(value.as_i64() + 1));
                     }
@@ -254,11 +255,11 @@ impl FunctionOptimizer for RegisterInliner {
                     self.values.remove(destination);
                 }
 
-                Instruction::MathOperation { operation, destination, lhs, rhs } => {
-                    *instruction = self.calculate_math_operation(*operation, *destination, lhs, rhs);
+                Instruction::MathOperation { operation, typ, destination, lhs, rhs } => {
+                    *instruction = self.calculate_math_operation(*operation, *typ, *destination, lhs, rhs);
                 }
 
-                Instruction::Negate { dst, src } => {
+                Instruction::Negate { typ: _, dst, src } => {
                     let Some(val) = self.values.get(src) else { continue };
 
                     let immediate = match val {
@@ -333,7 +334,7 @@ impl RegisterInliner {
         }
     }
 
-    fn calculate_math_operation(&mut self, operation: MathOperation, destination: Register, lhs: &Operand, rhs: &Operand) -> Instruction {
+    fn calculate_math_operation(&mut self, operation: MathOperation, typ: PrimitiveType, destination: Register, lhs: &Operand, rhs: &Operand) -> Instruction {
         let lhs = self.try_inline_operand(lhs);
         let rhs = self.try_inline_operand(rhs);
 
@@ -356,6 +357,7 @@ impl RegisterInliner {
 
         Instruction::MathOperation {
             operation,
+            typ,
             destination,
             lhs,
             rhs,

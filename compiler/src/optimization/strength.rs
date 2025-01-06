@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{Function, Immediate, Instruction, MathOperation, Operand, Register};
+use crate::{Function, Immediate, Instruction, MathOperation, Operand, PrimitiveType, Register};
 
 use super::FunctionOptimizer;
 
@@ -14,8 +14,8 @@ impl FunctionOptimizer for StrengthReductor {
     fn optimize(&mut self, function: &mut Function) {
         for instruction in &mut function.instructions {
             match instruction {
-                Instruction::MathOperation { operation, destination, lhs, rhs } => {
-                    if let Some(instr) = self.optimize_math_op(*operation, *destination, *lhs, *rhs) {
+                Instruction::MathOperation { operation,  typ, destination, lhs, rhs } => {
+                    if let Some(instr) = self.optimize_math_op(*operation, *typ, *destination, *lhs, *rhs) {
                         *instruction = instr;
                     }
                 }
@@ -27,7 +27,7 @@ impl FunctionOptimizer for StrengthReductor {
 }
 
 impl StrengthReductor {
-    fn optimize_math_op(&self, operation: MathOperation, destination: Register, lhs: Operand, rhs: Operand) -> Option<Instruction> {
+    fn optimize_math_op(&self, operation: MathOperation, typ: PrimitiveType, destination: Register, lhs: Operand, rhs: Operand) -> Option<Instruction> {
         let Operand::Immediate(rhs) = rhs else {
             return None;
         };
@@ -50,6 +50,7 @@ impl StrengthReductor {
 
                     Some(Instruction::MathOperation {
                         operation: MathOperation::LeftShift,
+                        typ,
                         destination,
                         lhs,
                         rhs: Operand::Immediate(Immediate::Integer64(power_of_two as _))

@@ -69,7 +69,7 @@ impl LifeAnalysis {
 
     fn add_instruction(&mut self, index: usize, instruction: &Instruction) {
         match instruction {
-            Instruction::Compare { lhs, rhs } => {
+            Instruction::Compare { lhs, rhs, typ: _ } => {
                 self.add_lifetime(lhs, index);
                 self.try_add_lifetime(rhs, index);
             }
@@ -78,7 +78,7 @@ impl LifeAnalysis {
                 self.add_lifetime(destination, index);
             }
 
-            Instruction::Increment { register } => {
+            Instruction::Increment { register, typ: _ } => {
                 self.add_lifetime(register, index);
             }
 
@@ -132,14 +132,14 @@ impl LifeAnalysis {
                 }
             }
 
-            Instruction::MathOperation { operation, destination, lhs, rhs } => {
+            Instruction::MathOperation { operation, typ: _, destination, lhs, rhs } => {
                 _ = operation;
                 self.add_lifetime(destination, index);
                 self.try_add_lifetime(lhs, index);
                 self.try_add_lifetime(rhs, index);
             }
 
-            Instruction::Negate { dst, src } => {
+            Instruction::Negate { typ: _, dst, src } => {
                 self.add_lifetime(dst, index);
                 self.add_lifetime(src, index);
             }
