@@ -51,7 +51,9 @@ impl Amd64CodeGenerator {
             }
 
             let instruction = this.materialize_instruction(instruction);
-            this.instructions.push(instruction);
+            if !is_instruction_redundant(&instruction) {
+                this.instructions.push(instruction);
+            }
             this.current_instruction_id += 1;
         }
 
@@ -413,6 +415,19 @@ impl Amd64CodeGenerator {
         }
 
         output
+    }
+}
+
+#[must_use]
+fn is_instruction_redundant(instruction: &Amd64Instruction<Amd64Register>) -> bool {
+    match instruction {
+        Amd64Instruction::MovReg32Reg32 { dst, src } => *dst == *src,
+        Amd64Instruction::MovReg64Reg64 { dst, src } => *dst == *src,
+        Amd64Instruction::AddReg32Imm8 { dst: _, src } => *src == 0,
+        Amd64Instruction::AddReg64Imm8 { dst: _, src } => *src == 0,
+        Amd64Instruction::SubReg32Imm8 { dst: _, src } => *src == 0,
+        Amd64Instruction::SubReg64Imm8 { dst: _, src } => *src == 0,
+        _ => false,
     }
 }
 
