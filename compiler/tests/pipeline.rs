@@ -1588,7 +1588,7 @@ fn create_single_object_executable(code: &str, directory: &Path) -> std::path::P
     let tree = parse_string_to_tree(code).unwrap();
 
     let mut pipeline = Pipeline::new(Platform::host_platform());
-    // let mut pipeline = Pipeline::new(Platform::new(babbelaar_compiler::Architecture::X86_64, babbelaar_compiler::Environment::Darwin, babbelaar_compiler::OperatingSystem::MacOs));
+    // let mut pipeline = Pipeline::new(Platform::new(babbelaar_compiler::Architecture::X86_64, babbelaar_compiler::Environment::Darwin, babbelaar_compiler::OperatingSystem::MacOs, Default::default()));
     pipeline.compile_trees(&[tree]);
     pipeline.create_object(directory, "BabBestand").unwrap();
 
