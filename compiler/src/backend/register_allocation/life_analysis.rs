@@ -1,11 +1,11 @@
-// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2024 - 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 use std::collections::BTreeMap;
 
 use log::debug;
 
-use crate::{ControlFlowGraph, Instruction, Operand, Register as IrRegister};
+use crate::{ControlFlowGraph, Register as IrRegister, TargetInstruction};
 
 use super::RegisterLifetime;
 
@@ -19,7 +19,7 @@ pub struct LifeAnalysis {
 
 impl LifeAnalysis {
     #[must_use]
-    pub fn analyze(argument_registers: &[IrRegister], instructions: &[Instruction]) -> LifeAnalysisResult {
+    pub fn analyze<I: TargetInstruction>(argument_registers: &[IrRegister], instructions: &[I]) -> LifeAnalysisResult {
         let mut this = Self {
             result: Default::default(),
             function_calls: Default::default(),
@@ -46,7 +46,7 @@ impl LifeAnalysis {
         for loop_range in this.cfg.loop_ranges() {
             let mut function_calls = 0;
             for instruction in &instructions[loop_range.clone()] {
-                if let Instruction::Call { .. } = instruction {
+                if instruction.is_call() {
                     function_calls += 1;
                 }
             }
@@ -67,101 +67,30 @@ impl LifeAnalysis {
         this.result
     }
 
-    fn add_instruction(&mut self, index: usize, instruction: &Instruction) {
-        match instruction {
-            Instruction::Compare { lhs, rhs, typ: _ } => {
-                self.add_lifetime(lhs, index);
-                self.try_add_lifetime(rhs, index);
+    fn add_instruction<I: TargetInstruction>(&mut self, index: usize, instruction: &I) {
+        let info = instruction.info();
+
+        let is_call = instruction.is_call();
+        let is_return = instruction.is_return();
+
+        for dst in info.virtual_destinations() {
+            self.add_lifetime(&dst, index);
+        }
+
+        for (idx, src) in info.virtual_sources().enumerate() {
+            let info = self.add_lifetime(&src, index);
+
+            if is_call {
+                info.did_use_for_argument(idx);
             }
 
-            Instruction::InitArg { destination, arg_idx: _ } => {
-                self.add_lifetime(destination, index);
+            if is_return {
+                info.did_use_for_return();
             }
+        }
 
-            Instruction::Increment { register, typ: _ } => {
-                self.add_lifetime(register, index);
-            }
-
-            Instruction::Move { source, destination } => {
-                if let Operand::Register(source) = source {
-                    self.add_lifetime(source, index);
-                }
-                self.add_lifetime(destination, index);
-            }
-
-            Instruction::MoveAddress { destination, offset } => {
-                self.add_lifetime(destination, index);
-                _ = offset;
-            }
-
-            Instruction::MoveCondition { destination, condition } => {
-                self.add_lifetime(destination, index);
-                _ = condition;
-            }
-
-            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
-                _ = name;
-                if let Some(ret_val_reg) = ret_val_reg {
-                    self.add_lifetime(ret_val_reg, index);
-                }
-                for (idx, arg) in arguments.iter().chain(variable_arguments.iter()).enumerate() {
-                    self.add_lifetime(&arg.register(), index)
-                        .did_use_for_argument(idx);
-                }
-
-                self.add_call(index);
-            }
-
-            Instruction::Jump { location } => {
-                _ = location;
-            }
-
-            Instruction::JumpConditional { condition, location } => {
-                _ = condition;
-                _ = location;
-            }
-
-            Instruction::Label(label) => {
-                _ = label;
-            }
-
-            Instruction::Return { value_reg } => {
-                if let Some(value_reg) = value_reg {
-                    self.add_lifetime(value_reg, index)
-                        .did_use_for_return();
-                }
-            }
-
-            Instruction::MathOperation { operation, typ: _, destination, lhs, rhs } => {
-                _ = operation;
-                self.add_lifetime(destination, index);
-                self.try_add_lifetime(lhs, index);
-                self.try_add_lifetime(rhs, index);
-            }
-
-            Instruction::Negate { typ: _, dst, src } => {
-                self.add_lifetime(dst, index);
-                self.add_lifetime(src, index);
-            }
-
-            Instruction::StackAlloc { dst, size } => {
-                _ = size;
-                self.add_lifetime(dst, index);
-            }
-
-            Instruction::LoadPtr { destination, base_ptr, offset, typ } => {
-                _ = typ;
-                self.add_lifetime(destination, index);
-                self.add_lifetime(base_ptr, index);
-                self.try_add_lifetime(offset, index);
-            }
-
-            Instruction::StorePtr { base_ptr, offset, value, typ } => {
-                _ = typ;
-                self.add_lifetime(base_ptr, index);
-                self.try_add_lifetime(offset, index);
-                self.add_lifetime(value, index);
-            }
+        if is_call {
+            self.add_call(index);
         }
     }
 
@@ -171,12 +100,6 @@ impl LifeAnalysis {
 
         lifetime.did_use_at(index);
         lifetime
-    }
-
-    fn try_add_lifetime(&mut self, operand: &Operand, index: usize) {
-        if let Operand::Register(register) = operand {
-            self.add_lifetime(register, index);
-        }
     }
 
     fn add_argument_registers(&mut self, argument_registers: &[IrRegister]) {

@@ -1,21 +1,20 @@
-// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2024 - 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 use std::{collections::HashMap, mem::take};
 
 use babbelaar::BabString;
-use log::{debug, warn};
+use log::debug;
 
-use crate::{AllocatableRegister, CodeGenerator, CompiledFunction, Function, Immediate, Instruction, Label, MathOperation, Operand, Platform, Register, RegisterAllocator, Relocation, RelocationMethod, RelocationType, StackAllocator};
+use crate::{backend::{amd64::instruction_selector::Amd64InstructionSelector, VirtOrPhysReg}, CodeGenerator, CompiledFunction, Function, Instruction, Label, Platform, RegisterAllocator, Relocation, RelocationMethod, RelocationType, StackAllocator};
 
-use super::{Amd64ConditionCode, Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
+use super::{Amd64FixUp, Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
 
 #[derive(Debug)]
 pub struct Amd64CodeGenerator {
-    platform: Platform,
     function_name: BabString,
     characteristics: Amd64FunctionCharacteristics,
-    instructions: Vec<Amd64Instruction>,
+    instructions: Vec<Amd64Instruction<Amd64Register>>,
     label_offsets: HashMap<Label, usize>,
     register_allocator: RegisterAllocator<Amd64Register>,
     stack_allocator: StackAllocator,
@@ -26,23 +25,34 @@ pub struct Amd64CodeGenerator {
 impl Amd64CodeGenerator {
     #[must_use]
     pub fn compile(function: &Function, platform: Platform) -> CompiledFunction {
+        let instruction_selector = Amd64InstructionSelector::compile(function, platform.clone());
+
         let characteristics = Amd64FunctionCharacteristics::analyze(function);
         let mut this = Self {
             function_name: function.name().clone(),
             characteristics,
             instructions: Vec::new(),
             label_offsets: HashMap::new(),
-            register_allocator: RegisterAllocator::new(platform.clone(), function),
-            stack_allocator: StackAllocator::new(platform.clone()),
+            register_allocator: RegisterAllocator::new(platform.clone(), function.argument_registers(), &instruction_selector.instructions),
+            stack_allocator: StackAllocator::new(platform),
             relocations: Vec::new(),
-            platform,
             current_instruction_id: 0,
         };
 
         this.add_prologue(function.instructions());
 
-        for (instruction_id, instruction) in function.instructions().iter().enumerate() {
-            this.add_instruction(instruction, instruction_id);
+        for instruction in instruction_selector.instructions {
+            if let Amd64Instruction::ReturnNear = instruction {
+                this.add_epilogue();
+            }
+
+            if let Amd64Instruction::Label(label) = instruction {
+                this.label_offsets.insert(label, this.instructions.len());
+            }
+
+            let instruction = this.materialize_instruction(instruction);
+            this.instructions.push(instruction);
+            this.current_instruction_id += 1;
         }
 
         this.dump_instructions();
@@ -63,253 +73,6 @@ impl Amd64CodeGenerator {
             name: function.name.clone(),
             byte_code,
             relocations,
-        }
-    }
-
-    fn add_instruction(&mut self, instruction: &Instruction, instruction_id: usize) {
-        self.current_instruction_id = instruction_id;
-
-        match instruction {
-            Instruction::Compare { lhs, rhs, typ } => {
-                let lhs = self.allocate_register(lhs);
-
-                assert_eq!(typ.bytes(), 4);
-
-                match rhs {
-                    Operand::Immediate(immediate) => {
-                        match immediate.shrink_if_possible() {
-                            Immediate::Integer8(rhs) => {
-                                self.instructions.push(Amd64Instruction::CmpReg32Imm8 {
-                                    lhs,
-                                    rhs,
-                                });
-                            }
-
-                            Immediate::Integer16(..) | Immediate::Integer32(..) => {
-                                self.instructions.push(Amd64Instruction::CmpReg32Imm32 {
-                                    lhs,
-                                    rhs: immediate.as_i32(),
-                                });
-                            }
-
-                            Immediate::Integer64(..) => todo!(),
-                        }
-                    }
-
-                    Operand::Register(register) => {
-                        let rhs = self.allocate_register(register);
-
-                        self.instructions.push(Amd64Instruction::CmpReg32Reg32 { lhs, rhs });
-                    }
-                }
-            }
-
-            Instruction::Increment { register, typ } => {
-                assert_eq!(typ.bytes(), 4);
-
-                let reg = self.allocate_register(register);
-                self.instructions.push(Amd64Instruction::Inc32 { reg });
-            }
-
-            Instruction::Move { source, destination } => {
-                let dst = self.allocate_register(destination);
-
-                self.add_instruction_mov(dst, source);
-            }
-
-            Instruction::MoveCondition { destination, condition } => {
-                let dst = self.allocate_register(destination);
-                self.instructions.push(Amd64Instruction::SetCC {
-                    dst,
-                    condition: Amd64ConditionCode::from(*condition),
-                })
-            }
-
-            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
-                assert_eq!(variable_arguments.len(), 0, "flexibele argumenten zijn niet ondersteund op dit platform!");
-                debug_assert!(arguments.len() < (1 << 8));
-
-                for (idx, arg) in arguments.iter().enumerate() {
-                    let current_reg = self.allocate_register(&arg.register());
-                    let actual_reg = Amd64Register::argument_nth(&self.platform, idx);
-
-                    if current_reg != actual_reg {
-                        self.instructions.push(Amd64Instruction::MovReg64Reg64 {
-                            dst: actual_reg,
-                            src: current_reg,
-                        });
-                    }
-                }
-
-                self.instructions.push(Amd64Instruction::CallNearRelative {
-                    symbol_name: name.clone(),
-                });
-
-                if let Some(ret_val_reg) = ret_val_reg {
-                    let ret_val_reg = self.allocate_register(ret_val_reg);
-                    if ret_val_reg != Amd64Register::return_register(&self.platform) {
-                        self.instructions.push(Amd64Instruction::MovReg64Reg64 {
-                            dst: ret_val_reg,
-                            src: Amd64Register::return_register(&self.platform),
-                        });
-                    }
-                }
-            }
-
-            Instruction::Jump { location } => {
-                let location = *location;
-                self.instructions.push(Amd64Instruction::Jmp { location });
-            }
-
-            Instruction::JumpConditional { condition, location } => {
-                let location = *location;
-
-                let condition = Amd64ConditionCode::from(*condition);
-                self.instructions.push(Amd64Instruction::JccShort { location, condition });
-            }
-
-            Instruction::Label(label) => {
-                self.label_offsets.insert(*label, self.instructions.len());
-            }
-
-            Instruction::InitArg { destination, arg_idx } => {
-                let src = Amd64Register::argument_nth(&self.platform, *arg_idx);
-                let dst = self.allocate_register(destination);
-                if src != dst {
-                    println!("InitArg {destination}, {arg_idx} => mov {dst}, {src}");
-                    self.instructions.push(Amd64Instruction::MovReg64Reg64 {
-                        dst,
-                        src,
-                    });
-                }
-            }
-
-            Instruction::Return { value_reg } => {
-                if let Some(value_reg) = value_reg {
-                    let value_reg = self.allocate_register(value_reg);
-                    if value_reg != Amd64Register::return_register(&self.platform) {
-                        self.instructions.push(Amd64Instruction::MovReg64Reg64 {
-                            dst: Amd64Register::return_register(&self.platform),
-                            src: value_reg,
-                        });
-                    }
-                }
-
-                self.add_epilogue();
-                self.instructions.push(Amd64Instruction::ReturnNear);
-            }
-
-            Instruction::MathOperation { operation, typ: _, destination, lhs, rhs } => {
-                let dst = self.allocate_register(destination);
-
-                match operation {
-                    MathOperation::Add => self.add_instruction_add(dst, lhs, rhs),
-                    MathOperation::Multiply => self.instruction_mul(dst, lhs, rhs),
-                    MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
-                    MathOperation::Divide => todo!("Ondersteun DeelDoor op AMD64"),
-                    MathOperation::Modulo => todo!("Ondersteun Modulo op AMD64"),
-                    MathOperation::LeftShift => todo!("Voeg SchuifLinks toe"),
-                    MathOperation::RightShift => todo!("Voeg SchuifRechts toe"),
-                    MathOperation::Xor => todo!("Voeg ExclusieveOf toe"),
-                }
-            }
-
-            Instruction::MoveAddress { destination, offset } => {
-                todo!("Bereken datasectie adres {offset} en zet hem in {destination}")
-            }
-
-            Instruction::Negate { typ: _, dst, src } => {
-                let dst = self.allocate_register(dst);
-                let src = self.allocate_register(src);
-
-                if dst != src {
-                    self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src });
-                }
-
-                self.instructions.push(Amd64Instruction::NegReg64 { dst: src });
-            }
-
-            Instruction::StackAlloc { dst, size } => {
-                let offset = self.stack_allocator.offset_of_reg(instruction_id);
-                _ = size;
-
-                let dst = self.allocate_register(dst);
-
-                if offset == 0 {
-                    self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src: Amd64Register::Rsp });
-                } else {
-                    self.instructions.push(Amd64Instruction::LeaReg64FromReg64Off8 { dst, base: Amd64Register::Rsp, offset: offset.try_into().unwrap() });
-                }
-            }
-
-            Instruction::LoadPtr { destination, base_ptr, offset, typ } => {
-                let dst = self.allocate_register(destination);
-                let base = self.allocate_register(base_ptr);
-
-                match (offset.shrink_if_possible(), typ.bytes()) {
-                    (Operand::Immediate(Immediate::Integer8(offset)), 4) => {
-                        if offset == 0 {
-                            self.instructions.push(Amd64Instruction::MovReg32FromPtrReg64 { dst, base });
-                        } else {
-                            self.instructions.push(Amd64Instruction::MovReg32FromPtrReg64Off8 { dst, base, offset });
-                        }
-                    }
-
-                    (Operand::Immediate(Immediate::Integer8(offset)), 8) => {
-                        if offset == 0 {
-                            self.instructions.push(Amd64Instruction::MovReg64FromPtrReg64 { dst, base });
-                        } else {
-                            self.instructions.push(Amd64Instruction::MovReg64FromPtrReg64Off8 { dst, base, offset });
-                        }
-                    }
-
-                    _ => todo!("Ondersteun register-offset {offset} met typegrootte {}", typ.bytes()),
-                }
-            }
-
-            Instruction::StorePtr { base_ptr, offset, value, typ } => {
-                let base = self.allocate_register(base_ptr);
-
-                // TODO: add x86-specific optimizations to create the following code below:
-                let value = &Operand::Register(*value);
-
-                match (value, offset.shrink_if_possible(), typ.bytes()) {
-                    (Operand::Immediate(value), Operand::Immediate(Immediate::Integer8(offset)), 4) => {
-                        if offset == 0 {
-                            self.instructions.push(Amd64Instruction::MovImm32ToPtrReg64 {
-                                base,
-                                src: value.as_i32(),
-                            });
-                        } else {
-                            self.instructions.push(Amd64Instruction::MovImm32ToPtrReg64Off8 {
-                                base,
-                                offset,
-                                src: value.as_i32(),
-                            });
-                        }
-                    }
-
-                    (Operand::Register(src), Operand::Immediate(Immediate::Integer8(offset)), 4) => {
-                        let src = self.allocate_register(src);
-                        if offset == 0 {
-                            self.instructions.push(Amd64Instruction::MovReg32ToPtrReg64 { base, src });
-                        } else {
-                            self.instructions.push(Amd64Instruction::MovReg32ToPtrReg64Off8 { base, offset, src });
-                        }
-                    }
-
-                    (Operand::Register(src), Operand::Immediate(Immediate::Integer8(offset)), 8) => {
-                        let src = self.allocate_register(src);
-                        if offset == 0 {
-                            self.instructions.push(Amd64Instruction::MovReg64ToPtrReg64 { base, src });
-                        } else {
-                            self.instructions.push(Amd64Instruction::MovReg64ToPtrReg64Off8 { base, offset, src });
-                        }
-                    }
-
-                    _ => todo!("Ondersteun {instruction}"),
-                }
-            }
         }
     }
 
@@ -358,8 +121,223 @@ impl Amd64CodeGenerator {
     }
 
     #[must_use]
-    fn allocate_register(&mut self, register: &Register) -> Amd64Register {
-        match self.register_allocator.get_mapping(register, self.current_instruction_id) {
+    fn materialize_instruction(&mut self, instruction: Amd64Instruction<VirtOrPhysReg<Amd64Register>>) -> Amd64Instruction<Amd64Register> {
+        match instruction {
+            Amd64Instruction::AddReg32Imm8 { dst, src } => Amd64Instruction::AddReg32Imm8 {
+                dst: self.allocate_register(dst),
+                src,
+            },
+
+            Amd64Instruction::AddReg32Reg32 { dst, src } => Amd64Instruction::AddReg32Reg32 {
+                dst: self.allocate_register(dst),
+                src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::CallNearRelative { symbol_name } => Amd64Instruction::CallNearRelative {
+                symbol_name,
+            },
+
+            Amd64Instruction::CmpReg32Imm8 { lhs, rhs } => Amd64Instruction::CmpReg32Imm8 {
+                lhs: self.allocate_register(lhs),
+                rhs,
+            },
+
+            Amd64Instruction::CmpReg32Imm32 { lhs, rhs } => Amd64Instruction::CmpReg32Imm32 {
+                lhs: self.allocate_register(lhs),
+                rhs,
+            },
+
+            Amd64Instruction::CmpReg32Reg32 { lhs, rhs } => Amd64Instruction::CmpReg32Reg32 {
+                lhs: self.allocate_register(lhs),
+                rhs: self.allocate_register(rhs),
+            },
+
+            Amd64Instruction::IMulReg32Imm8 { dst, lhs, rhs } => Amd64Instruction::IMulReg32Imm8 {
+                dst: self.allocate_register(dst),
+                lhs: self.allocate_register(lhs),
+                rhs,
+            },
+
+            Amd64Instruction::IMulReg32Imm32 { dst, lhs, rhs } => Amd64Instruction::IMulReg32Imm32 {
+                dst: self.allocate_register(dst),
+                lhs: self.allocate_register(lhs),
+                rhs,
+            },
+
+            Amd64Instruction::IMulReg32Reg32 { lhs, rhs } => Amd64Instruction::IMulReg32Reg32 {
+                lhs: self.allocate_register(lhs),
+                rhs: self.allocate_register(rhs),
+            },
+
+            Amd64Instruction::Inc32 { reg } => Amd64Instruction::Inc32 {
+                reg: self.allocate_register(reg),
+            },
+
+            Amd64Instruction::Jmp { location } => Amd64Instruction::Jmp {
+                location,
+            },
+
+            Amd64Instruction::JccShort { location, condition } => Amd64Instruction::JccShort {
+                location, condition,
+            },
+
+            Amd64Instruction::Label(label) => Amd64Instruction::Label(label),
+
+            Amd64Instruction::LeaReg32FromReg32 { dst, base } => Amd64Instruction::LeaReg32FromReg32 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+            },
+
+            Amd64Instruction::LeaReg32FromReg32Off8 { dst, base, offset } => Amd64Instruction::LeaReg32FromReg32Off8 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+                offset,
+            },
+
+            Amd64Instruction::LeaReg64FromReg64 { dst, base } => Amd64Instruction::LeaReg64FromReg64 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+            },
+
+            Amd64Instruction::LeaReg64FromReg64Off8 { dst, base, offset } => Amd64Instruction::LeaReg64FromReg64Off8 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+                offset,
+            },
+
+            Amd64Instruction::MovReg32FromPtrReg64 { dst, base } => Amd64Instruction::MovReg32FromPtrReg64 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+            },
+
+            Amd64Instruction::MovReg32FromPtrReg64Off8 { dst, base, offset } => Amd64Instruction::MovReg32FromPtrReg64Off8 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+                offset,
+            },
+
+            Amd64Instruction::MovReg64FromPtrReg64 { dst, base } => Amd64Instruction::MovReg64FromPtrReg64 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+            },
+
+            Amd64Instruction::MovReg64FromPtrReg64Off8 { dst, base, offset } => Amd64Instruction::MovReg64FromPtrReg64Off8 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+                offset,
+            },
+
+            Amd64Instruction::MovImm32ToPtrReg64 { base, src } => Amd64Instruction::MovImm32ToPtrReg64 {
+                base: self.allocate_register(base),
+                src,
+            },
+
+            Amd64Instruction::MovImm32ToPtrReg64Off8 { base, offset, src } => Amd64Instruction::MovImm32ToPtrReg64Off8 {
+                base: self.allocate_register(base),
+                offset,
+                src,
+            },
+
+            Amd64Instruction::MovReg32ToPtrReg64 { base, src } => Amd64Instruction::MovReg32ToPtrReg64 {
+                base: self.allocate_register(base),
+                src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::MovReg32ToPtrReg64Off8 { base, offset, src } => Amd64Instruction::MovReg32ToPtrReg64Off8 {
+                base: self.allocate_register(base),
+                offset,
+                src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::MovReg64ToPtrReg64 { base, src } => Amd64Instruction::MovReg64ToPtrReg64 {
+                base: self.allocate_register(base),
+                src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::MovReg64ToPtrReg64Off8 { base, offset, src } => Amd64Instruction::MovReg64ToPtrReg64Off8 {
+                base: self.allocate_register(base),
+                src: self.allocate_register(src),
+                offset,
+            },
+
+            Amd64Instruction::MovReg32Imm32 { dst, src } => Amd64Instruction::MovReg32Imm32 {
+                dst: self.allocate_register(dst),
+                src,
+            },
+
+            Amd64Instruction::MovReg32Reg32 { dst, src } => Amd64Instruction::MovReg32Reg32 {
+                dst: self.allocate_register(dst),
+                src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::MovReg64Reg64 { dst, src } => Amd64Instruction::MovReg64Reg64 {
+                dst: self.allocate_register(dst),
+                src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::NegReg64 { dst } => Amd64Instruction::NegReg64 {
+                dst: self.allocate_register(dst),
+            },
+
+            Amd64Instruction::PopReg64 { reg } => Amd64Instruction::PopReg64 {
+                reg: self.allocate_register(reg),
+            },
+
+            Amd64Instruction::PushReg64 { reg } => Amd64Instruction::PushReg64 {
+                reg: self.allocate_register(reg),
+            },
+
+            Amd64Instruction::ReturnNear => Amd64Instruction::ReturnNear,
+
+            Amd64Instruction::SetCC { dst, condition } => Amd64Instruction::SetCC {
+                dst: self.allocate_register(dst),
+                condition,
+            },
+
+            Amd64Instruction::SubReg32Imm8 { dst, src } => Amd64Instruction::SubReg32Imm8 {
+                dst: self.allocate_register(dst),
+                src,
+            },
+
+            Amd64Instruction::SubReg64Imm8 { dst, src } => Amd64Instruction::SubReg64Imm8 {
+                dst: self.allocate_register(dst),
+                src,
+            },
+
+            Amd64Instruction::SubReg32Reg32 { dst, src } => Amd64Instruction::SubReg32Reg32 {
+                dst: self.allocate_register(dst),
+                src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::FixUp(Amd64FixUp::StackAlloc { dst, instruction_id }) => {
+                let offset = self.stack_allocator.offset_of_reg(instruction_id);
+
+                let dst = self.allocate_register(dst);
+
+                if offset == 0 {
+                    Amd64Instruction::MovReg64Reg64 {
+                        dst,
+                        src: Amd64Register::Rsp,
+                    }
+                } else {
+                    Amd64Instruction::LeaReg64FromReg64Off8 {
+                        dst,
+                        base: Amd64Register::Rsp,
+                        offset: offset.try_into().unwrap(),
+                    }
+                }
+            }
+        }
+    }
+
+    #[must_use]
+    fn allocate_register(&mut self, register: VirtOrPhysReg<Amd64Register>) -> Amd64Register {
+        let register = match register {
+            VirtOrPhysReg::Physical(phys) => return phys,
+            VirtOrPhysReg::Virtual(register) => register,
+        };
+
+        match self.register_allocator.get_mapping(&register, self.current_instruction_id) {
             Some(register) => register,
             None => {
                 // TODO: allocate on the stack in this case.
@@ -424,145 +402,6 @@ impl Amd64CodeGenerator {
         }
 
         output
-    }
-
-    fn add_instruction_add(&mut self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
-        match (lhs, rhs) {
-            (Operand::Register(lhs), Operand::Immediate(rhs))
-                | (Operand::Immediate(rhs), Operand::Register(lhs))=> {
-                let lhs = self.allocate_register(lhs);
-
-                if lhs != dst {
-                    self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
-
-                    if let Immediate::Integer8(i8) = rhs {
-                        self.instructions.push(Amd64Instruction::LeaReg32FromReg32Off8 { dst, base: lhs, offset: *i8 });
-                        return;
-                    }
-                }
-
-                match rhs.shrink_if_possible() {
-                    Immediate::Integer8(i8) => {
-                        self.instructions.push(Amd64Instruction::AddReg32Imm8 { dst, src: i8 })
-                    }
-
-                    unsupported => todo!("Support ADD rhs {unsupported:?}"),
-                }
-            }
-
-            (Operand::Register(lhs), Operand::Register(rhs)) => {
-                let lhs = self.allocate_register(lhs);
-                let rhs = self.allocate_register(rhs);
-
-                if rhs == dst {
-                    self.instructions.push(Amd64Instruction::AddReg32Reg32 { dst, src: lhs })
-                } else if lhs == dst {
-                    self.instructions.push(Amd64Instruction::AddReg32Reg32 { dst, src: rhs })
-                } else {
-                    self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
-                    self.instructions.push(Amd64Instruction::AddReg32Reg32 { dst, src: rhs })
-                }
-            }
-
-            _ => todo!("Support add of {lhs}, {rhs}"),
-        }
-    }
-
-    fn add_instruction_mov(&mut self, dst: Amd64Register, source: &Operand) {
-        match source {
-            Operand::Immediate(immediate) => {
-                match immediate.shrink_if_possible() {
-                    Immediate::Integer8(..) | Immediate::Integer16(..) | Immediate::Integer32(..) => {
-                        self.instructions.push(Amd64Instruction::MovReg32Imm32 {
-                            dst,
-                            src: immediate.as_i32(),
-                        });
-                    }
-
-                    Immediate::Integer64(qword) => {
-                        todo!("Support mov64 (value is 0x{qword:x})")
-                    }
-                }
-            }
-
-            Operand::Register(source) => {
-                let src = self.allocate_register(source);
-
-                if dst != src {
-                    self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src });
-                }
-            }
-        }
-    }
-
-    fn add_instruction_sub(&mut self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
-        match (lhs, rhs) {
-            (Operand::Register(lhs), Operand::Immediate(rhs)) => {
-                let lhs = self.allocate_register(lhs);
-
-                if lhs != dst {
-                    self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
-                }
-
-                match rhs.shrink_if_possible() {
-                    Immediate::Integer8(i8) => {
-                        self.instructions.push(Amd64Instruction::SubReg32Imm8 { dst, src: i8 })
-                    }
-
-                    unsupported => todo!("Support SUB rhs {unsupported:?}"),
-                }
-            }
-
-            (Operand::Register(lhs), Operand::Register(rhs)) => {
-                let lhs = self.allocate_register(lhs);
-                let rhs = self.allocate_register(rhs);
-
-                if lhs != dst {
-                    self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
-                }
-
-                self.instructions.push(Amd64Instruction::SubReg32Reg32 { dst, src: rhs })
-            }
-
-            _ => todo!("Support sub of {lhs}, {rhs}"),
-        }
-    }
-
-    fn instruction_mul(&mut self, dst: Amd64Register, lhs: &Operand, rhs: &Operand) {
-        match (lhs, rhs) {
-            (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
-                warn!("MUL met twee immediate waarden zou gedaan moeten worden door de optimalisator!");
-
-                self.add_instruction_mov(dst, &Operand::Immediate(Immediate::Integer64(lhs.as_i64() * rhs.as_i64())));
-            }
-
-            (Operand::Immediate(imm), Operand::Register(reg)) | (Operand::Register(reg), Operand::Immediate(imm)) => {
-                let reg = self.allocate_register(reg);
-
-                match imm.shrink_if_possible() {
-                    Immediate::Integer8(i8) => {
-                        self.instructions.push(Amd64Instruction::IMulReg32Imm8 { dst, lhs: reg, rhs: i8 });
-                    }
-
-                    Immediate::Integer64(..) => todo!("Ondersteun MUL 64-bit op AMD64"),
-
-                    other => {
-                        self.instructions.push(Amd64Instruction::IMulReg32Imm32 { dst, lhs: reg, rhs: other.as_i32() });
-                    }
-                }
-            }
-
-            (Operand::Register(lhs), Operand::Register(rhs)) => {
-                let lhs = self.allocate_register(lhs);
-                let rhs = self.allocate_register(rhs);
-
-                if lhs != dst {
-                    self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
-                }
-
-                self.instructions.push(Amd64Instruction::IMulReg32Reg32 { lhs: dst, rhs })
-            }
-        }
     }
 }
 

@@ -1,13 +1,13 @@
-// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2024 - 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 use std::{collections::HashMap, fmt::Display, i32};
 
 use babbelaar::BabString;
 
-use crate::Label;
+use crate::{backend::{abstract_register::AbstractRegister, VirtOrPhysReg}, Label, TargetBranchInfo, TargetInstruction, TargetInstructionInfo};
 
-use super::{Amd64ConditionCode, Amd64Register};
+use super::{Amd64ConditionCode, Amd64FixUp, Amd64Register};
 
 
 /// Intel glossary:
@@ -23,21 +23,21 @@ use super::{Amd64ConditionCode, Amd64Register};
 /// | /r            | Indicates that the ModR/M byte of the instruction contains a register operand and an r/m operand.
 #[derive(Debug, Clone, PartialEq)]
 #[allow(unused)]
-pub enum Amd64Instruction {
-    AddReg32Imm8 { dst: Amd64Register, src: i8 },
-    AddReg32Reg32 { dst: Amd64Register, src: Amd64Register },
+pub enum Amd64Instruction<Reg> {
+    AddReg32Imm8 { dst: Reg, src: i8 },
+    AddReg32Reg32 { dst: Reg, src: Reg },
 
     CallNearRelative { symbol_name: BabString },
 
-    CmpReg32Imm8 { lhs: Amd64Register, rhs: i8 },
-    CmpReg32Imm32 { lhs: Amd64Register, rhs: i32 },
-    CmpReg32Reg32 { lhs: Amd64Register, rhs: Amd64Register },
+    CmpReg32Imm8 { lhs: Reg, rhs: i8 },
+    CmpReg32Imm32 { lhs: Reg, rhs: i32 },
+    CmpReg32Reg32 { lhs: Reg, rhs: Reg },
 
-    IMulReg32Imm8 { dst: Amd64Register, lhs: Amd64Register, rhs: i8 },
-    IMulReg32Imm32 { dst: Amd64Register, lhs: Amd64Register, rhs: i32 },
-    IMulReg32Reg32 { lhs: Amd64Register, rhs: Amd64Register },
+    IMulReg32Imm8 { dst: Reg, lhs: Reg, rhs: i8 },
+    IMulReg32Imm32 { dst: Reg, lhs: Reg, rhs: i32 },
+    IMulReg32Reg32 { lhs: Reg, rhs: Reg },
 
-    Inc32 { reg: Amd64Register },
+    Inc32 { reg: Reg },
 
     Jmp { location: Label },
 
@@ -45,59 +45,66 @@ pub enum Amd64Instruction {
     JccShort { location: Label, condition: Amd64ConditionCode },
 
     LeaReg32FromReg32 {
-        dst: Amd64Register,
-        base: Amd64Register,
+        dst: Reg,
+        base: Reg,
     },
 
     LeaReg32FromReg32Off8 {
-        dst: Amd64Register,
-        base: Amd64Register,
+        dst: Reg,
+        base: Reg,
         offset: i8,
     },
 
     LeaReg64FromReg64 {
-        dst: Amd64Register,
-        base: Amd64Register,
+        dst: Reg,
+        base: Reg,
     },
 
     LeaReg64FromReg64Off8 {
-        dst: Amd64Register,
-        base: Amd64Register,
+        dst: Reg,
+        base: Reg,
         offset: i8,
     },
 
-    MovReg32FromPtrReg64 { dst: Amd64Register, base: Amd64Register },
-    MovReg32FromPtrReg64Off8 { dst: Amd64Register, base: Amd64Register, offset: i8 },
-    MovReg64FromPtrReg64 { dst: Amd64Register, base: Amd64Register },
-    MovReg64FromPtrReg64Off8 { dst: Amd64Register, base: Amd64Register, offset: i8 },
+    MovReg32FromPtrReg64 { dst: Reg, base: Reg },
+    MovReg32FromPtrReg64Off8 { dst: Reg, base: Reg, offset: i8 },
+    MovReg64FromPtrReg64 { dst: Reg, base: Reg },
+    MovReg64FromPtrReg64Off8 { dst: Reg, base: Reg, offset: i8 },
 
-    MovImm32ToPtrReg64 { base: Amd64Register, src: i32 },
-    MovImm32ToPtrReg64Off8 { base: Amd64Register, offset: i8, src: i32 },
+    MovImm32ToPtrReg64 { base: Reg, src: i32 },
+    MovImm32ToPtrReg64Off8 { base: Reg, offset: i8, src: i32 },
 
-    MovReg32ToPtrReg64 { base: Amd64Register, src: Amd64Register },
-    MovReg32ToPtrReg64Off8 { base: Amd64Register, offset: i8, src: Amd64Register },
-    MovReg64ToPtrReg64 { base: Amd64Register, src: Amd64Register },
-    MovReg64ToPtrReg64Off8 { base: Amd64Register, offset: i8, src: Amd64Register },
+    MovReg32ToPtrReg64 { base: Reg, src: Reg },
+    MovReg32ToPtrReg64Off8 { base: Reg, offset: i8, src: Reg },
+    MovReg64ToPtrReg64 { base: Reg, src: Reg },
+    MovReg64ToPtrReg64Off8 { base: Reg, offset: i8, src: Reg },
 
-    MovReg32Imm32 { dst: Amd64Register, src: i32 },
-    MovReg32Reg32 { dst: Amd64Register, src: Amd64Register },
-    MovReg64Reg64 { dst: Amd64Register, src: Amd64Register },
+    MovReg32Imm32 { dst: Reg, src: i32 },
+    MovReg32Reg32 { dst: Reg, src: Reg },
+    MovReg64Reg64 { dst: Reg, src: Reg },
 
-    NegReg64 { dst: Amd64Register },
+    NegReg64 { dst: Reg },
 
-    PopReg64 { reg: Amd64Register },
-    PushReg64 { reg: Amd64Register },
+    PopReg64 { reg: Reg },
+    PushReg64 { reg: Reg },
 
     ReturnNear,
 
-    SetCC { dst: Amd64Register, condition: Amd64ConditionCode },
+    SetCC { dst: Reg, condition: Amd64ConditionCode },
 
-    SubReg32Imm8 { dst: Amd64Register, src: i8 },
-    SubReg64Imm8 { dst: Amd64Register, src: i8 },
-    SubReg32Reg32 { dst: Amd64Register, src: Amd64Register },
+    SubReg32Imm8 { dst: Reg, src: i8 },
+    SubReg64Imm8 { dst: Reg, src: i8 },
+    SubReg32Reg32 { dst: Reg, src: Reg },
+
+    //
+    // Virtual Instructions
+    //
+
+    Label(Label),
+    FixUp(Amd64FixUp),
 }
 
-impl Amd64Instruction {
+impl<Reg> Amd64Instruction<Reg> {
     #[must_use]
     pub fn uses_label_offsets(&self) -> bool {
         match self {
@@ -106,7 +113,9 @@ impl Amd64Instruction {
             _ => false,
         }
     }
+}
 
+impl Amd64Instruction<Amd64Register> {
     pub fn encode(&self, output: &mut Vec<u8>, offset: usize, label_offsets: &HashMap<Label, usize>) {
         match self {
             Self::AddReg32Imm8 { dst, src } => {
@@ -213,6 +222,8 @@ impl Amd64Instruction {
                 output.push(condition.jcc_short_code());
                 output.push(offset as u8);
             }
+
+            Self::Label(..) => (),
 
             Self::LeaReg32FromReg32 { dst, base } => {
                 output.push(0x8d);
@@ -363,11 +374,13 @@ impl Amd64Instruction {
                 output.push(0x29);
                 output.push(mod_rm_byte_reg_reg(*dst, *src))
             }
+
+            Self::FixUp(..) => panic!("FixUps zouden geresolveerd moeten zijn!"),
         }
     }
 }
 
-impl Display for Amd64Instruction {
+impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AddReg32Imm8 { dst, src } => {
@@ -391,10 +404,7 @@ impl Display for Amd64Instruction {
             }
 
             Self::CmpReg32Reg32 { lhs, rhs } => {
-                f.write_str("cmp ")?;
-                f.write_str(lhs.name32())?;
-                f.write_str(", ")?;
-                f.write_str(rhs.name32())
+                f.write_fmt(format_args!("cmp {}, {}", lhs.name32(), rhs.name32()))
             }
 
             Self::IMulReg32Imm8 { dst, lhs, rhs } => {
@@ -406,15 +416,11 @@ impl Display for Amd64Instruction {
             }
 
             Self::IMulReg32Reg32 { lhs, rhs } => {
-                f.write_str("imul ")?;
-                f.write_str(lhs.name32())?;
-                f.write_str(", ")?;
-                f.write_str(rhs.name32())
+                f.write_fmt(format_args!("imul {}, {}", lhs.name32(), rhs.name32()))
             }
 
             Self::Inc32 { reg } => {
-                f.write_str("inc ")?;
-                f.write_str(reg.name32())
+                f.write_fmt(format_args!("inc {}", reg.name32()))
             }
 
             Self::Jmp { location } => {
@@ -423,6 +429,10 @@ impl Display for Amd64Instruction {
 
             Self::JccShort { location, condition } => {
                 f.write_fmt(format_args!("j{condition} {location}"))
+            }
+
+            Self::Label(label) => {
+                f.write_fmt(format_args!("{label}:"))
             }
 
             Self::LeaReg32FromReg32 { dst, base } => {
@@ -522,7 +532,235 @@ impl Display for Amd64Instruction {
             Self::SubReg32Reg32 { dst, src } => {
                 f.write_fmt(format_args!("sub {}, {}", dst.name32(), src.name32()))
             }
+
+            Self::FixUp(fixup) => std::fmt::Debug::fmt(&fixup, f),
         }
+    }
+}
+
+impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
+    type PhysReg = Amd64Register;
+
+    fn info(&self) -> TargetInstructionInfo<Self::PhysReg> {
+        let mut info = TargetInstructionInfo::new();
+
+        match self {
+            Amd64Instruction::AddReg32Imm8 { dst, src } => {
+                info.add_dst(dst);
+                _ = src;
+            }
+
+            Amd64Instruction::AddReg32Reg32 { dst, src } => {
+                info.add_dst(dst);
+                info.add_src(src);
+            }
+
+            Amd64Instruction::CallNearRelative { symbol_name } => {
+                _ = symbol_name
+            }
+
+            Amd64Instruction::CmpReg32Imm8 { lhs, rhs } => {
+                info.add_src(lhs);
+                _ = rhs;
+            }
+
+            Amd64Instruction::CmpReg32Imm32 { lhs, rhs } => {
+                info.add_src(lhs);
+                _ = rhs;
+            }
+
+            Amd64Instruction::CmpReg32Reg32 { lhs, rhs } => {
+                info.add_src(lhs);
+                info.add_src(rhs);
+            }
+
+            Amd64Instruction::IMulReg32Imm8 { dst, lhs, rhs } => {
+                info.add_dst(dst);
+                info.add_src(lhs);
+                _ = rhs;
+            }
+
+            Amd64Instruction::IMulReg32Imm32 { dst, lhs, rhs } => {
+                info.add_dst(dst);
+                info.add_src(lhs);
+                _ = rhs;
+            }
+
+            Amd64Instruction::IMulReg32Reg32 { lhs, rhs } => {
+                info.add_src(lhs);
+                info.add_src(rhs);
+            }
+
+            Amd64Instruction::Inc32 { reg } => {
+                info.add_dst(reg);
+            }
+
+            Amd64Instruction::Jmp { location } => {
+                _ = location;
+            }
+
+            Amd64Instruction::JccShort { location, condition } => {
+                _ = location;
+                _ = condition;
+            }
+
+            Amd64Instruction::Label(..) => (),
+
+            Amd64Instruction::LeaReg32FromReg32 { dst, base } => {
+                info.add_dst(dst);
+                info.add_src(base);
+            }
+
+            Amd64Instruction::LeaReg32FromReg32Off8 { dst, base, offset } => {
+                info.add_dst(dst);
+                info.add_src(base);
+                _ = offset;
+            }
+
+            Amd64Instruction::LeaReg64FromReg64 { dst, base } => {
+                info.add_dst(dst);
+                info.add_src(base);
+            }
+
+            Amd64Instruction::LeaReg64FromReg64Off8 { dst, base, offset } => {
+                info.add_dst(dst);
+                info.add_src(base);
+                _ = offset;
+            }
+
+            Amd64Instruction::MovReg32FromPtrReg64 { dst, base } => {
+                info.add_dst(dst);
+                info.add_src(base);
+            }
+
+            Amd64Instruction::MovReg32FromPtrReg64Off8 { dst, base, offset } => {
+                info.add_dst(dst);
+                info.add_src(base);
+                _ = offset;
+            }
+
+            Amd64Instruction::MovReg64FromPtrReg64 { dst, base } => {
+                info.add_dst(dst);
+                info.add_src(base);
+            }
+
+            Amd64Instruction::MovReg64FromPtrReg64Off8 { dst, base, offset } => {
+                info.add_dst(dst);
+                info.add_src(base);
+                _ = offset;
+            }
+
+            Amd64Instruction::MovImm32ToPtrReg64 { base, src } => {
+                info.add_src(base);
+                _ = src;
+            }
+
+            Amd64Instruction::MovImm32ToPtrReg64Off8 { base, offset, src } => {
+                info.add_src(base);
+                _ = offset;
+                _ = src;
+            }
+
+            Amd64Instruction::MovReg32ToPtrReg64 { base, src } => {
+                info.add_src(base);
+                info.add_src(src);
+            }
+
+            Amd64Instruction::MovReg32ToPtrReg64Off8 { base, offset, src } => {
+                info.add_src(base);
+                info.add_src(src);
+                _ = offset;
+            }
+
+            Amd64Instruction::MovReg64ToPtrReg64 { base, src } => {
+                info.add_src(base);
+                info.add_src(src);
+            }
+
+            Amd64Instruction::MovReg64ToPtrReg64Off8 { base, offset, src } => {
+                info.add_src(base);
+                info.add_src(src);
+                _ = offset;
+            }
+
+            Amd64Instruction::MovReg32Imm32 { dst, src } => {
+                info.add_dst(dst);
+                _ = src;
+            }
+
+            Amd64Instruction::MovReg32Reg32 { dst, src } => {
+                info.add_dst(dst);
+                info.add_src(src);
+            }
+
+            Amd64Instruction::MovReg64Reg64 { dst, src } => {
+                info.add_dst(dst);
+                info.add_src(src);
+            }
+
+            Amd64Instruction::NegReg64 { dst } => {
+                info.add_dst(dst);
+            }
+
+            Amd64Instruction::PopReg64 { reg } => {
+                info.add_dst(reg);
+            }
+
+            Amd64Instruction::PushReg64 { reg } => {
+                info.add_src(reg);
+            }
+
+            Amd64Instruction::ReturnNear => {
+
+            }
+
+            Amd64Instruction::SetCC { dst, condition } => {
+                info.add_dst(dst);
+                _ = condition;
+            }
+
+            Amd64Instruction::SubReg32Imm8 { dst, src } => {
+                info.add_dst(dst);
+                _ = src;
+            }
+
+            Amd64Instruction::SubReg64Imm8 { dst, src } => {
+                info.add_dst(dst);
+                _ = src;
+            }
+
+            Amd64Instruction::SubReg32Reg32 { dst, src } => {
+                info.add_dst(dst);
+                info.add_src(src);
+            }
+
+            Amd64Instruction::FixUp(fixup) => {
+                fixup.add_info(&mut info);
+            }
+        }
+
+        info
+    }
+
+    fn branch_info(&self) -> Option<TargetBranchInfo> {
+        match self {
+            Self::Jmp { location } => Some(TargetBranchInfo::new_jump(*location, None)),
+            Self::JccShort { location, condition } => Some(TargetBranchInfo::new_jump(*location, Some(condition.clone().into()))),
+            Self::ReturnNear => Some(TargetBranchInfo::new_return(None)),
+            _ => None,
+        }
+    }
+
+    fn as_label(&self) -> Option<Label> {
+        if let Self::Label(label) = self {
+            Some(*label)
+        } else {
+            None
+        }
+    }
+
+    fn is_call(&self) -> bool {
+        matches!(self, Self::CallNearRelative { .. })
     }
 }
 
@@ -697,7 +935,7 @@ mod tests {
         },
         [ 0x41, 0x89, 0xC4  ].to_vec(),
     )]
-    fn check_encoding(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
+    fn check_encoding(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
         input.encode(&mut actual, 0, &HashMap::new());
 
@@ -721,7 +959,7 @@ mod tests {
         Amd64Instruction::LeaReg64FromReg64Off8 { dst: Amd64Register::Rax, base: Amd64Register::Rbp, offset: -4 },
         [ 0x48, 0x8d, 0x45, 0xfc ].to_vec(),
     )]
-    fn check_encoding_lea(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
+    fn check_encoding_lea(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
         input.encode(&mut actual, 0, &HashMap::new());
 
@@ -741,7 +979,7 @@ mod tests {
         Amd64Instruction::MovImm32ToPtrReg64Off8 { base: Amd64Register::Rdi, offset: 4, src: 62 },
         [ 0xc7, 0x47, 0x04, 62, 0x00, 0x00, 0x00 ].to_vec(),
     )]
-    fn check_encoding_mov_deref(#[case] input: Amd64Instruction, #[case] expected: Vec<u8>) {
+    fn check_encoding_mov_deref(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
         input.encode(&mut actual, 0, &HashMap::new());
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2024 - 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 use std::fmt::Display;
@@ -63,6 +63,19 @@ impl From<JumpCondition> for Amd64ConditionCode {
             JumpCondition::Less => Amd64ConditionCode::Less,
             JumpCondition::LessOrEqual => Amd64ConditionCode::LessOrEqual,
             JumpCondition::NotEqual => Amd64ConditionCode::NotEqual,
+        }
+    }
+}
+
+impl From<Amd64ConditionCode> for JumpCondition {
+    fn from(value: Amd64ConditionCode) -> Self {
+        match value {
+            Amd64ConditionCode::Equal => JumpCondition::Equal,
+            Amd64ConditionCode::Greater => JumpCondition::Greater,
+            Amd64ConditionCode::GreaterOrEqual => JumpCondition::GreaterOrEqual,
+            Amd64ConditionCode::Less => JumpCondition::Less,
+            Amd64ConditionCode::LessOrEqual => JumpCondition::LessOrEqual,
+            Amd64ConditionCode::NotEqual => JumpCondition::NotEqual,
         }
     }
 }

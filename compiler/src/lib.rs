@@ -18,6 +18,7 @@ pub use self::{
     analysis::ControlFlowGraph,
     backend::{
         AArch64CodeGenerator,
+        AbstractRegister,
         Amd64CodeGenerator,
         AllocatableRegister,
         CodeGenerator,
@@ -32,6 +33,9 @@ pub use self::{
         Relocation,
         RelocationMethod,
         RelocationType,
+        TargetBranchInfo,
+        TargetInstruction,
+        TargetInstructionInfo,
     },
     compiler::Compiler,
     interpreter::Interpreter,

@@ -1,9 +1,9 @@
-// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2024 - 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::Display;
+use std::{borrow::Cow, fmt::Display};
 
-use crate::{AllocatableRegister, Environment, Platform};
+use crate::{backend::abstract_register::AbstractRegister, AllocatableRegister, Environment, Platform};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -293,6 +293,24 @@ impl AllocatableRegister for Amd64Register {
 impl Display for Amd64Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.name(Amd64RegisterNameMode::Quad))
+    }
+}
+
+impl AbstractRegister for Amd64Register {
+    fn name8(&self) -> Cow<'_, str> {
+        self.name8().into()
+    }
+
+    fn name16(&self) -> Cow<'_, str> {
+        self.name16().into()
+    }
+
+    fn name32(&self) -> Cow<'_, str> {
+        self.name32().into()
+    }
+
+    fn name64(&self) -> Cow<'_, str> {
+        self.name64().into()
     }
 }
 

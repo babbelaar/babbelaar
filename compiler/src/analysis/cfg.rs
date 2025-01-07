@@ -5,7 +5,7 @@ use std::ops::Range;
 
 use log::debug;
 
-use crate::{Graph, Instruction, Label};
+use crate::{Graph, Label, TargetInstruction};
 
 #[derive(Debug, Clone)]
 pub struct ControlFlowGraph {
@@ -15,7 +15,7 @@ pub struct ControlFlowGraph {
 
 impl ControlFlowGraph {
     #[must_use]
-    pub fn new(instructions: &[Instruction]) -> Self {
+    pub fn new<I: TargetInstruction>(instructions: &[I]) -> Self {
         let mut this = Self {
             graph: Graph::default(),
             loops: Vec::new(),
@@ -52,9 +52,9 @@ impl ControlFlowGraph {
 
 // private methods
 impl ControlFlowGraph {
-    fn position_of_label(&mut self, instructions: &[Instruction], label: &Label) -> usize {
+    fn position_of_label<I: TargetInstruction>(&mut self, instructions: &[I], label: Label) -> usize {
         for (index, instruction) in instructions.iter().enumerate() {
-            if let Instruction::Label(l) = instruction {
+            if let Some(l) = instruction.as_label() {
                 if l == label {
                     return index;
                 }
@@ -64,7 +64,7 @@ impl ControlFlowGraph {
         panic!("Illegal label {label:?}")
     }
 
-    fn visit_function(&mut self, instructions: &[Instruction]) {
+    fn visit_function<I: TargetInstruction>(&mut self, instructions: &[I]) {
         for instruction_index in 0..instructions.len() {
             self.graph.add_node(instruction_index);
         }
@@ -75,29 +75,19 @@ impl ControlFlowGraph {
         self.analyze_loops();
     }
 
-    fn visit_section(&mut self, instructions: &[Instruction], mut index: usize) {
+    fn visit_section<I: TargetInstruction>(&mut self, instructions: &[I], mut index: usize) {
         while index < instructions.len() {
-            match &instructions[index] {
-                Instruction::Jump { location } => {
-                    let position = self.position_of_label(instructions, location);
-                    if self.graph.add_edge(index, position) {
-                        self.visit_section(instructions, position);
-                    }
-                    return;
-                }
-
-                Instruction::JumpConditional { location, .. } => {
+            if let Some(branch) = instructions[index].branch_info() {
+                if let Some(location) = branch.target_location() {
                     let position = self.position_of_label(instructions, location);
                     if self.graph.add_edge(index, position) {
                         self.visit_section(instructions, position);
                     }
                 }
 
-                Instruction::Return { .. } => {
+                if branch.is_unconditional() {
                     return;
                 }
-
-                _ => (),
             }
 
             let next = index + 1;
