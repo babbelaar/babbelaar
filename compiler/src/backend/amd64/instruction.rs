@@ -324,7 +324,7 @@ impl Amd64Instruction<Amd64Register> {
             }
 
             Self::MovReg64Reg64 { dst, src } => {
-                output.push(register_extension(true, false, false, false));
+                output.push(register_extension(true, src.is_64_extended_register(), false, dst.is_64_extended_register()));
                 output.push(0x89);
                 output.push(mod_rm_byte_reg_reg(*dst, *src));
             }
@@ -934,6 +934,27 @@ mod tests {
             src: Amd64Register::Rax,
         },
         [ 0x41, 0x89, 0xC4  ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::MovReg64Reg64 {
+            dst: Amd64Register::R12,
+            src: Amd64Register::Rax,
+        },
+        [ 0x49, 0x89, 0xC4 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::MovReg64Reg64 {
+            dst: Amd64Register::Rax,
+            src: Amd64Register::R12,
+        },
+        [ 0x4C, 0x89, 0xE0 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::MovReg64Reg64 {
+            dst: Amd64Register::R12,
+            src: Amd64Register::R13,
+        },
+        [ 0x4D, 0x89, 0xEC ].to_vec(),
     )]
     fn check_encoding(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
