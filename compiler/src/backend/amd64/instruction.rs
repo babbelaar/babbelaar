@@ -26,6 +26,8 @@ use super::{Amd64ConditionCode, Amd64FixUp, Amd64Register};
 pub enum Amd64Instruction<Reg> {
     AddReg32Imm8 { dst: Reg, src: i8 },
     AddReg32Reg32 { dst: Reg, src: Reg },
+    AddReg64Imm8 { dst: Reg, src: i8 },
+    AddReg64Reg64 { dst: Reg, src: Reg },
 
     CallNearRelative { symbol_name: BabString },
 
@@ -131,6 +133,19 @@ impl Amd64Instruction<Amd64Register> {
                 if dst.is_64_extended_register() || src.is_64_extended_register() {
                     output.push(register_extension(false, src.is_64_extended_register(), false, dst.is_64_extended_register()));
                 }
+                output.push(0x01);
+                output.push(mod_rm_byte_reg_reg(*dst, *src))
+            }
+
+            Self::AddReg64Imm8 { dst, src } => {
+                output.push(register_extension(true, false, false, dst.is_64_extended_register()));
+                output.push(0x83);
+                output.push(mod_rm_byte_extra_op(0, *dst));
+                output.push(*src as u8);
+            }
+
+            Self::AddReg64Reg64 { dst, src } => {
+                output.push(register_extension(true, src.is_64_extended_register(), false, dst.is_64_extended_register()));
                 output.push(0x01);
                 output.push(mod_rm_byte_reg_reg(*dst, *src))
             }
@@ -299,8 +314,8 @@ impl Amd64Instruction<Amd64Register> {
 
             Self::MovReg64ToPtrReg64 { base, src } => {
                 output.push(register_extension(true, false, false, false));
-                output.push(0x8b);
-                output.push(mod_rm_8_bit_displacement(*src, *base));
+                output.push(0x89);
+                output.push(mod_rm_no_displacement(*src, *base));
             }
 
             Self::MovReg64ToPtrReg64Off8 { base, offset, src } => {
@@ -389,6 +404,14 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
 
             Self::AddReg32Reg32 { dst, src } => {
                 f.write_fmt(format_args!("add {}, {}", dst.name32(), src.name32()))
+            }
+
+            Self::AddReg64Imm8 { dst, src } => {
+                f.write_fmt(format_args!("add {}, 0x{src:x}", dst.name64()))
+            }
+
+            Self::AddReg64Reg64 { dst, src } => {
+                f.write_fmt(format_args!("add {}, {}", dst.name64(), src.name64()))
             }
 
             Self::CallNearRelative { symbol_name } => {
@@ -551,6 +574,16 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
             }
 
             Amd64Instruction::AddReg32Reg32 { dst, src } => {
+                info.add_dst(dst);
+                info.add_src(src);
+            }
+
+            Amd64Instruction::AddReg64Imm8 { dst, src } => {
+                info.add_dst(dst);
+                _ = src;
+            }
+
+            Amd64Instruction::AddReg64Reg64 { dst, src } => {
                 info.add_dst(dst);
                 info.add_src(src);
             }
@@ -756,6 +789,17 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
             Some(*label)
         } else {
             None
+        }
+    }
+
+    fn as_rr_move(&self) -> Option<(VirtOrPhysReg<Self::PhysReg>, VirtOrPhysReg<Self::PhysReg>)> {
+        match self {
+            Self::MovReg32Reg32 { dst, src }
+                | Self::MovReg64Reg64 { dst, src } => {
+                Some((*dst, *src))
+            }
+
+            _ => None,
         }
     }
 
@@ -999,6 +1043,13 @@ mod tests {
     #[case(
         Amd64Instruction::MovImm32ToPtrReg64Off8 { base: Amd64Register::Rdi, offset: 4, src: 62 },
         [ 0xc7, 0x47, 0x04, 62, 0x00, 0x00, 0x00 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::MovReg64ToPtrReg64 {
+            base: Amd64Register::Rdi,
+            src: Amd64Register::Rsi,
+        },
+        [ 0x48, 0x89, 0x37 ].to_vec(),
     )]
     fn check_encoding_mov_deref(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();

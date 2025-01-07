@@ -104,7 +104,7 @@ impl Amd64CodeGenerator {
 
     fn add_epilogue(&mut self) {
         if self.stack_allocator.total_size() != 0 {
-            self.instructions.push(Amd64Instruction::SubReg64Imm8 {
+            self.instructions.push(Amd64Instruction::AddReg64Imm8 {
                 dst: Amd64Register::Rsp,
                 src: self.stack_allocator.total_size().try_into().unwrap(),
             });
@@ -132,6 +132,17 @@ impl Amd64CodeGenerator {
                 dst: self.allocate_register(dst),
                 src: self.allocate_register(src),
             },
+
+            Amd64Instruction::AddReg64Imm8 { dst, src } => Amd64Instruction::AddReg64Imm8 {
+                dst: self.allocate_register(dst),
+                src,
+            },
+
+            Amd64Instruction::AddReg64Reg64 { dst, src } => Amd64Instruction::AddReg64Reg64 {
+                dst: self.allocate_register(dst),
+                src: self.allocate_register(src),
+            },
+
 
             Amd64Instruction::CallNearRelative { symbol_name } => Amd64Instruction::CallNearRelative {
                 symbol_name,
