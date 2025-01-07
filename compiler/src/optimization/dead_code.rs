@@ -360,6 +360,7 @@ mod tests {
             argument_registers: Vec::new(),
             instructions: input_instructions.to_vec(),
             label_names: HashMap::new(),
+            ir_register_allocator: Default::default(),
         };
 
         DeadCodeEliminator::default().optimize(&mut function);

@@ -127,3 +127,17 @@ impl From<JumpCondition> for ArmConditionCode {
         }
     }
 }
+
+impl From<ArmConditionCode> for JumpCondition {
+    fn from(value: ArmConditionCode) -> Self {
+        match value {
+            ArmConditionCode::EQ => JumpCondition::Equal,
+            ArmConditionCode::GT => JumpCondition::Greater,
+            ArmConditionCode::GE => JumpCondition::GreaterOrEqual,
+            ArmConditionCode::LT => JumpCondition::Less,
+            ArmConditionCode::LE => JumpCondition::LessOrEqual,
+            ArmConditionCode::NE => JumpCondition::NotEqual,
+            _ => todo!(),
+        }
+    }
+}

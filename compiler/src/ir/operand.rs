@@ -118,7 +118,7 @@ impl Display for Register {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RegisterAllocator {
     next_number: usize,
 }
@@ -141,6 +141,11 @@ impl RegisterAllocator {
     }
 }
 
+impl Default for RegisterAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operand {

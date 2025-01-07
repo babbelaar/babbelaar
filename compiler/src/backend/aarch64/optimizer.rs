@@ -5,15 +5,15 @@ use std::collections::HashMap;
 
 use crate::Label;
 
-use super::{ArmInstruction, ArmRegister, ArmShift2};
+use super::{ArmInstruction, ArmShift2};
 
-pub struct AArch64Optimizer<'i> {
-    instructions: &'i mut Vec<ArmInstruction>,
+pub struct AArch64Optimizer<'i, Reg> {
+    instructions: &'i mut Vec<ArmInstruction<Reg>>,
     label_offsets: &'i mut HashMap<Label, usize>,
 }
 
-impl<'i> AArch64Optimizer<'i> {
-    pub fn optimize(instructions: &'i mut Vec<ArmInstruction>, label_offsets: &'i mut HashMap<Label, usize>) {
+impl<'i, Reg: Clone + Copy + PartialEq> AArch64Optimizer<'i, Reg> {
+    pub fn optimize(instructions: &'i mut Vec<ArmInstruction<Reg>>, label_offsets: &'i mut HashMap<Label, usize>) {
         let mut this = Self {
             instructions,
             label_offsets,
@@ -42,7 +42,7 @@ impl<'i> AArch64Optimizer<'i> {
         }
     }
 
-    fn handle_add(&mut self, idx: usize, add_64bit: bool, add_dst: ArmRegister, add_lhs: ArmRegister, add_rhs: ArmRegister, add_imm: u8, add_shift: ArmShift2) {
+    fn handle_add(&mut self, idx: usize, add_64bit: bool, add_dst: Reg, add_lhs: Reg, add_rhs: Reg, add_imm: u8, add_shift: ArmShift2) {
         if add_imm != 0 {
             return;
         }
@@ -62,7 +62,7 @@ impl<'i> AArch64Optimizer<'i> {
         }
     }
 
-    fn handle_mul(&mut self, idx: usize, mul_64bit: bool, mul_dst: ArmRegister, mul_lhs: ArmRegister, mul_rhs: ArmRegister) {
+    fn handle_mul(&mut self, idx: usize, mul_64bit: bool, mul_dst: Reg, mul_lhs: Reg, mul_rhs: Reg) {
         let Some(next_instruction) = self.instructions.get(idx + 1).cloned() else { return };
 
         match next_instruction {
@@ -90,10 +90,10 @@ impl<'i> AArch64Optimizer<'i> {
 }
 
 #[inline]
-fn try_madd(
-    add_64bit: bool, add_dst: ArmRegister, add_lhs: ArmRegister, add_rhs: ArmRegister, add_imm: u8, add_shift: ArmShift2,
-    mul_64bit: bool, mul_dst: ArmRegister, mul_lhs: ArmRegister, mul_rhs: ArmRegister,
-) -> Option<ArmInstruction> {
+fn try_madd<Reg: PartialEq>(
+    add_64bit: bool, add_dst: Reg, add_lhs: Reg, add_rhs: Reg, add_imm: u8, add_shift: ArmShift2,
+    mul_64bit: bool, mul_dst: Reg, mul_lhs: Reg, mul_rhs: Reg,
+) -> Option<ArmInstruction<Reg>> {
     // mul	w0, w0, w1
     // add	w0, w0, w2
 

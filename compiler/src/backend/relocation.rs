@@ -8,7 +8,7 @@ use object::{macho, RelocationEncoding, RelocationFlags, RelocationKind};
 
 use super::{aarch64::ArmInstruction, DataSectionKind};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Relocation {
     pub(super) ty: RelocationType,
     pub(super) offset: usize,
@@ -67,7 +67,7 @@ impl Relocation {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RelocationType {
     Data {
         section: DataSectionKind,

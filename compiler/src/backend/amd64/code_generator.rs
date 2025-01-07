@@ -428,6 +428,7 @@ mod tests {
             argument_registers: Vec::new(),
             instructions: vec![input],
             label_names: HashMap::new(),
+            ir_register_allocator: Default::default(),
         };
 
         let actual_bytecode = Amd64CodeGenerator::compile(&function, Platform::host_platform()).byte_code;

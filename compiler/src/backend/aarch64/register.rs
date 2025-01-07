@@ -3,7 +3,7 @@
 
 use std::fmt::{Display, Write};
 
-use crate::{backend::AllocatableRegister, Platform};
+use crate::{backend::AllocatableRegister, AbstractRegister, Platform};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ArmRegister {
@@ -146,6 +146,23 @@ impl Display for ArmRegisterDisplay {
     }
 }
 
+impl AbstractRegister for ArmRegister {
+    fn name8(&self) -> std::borrow::Cow<'_, str> {
+        self.name(&false).to_string().into()
+    }
+
+    fn name16(&self) -> std::borrow::Cow<'_, str> {
+        self.name(&false).to_string().into()
+    }
+
+    fn name32(&self) -> std::borrow::Cow<'_, str> {
+        self.name(&false).to_string().into()
+    }
+
+    fn name64(&self) -> std::borrow::Cow<'_, str> {
+        self.name(&true).to_string().into()
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ArmRegisterMode {

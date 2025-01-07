@@ -208,6 +208,7 @@ impl<'program> FunctionBuilder<'program> {
             argument_registers: self.argument_registers,
             instructions: self.instructions,
             label_names: self.label_names,
+            ir_register_allocator: self.register_allocator,
         }
     }
 

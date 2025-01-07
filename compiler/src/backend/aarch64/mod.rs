@@ -7,11 +7,12 @@
 // - convert B.AL to B for fewer instructions (B.cond can only take imm19, B can take imm26 and is clearer)
 
 mod addressing_mode;
-mod branch_location;
 mod code_generator;
 mod condition_code;
+mod fixup;
 mod function_characteristics;
 mod instruction;
+mod instruction_selector;
 mod optimizer;
 mod register;
 
@@ -24,7 +25,6 @@ pub use self::{
         ArmSignedAddressingMode,
         ArmUnsignedAddressingMode,
     },
-    branch_location::ArmBranchLocation,
     code_generator::AArch64CodeGenerator,
     condition_code::ArmConditionCode,
     function_characteristics::{
@@ -35,6 +35,7 @@ pub use self::{
         ArmInstruction,
         ArmShift2,
     },
+    instruction_selector::AArch64InstructionSelector,
     optimizer::AArch64Optimizer,
     register::ArmRegister,
 };

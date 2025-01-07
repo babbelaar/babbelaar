@@ -4,67 +4,66 @@
 use std::{collections::HashMap, fmt::Display};
 
 use babbelaar::BabString;
+use log::warn;
 
-use crate::Label;
+use crate::{backend::VirtOrPhysReg, Label, TargetBranchInfo, TargetInstruction, TargetInstructionInfo};
 
 use super::{
-    ArmBranchLocation,
-    ArmConditionCode,
-    ArmRegister, ArmSignedAddressingMode, ArmUnsignedAddressingMode,
+    fixup::AArch64FixUp, ArmConditionCode, ArmRegister, ArmSignedAddressingMode, ArmUnsignedAddressingMode
 };
 
 #[derive(Debug, Clone)]
-pub enum ArmInstruction {
+pub enum ArmInstruction<Reg> {
     /// It can be in place if src == dst, but it doesn't have to be
     AddImmediate {
         is_64_bit: bool,
-        dst: ArmRegister,
-        src: ArmRegister,
+        dst: Reg,
+        src: Reg,
         imm12: u16,
         shift: bool,
     },
 
     AddRegister {
         is_64_bit: bool,
-        dst: ArmRegister,
-        lhs: ArmRegister,
-        rhs: ArmRegister,
+        dst: Reg,
+        lhs: Reg,
+        rhs: Reg,
         imm: u8, // 6 bits
         shift: ArmShift2,
     },
 
     Adrp {
         is_64_bit: bool,
-        dst: ArmRegister,
+        dst: Reg,
         imm: u32,
     },
 
     /// Arithmetic Shift Right (immediate)
     AsrImmediate {
         is_64_bit: bool,
-        dst: ArmRegister,
-        src: ArmRegister,
+        dst: Reg,
+        src: Reg,
         amount: u8,
     },
 
     /// Arithmetic Shift Right (register)
     AsrRegister {
         is_64_bit: bool,
-        dst: ArmRegister,
-        src: ArmRegister,
-        amount: ArmRegister,
+        dst: Reg,
+        src: Reg,
+        amount: Reg,
     },
 
     /// Authenticate Instruction Address (SP)
     AutIASp,
 
     B {
-        location: ArmBranchLocation,
+        location: Label,
     },
 
     BCond {
         cond: ArmConditionCode,
-        location: ArmBranchLocation,
+        location: Label,
     },
 
     /// Branch with link
@@ -76,7 +75,7 @@ pub enum ArmInstruction {
     /// Compare Negative (immediate)
     CmnImmediate {
         is_64_bit: bool,
-        register: ArmRegister,
+        register: Reg,
         value: u16,
     },
 
@@ -84,156 +83,156 @@ pub enum ArmInstruction {
     #[allow(unused)] // I added this for completeness, but when is this ever needed?
     CmnRegister {
         is_64_bit: bool,
-        lhs: ArmRegister,
-        rhs: ArmRegister,
+        lhs: Reg,
+        rhs: Reg,
     },
 
     /// Compare Negative (immediate)
     CmpImmediate {
         is_64_bit: bool,
-        register: ArmRegister,
+        register: Reg,
         value: u16,
     },
 
     /// Compare (shifted register)
     CmpRegister {
         is_64_bit: bool,
-        lhs: ArmRegister,
-        rhs: ArmRegister,
+        lhs: Reg,
+        rhs: Reg,
     },
 
     CSet {
         is_64_bit: bool,
-        dst: ArmRegister,
+        dst: Reg,
         condition: ArmConditionCode,
     },
 
     EorImmediate {
         is_64_bit: bool,
-        dst: ArmRegister,
-        reg: ArmRegister,
+        dst: Reg,
+        reg: Reg,
         imm: u16,
     },
 
     EorRegister {
         is_64_bit: bool,
-        dst: ArmRegister,
-        lhs: ArmRegister,
-        rhs: ArmRegister,
+        dst: Reg,
+        lhs: Reg,
+        rhs: Reg,
     },
 
     /// Load pair
     Ldp {
         is_64_bit: bool,
         mode: ArmSignedAddressingMode,
-        first: ArmRegister,
-        second: ArmRegister,
-        src: ArmRegister,
+        first: Reg,
+        second: Reg,
+        src: Reg,
         offset: i16,
     },
 
     LdrByteImmediate {
         mode: ArmUnsignedAddressingMode,
-        dst: ArmRegister,
-        base_ptr: ArmRegister,
+        dst: Reg,
+        base_ptr: Reg,
         offset: i16,
     },
 
     LdrByteRegister {
-        dst: ArmRegister,
-        base_ptr: ArmRegister,
-        offset: ArmRegister,
+        dst: Reg,
+        base_ptr: Reg,
+        offset: Reg,
     },
 
     LdrHalfImmediate {
         mode: ArmUnsignedAddressingMode,
-        dst: ArmRegister,
-        base_ptr: ArmRegister,
+        dst: Reg,
+        base_ptr: Reg,
         offset: i16,
     },
 
     LdrHalfRegister {
-        dst: ArmRegister,
-        base_ptr: ArmRegister,
-        offset: ArmRegister,
+        dst: Reg,
+        base_ptr: Reg,
+        offset: Reg,
     },
 
     /// Load register
     LdrImmediate {
         is_64_bit: bool,
         mode: ArmUnsignedAddressingMode,
-        dst: ArmRegister,
-        base_ptr: ArmRegister,
+        dst: Reg,
+        base_ptr: Reg,
         offset: i16,
     },
 
     /// Load register
     LdrRegister {
         is_64_bit: bool,
-        dst: ArmRegister,
-        base_ptr: ArmRegister,
-        offset: ArmRegister,
+        dst: Reg,
+        base_ptr: Reg,
+        offset: Reg,
     },
 
     LslImmediate {
         is_64_bit: bool,
-        dst: ArmRegister,
-        src: ArmRegister,
+        dst: Reg,
+        src: Reg,
         amount: u8,
     },
 
     LslRegister {
         is_64_bit: bool,
-        dst: ArmRegister,
-        src: ArmRegister,
-        amount: ArmRegister,
+        dst: Reg,
+        src: Reg,
+        amount: Reg,
     },
 
     /// Vermenigvuldig twee getallen met elkaar, en tel er daarna een ander getal bij op.
     /// Altijd registers.
     MAdd {
         is_64_bit: bool,
-        dst: ArmRegister,
-        mul_lhs: ArmRegister,
-        mul_rhs: ArmRegister,
-        addend: ArmRegister,
+        dst: Reg,
+        mul_lhs: Reg,
+        mul_rhs: Reg,
+        addend: Reg,
     },
 
     MovN {
         is_64_bit: bool,
-        register: ArmRegister,
+        register: Reg,
         /// This make sure it is positive, otherwise it is flipped!
         unsigned_imm16: u16,
     },
 
     #[allow(unused)]
-    MovRegister32 { dst: ArmRegister, src: ArmRegister },
+    MovRegister32 { dst: Reg, src: Reg },
 
-    MovRegister64 { dst: ArmRegister, src: ArmRegister },
+    MovRegister64 { dst: Reg, src: Reg },
 
-    MovZ { register: ArmRegister, imm16: u16 },
+    MovZ { register: Reg, imm16: u16 },
 
     MSub {
         is_64_bit: bool,
-        dst: ArmRegister,
-        lhs: ArmRegister,
-        rhs: ArmRegister,
-        minuend: ArmRegister,
+        dst: Reg,
+        lhs: Reg,
+        rhs: Reg,
+        minuend: Reg,
     },
 
     Mul {
         is_64_bit: bool,
-        dst: ArmRegister,
-        lhs: ArmRegister,
-        rhs: ArmRegister,
+        dst: Reg,
+        lhs: Reg,
+        rhs: Reg,
     },
 
     Neg {
         is_64_bit: bool,
         shift: ArmShift2,
         shift_amount: i8,
-        dst: ArmRegister,
-        src: ArmRegister,
+        dst: Reg,
+        src: Reg,
     },
 
     /// Pointer Authentication Code Instruction Address (SP)
@@ -244,9 +243,9 @@ pub enum ArmInstruction {
     /// Signed divide
     SDiv {
         is_64_bit: bool,
-        dst: ArmRegister,
-        lhs: ArmRegister,
-        rhs: ArmRegister,
+        dst: Reg,
+        lhs: Reg,
+        rhs: Reg,
     },
 
     /// Store Pair of Registers calculates an address from a base register
@@ -255,71 +254,78 @@ pub enum ArmInstruction {
     Stp {
         is_64_bit: bool,
         mode: ArmSignedAddressingMode,
-        dst: ArmRegister,
+        dst: Reg,
         offset: i16,
-        first: ArmRegister,
-        second: ArmRegister,
+        first: Reg,
+        second: Reg,
     },
 
     StrByteImmediate {
         mode: ArmUnsignedAddressingMode,
-        src: ArmRegister,
-        base_ptr: ArmRegister,
+        src: Reg,
+        base_ptr: Reg,
         offset: i16,
     },
 
     StrByteRegister {
-        src: ArmRegister,
-        base_ptr: ArmRegister,
-        offset: ArmRegister,
+        src: Reg,
+        base_ptr: Reg,
+        offset: Reg,
     },
 
     StrHalfImmediate {
         mode: ArmUnsignedAddressingMode,
-        src: ArmRegister,
-        base_ptr: ArmRegister,
+        src: Reg,
+        base_ptr: Reg,
         offset: i16,
     },
 
     StrHalfRegister {
-        src: ArmRegister,
-        base_ptr: ArmRegister,
-        offset: ArmRegister,
+        src: Reg,
+        base_ptr: Reg,
+        offset: Reg,
     },
 
     StrImmediate {
         is_64_bit: bool,
         mode: ArmUnsignedAddressingMode,
-        src: ArmRegister,
-        base_ptr: ArmRegister,
+        src: Reg,
+        base_ptr: Reg,
         offset: i16,
     },
 
     StrRegister {
         is_64_bit: bool,
-        src: ArmRegister,
-        base_ptr: ArmRegister,
-        offset: ArmRegister,
+        src: Reg,
+        base_ptr: Reg,
+        offset: Reg,
     },
 
     SubImmediate {
         is_64_bit: bool,
-        dst: ArmRegister,
-        lhs: ArmRegister,
+        dst: Reg,
+        lhs: Reg,
         rhs_imm12: u16,
     },
 
     SubRegister {
         is_64_bit: bool,
-        dst: ArmRegister,
-        lhs: ArmRegister,
-        rhs: ArmRegister,
+        dst: Reg,
+        lhs: Reg,
+        rhs: Reg,
         shift: u8,
         shift_mode: ArmShift2,
     },
+
+    //
+    // Virtual Instructions
+    //
+
+    Label(Label),
+    FixUp(AArch64FixUp),
 }
 
-impl ArmInstruction {
+impl ArmInstruction<ArmRegister> {
     /// This functions encodes the tagged union values into a plain 32-bits integer.
     /// All instructions in ARM-land are 32-bits.
     #[must_use]
@@ -420,15 +426,9 @@ impl ArmInstruction {
             Self::AutIASp => 0xd50323bf,
 
             Self::B { location } => {
-                let pc_relative_offset = match location {
-                    ArmBranchLocation::Label(label) => {
-                        let destination = *label_offsets.get(&label).unwrap() as isize;
-                        let offset = offset as isize;
-                        (destination - offset) as i32
-                    }
-
-                    ArmBranchLocation::PcRelativeOffset(offset) => offset,
-                };
+                let destination = *label_offsets.get(&location).unwrap() as isize;
+                let offset = offset as isize;
+                let pc_relative_offset = (destination - offset) as i32;
 
                 let mut instruction = 0x14000000;
                 instruction |= pc_relative_offset as u32;
@@ -436,15 +436,9 @@ impl ArmInstruction {
             }
 
             Self::BCond { cond, location } => {
-                let pc_relative_offset = match location {
-                    ArmBranchLocation::Label(label) => {
-                        let destination = *label_offsets.get(&label).unwrap() as isize;
-                        let offset = offset as isize;
-                        (destination - offset) as i32
-                    }
-
-                    ArmBranchLocation::PcRelativeOffset(offset) => offset,
-                };
+                let destination = *label_offsets.get(&location).unwrap() as isize;
+                let offset = offset as isize;
+                let pc_relative_offset = (destination - offset) as i32;
 
                 let mut instruction = 0x54000000;
 
@@ -888,6 +882,18 @@ impl ArmInstruction {
 
                 instruction
             }
+
+            Self::Label(..) => {
+                warn!("Een label kan niet geëncodeerd worden!");
+                debug_assert!(false);
+                0x1f2003d5 // NOP
+            }
+
+            Self::FixUp(..) => {
+                warn!("Een fixup kan niet geëncodeerd worden!");
+                debug_assert!(false);
+                0x1f2003d5 // NOP
+            }
         }
     }
 }
@@ -1065,7 +1071,7 @@ const fn take_bits(i: u32, n: u32) -> u32  {
     i & ((1 << n) - 1)
 }
 
-impl Display for ArmInstruction {
+impl Display for ArmInstruction<ArmRegister> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AddImmediate { is_64_bit, dst, src, imm12, shift } => {
@@ -1381,6 +1387,9 @@ impl Display for ArmInstruction {
 
                 Ok(())
             }
+
+            Self::Label(label) => f.write_fmt(format_args!("{label}:")),
+            Self::FixUp(fixup) => f.write_fmt(format_args!("{fixup:#?}")),
         }
     }
 }
@@ -1396,6 +1405,329 @@ impl<T> Display for FormatSuffixOffset<T>
             f.write_str(", #")?;
             self.0.fmt(f)
         }
+    }
+}
+
+impl TargetInstruction for ArmInstruction<VirtOrPhysReg<ArmRegister>> {
+    type PhysReg = ArmRegister;
+
+    fn info(&self) -> TargetInstructionInfo<Self::PhysReg> {
+        let mut info = TargetInstructionInfo::new();
+
+        match self {
+            ArmInstruction::AddImmediate { is_64_bit, dst, src, imm12, shift } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(src);
+                _ = imm12;
+                _ = shift;
+            }
+
+            ArmInstruction::AddRegister { is_64_bit, dst, lhs, rhs, imm, shift } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(lhs);
+                info.add_src(rhs);
+                _ = imm;
+                _ = shift;
+            }
+
+            ArmInstruction::Adrp { is_64_bit, dst, imm } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                _ = imm;
+            }
+
+            ArmInstruction::AsrImmediate { is_64_bit, dst, src, amount } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(src);
+                _ = amount;
+            }
+
+            ArmInstruction::AsrRegister { is_64_bit, dst, src, amount } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(src);
+                info.add_src(amount);
+            }
+
+            ArmInstruction::AutIASp => (),
+
+            ArmInstruction::B { .. } => (),
+
+            ArmInstruction::BCond { .. } => (),
+
+            ArmInstruction::Bl { .. } => (),
+
+            ArmInstruction::CmnImmediate { is_64_bit, register, value } => {
+                _ = is_64_bit;
+                info.add_src(register);
+                _ = value;
+            }
+
+            ArmInstruction::CmnRegister { is_64_bit, lhs, rhs } => {
+                _ = is_64_bit;
+                info.add_src(lhs);
+                info.add_src(rhs);
+            }
+
+            ArmInstruction::CmpImmediate { is_64_bit, register, value } => {
+                _ = is_64_bit;
+                info.add_src(register);
+                _ = value;
+            }
+
+            ArmInstruction::CmpRegister { is_64_bit, lhs, rhs } => {
+                _ = is_64_bit;
+                info.add_src(lhs);
+                info.add_src(rhs);
+            }
+
+            ArmInstruction::CSet { is_64_bit, dst, condition } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                _ = condition;
+            }
+
+            ArmInstruction::EorImmediate { is_64_bit, dst, reg, imm } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(reg);
+                _ = imm;
+            }
+
+            ArmInstruction::EorRegister { is_64_bit, dst, lhs, rhs } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(lhs);
+                info.add_src(rhs);
+            }
+
+            ArmInstruction::Ldp { is_64_bit, mode, first, second, src, offset } => {
+                _ = is_64_bit;
+                _ = mode;
+                info.add_src(src);
+                info.add_dst(first);
+                info.add_dst(second);
+                _ = offset;
+            }
+
+            ArmInstruction::LdrByteImmediate { mode, dst, base_ptr, offset } => {
+                _ = mode;
+                info.add_dst(dst);
+                info.add_src(base_ptr);
+                _ = offset;
+            }
+
+            ArmInstruction::LdrByteRegister { dst, base_ptr, offset } => {
+                info.add_dst(dst);
+                info.add_src(base_ptr);
+                info.add_src(offset);
+            }
+
+            ArmInstruction::LdrHalfImmediate { mode, dst, base_ptr, offset } => {
+                _ = mode;
+                info.add_dst(dst);
+                info.add_src(base_ptr);
+                _ = offset;
+            }
+
+            ArmInstruction::LdrHalfRegister { dst, base_ptr, offset } => {
+                info.add_dst(dst);
+                info.add_src(base_ptr);
+                info.add_src(offset);
+            }
+
+            ArmInstruction::LdrImmediate { is_64_bit, mode, dst, base_ptr, offset } => {
+                _ = is_64_bit;
+                _ = mode;
+                info.add_dst(dst);
+                info.add_src(base_ptr);
+                _ = offset;
+            }
+
+            ArmInstruction::LdrRegister { is_64_bit, dst, base_ptr, offset } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(base_ptr);
+                info.add_src(offset);
+            }
+
+            ArmInstruction::LslImmediate { is_64_bit, dst, src, amount } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(src);
+                _ = amount;
+            }
+
+            ArmInstruction::LslRegister { is_64_bit, dst, src, amount } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(src);
+                info.add_src(amount);
+            }
+
+            ArmInstruction::MAdd { is_64_bit, dst, mul_lhs, mul_rhs, addend } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(mul_lhs);
+                info.add_src(mul_rhs);
+                info.add_src(addend);
+            }
+
+            ArmInstruction::MovN { is_64_bit, register, unsigned_imm16 } => {
+                _ = is_64_bit;
+                info.add_dst(register);
+                _ = unsigned_imm16;
+            }
+
+            ArmInstruction::MovRegister32 { dst, src } => {
+                info.add_dst(dst);
+                info.add_src(src);
+            }
+
+            ArmInstruction::MovRegister64 { dst, src } => {
+                info.add_dst(dst);
+                info.add_src(src);
+            }
+
+            ArmInstruction::MovZ { register, imm16 } => {
+                info.add_dst(register);
+                _ = imm16;
+            }
+
+            ArmInstruction::MSub { is_64_bit, dst, lhs, rhs, minuend } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(lhs);
+                info.add_src(rhs);
+                info.add_src(minuend);
+            }
+
+            ArmInstruction::Mul { is_64_bit, dst, lhs, rhs } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(lhs);
+                info.add_src(rhs);
+            }
+
+            ArmInstruction::Neg { is_64_bit, shift, shift_amount, dst, src } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(src);
+                _ = shift;
+                _ = shift_amount;
+            }
+
+            ArmInstruction::PacIASp => (),
+
+            ArmInstruction::Ret => (),
+
+            ArmInstruction::SDiv { is_64_bit, dst, lhs, rhs } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(lhs);
+                info.add_src(rhs);
+            }
+
+            ArmInstruction::Stp { is_64_bit, mode, dst, offset, first, second } => {
+                _ = is_64_bit;
+                _ = mode;
+                info.add_src(dst);
+                _ = offset;
+                info.add_src(first);
+                info.add_src(second);
+            }
+
+            ArmInstruction::StrByteImmediate { mode, src, base_ptr, offset } => {
+                _ = mode;
+                info.add_src(base_ptr);
+                info.add_src(src);
+                _ = offset;
+            }
+
+            ArmInstruction::StrByteRegister { src, base_ptr, offset } => {
+                info.add_src(base_ptr);
+                info.add_src(src);
+                info.add_src(offset);
+            }
+
+            ArmInstruction::StrHalfImmediate { mode, src, base_ptr, offset } => {
+                _ = mode;
+                info.add_src(base_ptr);
+                info.add_src(src);
+                _ = offset;
+            }
+
+            ArmInstruction::StrHalfRegister { src, base_ptr, offset } => {
+                info.add_src(base_ptr);
+                info.add_src(src);
+                info.add_src(offset);
+            }
+
+            ArmInstruction::StrImmediate { is_64_bit, mode, src, base_ptr, offset } => {
+                _ = is_64_bit;
+                _ = mode;
+                info.add_src(base_ptr);
+                info.add_src(src);
+                _ = offset;
+            }
+
+            ArmInstruction::StrRegister { is_64_bit, src, base_ptr, offset } => {
+                _ = is_64_bit;
+                info.add_src(base_ptr);
+                info.add_src(src);
+                info.add_src(offset);
+            }
+
+            ArmInstruction::SubImmediate { is_64_bit, dst, lhs, rhs_imm12 } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(lhs);
+                _ = rhs_imm12;
+            }
+
+            ArmInstruction::SubRegister { is_64_bit, dst, lhs, rhs, shift, shift_mode } => {
+                _ = is_64_bit;
+                info.add_dst(dst);
+                info.add_src(lhs);
+                info.add_src(rhs);
+                _ = shift;
+                _ = shift_mode;
+            }
+
+            ArmInstruction::Label(label) => {
+                _ = label;
+            }
+
+            ArmInstruction::FixUp(fixup) => {
+                fixup.add_info(&mut info);
+            }
+        }
+
+        info
+    }
+
+    fn branch_info(&self) -> Option<TargetBranchInfo> {
+        match self {
+            Self::B { location } => Some(TargetBranchInfo::new_jump(*location, None)),
+            Self::BCond { location, cond } => Some(TargetBranchInfo::new_jump(*location, Some(cond.clone().into()))),
+            Self::Ret => Some(TargetBranchInfo::new_return(None)),
+            _ => None,
+        }
+    }
+
+    fn as_label(&self) -> Option<Label> {
+        if let Self::Label(label) = self {
+            Some(*label)
+        } else {
+            None
+        }
+    }
+
+    fn is_call(&self) -> bool {
+        matches!(self, Self::Bl { .. })
     }
 }
 
@@ -1632,7 +1964,7 @@ mod tests {
         mul_rhs: ArmRegister::X1,
         addend: ArmRegister::X2,
     }, 0x1b010800)]
-    fn encode_instruction(#[case] input: ArmInstruction, #[case] expected: u32) {
+    fn encode_instruction(#[case] input: ArmInstruction<ArmRegister>, #[case] expected: u32) {
         let actual = input.encode(0, &HashMap::new());
         assert_eq!(expected, actual, "actual was: 0x{actual:x}");
     }

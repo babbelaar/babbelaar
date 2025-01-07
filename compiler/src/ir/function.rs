@@ -7,7 +7,7 @@ use babbelaar::BabString;
 
 use crate::{TypeId, TypeInfo};
 
-use super::{Instruction, Label, Register};
+use super::{Instruction, Label, Register, RegisterAllocator};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArgumentName {
@@ -49,19 +49,10 @@ pub struct Function {
     pub(crate) argument_registers: Vec<Register>,
     pub(crate) instructions: Vec<Instruction>,
     pub(crate) label_names: HashMap<Label, BabString>,
+    pub(crate) ir_register_allocator: RegisterAllocator,
 }
 
 impl Function {
-    #[must_use]
-    pub fn new(name: BabString, argument_registers: Vec<Register>, instructions: Vec<Instruction>, label_names: HashMap<Label, BabString>) -> Self {
-        Self {
-            name,
-            argument_registers,
-            instructions,
-            label_names,
-        }
-    }
-
     #[must_use]
     pub fn name(&self) -> &BabString {
         &self.name
