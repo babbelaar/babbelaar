@@ -14,7 +14,6 @@ pub struct RegisterAllocator<R: AllocatableRegister> {
     platform: Platform,
     registers_to_save: Vec<R>,
     register_mappings: HashMap<IrRegister, Vec<Allocation<R>>>,
-    scratch_register: Option<R>,
 }
 
 impl<R: AllocatableRegister> RegisterAllocator<R> {
@@ -24,12 +23,10 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
             platform: platform.clone(),
             registers_to_save: Vec::new(),
             register_mappings: HashMap::new(),
-            scratch_register: None,
         };
 
         this.allocate(argument_registers, instructions);
 
-        debug!("Scratch register: {:?}", this.scratch_register);
         debug!("Mappings: {:#?}", this.register_mappings);
 
         this
@@ -73,16 +70,9 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
         debug!("optimal_register_mappings: {optimal_register_mappings:#?}");
 
-        let argument_registers = (0..R::count()).filter_map(|n| R::argument_nth_opt(&self.platform, n)).collect::<HashSet<R>>();
-
         let instruction_count = instructions.len();
         let mut available_registers = Vec::new();
         for reg in R::caller_saved_registers(&self.platform).iter().cloned() {
-            if self.scratch_register.is_none() && !argument_registers.contains(&reg) {
-                self.scratch_register = Some(reg);
-                continue;
-            }
-
             available_registers.push(PlatformRegisterSchedule::new(reg, false, instruction_count));
         }
 
@@ -124,11 +114,6 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         }
 
         self.check_callee_saved_registers(available_registers);
-    }
-
-    #[must_use]
-    pub fn hacky_random_available_register(&self) -> Option<R> {
-        self.scratch_register
     }
 
     fn check_callee_saved_registers(&mut self, registers: Vec<PlatformRegisterSchedule<R>>) {
