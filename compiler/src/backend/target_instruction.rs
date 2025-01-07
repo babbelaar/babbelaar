@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use crate::{Instruction, JumpCondition, Label, Register};
+use crate::{Instruction, JumpCondition, Label, Operand, Register};
 
 use super::{AbstractRegister, VirtOrPhysReg};
 
@@ -61,6 +61,7 @@ pub trait TargetInstruction {
 
     #[must_use] fn is_call(&self) -> bool;
 
+    #[must_use] fn as_rr_move(&self) -> Option<(VirtOrPhysReg<Self::PhysReg>, VirtOrPhysReg<Self::PhysReg>)>;
 
     #[must_use]
     fn is_return(&self) -> bool {
@@ -102,6 +103,16 @@ impl TargetInstruction for Instruction {
         } else {
             None
         }
+    }
+
+    fn as_rr_move(&self) -> Option<(VirtOrPhysReg<Self::PhysReg>, VirtOrPhysReg<Self::PhysReg>)> {
+        if let Self::Move { destination, source } = self {
+            if let Operand::Register(source) = source {
+                return Some((VirtOrPhysReg::Virtual(*destination), VirtOrPhysReg::Virtual(*source)));
+            }
+        }
+
+        None
     }
 
     fn is_call(&self) -> bool {

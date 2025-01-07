@@ -3,9 +3,9 @@
 
 use std::{fmt::{Debug, Display}, hash::Hash};
 
-use crate::Platform;
+use crate::{AbstractRegister, Platform};
 
-pub trait AllocatableRegister: Debug + Clone + Copy + PartialEq + Eq + Hash + 'static {
+pub trait AllocatableRegister: AbstractRegister + Debug + Clone + Copy + PartialEq + Eq + Hash + 'static {
     /// Return what register is the return value for this architecture / platform (e.g. x0 on ARM64).
     #[must_use]
     fn return_register(platform: &Platform) -> Self;

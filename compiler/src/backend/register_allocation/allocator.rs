@@ -5,9 +5,9 @@ use std::{collections::{HashMap, HashSet}, ops::Range};
 
 use log::debug;
 
-use crate::{Platform, Register as IrRegister, TargetInstruction};
+use crate::{backend::VirtOrPhysReg, Platform, Register as IrRegister, TargetInstruction};
 
-use super::{AllocatableRegister, LifeAnalysis};
+use super::{life_analysis::LifeAnalysisResult, AllocatableRegister, LifeAnalysis, RegisterLifetime};
 
 #[derive(Debug)]
 pub struct RegisterAllocator<R: AllocatableRegister> {
@@ -19,7 +19,7 @@ pub struct RegisterAllocator<R: AllocatableRegister> {
 
 impl<R: AllocatableRegister> RegisterAllocator<R> {
     #[must_use]
-    pub fn new<I: TargetInstruction>(platform: Platform, argument_registers: &[IrRegister], instructions: &[I]) -> Self {
+    pub fn new<I: TargetInstruction<PhysReg = R>>(platform: Platform, argument_registers: &[IrRegister], instructions: &[I]) -> Self {
         let mut this = Self {
             platform: platform.clone(),
             registers_to_save: Vec::new(),
@@ -65,9 +65,13 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
     //
     // we could:
     // - optimize such that the return value doesn't need to be moved to the return register
-    fn allocate<I: TargetInstruction>(&mut self, argument_registers: &[IrRegister], instructions: &[I]) {
+    fn allocate<I: TargetInstruction<PhysReg = R>>(&mut self, argument_registers: &[IrRegister], instructions: &[I]) {
         let analysis = LifeAnalysis::analyze(argument_registers, instructions);
         analysis.dump_result();
+
+        let optimal_register_mappings = self.analyze_optimal_register_mappings(&analysis, instructions);
+
+        debug!("optimal_register_mappings: {optimal_register_mappings:#?}");
 
         let argument_registers = (0..R::count()).filter_map(|n| R::argument_nth_opt(&self.platform, n)).collect::<HashSet<R>>();
 
@@ -101,26 +105,13 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
         for (virtual_reg, lifetime) in analysis.lifetimes() {
             let mut is_mapped = false;
-            for schedule in &mut available_registers {
-                let range = lifetime.first_use()..(lifetime.last_use() + 1);
 
-                if !schedule.is_available_during(range.clone()) {
-                    continue;
-                }
+            if let Some(optimal_mappings) = optimal_register_mappings.get(virtual_reg) {
+                is_mapped = self.allocate_to_next_available_reg(virtual_reg, lifetime, &mut available_registers, |r| optimal_mappings.contains(&r.reg));
+            }
 
-                if lifetime.times_used_between_calls() != 0 && !schedule.is_callee_saved {
-                    continue;
-                }
-
-                schedule.mark_unavailable_during(range.clone());
-
-                let mapping = self.register_mappings.entry(*virtual_reg).or_default();
-                mapping.push(Allocation {
-                    range,
-                    register: Some(schedule.reg),
-                });
-                is_mapped = true;
-                break;
+            if !is_mapped {
+                is_mapped = self.allocate_to_next_available_reg(virtual_reg, lifetime, &mut available_registers, |_| true);
             }
 
             if !is_mapped {
@@ -146,6 +137,71 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                 self.registers_to_save.push(reg.reg);
             }
         }
+    }
+
+    #[must_use]
+    fn allocate_to_next_available_reg<F: Fn(&PlatformRegisterSchedule<R>) -> bool>(
+        &mut self,
+        virtual_reg: &IrRegister,
+        lifetime: &RegisterLifetime,
+        available_registers: &mut [PlatformRegisterSchedule<R>],
+        pred: F,
+    ) -> bool {
+        for schedule in available_registers {
+            let range = lifetime.first_use()..(lifetime.last_use() + 1);
+
+            if !schedule.is_available_during(range.clone()) {
+                continue;
+            }
+
+            if lifetime.times_used_between_calls() != 0 && !schedule.is_callee_saved {
+                continue;
+            }
+
+            if !pred(&schedule) {
+                continue;
+            }
+
+            schedule.mark_unavailable_during(range.clone());
+
+            let mapping = self.register_mappings.entry(*virtual_reg).or_default();
+            mapping.push(Allocation {
+                range,
+                register: Some(schedule.reg),
+            });
+            return true;
+        }
+
+        false
+    }
+
+    #[must_use]
+    fn analyze_optimal_register_mappings<I: TargetInstruction<PhysReg = R>>(&self, analysis: &LifeAnalysisResult, instructions: &[I]) -> HashMap<IrRegister, HashSet<R>> {
+        let only_return_register = analysis.find_only_return_register();
+
+        let mut registers = HashMap::new();
+
+        for (register, lifetime) in analysis.lifetimes() {
+            let mut set = HashSet::new();
+
+            if only_return_register == Some(*register) {
+                set.insert(R::return_register(&self.platform));
+            }
+
+            if lifetime.length() == 1 {
+                for instr in instructions {
+                    if let Some((VirtOrPhysReg::Physical(dst), VirtOrPhysReg::Virtual(src))) = instr.as_rr_move() {
+                        if src == *register {
+                            set.insert(dst);
+                        }
+                    }
+                }
+            }
+
+            registers.insert(*register, set);
+        }
+
+        registers
     }
 }
 

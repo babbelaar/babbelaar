@@ -1726,6 +1726,14 @@ impl TargetInstruction for ArmInstruction<VirtOrPhysReg<ArmRegister>> {
         }
     }
 
+    fn as_rr_move(&self) -> Option<(VirtOrPhysReg<Self::PhysReg>, VirtOrPhysReg<Self::PhysReg>)> {
+        match self {
+            Self::MovRegister32 { dst, src } => Some((*dst, *src)),
+            Self::MovRegister64 { dst, src } => Some((*dst, *src)),
+            _ => None,
+        }
+    }
+
     fn is_call(&self) -> bool {
         matches!(self, Self::Bl { .. })
     }
