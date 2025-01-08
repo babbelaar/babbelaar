@@ -972,7 +972,7 @@ impl AArch64InstructionSelector {
 
         for instruction in &self.instructions {
             let spaces = if instruction.as_label().is_some() { "" } else { "    " };
-            debug!("{spaces}{instruction:?}");
+            debug!("{spaces}{instruction}");
         }
 
         debug!("");

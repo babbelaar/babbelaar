@@ -6,7 +6,7 @@ use std::{collections::HashMap, fmt::Display};
 use babbelaar::BabString;
 use log::warn;
 
-use crate::{backend::VirtOrPhysReg, Label, TargetBranchInfo, TargetInstruction, TargetInstructionInfo};
+use crate::{backend::VirtOrPhysReg, AbstractRegister, Label, TargetBranchInfo, TargetInstruction, TargetInstructionInfo};
 
 use super::{
     fixup::AArch64FixUp, ArmConditionCode, ArmRegister, ArmSignedAddressingMode, ArmUnsignedAddressingMode
@@ -1071,7 +1071,25 @@ const fn take_bits(i: u32, n: u32) -> u32  {
     i & ((1 << n) - 1)
 }
 
-impl Display for ArmInstruction<ArmRegister> {
+trait DisplayExt {
+    fn name(&self, is_64_bit: &bool) -> impl Display {
+        self.name_impl(*is_64_bit)
+    }
+
+    fn name_impl(&self, is_64_bit: bool) -> impl Display;
+}
+
+impl<R: AbstractRegister> DisplayExt for R {
+    fn name_impl(&self, is_64_bit: bool) -> impl Display {
+        if is_64_bit {
+            self.name64()
+        } else {
+            self.name32()
+        }
+    }
+}
+
+impl<R: AbstractRegister> Display for ArmInstruction<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AddImmediate { is_64_bit, dst, src, imm12, shift } => {
@@ -1208,7 +1226,7 @@ impl Display for ArmInstruction<ArmRegister> {
 
             Self::LdrHalfRegister { dst, base_ptr, offset } => {
                 let is_64_bit = true;
-                f.write_fmt(format_args!("ldrh {}, [{}, {}]", dst.name(&is_64_bit), base_ptr.name(&is_64_bit), offset.name(&is_64_bit)))
+                f.write_fmt(format_args!("ldrh {}, [{}, {}]", dst.name_impl(is_64_bit), base_ptr.name_impl(is_64_bit), offset.name_impl(is_64_bit)))
             }
 
             Self::LdrImmediate { is_64_bit, mode, dst, base_ptr, offset } => {
@@ -1389,7 +1407,7 @@ impl Display for ArmInstruction<ArmRegister> {
             }
 
             Self::Label(label) => f.write_fmt(format_args!("{label}:")),
-            Self::FixUp(fixup) => f.write_fmt(format_args!("{fixup:#?}")),
+            Self::FixUp(fixup) => f.write_fmt(format_args!("{fixup:?}")),
         }
     }
 }
