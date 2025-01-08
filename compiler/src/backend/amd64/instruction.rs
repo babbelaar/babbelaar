@@ -583,7 +583,7 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
             Self::ReturnNear => f.write_str("ret"),
 
             Self::SetCC { dst, condition } => {
-                f.write_fmt(format_args!("set{condition}, {}", dst.name8()))
+                f.write_fmt(format_args!("set{condition} {}", dst.name8()))
             }
 
             Self::SubReg32Imm8 { dst, src } => {
@@ -1064,6 +1064,13 @@ mod tests {
             src: Amd64Register::R13,
         },
         [ 0x4D, 0x89, 0xEC ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::SetCC {
+            dst: Amd64Register::Rcx,
+            condition: Amd64ConditionCode::Equal,
+        },
+        [ 0x0F, 0x94, 0xC1 ].to_vec(),
     )]
     fn check_encoding(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
