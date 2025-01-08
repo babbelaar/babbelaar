@@ -106,6 +106,9 @@ pub enum Amd64Instruction<Reg> {
     SubReg64Imm8 { dst: Reg, src: i8 },
     SubReg32Reg32 { dst: Reg, src: Reg },
 
+    XorReg32Reg32 { dst: Reg, src: Reg },
+    XorReg64Reg64 { dst: Reg, src: Reg },
+
     //
     // Virtual Instructions
     //
@@ -421,6 +424,17 @@ impl Amd64Instruction<Amd64Register> {
                 output.push(mod_rm_byte_reg_reg(*dst, *src))
             }
 
+            Self::XorReg32Reg32 { dst, src: rhs } => {
+                output.push(0x31);
+                output.push(mod_rm_byte_reg_reg(*dst, *rhs));
+            }
+
+            Self::XorReg64Reg64 { dst, src: rhs } => {
+                output.push(register_extension(true, rhs.is_64_extended_register(), false, dst.is_64_extended_register()));
+                output.push(0x31);
+                output.push(mod_rm_byte_reg_reg(*dst, *rhs));
+            }
+
             Self::FixUp(..) => panic!("FixUps zouden geresolveerd moeten zijn!"),
         }
     }
@@ -596,6 +610,14 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
 
             Self::SubReg32Reg32 { dst, src } => {
                 f.write_fmt(format_args!("sub {}, {}", dst.name32(), src.name32()))
+            }
+
+            Self::XorReg32Reg32 { dst, src: rhs } => {
+                f.write_fmt(format_args!("xor {}, {}", dst.name32(), rhs.name32()))
+            }
+
+            Self::XorReg64Reg64 { dst, src: rhs } => {
+                f.write_fmt(format_args!("xor {}, {}", dst.name64(), rhs.name64()))
             }
 
             Self::FixUp(fixup) => std::fmt::Debug::fmt(&fixup, f),
@@ -829,6 +851,16 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
             Amd64Instruction::SubReg32Reg32 { dst, src } => {
                 info.add_dst(dst);
                 info.add_src(src);
+            }
+
+            Amd64Instruction::XorReg32Reg32 { dst, src: rhs } => {
+                info.add_dst(dst);
+                info.add_src(rhs);
+            }
+
+            Amd64Instruction::XorReg64Reg64 { dst, src: rhs } => {
+                info.add_dst(dst);
+                info.add_src(rhs);
             }
 
             Amd64Instruction::FixUp(fixup) => {
@@ -1071,6 +1103,13 @@ mod tests {
             condition: Amd64ConditionCode::Equal,
         },
         [ 0x0F, 0x94, 0xC1 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::XorReg64Reg64 {
+            dst: Amd64Register::R12,
+            src: Amd64Register::R13,
+        },
+        [ 0x4D, 0x31, 0xEC ].to_vec(),
     )]
     fn check_encoding(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();

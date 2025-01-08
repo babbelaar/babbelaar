@@ -44,7 +44,7 @@ impl Amd64InstructionSelector {
             Instruction::Compare { lhs, rhs, typ } => {
                 let lhs = self.allocate_register(lhs);
 
-                assert_eq!(typ.bytes(), 4);
+                assert!(typ.bytes() <= 4);
 
                 match rhs {
                     Operand::Immediate(immediate) => {
@@ -76,7 +76,7 @@ impl Amd64InstructionSelector {
             }
 
             Instruction::Increment { register, typ } => {
-                assert_eq!(typ.bytes(), 4);
+                assert!(typ.bytes() <= 4);
 
                 let reg = self.allocate_register(register);
                 self.instructions.push(Amd64Instruction::Inc32 { reg });
@@ -182,7 +182,7 @@ impl Amd64InstructionSelector {
                     MathOperation::Modulo => todo!("Ondersteun Modulo op AMD64"),
                     MathOperation::LeftShift => todo!("Voeg SchuifLinks toe"),
                     MathOperation::RightShift => todo!("Voeg SchuifRechts toe"),
-                    MathOperation::Xor => todo!("Voeg ExclusieveOf toe"),
+                    MathOperation::Xor => self.add_instruction_xor(dst, lhs, rhs),
                 }
             }
 
@@ -509,6 +509,43 @@ impl Amd64InstructionSelector {
 
                 self.instructions.push(Amd64Instruction::IMulReg32Reg32 { lhs: dst, rhs })
             }
+        }
+    }
+
+    fn add_instruction_xor(&mut self, dst: VirtOrPhysReg<Amd64Register>, lhs: &Operand, rhs: &Operand) {
+        match (lhs, rhs) {
+            (Operand::Register(lhs), Operand::Immediate(rhs))
+                | (Operand::Immediate(rhs), Operand::Register(lhs))=> {
+                let lhs = self.allocate_register(lhs);
+
+                if lhs != dst {
+                    self.instructions.push(Amd64Instruction::MovReg32Reg32 { dst, src: lhs });
+                }
+
+                let rhs_reg = VirtOrPhysReg::Virtual(self.ir_reg_allocator.next());
+                self.instructions.push(Amd64Instruction::MovReg32Imm32 {
+                    dst: rhs_reg,
+                    src: rhs.as_i32(),
+                });
+
+                self.instructions.push(Amd64Instruction::XorReg32Reg32 { dst, src: rhs_reg });
+            }
+
+            (Operand::Register(lhs), Operand::Register(rhs)) => {
+                let lhs = self.allocate_register(lhs);
+                let rhs = self.allocate_register(rhs);
+
+                if rhs == dst {
+                    self.instructions.push(Amd64Instruction::XorReg32Reg32 { dst, src: lhs })
+                } else if lhs == dst {
+                    self.instructions.push(Amd64Instruction::XorReg32Reg32 { dst, src: rhs })
+                } else {
+                    self.instructions.push(Amd64Instruction::XorReg32Reg32 { dst, src: lhs });
+                    self.instructions.push(Amd64Instruction::XorReg32Reg32 { dst, src: rhs })
+                }
+            }
+
+            _ => todo!("Support add of {lhs}, {rhs}"),
         }
     }
 }

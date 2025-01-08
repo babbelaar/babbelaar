@@ -333,6 +333,16 @@ impl Amd64CodeGenerator {
                 src: self.allocate_register(src),
             },
 
+            Amd64Instruction::XorReg32Reg32 { dst, src } => Amd64Instruction::XorReg32Reg32 {
+                dst: self.allocate_register(dst),
+                src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::XorReg64Reg64 { dst, src } => Amd64Instruction::XorReg32Reg32 {
+                dst: self.allocate_register(dst),
+                src: self.allocate_register(src),
+            },
+
             Amd64Instruction::FixUp(Amd64FixUp::StackAlloc { dst, instruction_id }) => {
                 let offset = self.stack_allocator.offset_of_reg(instruction_id);
 
