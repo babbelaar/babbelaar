@@ -32,6 +32,7 @@ impl WindowsLinkLinker {
 
         command.arg("/SUBSYSTEM:CONSOLE");
         command.arg("/ENTRY:main");
+        command.arg("/EXPORT:main");
 
         for object_path in &self.object_paths {
             command.arg(object_path);
