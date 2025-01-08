@@ -198,7 +198,7 @@ impl Amd64InstructionSelector {
                     self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src });
                 }
 
-                self.instructions.push(Amd64Instruction::NegReg64 { dst: src });
+                self.instructions.push(Amd64Instruction::NegReg64 { dst });
             }
 
             Instruction::StackAlloc { dst, size } => {

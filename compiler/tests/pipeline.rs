@@ -225,7 +225,7 @@ fn negate_immediate() {
     ");
 
     assert_eq!(result.signal, None);
-    assert_eq!(result.exit_code, Some(256 - 8));
+    assert_eq!(result.exit_code, Some(-8));
 }
 
 #[test]
@@ -241,7 +241,7 @@ fn negate_with_function_call() {
     ");
 
     assert_eq!(result.signal, None);
-    assert_eq!(result.exit_code, Some(256 - 94));
+    assert_eq!(result.exit_code, Some(-94));
 }
 
 #[test]
@@ -1616,6 +1616,8 @@ fn run(path: impl AsRef<Path>) -> Result<ProgramResult, Box<dyn Error>> {
         stdout,
         path: path.as_ref().into(),
     };
+
+    result.exit_code = result.exit_code.map(|x| if x > 127 { x - 256 } else { x });
 
     #[cfg(unix)]
     {
