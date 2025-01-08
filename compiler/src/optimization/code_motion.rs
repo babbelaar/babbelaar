@@ -237,6 +237,10 @@ impl LifetimeBasedCodeMover {
             return false;
         }
 
+        if let Instruction::InitArg { .. } = function.instructions()[info.first_init] {
+            return false;
+        }
+
         debug_assert_ne!(info.first_init, first_read, "Deze zouden apart moeten zijn, en zou alleen kunnen met een Move(r, r) en dat mag ook niet!");
 
         if first_read == info.first_init + 1 || first_read < info.first_init {
