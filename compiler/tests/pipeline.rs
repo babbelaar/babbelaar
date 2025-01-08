@@ -460,7 +460,7 @@ fn multiply_known_rhs() {
     ");
 
     assert_eq!(result.signal, None);
-    assert_eq!(result.exit_code, Some(200));
+    assert_eq!(result.exit_code, Some(-56));
 }
 
 #[test]
