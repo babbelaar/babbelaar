@@ -90,6 +90,7 @@ impl Amd64InstructionSelector {
 
             Instruction::MoveCondition { destination, condition } => {
                 let dst = self.allocate_register(destination);
+                self.instructions.push(Amd64Instruction::MovReg32Imm32 { dst, src: 0 });
                 self.instructions.push(Amd64Instruction::SetCC {
                     dst,
                     condition: Amd64ConditionCode::from(*condition),
