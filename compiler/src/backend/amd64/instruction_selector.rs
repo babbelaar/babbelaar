@@ -217,6 +217,14 @@ impl Amd64InstructionSelector {
                 let base = self.allocate_register(base_ptr);
 
                 match (offset.shrink_if_possible(), typ.bytes()) {
+                    (Operand::Immediate(Immediate::Integer8(offset)), 1) => {
+                        if offset == 0 {
+                            self.instructions.push(Amd64Instruction::MovzxReg8FromPtrReg64 { dst, base });
+                        } else {
+                            self.instructions.push(Amd64Instruction::MovzxReg8FromPtrReg64Off8 { dst, base, offset });
+                        }
+                    }
+
                     (Operand::Immediate(Immediate::Integer8(offset)), 4) => {
                         if offset == 0 {
                             self.instructions.push(Amd64Instruction::MovReg32FromPtrReg64 { dst, base });
@@ -244,6 +252,21 @@ impl Amd64InstructionSelector {
                 let value = &Operand::Register(*value);
 
                 match (value, offset.shrink_if_possible(), typ.bytes()) {
+                    (Operand::Immediate(value), Operand::Immediate(Immediate::Integer8(offset)), 1) => {
+                        if offset == 0 {
+                            self.instructions.push(Amd64Instruction::MovImm8ToPtrReg64 {
+                                base,
+                                src: value.as_i8(),
+                            });
+                        } else {
+                            self.instructions.push(Amd64Instruction::MovImm8ToPtrReg64Off8 {
+                                base,
+                                offset,
+                                src: value.as_i8(),
+                            });
+                        }
+                    }
+
                     (Operand::Immediate(value), Operand::Immediate(Immediate::Integer8(offset)), 4) => {
                         if offset == 0 {
                             self.instructions.push(Amd64Instruction::MovImm32ToPtrReg64 {
@@ -256,6 +279,15 @@ impl Amd64InstructionSelector {
                                 offset,
                                 src: value.as_i32(),
                             });
+                        }
+                    }
+
+                    (Operand::Register(src), Operand::Immediate(Immediate::Integer8(offset)), 1) => {
+                        let src = self.allocate_register(src);
+                        if offset == 0 {
+                            self.instructions.push(Amd64Instruction::MovReg8ToPtrReg64 { base, src });
+                        } else {
+                            self.instructions.push(Amd64Instruction::MovReg8ToPtrReg64Off8 { base, offset, src });
                         }
                     }
 

@@ -571,6 +571,6 @@ impl Display for PrimitiveType {
         } else {
             f.write_char('u')?;
         }
-        self.bytes.fmt(f)
+        (self.bytes * 8).fmt(f)
     }
 }

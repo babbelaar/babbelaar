@@ -251,6 +251,17 @@ impl Amd64CodeGenerator {
                 offset,
             },
 
+            Amd64Instruction::MovImm8ToPtrReg64 { base, src } => Amd64Instruction::MovImm8ToPtrReg64 {
+                base: self.allocate_register(base),
+                src,
+            },
+
+            Amd64Instruction::MovImm8ToPtrReg64Off8 { base, offset, src } => Amd64Instruction::MovImm8ToPtrReg64Off8 {
+                base: self.allocate_register(base),
+                offset,
+                src,
+            },
+
             Amd64Instruction::MovImm32ToPtrReg64 { base, src } => Amd64Instruction::MovImm32ToPtrReg64 {
                 base: self.allocate_register(base),
                 src,
@@ -260,6 +271,17 @@ impl Amd64CodeGenerator {
                 base: self.allocate_register(base),
                 offset,
                 src,
+            },
+
+            Amd64Instruction::MovReg8ToPtrReg64 { base, src } => Amd64Instruction::MovReg8ToPtrReg64 {
+                base: self.allocate_register(base),
+                src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::MovReg8ToPtrReg64Off8 { base, offset, src } => Amd64Instruction::MovReg8ToPtrReg64Off8 {
+                base: self.allocate_register(base),
+                offset,
+                src: self.allocate_register(src),
             },
 
             Amd64Instruction::MovReg32ToPtrReg64 { base, src } => Amd64Instruction::MovReg32ToPtrReg64 {
@@ -297,6 +319,17 @@ impl Amd64CodeGenerator {
             Amd64Instruction::MovReg64Reg64 { dst, src } => Amd64Instruction::MovReg64Reg64 {
                 dst: self.allocate_register(dst),
                 src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::MovzxReg8FromPtrReg64 { dst, base } => Amd64Instruction::MovzxReg8FromPtrReg64 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+            },
+
+            Amd64Instruction::MovzxReg8FromPtrReg64Off8 { dst, base, offset } => Amd64Instruction::MovzxReg8FromPtrReg64Off8 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+                offset,
             },
 
             Amd64Instruction::NegReg64 { dst } => Amd64Instruction::NegReg64 {
