@@ -4,7 +4,7 @@
 use babbelaar::BabString;
 use log::{debug, warn};
 
-use crate::{backend::VirtOrPhysReg, AllocatableRegister, Function, Immediate, Instruction, MathOperation, Operand, Platform, Register, TargetInstruction};
+use crate::{backend::VirtOrPhysReg, ir::RegisterAllocator as IrRegisterAllocator, AllocatableRegister, Function, Immediate, Instruction, MathOperation, Operand, Platform, Register, TargetInstruction};
 
 use super::{Amd64ConditionCode, Amd64FixUp, Amd64Instruction, Amd64Register};
 
@@ -14,6 +14,7 @@ pub struct Amd64InstructionSelector {
     pub(super) function_name: BabString,
     pub(super) instructions: Vec<Amd64Instruction<VirtOrPhysReg<Amd64Register>>>,
     pub(super) current_instruction_id: usize,
+    pub(super) ir_reg_allocator: IrRegisterAllocator,
 }
 
 impl Amd64InstructionSelector {
@@ -24,6 +25,7 @@ impl Amd64InstructionSelector {
             instructions: Vec::new(),
             platform,
             current_instruction_id: 0,
+            ir_reg_allocator: function.ir_register_allocator.clone(),
         };
 
         for (instruction_id, instruction) in function.instructions().iter().enumerate() {
@@ -175,7 +177,7 @@ impl Amd64InstructionSelector {
                     MathOperation::Add => self.add_instruction_add(dst, lhs, rhs),
                     MathOperation::Multiply => self.instruction_mul(dst, lhs, rhs),
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
-                    MathOperation::Divide => todo!("Ondersteun DeelDoor op AMD64"),
+                    MathOperation::Divide => self.instruction_idiv(dst, lhs, rhs),
                     MathOperation::Modulo => todo!("Ondersteun Modulo op AMD64"),
                     MathOperation::LeftShift => todo!("Voeg SchuifLinks toe"),
                     MathOperation::RightShift => todo!("Voeg SchuifRechts toe"),
@@ -386,6 +388,29 @@ impl Amd64InstructionSelector {
             }
 
             _ => todo!("Support add of {lhs}, {rhs}"),
+        }
+    }
+
+    fn instruction_idiv(&mut self, dst: VirtOrPhysReg<Amd64Register>, lhs: &Operand, rhs: &Operand) {
+        let rax = VirtOrPhysReg::Physical(Amd64Register::Rax);
+        self.add_instruction_mov(rax, lhs);
+
+        self.instructions.push(Amd64Instruction::Cqo);
+
+        let reg = match rhs {
+            Operand::Immediate(..) => {
+                let reg = self.ir_reg_allocator.next();
+                self.add_instruction_mov(VirtOrPhysReg::Virtual(reg), rhs);
+                reg
+            }
+
+            Operand::Register(reg) => *reg,
+        };
+
+        self.instructions.push(Amd64Instruction::IDiv64 { rhs: VirtOrPhysReg::Virtual(reg) });
+
+        if dst != rax {
+            self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src: rax });
         }
     }
 

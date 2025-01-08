@@ -91,3 +91,9 @@ impl<Phys: AbstractRegister> From<&VirtOrPhysReg<Phys>> for VirtOrPhysReg<Phys> 
         value.clone()
     }
 }
+
+impl<Phys: AbstractRegister> From<Phys> for VirtOrPhysReg<Phys> {
+    fn from(value: Phys) -> Self {
+        Self::Physical(value)
+    }
+}

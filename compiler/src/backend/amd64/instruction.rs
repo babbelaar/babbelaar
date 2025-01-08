@@ -35,6 +35,14 @@ pub enum Amd64Instruction<Reg> {
     CmpReg32Imm32 { lhs: Reg, rhs: i32 },
     CmpReg32Reg32 { lhs: Reg, rhs: Reg },
 
+    /// <https://www.felixcloutier.com/x86/cwd:cdq:cqo>
+    Cqd,
+    /// <https://www.felixcloutier.com/x86/cwd:cdq:cqo>
+    Cqo,
+
+    IDiv32 { rhs: Reg },
+    IDiv64 { rhs: Reg },
+
     IMulReg32Imm8 { dst: Reg, lhs: Reg, rhs: i8 },
     IMulReg32Imm32 { dst: Reg, lhs: Reg, rhs: i32 },
     IMulReg32Reg32 { lhs: Reg, rhs: Reg },
@@ -172,6 +180,29 @@ impl Amd64Instruction<Amd64Register> {
             Self::CmpReg32Reg32 { lhs, rhs } => {
                 output.push(0x39);
                 output.push(mod_rm_byte_reg_reg(*lhs, *rhs));
+            }
+
+            Self::Cqd => {
+                output.push(0x99);
+            }
+
+            Self::Cqo => {
+                output.push(0x48);
+                output.push(0x99);
+            }
+
+            Self::IDiv32 { rhs } => {
+                if rhs.is_64_extended_register() {
+                    output.push(register_extension(false, false, false, rhs.is_64_extended_register()));
+                }
+                output.push(0xF7);
+                output.push(mod_rm_byte_extra_op(7, *rhs));
+            }
+
+            Self::IDiv64 { rhs } => {
+                output.push(register_extension(true, false, false, rhs.is_64_extended_register()));
+                output.push(0xF7);
+                output.push(mod_rm_byte_extra_op(7, *rhs));
             }
 
             Self::IMulReg32Imm8 { dst, lhs, rhs } => {
@@ -430,6 +461,17 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
                 f.write_fmt(format_args!("cmp {}, {}", lhs.name32(), rhs.name32()))
             }
 
+            Self::Cqd => f.write_str("cqd"),
+            Self::Cqo => f.write_str("cqo"),
+
+            Self::IDiv32 { rhs } => {
+                f.write_fmt(format_args!("idiv {}", rhs.name32()))
+            }
+
+            Self::IDiv64 { rhs } => {
+                f.write_fmt(format_args!("idiv {}", rhs.name64()))
+            }
+
             Self::IMulReg32Imm8 { dst, lhs, rhs } => {
                 f.write_fmt(format_args!("imul {}, {}, 0x{rhs:x}", dst.name32(), lhs.name32()))
             }
@@ -605,6 +647,28 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
             Amd64Instruction::CmpReg32Reg32 { lhs, rhs } => {
                 info.add_src(lhs);
                 info.add_src(rhs);
+            }
+
+            Amd64Instruction::Cqd => {
+                info.add_dst(Amd64Register::Rax);
+                info.add_dst(Amd64Register::Rdx);
+            }
+
+            Amd64Instruction::Cqo => {
+                info.add_dst(Amd64Register::Rax);
+                info.add_dst(Amd64Register::Rdx);
+            }
+
+            Amd64Instruction::IDiv32 { rhs } => {
+                info.add_dst(Amd64Register::Rax);
+                info.add_dst(Amd64Register::Rdx);
+                info.add_dst(rhs);
+            }
+
+            Amd64Instruction::IDiv64 { rhs } => {
+                info.add_dst(Amd64Register::Rax);
+                info.add_dst(Amd64Register::Rdx);
+                info.add_dst(rhs);
             }
 
             Amd64Instruction::IMulReg32Imm8 { dst, lhs, rhs } => {
@@ -810,9 +874,10 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
 
 /// Creates the REX prefix (Volume 2A chapter 2.2.1).
 #[must_use]
-const fn register_extension(reg_64: bool, r: bool, x: bool, b: bool) -> u8 {
+const fn register_extension(w: bool, r: bool, x: bool, b: bool) -> u8 {
+    // x is if we should use 64-bit extended registers
     0b0100_0000
-        | ((reg_64 as u8) << 3)
+        | ((w as u8) << 3)
         | ((r as u8) << 2)
         | ((x as u8) << 1)
         | ((b as u8) << 0)

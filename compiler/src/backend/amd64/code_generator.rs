@@ -165,6 +165,17 @@ impl Amd64CodeGenerator {
                 rhs: self.allocate_register(rhs),
             },
 
+            Amd64Instruction::Cqd => Amd64Instruction::Cqd,
+            Amd64Instruction::Cqo => Amd64Instruction::Cqo,
+
+            Amd64Instruction::IDiv32 { rhs } => Amd64Instruction::IDiv32 {
+                rhs: self.allocate_register(rhs)
+            },
+
+            Amd64Instruction::IDiv64 { rhs } => Amd64Instruction::IDiv64 {
+                rhs: self.allocate_register(rhs)
+            },
+
             Amd64Instruction::IMulReg32Imm8 { dst, lhs, rhs } => Amd64Instruction::IMulReg32Imm8 {
                 dst: self.allocate_register(dst),
                 lhs: self.allocate_register(lhs),
