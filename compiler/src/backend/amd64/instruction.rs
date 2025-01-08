@@ -196,7 +196,7 @@ impl Amd64Instruction<Amd64Register> {
 
             Self::IDiv32 { rhs } => {
                 if rhs.is_64_extended_register() {
-                    output.push(register_extension(false, false, false, rhs.is_64_extended_register()));
+                    output.push(register_extension(false, false, false, true));
                 }
                 output.push(0xF7);
                 output.push(mod_rm_byte_extra_op(7, *rhs));
@@ -209,18 +209,27 @@ impl Amd64Instruction<Amd64Register> {
             }
 
             Self::IMulReg32Imm8 { dst, lhs, rhs } => {
+                if dst.is_64_extended_register() || lhs.is_64_extended_register() {
+                    output.push(register_extension(false, lhs.is_64_extended_register(), false, dst.is_64_extended_register()));
+                }
                 output.push(0x6b);
                 output.push(mod_rm_byte_reg_reg(*lhs, *dst));
                 output.extend_from_slice(&rhs.to_le_bytes());
             }
 
             Self::IMulReg32Imm32 { dst, lhs, rhs } => {
+                if dst.is_64_extended_register() || lhs.is_64_extended_register() {
+                    output.push(register_extension(false, lhs.is_64_extended_register(), false, dst.is_64_extended_register()));
+                }
                 output.push(0x69);
                 output.push(mod_rm_byte_reg_reg(*lhs, *dst));
                 output.extend_from_slice(&rhs.to_le_bytes());
             }
 
             Self::IMulReg32Reg32 { lhs, rhs } => {
+                if lhs.is_64_extended_register() || rhs.is_64_extended_register() {
+                    output.push(register_extension(false, lhs.is_64_extended_register(), false, rhs.is_64_extended_register()));
+                }
                 output.push(0x0F);
                 output.push(0xAF);
                 output.push(mod_rm_byte_reg_reg(*rhs, *lhs));
@@ -360,6 +369,9 @@ impl Amd64Instruction<Amd64Register> {
             }
 
             Self::MovReg32Imm32 { dst, src } => {
+                if dst.is_64_extended_register() {
+                    output.push(register_extension(false, false, false, true));
+                }
                 output.push(0xb8 + dst.mod_rm_bits());
                 output.extend_from_slice(&src.to_le_bytes());
             }
@@ -1110,6 +1122,20 @@ mod tests {
             src: Amd64Register::R13,
         },
         [ 0x4D, 0x31, 0xEC ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::MovReg32Imm32 {
+            dst: Amd64Register::Rcx,
+            src: 123,
+        },
+        [ 0xB9, 0x7b, 0x00, 0x00, 0x00 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::MovReg32Imm32 {
+            dst: Amd64Register::R15,
+            src: 123,
+        },
+        [ 0x41, 0xbf, 0x7b, 0x00, 0x00, 0x00 ].to_vec(),
     )]
     fn check_encoding(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
