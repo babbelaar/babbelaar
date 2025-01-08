@@ -88,16 +88,18 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                     let arg_reg = R::argument_nth(&self.platform, arg_idx);
                     for schedule in &mut available_registers {
                         if schedule.reg == arg_reg {
-                            schedule.mark_unavailable_on(instruction_id);
+                            schedule.mark_unavailable_on(instruction_id, None);
                         }
                     }
                 }
             }
 
+            let as_mov = instruction.as_rr_move().and_then(|(dst, src)| dst.as_virtual().xor(src.as_virtual()));
+
             for reg in info.physical_destinations().chain(info.physical_sources()) {
                 for schedule in &mut available_registers {
                     if schedule.reg == reg {
-                        schedule.mark_unavailable_on(instruction_id);
+                        schedule.mark_unavailable_on(instruction_id, as_mov);
                     }
                 }
             }
@@ -108,6 +110,9 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
             if let Some(optimal_mappings) = optimal_register_mappings.get(virtual_reg) {
                 is_mapped = self.allocate_to_next_available_reg(virtual_reg, lifetime, &mut available_registers, |r| optimal_mappings.contains(&r.reg));
+                if !is_mapped {
+                    debug!("Kon optimale niet mappen!");
+                }
             }
 
             if !is_mapped {
@@ -145,7 +150,14 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         for schedule in available_registers {
             let range = lifetime.first_use()..(lifetime.last_use() + 1);
 
-            if !schedule.is_available_during(range.clone()) {
+            if !pred(&schedule) {
+                continue;
+            }
+
+            if !schedule.is_available_during(range.clone(), *virtual_reg) {
+                debug!("Kan optimale register {} niet gebruiken wegens onbeschikbaarheid", schedule.reg.display());
+                debug!("   We zoeken {range:?}");
+                debug!("   We hebben maar {:?}", &schedule.availability[range]);
                 continue;
             }
 
@@ -153,11 +165,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                 continue;
             }
 
-            if !pred(&schedule) {
-                continue;
-            }
-
-            schedule.mark_unavailable_during(range.clone());
+            schedule.mark_unavailable_during(range.clone(), *virtual_reg);
 
             let mapping = self.register_mappings.entry(*virtual_reg).or_default();
             mapping.push(Allocation {
@@ -183,12 +191,10 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
                 set.insert(R::return_register(&self.platform));
             }
 
-            if lifetime.length() == 1 {
-                for instr in instructions {
-                    if let Some((VirtOrPhysReg::Physical(dst), VirtOrPhysReg::Virtual(src))) = instr.as_rr_move() {
-                        if src == *register {
-                            set.insert(dst);
-                        }
+            for instr in instructions {
+                if let Some((VirtOrPhysReg::Physical(dst), VirtOrPhysReg::Virtual(src))) = instr.as_rr_move() {
+                    if src == *register {
+                        set.insert(dst);
                     }
                 }
             }
@@ -212,6 +218,7 @@ struct PlatformRegisterSchedule<R: AllocatableRegister> {
     is_callee_saved: bool,
     // TODO: this can easily be replaced with a better structure
     availability: Vec<bool>,
+    move_hints: Vec<Option<IrRegister>>,
 }
 
 impl<R: AllocatableRegister> PlatformRegisterSchedule<R> {
@@ -220,21 +227,36 @@ impl<R: AllocatableRegister> PlatformRegisterSchedule<R> {
             reg,
             availability: vec![true; instruction_count],
             is_callee_saved,
+            move_hints: vec![None; instruction_count],
         }
     }
 
-    fn mark_unavailable_on(&mut self, instruction_id: usize) {
+    fn mark_unavailable_on(&mut self, instruction_id: usize, mov_reg_hint: Option<IrRegister>) {
         self.availability[instruction_id] = false;
+        self.move_hints[instruction_id] = mov_reg_hint;
     }
 
     #[must_use]
-    fn is_available_during(&self, range: Range<usize>) -> bool {
-        self.availability.iter().skip(range.start).take(range.end - range.start).all(|b| *b)
+    fn is_available_during(&self, range: Range<usize>, register: IrRegister) -> bool {
+        for i in range {
+            if self.availability[i] {
+                continue;
+            }
+
+            if self.move_hints[i] == Some(register) {
+                continue;
+            }
+
+            return false;
+        }
+
+        true
     }
 
-    fn mark_unavailable_during(&mut self, range: Range<usize>) {
+    fn mark_unavailable_during(&mut self, range: Range<usize>, register: IrRegister) {
         for idx in range {
             self.availability[idx] = false;
+            self.move_hints[idx] = Some(register);
         }
     }
 
