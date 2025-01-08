@@ -144,6 +144,16 @@ impl<PhysReg: AbstractRegister> TargetInstructionInfo<PhysReg> {
         self.sources.iter().filter_map(VirtOrPhysReg::as_virtual)
     }
 
+    #[must_use]
+    pub fn physical_destinations(&self) -> impl Iterator<Item = PhysReg> + '_ {
+        self.destinations.iter().filter_map(VirtOrPhysReg::as_physical)
+    }
+
+    #[must_use]
+    pub fn physical_sources(&self) -> impl Iterator<Item = PhysReg> + '_ {
+        self.sources.iter().filter_map(VirtOrPhysReg::as_physical)
+    }
+
     pub fn add_dst(&mut self, dst: impl Into<VirtOrPhysReg<PhysReg>>) {
         self.destinations.push(dst.into());
     }

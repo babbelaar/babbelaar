@@ -81,13 +81,23 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         }
 
         for (instruction_id, instruction) in instructions.iter().enumerate() {
+            let info = instruction.info();
+
             if instruction.is_call() {
-                for (arg_idx, _) in instruction.info().virtual_sources().enumerate() {
+                for (arg_idx, _) in info.virtual_sources().enumerate() {
                     let arg_reg = R::argument_nth(&self.platform, arg_idx);
                     for schedule in &mut available_registers {
                         if schedule.reg == arg_reg {
                             schedule.mark_unavailable_on(instruction_id);
                         }
+                    }
+                }
+            }
+
+            for reg in info.physical_destinations().chain(info.physical_sources()) {
+                for schedule in &mut available_registers {
+                    if schedule.reg == reg {
+                        schedule.mark_unavailable_on(instruction_id);
                     }
                 }
             }
