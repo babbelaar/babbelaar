@@ -66,7 +66,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         let analysis = LifeAnalysis::analyze(argument_registers, instructions);
         analysis.dump_result();
 
-        let optimal_register_mappings = self.analyze_optimal_register_mappings(&analysis, instructions);
+        let mut optimal_register_mappings = self.analyze_optimal_register_mappings(&analysis, instructions);
 
         debug!("optimal_register_mappings: {optimal_register_mappings:#?}");
 
@@ -106,14 +106,22 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
         }
 
         for (virtual_reg, lifetime) in analysis.lifetimes() {
-            let mut is_mapped = false;
+            let Some(optimal_mappings) = optimal_register_mappings.get(virtual_reg) else { continue };
 
-            if let Some(optimal_mappings) = optimal_register_mappings.get(virtual_reg) {
-                is_mapped = self.allocate_to_next_available_reg(virtual_reg, lifetime, &mut available_registers, |r| optimal_mappings.contains(&r.reg));
-                if !is_mapped {
-                    debug!("Kon optimale niet mappen!");
-                }
+            if self.allocate_to_next_available_reg(virtual_reg, lifetime, &mut available_registers, |r| optimal_mappings.contains(&r.reg)) {
+                continue;
             }
+
+            debug!("Kon optimale niet mappen!");
+            optimal_register_mappings.remove(virtual_reg);
+        }
+
+        for (virtual_reg, lifetime) in analysis.lifetimes() {
+            if optimal_register_mappings.contains_key(virtual_reg) {
+                continue;
+            }
+
+            let mut is_mapped = false;
 
             if !is_mapped {
                 is_mapped = self.allocate_to_next_available_reg(virtual_reg, lifetime, &mut available_registers, |_| true);
@@ -184,7 +192,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
         let mut registers = HashMap::new();
 
-        for (register, lifetime) in analysis.lifetimes() {
+        for register in analysis.lifetimes().keys() {
             let mut set = HashSet::new();
 
             if only_return_register == Some(*register) {
