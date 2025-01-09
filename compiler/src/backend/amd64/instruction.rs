@@ -309,9 +309,12 @@ impl Amd64Instruction<Amd64Register> {
             }
 
             Self::LeaReg64FromReg64Off8 { dst, base, offset } => {
-                output.push(register_extension(true, false, false, false));
+                output.push(register_extension(true, base.is_64_extended_register(), false, dst.is_64_extended_register()));
                 output.push(0x8d);
                 output.push(mod_rm_8_bit_displacement(*dst, *base));
+                if *base == Amd64Register::Rsp {
+                    output.push(sib_byte(SibScale::Scale0, None, Amd64Register::Rsp));
+                }
                 output.push(*offset as u8);
             }
 
@@ -1090,6 +1093,33 @@ fn mod_rm_no_displacement(dst: Amd64Register, src: Amd64Register) -> u8 {
     byte
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[allow(unused)]
+enum SibScale {
+    #[default]
+    Scale0 = 0b00,
+    Scale2 = 0b01,
+    Scale4 = 0b10,
+    Scale8 = 0b11,
+}
+
+/// Certain encodings of the ModR/M byte require a second addressing byte (the SIB byte). The base-plus-index and
+/// scale-plus-index forms of 32-bit addressing require the SIB byte. The SIB byte includes the following fields:
+/// - The _scale_ field specifies the scale factor.
+/// - The _index_ field specifies the register number of the index register.
+/// - The _base_ field specifies the register number of the base register.
+/// See Section 2.1.5 for the encodings of the ModR/M and SIB bytes.
+#[must_use]
+fn sib_byte(scale: SibScale, index: Option<Amd64Register>, base: Amd64Register) -> u8 {
+    assert_ne!(index, Some(Amd64Register::Rsp));
+
+    let scale = (scale as u8) << 6;
+    let index = index.map(|x| x.sib_bits()).unwrap_or(0b100) << 3;
+    let base = base.sib_bits();
+
+    scale | index | base
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1248,7 +1278,7 @@ mod tests {
         let mut actual = Vec::new();
         input.encode(&mut actual, 0, &HashMap::new());
 
-        assert_eq!(actual, expected, "{actual:#x?}");
+        assert_eq!(actual, expected, "{input} werd ge-encodeerd naar: {actual:#x?}, maar we verwachten: {expected:#x?}");
     }
 
     #[rstest]
@@ -1267,6 +1297,10 @@ mod tests {
     #[case(
         Amd64Instruction::LeaReg64FromReg64Off8 { dst: Amd64Register::Rax, base: Amd64Register::Rbp, offset: -4 },
         [ 0x48, 0x8d, 0x45, 0xfc ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::LeaReg64FromReg64Off8 { dst: Amd64Register::Rsi, base: Amd64Register::Rsp, offset: 0x4 },
+        [ 0x48, 0x8d, 0x74, 0x24, 0x04 ].to_vec(),
     )]
     fn check_encoding_lea(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
@@ -1300,5 +1334,17 @@ mod tests {
         input.encode(&mut actual, 0, &HashMap::new());
 
         assert_eq!(actual, expected, "actual wasn't the expected! Instruction was: {input}");
+    }
+
+    #[rstest]
+    #[case(
+        SibScale::Scale0,
+        None,
+        Amd64Register::Rsp,
+        0x24
+    )]
+    fn sib_encoding(#[case] scale: SibScale, #[case] index: Option<Amd64Register>, #[case] base: Amd64Register, #[case] expected: u8) {
+        let actual = sib_byte(scale, index, base);
+        assert_eq!(actual, expected);
     }
 }

@@ -64,6 +64,11 @@ impl Amd64Register {
     }
 
     #[must_use]
+    pub const fn sib_bits(&self) -> u8 {
+        self.mod_rm_bits()
+    }
+
+    #[must_use]
     pub const fn name(&self, mode: Amd64RegisterNameMode) -> &'static str {
         match (mode, self) {
             (Amd64RegisterNameMode::Quad, Self::Rax) => "rax",
