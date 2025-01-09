@@ -451,7 +451,7 @@ impl Amd64CodeGenerator {
                     ty: RelocationType::Function {
                         name: symbol_name.clone(),
                     },
-                    offset,
+                    offset: offset + 1,
                     method: RelocationMethod::Amd64CallNearRelative,
                 });
             }
