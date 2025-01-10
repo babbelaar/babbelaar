@@ -40,14 +40,6 @@ impl ArmRegister {
     }
 
     #[must_use]
-    pub const fn name32(&self) -> impl Display {
-        ArmRegisterDisplay {
-            mode: ArmRegisterMode::Bit32,
-            reg: *self
-        }
-    }
-
-    #[must_use]
     pub const fn name64(&self) -> impl Display {
         ArmRegisterDisplay {
             mode: ArmRegisterMode::Bit64,

@@ -42,7 +42,7 @@ impl CompiledFunction {
     }
 
     fn final_name(&self, platform: &Platform) -> &str {
-        if platform.operating_system() == OperatingSystem::Windows && self.name() == Constants::MAIN_FUNCTION {
+        if platform.operating_system() != OperatingSystem::Windows && self.name() == Constants::MAIN_FUNCTION {
             return "main";
         }
         &self.name
