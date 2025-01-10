@@ -187,7 +187,11 @@ impl Amd64InstructionSelector {
             }
 
             Instruction::MoveAddress { destination, offset } => {
-                todo!("Bereken datasectie adres {offset} en zet hem in {destination}")
+                let destination = self.allocate_register(destination);
+                self.instructions.push(Amd64Instruction::FixUp(Amd64FixUp::MoveAddress {
+                    destination,
+                    offset: *offset,
+                }));
             }
 
             Instruction::Negate { typ: _, dst, src } => {

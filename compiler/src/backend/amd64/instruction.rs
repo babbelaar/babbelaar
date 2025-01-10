@@ -5,7 +5,7 @@ use std::{collections::HashMap, fmt::Display, i32};
 
 use babbelaar::BabString;
 
-use crate::{backend::{abstract_register::AbstractRegister, VirtOrPhysReg}, Label, TargetBranchInfo, TargetInstruction, TargetInstructionInfo};
+use crate::{backend::{abstract_register::AbstractRegister, VirtOrPhysReg}, DataSectionOffset, Label, TargetBranchInfo, TargetInstruction, TargetInstructionInfo};
 
 use super::{Amd64ConditionCode, Amd64FixUp, Amd64Register};
 
@@ -74,6 +74,12 @@ pub enum Amd64Instruction<Reg> {
         dst: Reg,
         base: Reg,
         offset: i8,
+    },
+
+    LeaReg64RipDisp32 {
+        dst: Reg,
+        offset: i32,
+        data_section_offset: DataSectionOffset,
     },
 
     MovImm8ToPtrReg64 { base: Reg, src: i8 },
@@ -316,6 +322,13 @@ impl Amd64Instruction<Amd64Register> {
                     output.push(sib_byte(SibScale::Scale0, None, Amd64Register::Rsp));
                 }
                 output.push(*offset as u8);
+            }
+
+            Self::LeaReg64RipDisp32 { dst, offset, .. } => {
+                output.push(register_extension(true, false, false, dst.is_64_extended_register()));
+                output.push(0x8d);
+                output.push(mod_rip_relative_disp32(*dst));
+                output.extend(&offset.to_le_bytes());
             }
 
             Self::MovReg32FromPtrReg64 { dst, base } => {
@@ -595,6 +608,10 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
                 f.write_fmt(format_args!("lea {}, [{} + 0x{offset:x}]", dst.name64(), base.name64()))
             }
 
+            Self::LeaReg64RipDisp32 { dst, offset, data_section_offset } => {
+                f.write_fmt(format_args!("lea {}, [rip + 0x{offset:x}]    # {data_section_offset}", dst.name64()))
+            }
+
             Self::MovReg32FromPtrReg64 { dst, base } => {
                 f.write_fmt(format_args!("mov {}, [{}]", dst.name32(), base.name64()))
             }
@@ -834,6 +851,13 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
                 info.add_dst(dst);
                 info.add_src(base);
                 _ = offset;
+            }
+
+            Amd64Instruction::LeaReg64RipDisp32 { dst, offset, data_section_offset } => {
+                info.add_dst(dst);
+                // rip..?
+                _ = offset;
+                _ = data_section_offset;
             }
 
             Amd64Instruction::MovReg32FromPtrReg64 { dst, base } => {
@@ -1089,6 +1113,15 @@ fn mod_rm_no_displacement(dst: Amd64Register, src: Amd64Register) -> u8 {
 
     byte |= dst.mod_rm_bits() << 3;
     byte |= src.mod_rm_bits();
+
+    byte
+}
+
+#[must_use]
+fn mod_rip_relative_disp32(dst: Amd64Register) -> u8 {
+    let mut byte = 0b00_000_101;
+
+    byte |= dst.mod_rm_bits() << 3;
 
     byte
 }

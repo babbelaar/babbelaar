@@ -63,6 +63,11 @@ impl Relocation {
                 let offset = offset as u32 - 4;
                 code[0..4].copy_from_slice(&offset.to_le_bytes());
             }
+
+            RelocationMethod::Amd64RipRelative => {
+                let offset = offset as u32 - 4;
+                code[0..4].copy_from_slice(&offset.to_le_bytes());
+            }
         }
     }
 }
@@ -84,6 +89,7 @@ pub enum RelocationMethod {
     Aarch64PageOff12,
     Aarch64Page21,
     Amd64CallNearRelative,
+    Amd64RipRelative,
 }
 
 impl RelocationMethod {
@@ -94,6 +100,7 @@ impl RelocationMethod {
             Self::Aarch64PageOff12 => 0,
             Self::Aarch64Page21 => 0,
             Self::Amd64CallNearRelative => -4,
+            Self::Amd64RipRelative => -4,
         }
     }
 
@@ -132,6 +139,13 @@ impl RelocationMethod {
                 }
             },
 
+            RelocationMethod::Amd64RipRelative => {
+                RelocationFlags::Generic {
+                    kind: RelocationKind::Relative,
+                    encoding: RelocationEncoding::Generic,
+                    size: 32,
+                }
+            }
         }
     }
 }

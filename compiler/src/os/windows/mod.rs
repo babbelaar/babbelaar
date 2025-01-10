@@ -45,7 +45,7 @@ impl WindowsLinkLinker {
             command.arg(object_path);
         }
 
-        for lib in "vcruntime.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib".split(' ') {
+        for lib in "ucrt.lib legacy_stdio_definitions.lib vcruntime.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib".split(' ') {
             command.arg(lib);
         }
 

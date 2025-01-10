@@ -229,6 +229,12 @@ impl Amd64CodeGenerator {
                 offset,
             },
 
+            Amd64Instruction::LeaReg64RipDisp32 { dst, offset, data_section_offset } => Amd64Instruction::LeaReg64RipDisp32 {
+                dst: self.allocate_register(dst),
+                offset,
+                data_section_offset,
+            },
+
             Amd64Instruction::MovReg32FromPtrReg64 { dst, base } => Amd64Instruction::MovReg32FromPtrReg64 {
                 dst: self.allocate_register(dst),
                 base: self.allocate_register(base),
@@ -376,6 +382,16 @@ impl Amd64CodeGenerator {
                 src: self.allocate_register(src),
             },
 
+            Amd64Instruction::FixUp(Amd64FixUp::MoveAddress { destination, offset }) => {
+                let dst = self.allocate_register(destination);
+
+                Amd64Instruction::LeaReg64RipDisp32 {
+                    dst,
+                    offset: 0,
+                    data_section_offset: offset,
+                }
+            }
+
             Amd64Instruction::FixUp(Amd64FixUp::StackAlloc { dst, instruction_id }) => {
                 let offset = self.stack_allocator.offset_of_reg(instruction_id);
 
@@ -453,6 +469,17 @@ impl Amd64CodeGenerator {
                     },
                     offset: offset + 1,
                     method: RelocationMethod::Amd64CallNearRelative,
+                });
+            }
+
+            if let Amd64Instruction::LeaReg64RipDisp32 { data_section_offset, .. } = instruction {
+                self.relocations.push(Relocation {
+                    ty: RelocationType::Data {
+                        offset: data_section_offset.offset(),
+                        section: data_section_offset.section_kind(),
+                    },
+                    offset: offset + 3,
+                    method: RelocationMethod::Amd64RipRelative,
                 });
             }
         }
