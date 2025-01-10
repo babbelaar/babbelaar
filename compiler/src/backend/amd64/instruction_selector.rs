@@ -178,7 +178,7 @@ impl Amd64InstructionSelector {
                     MathOperation::Multiply => self.instruction_mul(dst, lhs, rhs),
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
                     MathOperation::Divide => self.instruction_idiv(dst, lhs, rhs),
-                    MathOperation::Modulo => todo!("Ondersteun Modulo op AMD64"),
+                    MathOperation::Modulo => self.add_instruction_mod(dst, lhs, rhs),
                     MathOperation::LeftShift => todo!("Voeg SchuifLinks toe"),
                     MathOperation::RightShift => todo!("Voeg SchuifRechts toe"),
                     MathOperation::Xor => self.add_instruction_xor(dst, lhs, rhs),
@@ -447,6 +447,31 @@ impl Amd64InstructionSelector {
 
         if dst != rax {
             self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src: rax });
+        }
+    }
+
+    /// Uses the IDIV instruction, but moves RDX instead of RAX.
+    fn add_instruction_mod(&mut self, dst: VirtOrPhysReg<Amd64Register>, lhs: &Operand, rhs: &Operand) {
+        let rax = VirtOrPhysReg::Physical(Amd64Register::Rax);
+        let rdx = VirtOrPhysReg::Physical(Amd64Register::Rdx);
+        self.add_instruction_mov(rax, lhs);
+
+        self.instructions.push(Amd64Instruction::Cqo);
+
+        let reg = match rhs {
+            Operand::Immediate(..) => {
+                let reg = self.ir_reg_allocator.next();
+                self.add_instruction_mov(VirtOrPhysReg::Virtual(reg), rhs);
+                reg
+            }
+
+            Operand::Register(reg) => *reg,
+        };
+
+        self.instructions.push(Amd64Instruction::IDiv64 { rhs: VirtOrPhysReg::Virtual(reg) });
+
+        if dst != rdx {
+            self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src: rdx });
         }
     }
 
