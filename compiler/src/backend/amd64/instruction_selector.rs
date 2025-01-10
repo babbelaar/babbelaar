@@ -98,10 +98,9 @@ impl Amd64InstructionSelector {
             }
 
             Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
-                assert_eq!(variable_arguments.len(), 0, "flexibele argumenten zijn niet ondersteund op dit platform!");
-                debug_assert!(arguments.len() < (1 << 8));
+                assert!(arguments.len() < 5, "We ondersteunen een maximum van 4 argumenten op AMD64...");
 
-                for (idx, arg) in arguments.iter().enumerate() {
+                for (idx, arg) in arguments.iter().chain(variable_arguments.iter()).enumerate() {
                     let current_reg = self.allocate_register(&arg.register());
                     let actual_reg = VirtOrPhysReg::Physical(Amd64Register::argument_nth(&self.platform, idx));
 
