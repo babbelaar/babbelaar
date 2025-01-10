@@ -41,8 +41,8 @@ impl CompiledFunction {
         &self.relocations
     }
 
-    fn final_name(&self) -> &str {
-        if self.name() == Constants::MAIN_FUNCTION {
+    fn final_name(&self, platform: &Platform) -> &str {
+        if platform.operating_system() == OperatingSystem::Windows && self.name() == Constants::MAIN_FUNCTION {
             return "main";
         }
         &self.name
@@ -120,7 +120,7 @@ impl CompiledObject {
             let our_offset = *self.symbol_offsets.get(&function.name).unwrap();
 
             let main_symbol = obj.add_symbol(Symbol {
-                name: function.final_name().as_bytes().to_vec(),
+                name: function.final_name(&self.platform).as_bytes().to_vec(),
                 value: 0,
                 size: 0,
                 kind: SymbolKind::Text,
@@ -264,7 +264,7 @@ impl CompiledObject {
         };
 
         for function in &self.functions {
-            if function.final_name() == "main" {
+            if function.final_name(&self.platform) == "main" {
                 address_of_entry_point = section.data.len() as u32;
             }
 

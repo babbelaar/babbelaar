@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 babbelaar = { path = "../babbelaar" }
-babbelaar-builtin = { path = "../builtin" }
+babbelaar-builtin = { path = "../builtin", features = ["no-win-main"] }
 
 log.workspace = true
 object.workspace = true

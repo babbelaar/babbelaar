@@ -54,3 +54,19 @@ pub unsafe fn strlen(mut ptr: *const u8) -> usize {
 
     size
 }
+
+// #[cfg(not(feature = "no-win-main"))]
+#[cfg(windows)]
+unsafe extern "C" {
+    #[must_use]
+    unsafe fn hoofd() -> i32;
+}
+
+// #[cfg(not(feature = "no-win-main"))]
+#[cfg(windows)]
+#[must_use]
+#[no_mangle]
+pub unsafe extern "C"  fn babbelaar_hoofd() {
+    let code = hoofd();
+    std::process::exit(code);
+}
