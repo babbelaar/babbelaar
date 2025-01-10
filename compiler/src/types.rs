@@ -33,6 +33,15 @@ impl Architecture {
         }
     }
 
+    /// See <https://learn.microsoft.com/en-us/cpp/build/reference/machine-specify-target-platform?view=msvc-170>
+    #[must_use]
+    pub const fn windows_machine_name(&self) -> &str {
+        match self {
+            Self::AArch64 => "arm64",
+            Self::X86_64 => "x64",
+        }
+    }
+
     #[must_use]
     fn try_detect() -> Option<Self> {
         if cfg!(target_arch = "aarch64") {
