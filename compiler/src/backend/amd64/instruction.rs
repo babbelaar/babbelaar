@@ -48,6 +48,7 @@ pub enum Amd64Instruction<Reg> {
     IMulReg32Reg32 { lhs: Reg, rhs: Reg },
 
     Inc32 { reg: Reg },
+    Inc64 { reg: Reg },
 
     Jmp { location: Label },
 
@@ -250,6 +251,15 @@ impl Amd64Instruction<Amd64Register> {
             }
 
             Self::Inc32 { reg } => {
+                if reg.is_64_extended_register() {
+                    output.push(register_extension(false, false, false, true));
+                }
+                output.push(0xff);
+                output.push(mod_rm_byte_reg(*reg));
+            }
+
+            Self::Inc64 { reg } => {
+                output.push(register_extension(true, false, false, reg.is_64_extended_register()));
                 output.push(0xff);
                 output.push(mod_rm_byte_reg(*reg));
             }
@@ -580,6 +590,10 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
                 f.write_fmt(format_args!("inc {}", reg.name32()))
             }
 
+            Self::Inc64 { reg } => {
+                f.write_fmt(format_args!("inc {}", reg.name64()))
+            }
+
             Self::Jmp { location } => {
                 f.write_fmt(format_args!("jmp {location}"))
             }
@@ -817,6 +831,10 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
             }
 
             Amd64Instruction::Inc32 { reg } => {
+                info.add_dst(reg);
+            }
+
+            Amd64Instruction::Inc64 { reg } => {
                 info.add_dst(reg);
             }
 

@@ -44,8 +44,6 @@ impl Amd64InstructionSelector {
             Instruction::Compare { lhs, rhs, typ } => {
                 let lhs = self.allocate_register(lhs);
 
-                assert!(typ.bytes() <= 4);
-
                 match rhs {
                     Operand::Immediate(immediate) => {
                         match immediate.shrink_if_possible() {
@@ -76,10 +74,14 @@ impl Amd64InstructionSelector {
             }
 
             Instruction::Increment { register, typ } => {
-                assert!(typ.bytes() <= 4);
+                assert!(typ.bytes() <= 8);
 
                 let reg = self.allocate_register(register);
-                self.instructions.push(Amd64Instruction::Inc32 { reg });
+                if typ.bytes() <= 4 {
+                    self.instructions.push(Amd64Instruction::Inc32 { reg });
+                } else {
+                    self.instructions.push(Amd64Instruction::Inc64 { reg });
+                }
             }
 
             Instruction::Move { source, destination } => {
@@ -317,50 +319,6 @@ impl Amd64InstructionSelector {
             }
         }
     }
-
-    // fn add_prologue(&mut self, instructions: &[Instruction]) {
-    //     for reg in self.register_allocator.callee_saved_registers_to_save() {
-    //         self.instructions.push(Amd64Instruction::PushReg64 { reg });
-    //     }
-
-    //     for (instruction_id, instruction) in instructions.iter().enumerate() {
-    //         if let Instruction::StackAlloc { dst, size, .. } = instruction {
-    //             self.stack_allocator.reserve_stack_allocation(instruction_id, *dst, *size);
-    //         }
-    //     }
-
-    //     self.stack_allocator.finalize();
-
-    //     if !self.characteristics.is_leaf_function() {
-    //         self.instructions.push(Amd64Instruction::PushReg64 { reg: Amd64Register::Rbp });
-    //         self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: VirtOrPhysReg<Amd64Register>::Rbp, src: VirtOrPhysReg::Physical(Amd64Register::Rsp) });
-    //     }
-
-    //     if self.stack_allocator.total_size() != 0 {
-    //         self.instructions.push(Amd64Instruction::SubReg64Imm8 {
-    //             dst: VirtOrPhysReg::Physical(Amd64Register::Rsp),
-    //             src: self.stack_allocator.total_size().try_into().unwrap(),
-    //         });
-    //     }
-    // }
-
-    // fn add_epilogue(&mut self) {
-    //     if self.stack_allocator.total_size() != 0 {
-    //         self.instructions.push(Amd64Instruction::SubReg64Imm8 {
-    //             dst: VirtOrPhysReg::Physical(Amd64Register::Rsp),
-    //             src: self.stack_allocator.total_size().try_into().unwrap(),
-    //         });
-    //     }
-
-    //     if !self.characteristics.is_leaf_function() {
-    //         self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst: VirtOrPhysReg::Physical(Amd64Register::Rsp), src: Amd64Register::Rbp });
-    //         self.instructions.push(Amd64Instruction::PopReg64 { reg: Amd64Register::Rbp });
-    //     }
-
-    //     for reg in self.register_allocator.callee_saved_registers_to_save().rev() {
-    //         self.instructions.push(Amd64Instruction::PopReg64 { reg });
-    //     }
-    // }
 
     #[must_use]
     fn allocate_register(&mut self, register: &Register) -> VirtOrPhysReg<Amd64Register> {

@@ -197,6 +197,10 @@ impl Amd64CodeGenerator {
                 reg: self.allocate_register(reg),
             },
 
+            Amd64Instruction::Inc64 { reg } => Amd64Instruction::Inc64 {
+                reg: self.allocate_register(reg),
+            },
+
             Amd64Instruction::Jmp { location } => Amd64Instruction::Jmp {
                 location,
             },
