@@ -354,7 +354,7 @@ mod tests {
         object.add_function(CompiledFunction {
             name: BabString::new_static("b"),
             byte_code: [
-                ArmInstruction::MovZ { register: ArmRegister::X0, imm16: 100 }.encode(0, &HashMap::new()).to_le_bytes(),
+                ArmInstruction::MovZ { register: ArmRegister::X0, imm16: 100, shift: 0 }.encode(0, &HashMap::new()).to_le_bytes(),
                 ArmInstruction::Bl { offset: 0, symbol_name: BabString::new_static("a") }.encode(0, &HashMap::new()).to_le_bytes(),
             ].into_iter().flatten().collect(),
             relocations: [

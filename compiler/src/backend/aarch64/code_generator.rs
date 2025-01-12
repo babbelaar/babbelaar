@@ -494,9 +494,14 @@ impl AArch64CodeGenerator {
                 self.add_instruction(ArmInstruction::MAdd { is_64_bit, dst, mul_lhs, mul_rhs, addend });
             }
 
-            ArmInstruction::MovN { is_64_bit, register, unsigned_imm16 } => {
+            ArmInstruction::MovK { is_64_bit, register, imm16, shift } => {
                 let register = self.allocate_register(register);
-                self.add_instruction(ArmInstruction::MovN { is_64_bit, register, unsigned_imm16 });
+                self.add_instruction(ArmInstruction::MovK { is_64_bit, register, imm16, shift });
+            }
+
+            ArmInstruction::MovN { is_64_bit, register, unsigned_imm16, shift } => {
+                let register = self.allocate_register(register);
+                self.add_instruction(ArmInstruction::MovN { is_64_bit, register, unsigned_imm16, shift });
             }
 
             ArmInstruction::MovRegister32 { dst, src } => {
@@ -511,9 +516,9 @@ impl AArch64CodeGenerator {
                 self.add_instruction(ArmInstruction::MovRegister64 { dst, src });
             }
 
-            ArmInstruction::MovZ { register, imm16 } => {
+            ArmInstruction::MovZ { register, imm16, shift } => {
                 let register = self.allocate_register(register);
-                self.add_instruction(ArmInstruction::MovZ { register, imm16 });
+                self.add_instruction(ArmInstruction::MovZ { register, imm16, shift });
             }
 
             ArmInstruction::MSub { is_64_bit, dst, lhs, rhs, minuend } => {

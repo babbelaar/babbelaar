@@ -1570,6 +1570,60 @@ fn fill_local_by_ptr() {
     assert_eq!(result.stdout, "");
 }
 
+#[rstest]
+#[case("%u", "g8", "128")]
+#[case("%#x", "g8", "0xfe")]
+#[case("%#x", "g8", "0xff")]
+#[case("%u", "g16", "255")]
+#[case("%#x", "g16", "0xfe")]
+#[case("%#x", "g16", "0xff")]
+#[case("%#x", "g16", "0x100")]
+#[case("%#x", "g16", "0xfffe")]
+#[case("%#x", "g16", "0xffff")]
+#[case("%u", "g32", "255")]
+#[case("%#x", "g32", "0xfe")]
+#[case("%#x", "g32", "0xff")]
+#[case("%#x", "g32", "0x100")]
+#[case("%#x", "g32", "0xfffe")]
+#[case("%#x", "g32", "0xffff")]
+#[case("%#x", "g32", "0x10000")]
+#[case("%#x", "g32", "0xfffffffe")]
+#[case("%#x", "g32", "0xffffffff")]
+#[case("%llu", "g64", "255")]
+#[case("%#llx", "g64", "0xfe")]
+#[case("%#llx", "g64", "0xff")]
+#[case("%#llx", "g64", "0x100")]
+#[case("%#llx", "g64", "0xfffe")]
+#[case("%#llx", "g64", "0xffff")]
+#[case("%#llx", "g64", "0x10000")]
+#[case("%#llx", "g64", "0xfffffffe")]
+#[case("%#llx", "g64", "0xffffffff")]
+#[case("%#llx", "g64", "0x100000000")]
+#[case("%#llx", "g64", "0xfffffffffffffffe")]
+#[case("%#llx", "g64", "0xffffffffffffffff")]
+#[case("%#llx", "g64", "0x1234567890abcdef")]
+fn numeric_bounds_printf(#[case] format: &str, #[case] ty: &str, #[case] number: &str) {
+    let result = create_and_run_single_object_executable(&format!(r#"
+        werkwijze schrijfGetal(g: {ty}) {{
+            printf("{format}", g);
+        }}
+
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+
+        werkwijze hoofd() -> g32 {{
+            stel getal = {number};
+            schrijfGetal(getal);
+            bekeer 0;
+        }}
+    "#));
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, number);
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() || std::env::var("GITHUB_ACTION").is_ok() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();

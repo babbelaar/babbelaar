@@ -684,18 +684,61 @@ impl AArch64InstructionSelector {
     fn add_instruction_mov(&mut self, typ: PrimitiveType, dst: VirtOrPhysReg<ArmRegister>, source: &Operand) {
         match source {
             Operand::Immediate(immediate) => {
-                if immediate.as_i64() < 0 {
+                if immediate.as_i64() >= 0 && immediate.as_i64() <= 0xFFFF {
+                    self.instructions.push(ArmInstruction::MovZ {
+                        register: dst,
+                        shift: 0,
+                        imm16: immediate.as_i64() as _,
+                    });
+                    return;
+                }
+
+                if immediate.as_i64() >= -0xFFFF && immediate.as_i64() < 0 {
                     self.instructions.push(ArmInstruction::MovN {
                         is_64_bit: typ.is_arm_64_bit(),
+                        shift: 0,
                         register: dst,
                         unsigned_imm16: (immediate.as_i64().wrapping_neg()) as _,
                     });
-                } else {
-                    self.instructions.push(ArmInstruction::MovZ {
-                        register: dst,
-                        imm16: immediate.as_i64() as _,
-                    });
+                    return;
                 }
+
+                if immediate.as_i32() >= -0xFFFF && immediate.as_i32() < 0 {
+                    self.instructions.push(ArmInstruction::MovN {
+                        is_64_bit: false,
+                        shift: 0,
+                        register: dst,
+                        unsigned_imm16: (immediate.as_i64().wrapping_neg()) as _,
+                    });
+                    return;
+                }
+
+                let mut is_first = true;
+                for shift in 0..4 {
+                    let imm16 = (immediate.as_i64() >> (shift * 16)) as u16;
+
+                    if imm16 == 0 {
+                        continue;
+                    }
+
+                    if is_first {
+                        self.instructions.push(ArmInstruction::MovZ {
+                            register: dst,
+                            shift,
+                            imm16,
+                        });
+                        is_first = false;
+                    } else {
+                        self.instructions.push(ArmInstruction::MovK {
+                            is_64_bit: true,
+                            register: dst,
+                            shift,
+                            imm16,
+                        });
+                    }
+                }
+
+                debug_assert!(!is_first);
             }
 
             Operand::Register(source) => {

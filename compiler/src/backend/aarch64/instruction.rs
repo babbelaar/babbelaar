@@ -198,9 +198,17 @@ pub enum ArmInstruction<Reg> {
         addend: Reg,
     },
 
+    MovK {
+        is_64_bit: bool,
+        register: Reg,
+        shift: u8,
+        imm16: u16,
+    },
+
     MovN {
         is_64_bit: bool,
         register: Reg,
+        shift: u8,
         /// This make sure it is positive, otherwise it is flipped!
         unsigned_imm16: u16,
     },
@@ -210,7 +218,7 @@ pub enum ArmInstruction<Reg> {
 
     MovRegister64 { dst: Reg, src: Reg },
 
-    MovZ { register: Reg, imm16: u16 },
+    MovZ { register: Reg, shift: u8, imm16: u16 },
 
     MSub {
         is_64_bit: bool,
@@ -680,12 +688,26 @@ impl ArmInstruction<ArmRegister> {
                 instruction
             }
 
-            Self::MovN { is_64_bit, register, unsigned_imm16 } => {
+            Self::MovK { is_64_bit, register, shift, imm16 } => {
+                let mut instruction = 0x72800000;
+                if is_64_bit {
+                    instruction |= 1 << 31;
+                }
+
+                instruction |= ((shift & 0b11) as u32) << 21;
+                instruction |= (imm16 as u32) << 5;
+                instruction |= register.number as u32;
+
+                instruction
+            }
+
+            Self::MovN { is_64_bit, register, shift, unsigned_imm16 } => {
                 let mut instruction = 0x12800000;
                 if is_64_bit {
                     instruction |= 1 << 31;
                 }
 
+                instruction |= ((shift & 0b11) as u32) << 21;
                 instruction |= (unsigned_imm16 as u32).wrapping_sub(1) << 5;
                 instruction |= register.number as u32;
 
@@ -706,10 +728,11 @@ impl ArmInstruction<ArmRegister> {
                 instruction
             }
 
-            Self::MovZ { register, imm16 } => {
+            Self::MovZ { register, shift, imm16 } => {
                 let mut instruction = 0xD2800000;
                 instruction |= register.number as u32;
                 instruction |= (imm16 as u32) << 5;
+                instruction |= ((shift & 0b11) as u32) << 21;
                 instruction
             }
 
@@ -1262,8 +1285,22 @@ impl<R: AbstractRegister> Display for ArmInstruction<R> {
                 f.write_fmt(format_args!("madd {}, {}, {}, {}", dst.name(is_64_bit), mul_lhs.name(is_64_bit), mul_rhs.name(is_64_bit), addend.name(is_64_bit)))
             }
 
-            Self::MovN { is_64_bit, register, unsigned_imm16 } => {
-                f.write_fmt(format_args!("mov {}, #-{unsigned_imm16}", register.name(is_64_bit)))
+            Self::MovK { is_64_bit, register, shift, imm16 } => {
+                f.write_fmt(format_args!("movk {}, #{imm16}", register.name(is_64_bit)))?;
+                if *shift != 0 {
+                    f.write_fmt(format_args!(", LSL #{shift}"))
+                } else {
+                    Ok(())
+                }
+            }
+
+            Self::MovN { is_64_bit, register, shift, unsigned_imm16 } => {
+                f.write_fmt(format_args!("movn {}, #-{unsigned_imm16}", register.name(is_64_bit)))?;
+                if *shift != 0 {
+                    f.write_fmt(format_args!(", LSL #{shift}"))
+                } else {
+                    Ok(())
+                }
             }
 
             Self::MovRegister32 { dst, src } => {
@@ -1274,9 +1311,14 @@ impl<R: AbstractRegister> Display for ArmInstruction<R> {
                 f.write_fmt(format_args!("mov {}, {}", dst.name64(), src.name64()))
             }
 
-            Self::MovZ { register, imm16 } => {
+            Self::MovZ { register, imm16, shift } => {
                 let is_64_bit = &true;
-                f.write_fmt(format_args!("mov {}, #{imm16}", register.name(is_64_bit)))
+                f.write_fmt(format_args!("movz {}, #{imm16}", register.name(is_64_bit)))?;
+                if *shift != 0 {
+                    f.write_fmt(format_args!(", LSL #{shift}"))
+                } else {
+                    Ok(())
+                }
             }
 
             Self::MSub { is_64_bit, dst, lhs, rhs, minuend } => {
@@ -1594,10 +1636,18 @@ impl TargetInstruction for ArmInstruction<VirtOrPhysReg<ArmRegister>> {
                 info.add_src(addend);
             }
 
-            ArmInstruction::MovN { is_64_bit, register, unsigned_imm16 } => {
+            ArmInstruction::MovK { is_64_bit, register, imm16, shift } => {
+                _ = is_64_bit;
+                info.add_dst(register);
+                _ = imm16;
+                _ = shift;
+            }
+
+            ArmInstruction::MovN { is_64_bit, register, unsigned_imm16, shift } => {
                 _ = is_64_bit;
                 info.add_dst(register);
                 _ = unsigned_imm16;
+                _ = shift;
             }
 
             ArmInstruction::MovRegister32 { dst, src } => {
@@ -1610,9 +1660,10 @@ impl TargetInstruction for ArmInstruction<VirtOrPhysReg<ArmRegister>> {
                 info.add_src(src);
             }
 
-            ArmInstruction::MovZ { register, imm16 } => {
+            ArmInstruction::MovZ { register, imm16, shift } => {
                 info.add_dst(register);
                 _ = imm16;
+                _ = shift;
             }
 
             ArmInstruction::MSub { is_64_bit, dst, lhs, rhs, minuend } => {
@@ -1865,6 +1916,7 @@ mod tests {
     #[case(
         ArmInstruction::MovN {
             is_64_bit: false,
+            shift: 0,
             unsigned_imm16: 8,
             register: ArmRegister::X0,
         },
