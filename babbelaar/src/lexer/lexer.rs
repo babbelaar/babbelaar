@@ -406,7 +406,7 @@ impl<'source_code> Lexer<'source_code> {
                 break;
             };
 
-            if !('0'..='9').contains(&c) && c != 'x' {
+            if !c.is_ascii_hexdigit() && c != 'x' {
                 break;
             }
 
@@ -422,7 +422,7 @@ impl<'source_code> Lexer<'source_code> {
             radix = 16;
         }
 
-        let integer = match i64::from_str_radix(str, radix) {
+        let integer = match u64::from_str_radix(str, radix) {
             Ok(int) => int,
             Err(..) => {
                 self.errors.push(LexerError {
@@ -434,7 +434,7 @@ impl<'source_code> Lexer<'source_code> {
         };
 
         Some(Token {
-            kind: TokenKind::Integer(integer),
+            kind: TokenKind::Integer(integer as i64),
             begin,
             end,
         })
