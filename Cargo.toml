@@ -19,11 +19,11 @@ strum = { version = "0.26", features = ["derive"] }
 log = "0.4"
 object = { version = "0.36", features = ["write"] }
 
-dap = "0.4.1-alpha1"
 libloading = "0.8"
 clap = { version = "4.5.16", features = ["derive"] }
-colored = "2.1"
+colored = "3"
 
+anyhow = "1"
 dashmap = "6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
