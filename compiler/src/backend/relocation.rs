@@ -134,7 +134,7 @@ impl RelocationMethod {
             RelocationMethod::Amd64CallNearRelative => {
                 RelocationFlags::Generic {
                     kind: RelocationKind::Relative,
-                    encoding: RelocationEncoding::X86RipRelative,
+                    encoding: RelocationEncoding::X86Branch,
                     size: 32,
                 }
             },
