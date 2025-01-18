@@ -345,7 +345,7 @@ impl Amd64Instruction<Amd64Register> {
             }
 
             Self::LeaReg64RipDisp32 { dst, offset, .. } => {
-                output.push(register_extension(true, false, false, dst.is_64_extended_register()));
+                output.push(register_extension(true, dst.is_64_extended_register(), false, false));
                 output.push(0x8d);
                 output.push(mod_rip_relative_disp32(*dst));
                 output.extend(&offset.to_le_bytes());
@@ -1205,6 +1205,8 @@ fn sib_byte(scale: SibScale, index: Option<Amd64Register>, base: Amd64Register) 
 
 #[cfg(test)]
 mod tests {
+    use crate::DataSectionKind;
+
     use super::*;
     use rstest::rstest;
     use pretty_assertions::assert_eq;
@@ -1384,6 +1386,14 @@ mod tests {
     #[case(
         Amd64Instruction::LeaReg64FromReg64Off8 { dst: Amd64Register::Rsi, base: Amd64Register::Rsp, offset: 0x4 },
         [ 0x48, 0x8d, 0x74, 0x24, 0x04 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::LeaReg64RipDisp32 { dst: Amd64Register::Rax, data_section_offset: DataSectionOffset::new(DataSectionKind::ReadOnly, 0), offset: 0 },
+        [ 0x48, 0x8d, 0x05, 0x00, 0x00, 0x00, 0x00, ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::LeaReg64RipDisp32 { dst: Amd64Register::R12, data_section_offset: DataSectionOffset::new(DataSectionKind::ReadOnly, 0), offset: 0 },
+        [ 0x4c, 0x8d, 0x25, 0x00, 0x00, 0x00, 0x00, ].to_vec(),
     )]
     fn check_encoding_lea(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
