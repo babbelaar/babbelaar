@@ -6,10 +6,7 @@
 
 
 mod data;
-mod debugger;
 mod error;
-mod ffi;
-mod interpreter;
 mod scope;
 
 use std::{collections::HashMap, fs::{create_dir_all, read_dir}, io, path::{Path, PathBuf}, process::{exit, Command, Stdio}, time::Instant};
@@ -30,14 +27,7 @@ pub use self::{
         InterpreterInterface,
         InterpreterStructure,
     },
-    debugger::{
-        Debugger,
-        DebuggerFunction,
-        DebuggerFunctionType,
-    },
     error::RuntimeError,
-    ffi::FFIManager,
-    interpreter::Interpreter,
     scope::Scope,
 };
 
@@ -190,25 +180,6 @@ fn compile(map: PathBuf, config: &ConfigRoot) -> PathBuf {
 
     pipeline.create_object(&dir, &config.project.naam).unwrap();
     pipeline.link(&dir, &config.project.naam, config.project.r#type).unwrap()
-}
-
-pub fn interpret<D: Debugger>(path: &Path, debugger: D) {
-    let files: Vec<(SourceCode, ParseTree)> = read_dir(&path.parent().unwrap())
-        .unwrap()
-        .flatten()
-        .filter(|x| x.file_name().to_string_lossy().ends_with(".bab"))
-        .map(|x| parse(&x.path()))
-        .collect();
-
-    analyze(&files);
-
-    let mut interpreter = Interpreter::new(debugger);
-
-    let trees: Vec<ParseTree> = files.into_iter()
-        .map(|(_, tree)| tree)
-        .collect();
-
-    interpreter.execute_trees(&trees);
 }
 
 fn analyze(files: &[(SourceCode, ParseTree)]) {
