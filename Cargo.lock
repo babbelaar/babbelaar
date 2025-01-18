@@ -122,15 +122,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "babbelaar-builtin"
-version = "0.0.3"
-
-[[package]]
 name = "babbelaar-compiler"
 version = "0.0.3"
 dependencies = [
  "babbelaar",
- "babbelaar-builtin",
  "env_logger",
  "log",
  "object",
@@ -1247,15 +1242,6 @@ name = "temp-dir"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc1ee6eef34f12f765cb94725905c6312b6610ab2b0940889cfe58dae7bc3c72"
-
-[[package]]
-name = "tests"
-version = "0.0.3"
-dependencies = [
- "babbelaar",
- "babbelaar-interpreter",
- "rstest",
-]
 
 [[package]]
 name = "thiserror"

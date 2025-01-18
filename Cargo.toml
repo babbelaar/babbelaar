@@ -6,11 +6,10 @@ version = "0.0.3"
 resolver = "2"
 members = [
     "babbelaar",
-    "builtin",
     "compiler",
     "interpreter",
-    "lsp", "playground-api",
-    "tests",
+    "lsp",
+    "playground-api",
 ]
 default-members = ["interpreter"]
 

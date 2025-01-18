@@ -387,16 +387,10 @@ impl Interpreter {
     fn execute_builtin_function(&mut self, name: &BabString, arguments: &[Immediate]) -> Option<Option<Immediate>> {
         match name.as_str() {
             "Slinger__lengte" => {
-                // let ptr = arguments[0].as_i64() as _;
-                // let result = unsafe { babbelaar_builtin::strlen(ptr) };
-                // Some(Some(Immediate::Integer64(result as _)))
                 todo!()
             }
 
             "schrijf" => {
-                // let ptr = arguments[0].as_i64() as _;
-                // unsafe { babbelaar_builtin::schrijf(ptr) };
-                // Some(None)
                 todo!()
             }
 

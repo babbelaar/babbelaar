@@ -41,8 +41,6 @@ impl WindowsLinkLinker {
         command.env("LIB", r#"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.41.34120\ATLMFC\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.41.34120\lib\x64;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\lib\um\x64;C:\Program Files (x86)\Windows Kits\10\lib\10.0.22621.0\ucrt\x64;C:\Program Files (x86)\Windows Kits\10\\lib\10.0.22621.0\\um\x64"#);
         command.env("LIBPATH", r#"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.41.34120\ATLMFC\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.41.34120\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.41.34120\lib\x86\store\references;C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.22621.0;C:\Program Files (x86)\Windows Kits\10\References\10.0.22621.0;C:\Windows\Microsoft.NET\Framework64\v4.0.30319"#);
 
-        command.arg(find_builtin_lib_path().unwrap());
-
         for object_path in &self.object_paths {
             command.arg(object_path);
         }
@@ -99,18 +97,3 @@ fn find_linker_path(platform: &Platform) -> Result<PathBuf, io::Error> {
 
     panic!("Cannot find linker")
 }
-
-fn find_builtin_lib_path() -> Option<PathBuf> {
-    let mut exe = std::env::current_exe().unwrap();
-
-    while exe.pop() {
-        if exe.file_name().unwrap_or_default() == "target" {
-            break;
-        }
-    }
-
-    exe.push("debug");
-    exe.push("babbelaar_builtin.lib");
-    Some(exe)
-}
-

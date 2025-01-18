@@ -31,8 +31,6 @@ impl LinuxGccLinker {
         for object_path in &self.object_paths {
             command.arg(object_path);
         }
-        command.arg(find_builtin_lib_path().unwrap());
-
         command.arg("-o");
         command.arg(&self.output_path);
 
@@ -48,18 +46,4 @@ impl LinuxGccLinker {
 
         Ok(())
     }
-}
-
-fn find_builtin_lib_path() -> Option<PathBuf> {
-    let mut exe = std::env::current_exe().unwrap();
-
-    while exe.pop() {
-        if exe.file_name().unwrap_or_default() == "target" {
-            break;
-        }
-    }
-
-    exe.push("debug");
-    exe.push("libbabbelaar_builtin.a");
-    Some(exe)
 }
