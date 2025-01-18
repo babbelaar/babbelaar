@@ -1,4 +1,4 @@
-// Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2023 - 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 #![feature(thread_id_value)]
@@ -16,11 +16,12 @@ use std::{collections::HashMap, fs::{create_dir_all, read_dir}, io, path::{Path,
 
 use anyhow::Result;
 pub use babbelaar::*;
-use babbelaar_compiler::{Pipeline, Platform};
+use babbelaar_compiler::{Architecture, Pipeline, Platform};
 use clap::Subcommand;
 use colored::Colorize;
 use env_logger::Env;
 use error::ErrorPrinter;
+use strum::IntoEnumIterator;
 
 pub use self::{
     data::{
@@ -164,13 +165,31 @@ fn compile(map: PathBuf, config: &ConfigRoot) -> PathBuf {
         .map(|(_, tree)| tree)
         .collect();
 
-    let mut pipeline = Pipeline::new(create_platform_from_config(config));
-    pipeline.compile_trees(&trees);
-
+    let platform = create_platform_from_config(config);
     let dir = output_dir(&map);
 
+    if config.bouwen.alle_architecturen {
+        for arch in Architecture::iter() {
+            let platform = Platform::new(arch, platform.environment(), platform.operating_system(), Default::default());
+            let mut pipeline = Pipeline::new(platform, !config.bouwen.geen_babbib);
+            pipeline.compile_trees(&trees);
+
+            let dir = dir.join(arch.name());
+            if !dir.exists() {
+                create_dir_all(&dir).unwrap();
+            }
+
+            pipeline.create_object(&dir, &config.project.naam).unwrap();
+            pipeline.link(&dir, &config.project.naam, config.project.r#type).unwrap();
+        }
+    }
+
+    let mut pipeline = Pipeline::new(platform, !config.bouwen.geen_babbib);
+    pipeline.compile_trees(&trees);
+
+
     pipeline.create_object(&dir, &config.project.naam).unwrap();
-    pipeline.link_to_executable(&dir, &config.project.naam).unwrap()
+    pipeline.link(&dir, &config.project.naam, config.project.r#type).unwrap()
 }
 
 pub fn interpret<D: Debugger>(path: &Path, debugger: D) {

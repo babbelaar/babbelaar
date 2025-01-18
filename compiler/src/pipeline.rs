@@ -1,9 +1,9 @@
-// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2024 - 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 use std::{error::Error, fmt::Display, mem::replace, path::{Path, PathBuf}};
 
-use babbelaar::ParseTree;
+use babbelaar::{ArchiveKind, ParseTree};
 use log::debug;
 
 use crate::{backend::Amd64CodeGenerator, os::{linux::LinuxGccLinker, macos::MacOsLdLinker, windows::WindowsLinkLinker}, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, OperatingSystem, Platform};
@@ -16,10 +16,16 @@ pub struct Pipeline {
 
 impl Pipeline {
     #[must_use]
-    pub fn new(platform: Platform) -> Self {
+    pub fn new(platform: Platform, include_babbib: bool) -> Self {
+        let mut paths_to_objects = Vec::new();
+
+        if include_babbib {
+            paths_to_objects.push(create_path_to_babbib(&platform));
+        }
+
         Self {
             object: CompiledObject::new(platform),
-            paths_to_objects: Vec::new(),
+            paths_to_objects,
         }
     }
 
@@ -68,10 +74,10 @@ impl Pipeline {
         Ok(())
     }
 
-    pub fn link_to_executable(&mut self, directory: &Path, name: &str) -> Result<PathBuf, Box<dyn Error>> {
+    pub fn link(&mut self, directory: &Path, name: &str, archive: ArchiveKind) -> Result<PathBuf, Box<dyn Error>> {
         let mut path = directory.to_path_buf();
 
-        let ext = self.object.platform().operating_system().executable_extension();
+        let ext = self.object.platform().operating_system().archive_extension(archive);
         path.push(format!("{name}{ext}"));
 
         match self.object.platform().operating_system() {
@@ -86,7 +92,7 @@ impl Pipeline {
             }
 
             OperatingSystem::MacOs => {
-                let mut linker = MacOsLdLinker::new(&path);
+                let mut linker = MacOsLdLinker::new(&path, archive);
 
                 for path in &self.paths_to_objects {
                     linker.add_object(path);
@@ -128,3 +134,16 @@ impl Display for LinkerError {
 }
 
 impl Error for LinkerError {}
+
+#[must_use]
+fn create_path_to_babbib(platform: &Platform) -> PathBuf {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.pop();
+
+    path.push("babbib");
+    path.push("uit");
+    path.push(platform.architecture().name());
+    path.push(format!("babbib{}", platform.operating_system().archive_extension(ArchiveKind::StatischeBibliotheek)));
+
+    path
+}

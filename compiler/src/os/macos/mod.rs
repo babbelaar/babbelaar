@@ -3,21 +3,23 @@
 
 use std::{error::Error, io::Read, path::{Path, PathBuf}, process::{Command, Stdio}};
 
-use babbelaar::Constants;
+use babbelaar::{ArchiveKind, Constants};
 
 use crate::LinkerError;
 
 pub struct MacOsLdLinker {
     output_path: PathBuf,
     object_paths: Vec<PathBuf>,
+    archive_kind: ArchiveKind,
 }
 
 impl MacOsLdLinker {
     #[must_use]
-    pub fn new(output_path: impl Into<PathBuf>) -> Self {
+    pub fn new(output_path: impl Into<PathBuf>, archive_kind: ArchiveKind) -> Self {
         Self {
             output_path: output_path.into(),
             object_paths: Vec::new(),
+            archive_kind,
         }
     }
 
@@ -31,9 +33,14 @@ impl MacOsLdLinker {
         command.stderr(Stdio::piped());
 
         for object_path in &self.object_paths {
+            log::info!("Object: {}", object_path.display());
             command.arg(object_path);
         }
-        command.arg(find_builtin_lib_path().unwrap());
+
+        match self.archive_kind {
+            ArchiveKind::Applicatie => command.arg("-execute"),
+            ArchiveKind::StatischeBibliotheek => command.arg("-r"),
+        };
 
         command.arg("-o");
         command.arg(&self.output_path);
@@ -56,18 +63,4 @@ impl MacOsLdLinker {
 
         Ok(())
     }
-}
-
-fn find_builtin_lib_path() -> Option<PathBuf> {
-    let mut exe = std::env::current_exe().unwrap();
-
-    while exe.pop() {
-        if exe.file_name().unwrap_or_default() == "target" {
-            break;
-        }
-    }
-
-    exe.push("debug");
-    exe.push("libbabbelaar_builtin.a");
-    Some(exe)
 }

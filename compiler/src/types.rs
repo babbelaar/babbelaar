@@ -3,17 +3,27 @@
 
 use std::collections::HashSet;
 
+use babbelaar::ArchiveKind;
 use object::pe::{IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_ARM64};
+use strum::EnumIter;
 
 use crate::os::linux::Ldd;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum Architecture {
     AArch64,
     X86_64,
 }
 
 impl Architecture {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::AArch64 => "aarch64",
+            Self::X86_64 => "amd64",
+        }
+    }
+
     #[must_use]
     pub const fn endianness(&self) -> Endianness {
         Endianness::Little
@@ -94,10 +104,12 @@ pub enum OperatingSystem {
 
 impl OperatingSystem {
     #[must_use]
-    pub const fn executable_extension(&self) -> &'static str {
-        match self {
-            Self::Windows => ".exe",
-            _ => "",
+    pub const fn archive_extension(&self, archive_kind: ArchiveKind) -> &'static str {
+        match (self, archive_kind) {
+            (Self::Windows, ArchiveKind::Applicatie) => ".exe",
+            (Self::Windows, ArchiveKind::StatischeBibliotheek) => ".lib",
+            (_, ArchiveKind::Applicatie) => "",
+            (_, ArchiveKind::StatischeBibliotheek) => ".a",
         }
     }
 

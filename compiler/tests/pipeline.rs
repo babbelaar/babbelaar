@@ -1,9 +1,9 @@
-// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2024 - 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 use std::{error::Error, io::Read, path::{Path, PathBuf}, process::{Command, Stdio}};
 
-use babbelaar::parse_string_to_tree;
+use babbelaar::{parse_string_to_tree, ArchiveKind};
 use babbelaar_compiler::{Pipeline, Platform, Signal};
 use log::info;
 use rstest::rstest;
@@ -1661,12 +1661,12 @@ fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
 fn create_single_object_executable(code: &str, directory: &Path) -> std::path::PathBuf {
     let tree = parse_string_to_tree(code).unwrap();
 
-    let mut pipeline = Pipeline::new(Platform::host_platform());
-    // let mut pipeline = Pipeline::new(Platform::new(babbelaar_compiler::Architecture::X86_64, babbelaar_compiler::Environment::Darwin, babbelaar_compiler::OperatingSystem::MacOs, Default::default()));
+    let mut pipeline = Pipeline::new(Platform::host_platform(), true);
+    // let mut pipeline = Pipeline::new(Platform::new(babbelaar_compiler::Architecture::X86_64, babbelaar_compiler::Environment::Darwin, babbelaar_compiler::OperatingSystem::MacOs, Default::default()), true);
     pipeline.compile_trees(&[tree]);
     pipeline.create_object(directory, "BabBestand").unwrap();
 
-    let executable = pipeline.link_to_executable(directory, "BabUitvoerbare").unwrap();
+    let executable = pipeline.link(directory, "BabUitvoerbare", ArchiveKind::Applicatie).unwrap();
     executable
 }
 

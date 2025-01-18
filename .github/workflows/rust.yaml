@@ -21,6 +21,9 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Bouwen
+      run: make bouw
+
+    - name: Bouwen
       run: cargo build --verbose --workspace
 
     - name: Testen

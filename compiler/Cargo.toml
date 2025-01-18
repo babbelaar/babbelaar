@@ -9,6 +9,7 @@ babbelaar-builtin = { path = "../builtin", features = ["no-win-main"] }
 
 log.workspace = true
 object.workspace = true
+strum.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

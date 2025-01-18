@@ -26,6 +26,8 @@ jobs:
             os: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Bouwen
+        run: make bouw
       - name: Build
         run: cargo build --verbose --release --all
 

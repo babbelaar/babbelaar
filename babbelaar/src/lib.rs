@@ -69,7 +69,11 @@ pub use self::{
         BuiltinType,
     },
     config::{
+        ArchiveKind,
         ConfigRoot,
+        ConfigSectionArch,
+        ConfigSectionArchAarch64,
+        ConfigSectionBuild,
         ConfigSectionLog,
         ConfigSectionProject,
     },

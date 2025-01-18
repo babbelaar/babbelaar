@@ -138,6 +138,7 @@ dependencies = [
  "region",
  "rstest",
  "signal-hook",
+ "strum",
  "temp-dir",
  "thiserror 2.0.9",
 ]

@@ -1,0 +1,36 @@
+// Copyright (C) 2025 Tristan Gerritsen <tristan@thewoosh.org>
+// Alle rechten voorbehouden.
+
+@uitheems(naam: "puts")
+werkwijze puts(_: Slinger);
+
+@uitheems(naam: "strlen")
+werkwijze strlen(_: Slinger) -> g64;
+
+@uitheems(naam: "malloc")
+werkwijze malloc(lengte: g32) -> g64*;
+
+@uitheems(naam: "strcat")
+werkwijze strcat(dst: g64*, slinger: Slinger);
+
+@uitheems(naam: "strcpy")
+werkwijze strcpy(dst: g64*, slinger: Slinger);
+
+werkwijze schrijf(a: Slinger) {
+    puts(a);
+}
+
+werkwijze Slinger__lengte(a: Slinger) -> g64 {
+    bekeer strlen(a);
+}
+
+werkwijze Slinger__voegSamen(a: Slinger, b: Slinger) -> g64* {
+    stel lengte = a.lengte() + b.lengte() + 1;
+
+    stel data = malloc(lengte);
+    strcpy(data, a);
+    strcat(data, b);
+
+    bekeer data;
+}
+
