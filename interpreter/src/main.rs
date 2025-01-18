@@ -167,7 +167,7 @@ fn compile(map: PathBuf, config: &ConfigRoot) -> PathBuf {
     let mut pipeline = Pipeline::new(create_platform_from_config(config));
     pipeline.compile_trees(&trees);
 
-    let dir = output_dir();
+    let dir = output_dir(&map);
 
     pipeline.create_object(&dir, &config.project.naam).unwrap();
     pipeline.link_to_executable(&dir, &config.project.naam).unwrap()
@@ -260,8 +260,8 @@ fn parse(path: &Path) -> (SourceCode, ParseTree) {
 }
 
 #[must_use]
-fn output_dir() -> PathBuf {
-    let mut dir = std::env::current_dir().unwrap();
+fn output_dir(map: &PathBuf) -> PathBuf {
+    let mut dir = map.clone();
 
     dir.push("uit");
 
