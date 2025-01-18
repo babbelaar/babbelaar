@@ -124,6 +124,7 @@ impl Amd64CodeGenerator {
 
     #[must_use]
     fn materialize_instruction(&mut self, instruction: Amd64Instruction<VirtOrPhysReg<Amd64Register>>) -> Amd64Instruction<Amd64Register> {
+        // TODO: this should really be a macro...
         match instruction {
             Amd64Instruction::AddReg32Imm8 { dst, src } => Amd64Instruction::AddReg32Imm8 {
                 dst: self.allocate_register(dst),
@@ -324,6 +325,11 @@ impl Amd64CodeGenerator {
             Amd64Instruction::MovReg32Reg32 { dst, src } => Amd64Instruction::MovReg32Reg32 {
                 dst: self.allocate_register(dst),
                 src: self.allocate_register(src),
+            },
+
+            Amd64Instruction::MovReg64Imm64 { dst, src } => Amd64Instruction::MovReg64Imm64 {
+                dst: self.allocate_register(dst),
+                src,
             },
 
             Amd64Instruction::MovReg64Reg64 { dst, src } => Amd64Instruction::MovReg64Reg64 {

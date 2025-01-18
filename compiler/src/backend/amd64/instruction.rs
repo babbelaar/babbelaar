@@ -103,6 +103,7 @@ pub enum Amd64Instruction<Reg> {
 
     MovReg32Imm32 { dst: Reg, src: i32 },
     MovReg32Reg32 { dst: Reg, src: Reg },
+    MovReg64Imm64 { dst: Reg, src: i64 },
     MovReg64Reg64 { dst: Reg, src: Reg },
 
     MovzxReg8FromPtrReg64 { dst: Reg, base: Reg },
@@ -445,6 +446,12 @@ impl Amd64Instruction<Amd64Register> {
                 output.push(mod_rm_byte_reg_reg(*dst, *src));
             }
 
+            Self::MovReg64Imm64 { dst, src } => {
+                output.push(register_extension(true, false, false, dst.is_64_extended_register()));
+                output.push(0xb8 + dst.mod_rm_bits());
+                output.extend_from_slice(&src.to_le_bytes());
+            }
+
             Self::MovReg64Reg64 { dst, src } => {
                 output.push(register_extension(true, src.is_64_extended_register(), false, dst.is_64_extended_register()));
                 output.push(0x89);
@@ -690,6 +697,10 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
                 f.write_fmt(format_args!("mov {}, {}", dst.name32(), src.name32()))
             }
 
+            Self::MovReg64Imm64 { dst, src } => {
+                f.write_fmt(format_args!("mov {}, 0x{src:x}", dst.name64()))
+            }
+
             Self::MovReg64Reg64 { dst, src } => {
                 f.write_fmt(format_args!("mov {}, {}", dst.name64(), src.name64()))
             }
@@ -751,6 +762,7 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
     fn info(&self) -> TargetInstructionInfo<Self::PhysReg> {
         let mut info = TargetInstructionInfo::new();
 
+        // TODO: this should really be a macro...
         match self {
             Amd64Instruction::AddReg32Imm8 { dst, src } => {
                 info.add_dst(dst);
@@ -963,6 +975,11 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
             Amd64Instruction::MovReg32Reg32 { dst, src } => {
                 info.add_dst(dst);
                 info.add_src(src);
+            }
+
+            Amd64Instruction::MovReg64Imm64 { dst, src } => {
+                info.add_dst(dst);
+                _ = src;
             }
 
             Amd64Instruction::MovReg64Reg64 { dst, src } => {

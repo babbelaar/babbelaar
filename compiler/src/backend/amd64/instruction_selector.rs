@@ -436,17 +436,17 @@ impl Amd64InstructionSelector {
     fn add_instruction_mov(&mut self, dst: VirtOrPhysReg<Amd64Register>, source: &Operand) {
         match source {
             Operand::Immediate(immediate) => {
-                match immediate.shrink_if_possible() {
-                    Immediate::Integer8(..) | Immediate::Integer16(..) | Immediate::Integer32(..) => {
-                        self.instructions.push(Amd64Instruction::MovReg32Imm32 {
-                            dst,
-                            src: immediate.as_i32(),
-                        });
-                    }
-
-                    Immediate::Integer64(qword) => {
-                        todo!("Support mov64 (value is 0x{qword:x})")
-                    }
+                let can_be_32_bit = !matches!(immediate.shrink_if_possible(), Immediate::Integer64(..)) && immediate.as_i64() >= 0;
+                if can_be_32_bit {
+                    self.instructions.push(Amd64Instruction::MovReg32Imm32 {
+                        dst,
+                        src: immediate.as_i32(),
+                    });
+                } else {
+                    self.instructions.push(Amd64Instruction::MovReg64Imm64 {
+                        dst,
+                        src: immediate.as_i64(),
+                    });
                 }
             }
 
