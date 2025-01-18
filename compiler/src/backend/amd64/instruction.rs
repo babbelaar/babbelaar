@@ -185,18 +185,27 @@ impl Amd64Instruction<Amd64Register> {
             }
 
             Self::CmpReg32Imm8 { lhs, rhs } => {
+                if lhs.is_64_extended_register() {
+                    output.push(register_extension(false, false, false, true));
+                }
                 output.push(0x83);
                 output.push(mod_rm_byte_extra_op(7, *lhs));
                 output.push(*rhs as u8);
             }
 
             Self::CmpReg32Imm32 { lhs, rhs } => {
+                if lhs.is_64_extended_register() {
+                    output.push(register_extension(false, false, false, true));
+                }
                 output.push(0x81);
                 output.push(mod_rm_byte_extra_op(7, *lhs));
                 output.extend_from_slice(&rhs.to_le_bytes());
             }
 
             Self::CmpReg32Reg32 { lhs, rhs } => {
+                if lhs.is_64_extended_register() || rhs.is_64_extended_register() {
+                    output.push(register_extension(false, rhs.is_64_extended_register(), false, lhs.is_64_extended_register()));
+                }
                 output.push(0x39);
                 output.push(mod_rm_byte_reg_reg(*lhs, *rhs));
             }

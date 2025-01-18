@@ -192,10 +192,10 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
 
         let mut registers = HashMap::new();
 
-        for register in analysis.lifetimes().keys() {
+        for (register, lifetime) in analysis.lifetimes() {
             let mut set = HashSet::new();
 
-            if only_return_register == Some(*register) {
+            if only_return_register == Some(*register) && lifetime.times_used_between_calls() == 0 {
                 set.insert(R::return_register(&self.platform));
             }
 
