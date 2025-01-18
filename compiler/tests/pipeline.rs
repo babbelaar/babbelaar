@@ -365,6 +365,26 @@ fn return_comparison_value() {
 }
 
 #[test]
+fn pass_single_comparison_value() {
+    let result = create_and_run_single_object_executable("
+        werkwijze bekeerResultaat(a: g32) -> g32 {
+            bekeer a;
+        }
+
+        werkwijze bekeerAls5(a: g32) -> g32 {
+            bekeer bekeerResultaat(a == 5);
+        }
+
+        werkwijze hoofd() -> g32 {
+            bekeer bekeerAls5(5);
+        }
+    ");
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(1));
+}
+
+#[test]
 fn pass_comparison_value() {
     let result = create_and_run_single_object_executable("
         werkwijze bekeerResultaat(_negeer: g32, a: g32) -> g32 {

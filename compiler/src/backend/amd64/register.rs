@@ -142,6 +142,18 @@ impl Amd64Register {
     pub fn is_64_extended_register(&self) -> bool {
         *self as u8 >= Self::R8 as u8
     }
+
+    /// <https://wiki.osdev.org/X86-64_Instruction_Encoding#Registers>
+    #[must_use]
+    pub fn has_8bit_lo_and_hi(&self) -> bool {
+        match self {
+            Self::Rsp => true,
+            Self::Rbp => true,
+            Self::Rsi => true,
+            Self::Rdi => true,
+            _ => false,
+        }
+    }
 }
 
 impl AllocatableRegister for Amd64Register {

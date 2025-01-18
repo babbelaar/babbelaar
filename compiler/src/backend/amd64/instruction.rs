@@ -496,6 +496,12 @@ impl Amd64Instruction<Amd64Register> {
             Self::ReturnNear => output.push(0xc3),
 
             Self::SetCC { dst, condition } => {
+                if dst.is_64_extended_register() {
+                    output.push(register_extension(false, false, false, true));
+                } else if dst.has_8bit_lo_and_hi() {
+                    output.push(register_extension(false, false, false, false));
+                }
+
                 output.push(0x0f);
                 output.push(condition.setcc_op_code_part());
                 output.push(mod_rm_byte_reg(*dst));
