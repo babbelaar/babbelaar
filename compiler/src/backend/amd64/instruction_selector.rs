@@ -6,7 +6,7 @@ use log::{debug, warn};
 
 use crate::{backend::VirtOrPhysReg, ir::RegisterAllocator as IrRegisterAllocator, AllocatableRegister, Function, Immediate, Instruction, MathOperation, Operand, Platform, Register, TargetInstruction};
 
-use super::{Amd64ConditionCode, Amd64FixUp, Amd64Instruction, Amd64Register};
+use super::{instruction::SibScale, Amd64ConditionCode, Amd64FixUp, Amd64Instruction, Amd64Register};
 
 #[derive(Debug)]
 pub struct Amd64InstructionSelector {
@@ -244,6 +244,16 @@ impl Amd64InstructionSelector {
                         } else {
                             self.instructions.push(Amd64Instruction::MovReg64FromPtrReg64Off8 { dst, base, offset });
                         }
+                    }
+
+                    (Operand::Register(offset), 4) => {
+                        let offset = self.allocate_register(&offset);
+                        self.instructions.push(Amd64Instruction::MovReg32FromPtrReg64OffReg64 { dst, base, index: offset, scale: SibScale::Scale1 });
+                    }
+
+                    (Operand::Register(offset), 8) => {
+                        let offset = self.allocate_register(&offset);
+                        self.instructions.push(Amd64Instruction::MovReg64FromPtrReg64OffReg64 { dst, base, index: offset, scale: SibScale::Scale1 });
                     }
 
                     _ => todo!("Ondersteun register-offset {offset} met typegrootte {}", typ.bytes()),

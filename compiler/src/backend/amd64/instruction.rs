@@ -88,8 +88,10 @@ pub enum Amd64Instruction<Reg> {
 
     MovReg32FromPtrReg64 { dst: Reg, base: Reg },
     MovReg32FromPtrReg64Off8 { dst: Reg, base: Reg, offset: i8 },
+    MovReg32FromPtrReg64OffReg64 { dst: Reg, base: Reg, index: Reg, scale: SibScale },
     MovReg64FromPtrReg64 { dst: Reg, base: Reg },
     MovReg64FromPtrReg64Off8 { dst: Reg, base: Reg, offset: i8 },
+    MovReg64FromPtrReg64OffReg64 { dst: Reg, base: Reg, index: Reg, scale: SibScale },
 
     MovImm32ToPtrReg64 { base: Reg, src: i32 },
     MovImm32ToPtrReg64Off8 { base: Reg, offset: i8, src: i32 },
@@ -339,7 +341,7 @@ impl Amd64Instruction<Amd64Register> {
                 output.push(0x8d);
                 output.push(mod_rm_8_bit_displacement(*dst, *base));
                 if *base == Amd64Register::Rsp {
-                    output.push(sib_byte(SibScale::Scale0, None, Amd64Register::Rsp));
+                    output.push(sib_byte(SibScale::Scale1, None, Amd64Register::Rsp));
                 }
                 output.push(*offset as u8);
             }
@@ -362,6 +364,13 @@ impl Amd64Instruction<Amd64Register> {
                 output.push(*offset as u8);
             }
 
+            Self::MovReg32FromPtrReg64OffReg64 { dst, base, index, scale } => {
+                output.push(register_extension(false, dst.is_64_extended_register(), index.is_64_extended_register(), base.is_64_extended_register()));
+                output.push(0x8b);
+                output.push(mod_rm_no_displacement_sib(*dst));
+                output.push(sib_byte(*scale, Some(*index), *base));
+            }
+
             Self::MovReg64FromPtrReg64 { dst, base } => {
                 output.push(register_extension(true, false, false, false));
                 output.push(0x8b);
@@ -373,6 +382,13 @@ impl Amd64Instruction<Amd64Register> {
                 output.push(0x8b);
                 output.push(mod_rm_8_bit_displacement(*dst, *base));
                 output.push(*offset as u8);
+            }
+
+            Self::MovReg64FromPtrReg64OffReg64 { dst, base, index, scale } => {
+                output.push(register_extension(true, dst.is_64_extended_register(), index.is_64_extended_register(), base.is_64_extended_register()));
+                output.push(0x8b);
+                output.push(mod_rm_no_displacement_sib(*dst));
+                output.push(sib_byte(*scale, Some(*index), *base));
             }
 
             Self::MovImm8ToPtrReg64 { base, src } => {
@@ -656,12 +672,20 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
                 f.write_fmt(format_args!("mov {}, [{} + 0x{offset:x}]", dst.name32(), base.name64()))
             }
 
+            Self::MovReg32FromPtrReg64OffReg64 { dst, base, index: offset, scale } => {
+                f.write_fmt(format_args!("mov {}, [{} + {} * {scale}]", dst.name32(), base.name64(), offset.name64()))
+            }
+
             Self::MovReg64FromPtrReg64 { dst, base } => {
                 f.write_fmt(format_args!("mov {}, [{}]", dst.name64(), base.name64()))
             }
 
             Self::MovReg64FromPtrReg64Off8 { dst, base, offset } => {
                 f.write_fmt(format_args!("mov {}, [{} + 0x{offset:x}]", dst.name64(), base.name64()))
+            }
+
+            Self::MovReg64FromPtrReg64OffReg64 { dst, base, index: offset, scale } => {
+                f.write_fmt(format_args!("mov {}, [{} + {} * {scale}]", dst.name64(), base.name64(), offset.name64()))
             }
 
             Self::MovImm8ToPtrReg64 { base, src } => {
@@ -916,6 +940,13 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
                 _ = offset;
             }
 
+            Amd64Instruction::MovReg32FromPtrReg64OffReg64 { dst, base, index: offset, scale } => {
+                info.add_dst(dst);
+                info.add_src(base);
+                info.add_src(offset);
+                _ = scale;
+            }
+
             Amd64Instruction::MovReg64FromPtrReg64 { dst, base } => {
                 info.add_dst(dst);
                 info.add_src(base);
@@ -925,6 +956,13 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
                 info.add_dst(dst);
                 info.add_src(base);
                 _ = offset;
+            }
+
+            Amd64Instruction::MovReg64FromPtrReg64OffReg64 { dst, base, index: offset, scale } => {
+                info.add_dst(dst);
+                info.add_src(base);
+                info.add_src(offset);
+                _ = scale;
             }
 
             Amd64Instruction::MovImm8ToPtrReg64 { base, src } => {
@@ -1176,14 +1214,30 @@ fn mod_rip_relative_disp32(dst: Amd64Register) -> u8 {
     byte
 }
 
+#[must_use]
+fn mod_rm_no_displacement_sib(dst: Amd64Register) -> u8 {
+    0b00_000_100 | (dst.mod_rm_bits() << 3)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[allow(unused)]
-enum SibScale {
+pub enum SibScale {
     #[default]
-    Scale0 = 0b00,
+    Scale1 = 0b00,
     Scale2 = 0b01,
     Scale4 = 0b10,
     Scale8 = 0b11,
+}
+
+impl Display for SibScale {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Scale1 => f.write_str("1"),
+            Self::Scale2 => f.write_str("2"),
+            Self::Scale4 => f.write_str("4"),
+            Self::Scale8 => f.write_str("8"),
+        }
+    }
 }
 
 /// Certain encodings of the ModR/M byte require a second addressing byte (the SIB byte). The base-plus-index and
@@ -1431,7 +1485,7 @@ mod tests {
 
     #[rstest]
     #[case(
-        SibScale::Scale0,
+        SibScale::Scale1,
         None,
         Amd64Register::Rsp,
         0x24
@@ -1439,5 +1493,40 @@ mod tests {
     fn sib_encoding(#[case] scale: SibScale, #[case] index: Option<Amd64Register>, #[case] base: Amd64Register, #[case] expected: u8) {
         let actual = sib_byte(scale, index, base);
         assert_eq!(actual, expected);
+    }
+
+    #[rstest]
+    #[case(
+        Amd64Instruction::MovReg32FromPtrReg64OffReg64 {
+            dst: Amd64Register::Rax,
+            base: Amd64Register::Rdx,
+            index: Amd64Register::R12,
+            scale: SibScale::Scale1,
+        },
+        vec![0x42, 0x8B, 0x04, 0x22]
+    )]
+    #[case(
+        Amd64Instruction::MovReg64FromPtrReg64OffReg64 {
+            dst: Amd64Register::Rax,
+            base: Amd64Register::Rdx,
+            index: Amd64Register::R12,
+            scale: SibScale::Scale1,
+        },
+        vec![0x4A, 0x8B, 0x04, 0x22]
+    )]
+    #[case(
+        Amd64Instruction::MovReg64FromPtrReg64OffReg64 {
+            dst: Amd64Register::Rdi,
+            base: Amd64Register::Rbx,
+            index: Amd64Register::Rcx,
+            scale: SibScale::Scale2,
+        },
+        vec![0x48, 0x8B, 0x3C, 0x4B]
+    )]
+    fn check_encoding_mov_scaled_index(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
+        let mut actual = Vec::new();
+        input.encode(&mut actual, 0, &HashMap::new());
+
+        assert_eq!(actual, expected, "actual wasn't the expected! Instruction was: {input}");
     }
 }

@@ -251,6 +251,13 @@ impl Amd64CodeGenerator {
                 offset,
             },
 
+            Amd64Instruction::MovReg32FromPtrReg64OffReg64 { dst, base, index, scale } => Amd64Instruction::MovReg32FromPtrReg64OffReg64 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+                index: self.allocate_register(index),
+                scale,
+            },
+
             Amd64Instruction::MovReg64FromPtrReg64 { dst, base } => Amd64Instruction::MovReg64FromPtrReg64 {
                 dst: self.allocate_register(dst),
                 base: self.allocate_register(base),
@@ -260,6 +267,13 @@ impl Amd64CodeGenerator {
                 dst: self.allocate_register(dst),
                 base: self.allocate_register(base),
                 offset,
+            },
+
+            Amd64Instruction::MovReg64FromPtrReg64OffReg64 { dst, base, index, scale } => Amd64Instruction::MovReg64FromPtrReg64OffReg64 {
+                dst: self.allocate_register(dst),
+                base: self.allocate_register(base),
+                index: self.allocate_register(index),
+                scale,
             },
 
             Amd64Instruction::MovImm8ToPtrReg64 { base, src } => Amd64Instruction::MovImm8ToPtrReg64 {
