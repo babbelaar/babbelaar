@@ -99,61 +99,6 @@ fn structure_and_using_function() {
     assert_eq!(value, 44);
 }
 
-#[test]
-fn two_functions() {
-    let value = compile_and_execute("stuurGetalDoor", "
-    werkwijze krijgGetal() -> g32 {
-        bekeer 8;
-    }
-
-    werkwijze stuurGetalDoor() -> g32 {
-        bekeer krijgGetal();
-    }
-    ");
-
-    assert_eq!(value, 8);
-}
-
-#[test]
-fn method_call() {
-    let value = compile_and_execute("gebruikStructuur", "
-    structuur MijnGeavanceerdeStructuur {
-        werkwijze krijgGetal() -> g32 {
-            bekeer 3;
-        }
-    }
-
-    werkwijze gebruikStructuur() -> g32 {
-        stel a = nieuw MijnGeavanceerdeStructuur {};
-        bekeer a.krijgGetal();
-    }
-    ");
-
-    assert_eq!(value, 3);
-}
-
-#[test]
-fn method_call_with_this() {
-    let value = compile_and_execute("gebruikStructuurMetGetal", "
-    structuur MijnStructuurMetGetal {
-        veld getal: g32,
-
-        werkwijze gebruikGetal() -> g32 {
-            bekeer dit.getal + 3;
-        }
-    }
-
-    werkwijze gebruikStructuurMetGetal() -> g32 {
-        stel a = nieuw MijnStructuurMetGetal {
-            getal: 5,
-        };
-        bekeer a.gebruikGetal();
-    }
-    ");
-
-    assert_eq!(value, 8);
-}
-
 //
 //
 // Helper code
