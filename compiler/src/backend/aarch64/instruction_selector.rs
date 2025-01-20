@@ -28,6 +28,7 @@ impl AArch64InstructionSelector {
 
         let var_args_convention = match platform.environment() {
             Environment::Darwin => AArch64VarArgsConvention::StackOnly,
+            Environment::Gnu => AArch64VarArgsConvention::RegistersAndStack,
             _ => todo!("ondersteun niet-macOS AArch64")
         };
 

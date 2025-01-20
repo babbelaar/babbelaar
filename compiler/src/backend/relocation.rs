@@ -111,7 +111,7 @@ impl RelocationMethod {
                 RelocationFlags::Generic {
                     kind: RelocationKind::Relative,
                     encoding: RelocationEncoding::AArch64Call,
-                    size: 32,
+                    size: 26,
                 }
             },
 
