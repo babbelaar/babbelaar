@@ -721,6 +721,30 @@ fn loop_string_chars() {
 }
 
 #[test]
+fn loop_g32_array() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            stel s = nieuw g32[4];
+            s[0] = 12;
+            s[1] = 3;
+            s[2] = 6;
+            s[3] = 8;
+
+            stel res = 0;
+
+            volg i in reeks(0, 4) {
+                res += s[i];
+            }
+
+            bekeer res;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(29));
+}
+
+#[test]
 fn left_shift_immediate_2() {
     let result = create_and_run_single_object_executable(r#"
 
