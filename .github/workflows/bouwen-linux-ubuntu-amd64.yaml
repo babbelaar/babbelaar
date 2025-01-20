@@ -1,4 +1,4 @@
-name: Rust
+name: Bouwen op Ubuntu Linux (AMD64)
 
 on:
   push:

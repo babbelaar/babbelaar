@@ -1,4 +1,4 @@
-name: Rust
+name: Bouwen op macOS (AArch64)
 
 on:
   push:
