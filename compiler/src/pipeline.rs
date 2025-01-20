@@ -6,26 +6,26 @@ use std::{error::Error, fmt::Display, mem::replace, path::{Path, PathBuf}};
 use babbelaar::{ArchiveKind, ParseTree};
 use log::debug;
 
-use crate::{backend::Amd64CodeGenerator, os::{linux::LinuxGccLinker, macos::MacOsLdLinker, windows::WindowsLinkLinker}, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, OperatingSystem, Platform};
+use crate::{backend::Amd64CodeGenerator, os::{linux::{LinuxArLinker, LinuxGccLinker}, macos::MacOsLdLinker, windows::WindowsLinkLinker}, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, LinkerPath, OperatingSystem, Platform};
 
 #[derive(Debug)]
 pub struct Pipeline {
     object: CompiledObject,
-    paths_to_objects: Vec<PathBuf>,
+    paths: Vec<LinkerPath>,
 }
 
 impl Pipeline {
     #[must_use]
     pub fn new(platform: Platform, include_babbib: bool) -> Self {
-        let mut paths_to_objects = Vec::new();
+        let mut paths = Vec::new();
 
         if include_babbib {
-            paths_to_objects.push(create_path_to_babbib(&platform));
+            paths.push(LinkerPath::StaticLibrary(create_path_to_babbib(&platform)));
         }
 
         Self {
             object: CompiledObject::new(platform),
-            paths_to_objects,
+            paths,
         }
     }
 
@@ -70,32 +70,47 @@ impl Pipeline {
 
         obj.write_to(&path)?;
 
-        self.paths_to_objects.push(path);
+        self.paths.push(LinkerPath::Object(path));
         Ok(())
     }
 
-    pub fn link(&mut self, directory: &Path, name: &str, archive: ArchiveKind) -> Result<PathBuf, Box<dyn Error>> {
+    pub fn link(self, directory: &Path, name: &str, archive: ArchiveKind) -> Result<PathBuf, Box<dyn Error>> {
         let mut path = directory.to_path_buf();
 
+        let prefix = self.object.platform().operating_system().archive_prefix(archive);
         let ext = self.object.platform().operating_system().archive_extension(archive);
-        path.push(format!("{name}{ext}"));
+        path.push(format!("{prefix}{name}{ext}"));
 
         match self.object.platform().operating_system() {
             OperatingSystem::Linux => {
-                let mut linker = LinuxGccLinker::new(&path);
+                match archive {
+                    ArchiveKind::Applicatie => {
+                        let mut linker = LinuxGccLinker::new(&path);
 
-                for path in &self.paths_to_objects {
-                    linker.add_object(path);
+                        for path in self.paths {
+                            linker.add_path(path);
+                        }
+
+                        linker.run()?;
+                    }
+
+                    ArchiveKind::StatischeBibliotheek => {
+                        let mut linker = LinuxArLinker::new(&path);
+
+                        for path in self.paths {
+                            linker.add_path(path);
+                        }
+
+                        linker.run()?;
+                    }
                 }
-
-                linker.run()?;
             }
 
             OperatingSystem::MacOs => {
                 let mut linker = MacOsLdLinker::new(&path, archive);
 
-                for path in &self.paths_to_objects {
-                    linker.add_object(path);
+                for path in &self.paths {
+                    linker.add_object(&path.path_buf());
                 }
 
                 linker.run()?;
@@ -104,8 +119,8 @@ impl Pipeline {
             OperatingSystem::Windows => {
                 let mut linker = WindowsLinkLinker::new(self.object.platform().clone(), &path);
 
-                for path in &self.paths_to_objects {
-                    linker.add_object(path);
+                for path in &self.paths {
+                    linker.add_object(path.path_buf());
                 }
 
                 linker.run()?;
@@ -143,7 +158,10 @@ fn create_path_to_babbib(platform: &Platform) -> PathBuf {
     path.push("babbib");
     path.push("uit");
     path.push(platform.architecture().name());
-    path.push(format!("babbib{}", platform.operating_system().archive_extension(ArchiveKind::StatischeBibliotheek)));
+
+    let prefix = platform.operating_system().archive_prefix(ArchiveKind::StatischeBibliotheek);
+    let suffix = platform.operating_system().archive_extension(ArchiveKind::StatischeBibliotheek);
+    path.push(format!("{prefix}babbib{suffix}"));
 
     path
 }

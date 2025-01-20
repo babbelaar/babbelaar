@@ -2,6 +2,7 @@
 // All Rights Reserved.
 
 mod command;
+mod linker_path;
 mod signal;
 pub mod linux;
 pub mod macos;
@@ -9,5 +10,6 @@ pub mod windows;
 
 pub use self::{
     command::CommandExt,
+    linker_path::LinkerPath,
     signal::Signal,
 };

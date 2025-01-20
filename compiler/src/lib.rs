@@ -68,7 +68,10 @@ pub use self::{
         OptimizationContext,
         optimize_program,
     },
-    os::Signal,
+    os::{
+        LinkerPath,
+        Signal,
+    },
     pipeline::{
         LinkerError,
         Pipeline,

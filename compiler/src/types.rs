@@ -121,6 +121,14 @@ impl OperatingSystem {
             Self::Windows => "obj",
         }
     }
+
+    #[must_use]
+    pub const fn archive_prefix(&self, archive: ArchiveKind) -> &'static str {
+        match (self, archive) {
+            (Self::Linux, ArchiveKind::StatischeBibliotheek) => "lib",
+            _ => "",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

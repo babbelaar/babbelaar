@@ -6,5 +6,8 @@ mod linker;
 
 pub use self::{
     ldd::Ldd,
-    linker::LinuxGccLinker,
+    linker::{
+        LinuxArLinker,
+        LinuxGccLinker,
+    },
 };
