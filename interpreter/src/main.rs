@@ -18,7 +18,6 @@ use clap::Subcommand;
 use colored::Colorize;
 use env_logger::Env;
 use error::ErrorPrinter;
-use strum::IntoEnumIterator;
 
 pub use self::{
     data::{
@@ -159,8 +158,8 @@ fn compile(map: PathBuf, config: &ConfigRoot) -> PathBuf {
     let dir = output_dir(&map);
 
     if config.bouwen.alle_architecturen {
-        for arch in Architecture::iter() {
-            let platform = Platform::new(arch, platform.environment(), platform.operating_system(), Default::default());
+        for arch in Architecture::all_supported_on_this_platform() {
+            let platform = Platform::new(*arch, platform.environment(), platform.operating_system(), Default::default());
             let mut pipeline = Pipeline::new(platform, !config.bouwen.geen_babbib);
             pipeline.compile_trees(&trees);
 

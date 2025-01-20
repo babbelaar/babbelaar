@@ -66,6 +66,15 @@ impl Architecture {
     }
 
     #[must_use]
+    pub fn all_supported_on_this_platform() -> &'static [Self] {
+        if cfg!(target_os = "macos") {
+            return &[Self::AArch64, Self::X86_64];
+        }
+
+        &[Self::X86_64]
+    }
+
+    #[must_use]
     pub const fn pointer_size(&self) -> usize {
         match self {
             Self::AArch64 => 8,
