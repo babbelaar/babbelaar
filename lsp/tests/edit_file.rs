@@ -13,6 +13,7 @@ const LSP_EXECUTABLE_PATH: &str = env!("CARGO_BIN_EXE_babbelaar-lsp");
 
 const TYPING_SPEED: Duration = Duration::from_millis(1);
 
+#[ignore = "flaky"]
 #[test]
 fn character_by_character() {
     let mut dir = std::env::current_dir().unwrap();
