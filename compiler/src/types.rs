@@ -135,11 +135,20 @@ impl Platform {
     #[must_use]
     pub fn host_platform() -> Self {
         if cfg!(target_os = "macos") {
-            Self {
-                architecture: Architecture::AArch64,
-                environment: Environment::Darwin,
-                operating_system: OperatingSystem::MacOs,
-                options: PlatformOptions::default(),
+            if cfg!(target_arch = "aarch64") {
+                Self {
+                    architecture: Architecture::AArch64,
+                    environment: Environment::Darwin,
+                    operating_system: OperatingSystem::MacOs,
+                    options: PlatformOptions::default(),
+                }
+            } else {
+                Self {
+                    architecture: Architecture::X86_64,
+                    environment: Environment::Darwin,
+                    operating_system: OperatingSystem::MacOs,
+                    options: PlatformOptions::default(),
+                }
             }
         } else if cfg!(target_os = "windows") {
             Self {
