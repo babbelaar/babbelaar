@@ -457,7 +457,7 @@ impl Amd64Instruction<Amd64Register> {
 
             Self::MovReg64ToPtrReg64Off8 { base, offset, src } => {
                 output.push(register_extension(true, false, false, false));
-                output.push(0x8b);
+                output.push(0x89);
                 output.push(mod_rm_8_bit_displacement(*src, *base));
                 output.push(*offset as u8);
             }
@@ -1610,6 +1610,14 @@ mod tests {
             src: Amd64Register::Rsi,
         },
         [ 0x48, 0x89, 0x37 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::MovReg64ToPtrReg64Off8 {
+            base: Amd64Register::Rdi,
+            offset: 0x08,
+            src: Amd64Register::Rsi,
+        },
+        [ 0x48, 0x89, 0x77, 0x08 ].to_vec(),
     )]
     fn check_encoding_mov_deref(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
