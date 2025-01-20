@@ -62,8 +62,10 @@ impl LifeAnalysis {
 
                 lifetime.did_use_during_loop(loop_range.clone());
 
-                // een register die buiten een loop gedefinieerd is, maar eindigt binnen een loop, moet binnen die hele loop nog gebruikt worden
-                lifetime.did_use_at(loop_range.end);
+                if lifetime.first_use() >= loop_range.start {
+                    // een register die buiten een loop gedefinieerd is, maar eindigt binnen een loop, moet binnen die hele loop nog gebruikt worden
+                    lifetime.did_use_at(loop_range.end);
+                }
             }
         }
 
