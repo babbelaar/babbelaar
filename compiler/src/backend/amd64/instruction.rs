@@ -120,6 +120,13 @@ pub enum Amd64Instruction<Reg> {
 
     SetCC { dst: Reg, condition: Amd64ConditionCode },
 
+    SarReg32Cl { reg: Reg },
+    SarReg64Cl { reg: Reg },
+    ShlReg32Cl { reg: Reg },
+    ShlReg64Cl { reg: Reg },
+    ShrReg32Cl { reg: Reg },
+    ShrReg64Cl { reg: Reg },
+
     SubReg32Imm8 { dst: Reg, src: i8 },
     SubReg64Imm8 { dst: Reg, src: i8 },
     SubReg32Reg32 { dst: Reg, src: Reg },
@@ -532,6 +539,48 @@ impl Amd64Instruction<Amd64Register> {
                 output.push(mod_rm_byte_reg(*dst));
             }
 
+            Self::SarReg32Cl { reg } => {
+                if reg.is_64_extended_register() {
+                    output.push(register_extension(false, false, false, true));
+                }
+                output.push(0xD3);
+                output.push(mod_rm_byte_extra_op(7, *reg));
+            }
+
+            Self::SarReg64Cl { reg } => {
+                output.push(register_extension(true, false, false, reg.is_64_extended_register()));
+                output.push(0xD3);
+                output.push(mod_rm_byte_extra_op(7, *reg));
+            }
+
+            Self::ShlReg32Cl { reg } => {
+                if reg.is_64_extended_register() {
+                    output.push(register_extension(false, false, false, true));
+                }
+                output.push(0xD3);
+                output.push(mod_rm_byte_extra_op(4, *reg));
+            }
+
+            Self::ShlReg64Cl { reg } => {
+                output.push(register_extension(true, false, false, reg.is_64_extended_register()));
+                output.push(0xD3);
+                output.push(mod_rm_byte_extra_op(4, *reg));
+            }
+
+            Self::ShrReg32Cl { reg } => {
+                if reg.is_64_extended_register() {
+                    output.push(register_extension(false, false, false, true));
+                }
+                output.push(0xD3);
+                output.push(mod_rm_byte_extra_op(5, *reg));
+            }
+
+            Self::ShrReg64Cl { reg } => {
+                output.push(register_extension(true, false, false, reg.is_64_extended_register()));
+                output.push(0xD3);
+                output.push(mod_rm_byte_extra_op(5, *reg));
+            }
+
             Self::SubReg32Imm8 { dst, src } => {
                 output.push(0x83);
                 output.push(mod_rm_byte_extra_op(5, *dst));
@@ -768,6 +817,30 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
 
             Self::SetCC { dst, condition } => {
                 f.write_fmt(format_args!("set{condition} {}", dst.name8()))
+            }
+
+            Self::SarReg32Cl { reg } => {
+                f.write_fmt(format_args!("sar {}, cl", reg.name32()))
+            }
+
+            Self::SarReg64Cl { reg } => {
+                f.write_fmt(format_args!("sar {}, cl", reg.name64()))
+            }
+
+            Self::ShlReg32Cl { reg } => {
+                f.write_fmt(format_args!("shl {}, cl", reg.name32()))
+            }
+
+            Self::ShlReg64Cl { reg } => {
+                f.write_fmt(format_args!("shl {}, cl", reg.name64()))
+            }
+
+            Self::ShrReg32Cl { reg } => {
+                f.write_fmt(format_args!("shr {}, cl", reg.name32()))
+            }
+
+            Self::ShrReg64Cl { reg } => {
+                f.write_fmt(format_args!("shr {}, cl", reg.name64()))
             }
 
             Self::SubReg32Imm8 { dst, src } => {
@@ -1070,6 +1143,36 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
             Amd64Instruction::SetCC { dst, condition } => {
                 info.add_dst(dst);
                 _ = condition;
+            }
+
+            Amd64Instruction::SarReg32Cl { reg } => {
+                info.add_dst(reg);
+                info.add_src(Amd64Register::Rcx);
+            }
+
+            Amd64Instruction::SarReg64Cl { reg } => {
+                info.add_dst(reg);
+                info.add_src(Amd64Register::Rcx);
+            }
+
+            Amd64Instruction::ShlReg32Cl { reg } => {
+                info.add_dst(reg);
+                info.add_src(Amd64Register::Rcx);
+            }
+
+            Amd64Instruction::ShlReg64Cl { reg } => {
+                info.add_dst(reg);
+                info.add_src(Amd64Register::Rcx);
+            }
+
+            Amd64Instruction::ShrReg32Cl { reg } => {
+                info.add_dst(reg);
+                info.add_src(Amd64Register::Rcx);
+            }
+
+            Amd64Instruction::ShrReg64Cl { reg } => {
+                info.add_dst(reg);
+                info.add_src(Amd64Register::Rcx);
             }
 
             Amd64Instruction::SubReg32Imm8 { dst, src } => {
@@ -1412,6 +1515,38 @@ mod tests {
             src: 123,
         },
         [ 0x41, 0xbf, 0x7b, 0x00, 0x00, 0x00 ].to_vec(),
+    )]
+    #[case(
+        Amd64Instruction::SarReg32Cl { reg: Amd64Register::Rax },
+        vec![ 0xD3, 0xF8 ]
+    )]
+    #[case(
+        Amd64Instruction::SarReg64Cl { reg: Amd64Register::Rax },
+        vec![ 0x48, 0xD3, 0xF8 ]
+    )]
+    #[case(
+        Amd64Instruction::SarReg64Cl { reg: Amd64Register::R12 },
+        vec![ 0x49, 0xD3, 0xFC ]
+    )]
+    #[case(
+        Amd64Instruction::ShlReg64Cl { reg: Amd64Register::Rcx },
+        vec![ 0x48, 0xD3, 0xE1 ]
+    )]
+    #[case(
+        Amd64Instruction::ShlReg64Cl { reg: Amd64Register::R15 },
+        vec![ 0x49, 0xD3, 0xE7 ]
+    )]
+    #[case(
+        Amd64Instruction::ShrReg64Cl { reg: Amd64Register::R9 },
+        vec![ 0x49, 0xD3, 0xE9 ]
+    )]
+    #[case(
+        Amd64Instruction::ShrReg32Cl { reg: Amd64Register::Rsp },
+        vec![ 0xD3, 0xEC ]
+    )]
+    #[case(
+        Amd64Instruction::ShrReg64Cl { reg: Amd64Register::Rbx },
+        vec![ 0x48, 0xD3, 0xEB ]
     )]
     fn check_encoding(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();

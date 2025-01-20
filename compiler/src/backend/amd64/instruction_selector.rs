@@ -4,7 +4,7 @@
 use babbelaar::BabString;
 use log::{debug, warn};
 
-use crate::{backend::VirtOrPhysReg, ir::RegisterAllocator as IrRegisterAllocator, AllocatableRegister, Function, Immediate, Instruction, MathOperation, Operand, Platform, Register, TargetInstruction};
+use crate::{backend::VirtOrPhysReg, ir::RegisterAllocator as IrRegisterAllocator, AllocatableRegister, Function, Immediate, Instruction, MathOperation, Operand, Platform, PrimitiveType, Register, TargetInstruction};
 
 use super::{instruction::SibScale, Amd64ConditionCode, Amd64FixUp, Amd64Instruction, Amd64Register};
 
@@ -172,7 +172,7 @@ impl Amd64InstructionSelector {
                 self.instructions.push(Amd64Instruction::ReturnNear);
             }
 
-            Instruction::MathOperation { operation, typ: _, destination, lhs, rhs } => {
+            Instruction::MathOperation { operation, typ, destination, lhs, rhs } => {
                 let dst = self.allocate_register(destination);
 
                 match operation {
@@ -181,8 +181,8 @@ impl Amd64InstructionSelector {
                     MathOperation::Subtract => self.add_instruction_sub(dst, lhs, rhs),
                     MathOperation::Divide => self.instruction_idiv(dst, lhs, rhs),
                     MathOperation::Modulo => self.add_instruction_mod(dst, lhs, rhs),
-                    MathOperation::LeftShift => todo!("Voeg SchuifLinks toe"),
-                    MathOperation::RightShift => todo!("Voeg SchuifRechts toe"),
+                    MathOperation::LeftShift => self.add_instruction_shift_left(dst, lhs, rhs, *typ),
+                    MathOperation::RightShift => self.add_instruction_shift_right(dst, lhs, rhs, *typ),
                     MathOperation::Xor => self.add_instruction_xor(dst, lhs, rhs),
                 }
             }
@@ -466,6 +466,62 @@ impl Amd64InstructionSelector {
                 if dst != src {
                     self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src });
                 }
+            }
+        }
+    }
+
+    fn add_instruction_shift_left(&mut self, dst: VirtOrPhysReg<Amd64Register>, lhs: &Operand, rhs: &Operand, typ: PrimitiveType) {
+        match lhs {
+            Operand::Immediate(..) => {
+                self.add_instruction_mov(dst, lhs);
+            }
+
+            Operand::Register(lhs) => {
+                let lhs = self.allocate_register(&lhs);
+
+                if lhs != dst {
+                    self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src: lhs });
+                }
+            }
+        }
+
+        self.add_instruction_mov(VirtOrPhysReg::Physical(Amd64Register::Rcx), rhs);
+
+        if typ.is_arm_64_bit() {
+            self.instructions.push(Amd64Instruction::ShlReg64Cl { reg: dst });
+        } else {
+            self.instructions.push(Amd64Instruction::ShlReg32Cl { reg: dst });
+        }
+    }
+
+    fn add_instruction_shift_right(&mut self, dst: VirtOrPhysReg<Amd64Register>, lhs: &Operand, rhs: &Operand, typ: PrimitiveType) {
+        match lhs {
+            Operand::Immediate(..) => {
+                self.add_instruction_mov(dst, lhs);
+            }
+
+            Operand::Register(lhs) => {
+                let lhs = self.allocate_register(&lhs);
+
+                if lhs != dst {
+                    self.instructions.push(Amd64Instruction::MovReg64Reg64 { dst, src: lhs });
+                }
+            }
+        }
+
+        self.add_instruction_mov(VirtOrPhysReg::Physical(Amd64Register::Rcx), rhs);
+
+        if typ.is_signed() {
+            if typ.is_arm_64_bit() {
+                self.instructions.push(Amd64Instruction::SarReg64Cl { reg: dst });
+            } else {
+                self.instructions.push(Amd64Instruction::SarReg32Cl { reg: dst });
+            }
+        } else {
+            if typ.is_arm_64_bit() {
+                self.instructions.push(Amd64Instruction::ShrReg64Cl { reg: dst });
+            } else {
+                self.instructions.push(Amd64Instruction::ShrReg32Cl { reg: dst });
             }
         }
     }

@@ -381,6 +381,31 @@ impl Amd64CodeGenerator {
                 condition,
             },
 
+            Amd64Instruction::SarReg32Cl { reg} => Amd64Instruction::SarReg32Cl {
+                reg: self.allocate_register(reg),
+            },
+
+            Amd64Instruction::SarReg64Cl { reg} => Amd64Instruction::SarReg64Cl {
+                reg: self.allocate_register(reg),
+            },
+
+            Amd64Instruction::ShlReg32Cl { reg} => Amd64Instruction::ShlReg32Cl {
+                reg: self.allocate_register(reg),
+            },
+
+            Amd64Instruction::ShlReg64Cl { reg} => Amd64Instruction::ShlReg64Cl {
+                reg: self.allocate_register(reg),
+            },
+
+            Amd64Instruction::ShrReg32Cl { reg} => Amd64Instruction::ShrReg32Cl {
+                reg: self.allocate_register(reg),
+            },
+
+            Amd64Instruction::ShrReg64Cl { reg} => Amd64Instruction::ShrReg64Cl {
+                reg: self.allocate_register(reg),
+            },
+
+
             Amd64Instruction::SubReg32Imm8 { dst, src } => Amd64Instruction::SubReg32Imm8 {
                 dst: self.allocate_register(dst),
                 src,
