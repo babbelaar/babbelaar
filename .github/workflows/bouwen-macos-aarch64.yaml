@@ -1,0 +1,25 @@
+name: Rust
+
+on:
+  push:
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Babbelaar Bouwen
+      run: cargo build --verbose --workspace
+
+    - name: Babbelaar Bibliotheek Bouwen
+      run: make bouw
+
+    - name: Testen
+      run: cargo test --all --tests --workspace --no-fail-fast
