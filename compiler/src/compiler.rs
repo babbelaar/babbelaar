@@ -702,8 +702,10 @@ impl CompileExpression for UnaryExpression {
                 let (register, type_info) = value.to_register_and_type(builder);
                 if let Expression::Primary(PrimaryExpression::Reference(reference)) = self.rhs.value() {
                     if let TypeInfo::Plain(_) = type_info {
-                        let (reg, _) = builder.promote_to_stack(reference.value().clone());
-                        return ExpressionResult::array(reg, type_info);
+                        if type_info.type_id().is_primitive() {
+                            let (reg, _) = builder.promote_to_stack(reference.value().clone());
+                            return ExpressionResult::array(reg, type_info);
+                        }
                     }
                 }
                 ExpressionResult::typed(register, TypeInfo::Plain(TypeId::G64))

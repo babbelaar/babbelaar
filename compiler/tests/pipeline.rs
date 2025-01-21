@@ -1668,6 +1668,110 @@ fn numeric_bounds_printf(#[case] format: &str, #[case] ty: &str, #[case] number:
     assert_eq!(result.stdout, number);
 }
 
+#[test]
+fn ptr_to_first_field_is_same_as_ptr_to_structure() {
+    let result = create_and_run_single_object_executable(r#"
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+
+        structuur Structuurtje {
+            veld lengte: g32,
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel adres = nieuw Structuurtje {
+                lengte: 64,
+            };
+
+            printf("%p\n", &adres.lengte);
+            printf("%p\n", &adres);
+
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+
+    let parts = result.stdout.trim().split('\n').collect::<Vec<_>>();
+    let ptr_to_first_field = parts[0];
+    let ptr_to_structure = parts[1];
+    assert_eq!(ptr_to_first_field, ptr_to_structure);
+}
+
+#[test]
+fn memcpy_of_structure_field_g32() {
+    let result = create_and_run_single_object_executable(r#"
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+
+        @uitheems(naam: "memcpy")
+        werkwijze memcpy(bestemming: g32*, bron: Structuurtje*, lengte: g64);
+
+        structuur Structuurtje {
+            veld lengte: g32,
+        }
+
+        werkwijze krijgVeld(adres: Structuurtje*) -> g32 {
+            stel w = 12;
+
+            memcpy(&w, adres, 4);
+
+            bekeer w;
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel adres = nieuw Structuurtje {
+                lengte: 64,
+            };
+
+            bekeer krijgVeld(&adres);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(64));
+    assert_eq!(result.stdout, "");
+}
+
+#[test]
+fn memcpy_of_structure_field_g8() {
+    let result = create_and_run_single_object_executable(r#"
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+
+        @uitheems(naam: "memcpy")
+        werkwijze memcpy(bestemming: g32*, bron: Structuurtje*, lengte: g64);
+
+        structuur Structuurtje {
+            veld lengte: g8,
+        }
+
+        werkwijze krijgVeld(adres: Structuurtje*) -> g32 {
+            stel w: g32 = 0;
+
+            memcpy(&w, adres, 1);
+
+            bekeer w;
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel adres = nieuw Structuurtje {
+                lengte: 77,
+            };
+
+            bekeer krijgVeld(&adres);
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(77));
+    assert_eq!(result.stdout, "");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() || std::env::var("GITHUB_ACTION").is_ok() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
