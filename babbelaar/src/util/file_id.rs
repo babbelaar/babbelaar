@@ -3,7 +3,7 @@
 
 use std::{fmt::Debug, hash::{DefaultHasher, Hash, Hasher}, path::Path};
 
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(usize);
 
 impl FileId {
@@ -29,5 +29,11 @@ impl Debug for FileId {
         } else {
             f.debug_tuple("FileId").field(&self.0).finish()
         }
+    }
+}
+
+impl Default for FileId {
+    fn default() -> Self {
+        Self::INTERNAL
     }
 }

@@ -146,6 +146,10 @@ impl BabbelaarContext {
             }
         }
 
+        if cfg!(debug_assertions) {
+            log::error!("Broncode van {file_id:?} kon niet gevonden worden: {:#?}", std::backtrace::Backtrace::force_capture());
+        }
+
         Err(BabbelaarLspError::IllegalFileId { file_id })
     }
 

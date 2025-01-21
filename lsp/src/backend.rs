@@ -836,7 +836,7 @@ impl Backend {
             Some((origin_range, reference)) => {
                 let file_id = reference.declaration_range.file_id();
                 if file_id == FileId::INTERNAL {
-                    log::warn!("Verwijst naar een intern bestand: {reference:#?}");
+                    log::warn!("Definitie verwijst naar een intern bestand: {reference:#?}");
                     return Ok(None);
                 }
 
