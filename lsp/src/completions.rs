@@ -1,13 +1,15 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use babbelaar::*;
 use log::warn;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams, CompletionResponse, Documentation, InsertTextFormat, MarkupContent, MarkupKind};
 
 use crate::{BabbelaarLspResult as Result, Backend};
+
+static SYMBOL_CACHE: OnceLock<Vec<&'static str>> = OnceLock::new();
 
 pub struct CompletionEngine<'b> {
     server: &'b Backend,
@@ -70,6 +72,11 @@ impl<'b> CompletionEngine<'b> {
 
             Some(CompletionMode::StructureMember(name)) => {
                 self.complete_member_definition(name).await;
+                Ok(true)
+            }
+
+            Some(CompletionMode::ExternFunctionName { name }) => {
+                self.complete_extern_function_name(name).await;
                 Ok(true)
             }
 
@@ -201,7 +208,17 @@ impl<'b> CompletionEngine<'b> {
             return Ok(None);
         }
 
-        Ok(completion_mode)
+        if completion_mode.is_some() {
+            return Ok(completion_mode);
+        }
+
+        self.server.with_syntax(&self.params.text_document_position.text_document, |tree, source_code| {
+            let Ok(location) = self.server.converter(source_code).convert_location(self.params.text_document_position.position) else {
+                return Ok(None);
+            };
+
+            Ok(find_completion_mode_with_syntax(tree, location))
+        }).await
     }
 
     async fn complete_member_definition(&mut self, name: Ranged<BabString>) {
@@ -539,6 +556,56 @@ impl<'b> CompletionEngine<'b> {
             }
         }
     }
+
+    async fn complete_extern_function_name(&mut self, name: BabString) {
+        let cache = SYMBOL_CACHE.get_or_init(|| {
+            log::debug!("macOS-werkwijzelijst voorbereiden...");
+
+            let str = include_str!("../../tools/platform/macos-symbols.txt");
+            let result = str.lines().collect();
+
+            log::debug!("macOS-werkwijzelijst gereed");
+            result
+        });
+
+        let idx = match cache.binary_search(&name.as_str()) {
+            Ok(idx) => idx,
+            Err(idx) => idx,
+        };
+
+        for index in (idx..idx+5).chain(idx-5..idx) {
+            let Some(val) = cache.get(index) else { continue };
+            self.completions.push(CompletionItem {
+                preselect: Some(true),
+                ..CompletionItem::new_simple(val.to_string(), val.to_string())
+            });
+        }
+    }
+}
+
+#[must_use]
+fn find_completion_mode_with_syntax(tree: &ParseTree, location: FileLocation) -> Option<CompletionMode> {
+    for func in tree.functions() {
+        for attr in &func.attributes {
+            if !attr.range().contains(location) {
+                continue;
+            }
+
+            if *attr.name == AttributeName::Extern {
+                for arg in attr.arguments.value() {
+                    if arg.value.range().contains(location) && *arg.name == "naam" {
+                        if let PrimaryExpression::StringLiteral(name) = arg.value.value() {
+                            return Some(CompletionMode::ExternFunctionName {
+                                name: name.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
 
 #[must_use]
@@ -572,4 +639,7 @@ enum CompletionMode {
         name: BabString,
     },
     StructureMember(Ranged<BabString>),
+    ExternFunctionName {
+        name: BabString,
+    },
 }

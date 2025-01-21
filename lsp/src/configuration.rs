@@ -37,7 +37,7 @@ impl LspConfiguration {
             )),
             completion_provider: Some(CompletionOptions {
                 resolve_provider: Some(false),
-                trigger_characters: Some(vec![".".to_string(), ",".to_string(), "{".to_string(), "@".to_string()]),
+                trigger_characters: Some(vec![".".to_string(), ",".to_string(), "{".to_string(), "@".to_string(), "\"".to_string()]),
                 work_done_progress_options: WorkDoneProgressOptions::default(),
                 completion_item: Some(CompletionOptionsCompletionItem {
                     label_details_support: Some(true),
