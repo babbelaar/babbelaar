@@ -1036,8 +1036,13 @@ impl SemanticAnalyzer {
             ));
         }
 
+        let ty = match expression.operator.value() {
+            BiOperator::Comparison(..) => SemanticType::Builtin(BuiltinType::Bool),
+            BiOperator::Math(..) => lhs_type,
+        };
+
         SemanticValue {
-            ty: lhs_type,
+            ty,
             usage: SemanticUsage::Pure(PureValue::Operator {
                 operator_range: expression.operator.range(),
             }),
