@@ -1772,6 +1772,29 @@ fn memcpy_of_structure_field_g8() {
     assert_eq!(result.stdout, "");
 }
 
+#[test]
+fn slinger_index_constant() {
+    let result = create_and_run_single_object_executable(r#"
+        @flexibeleArgumenten
+        @uitheems(naam: "printf")
+        werkwijze printf(format: Slinger);
+
+        werkwijze hoofd() -> g32 {
+            stel s = "Hallo";
+
+            volg i in reeks(0, s.lengte()) {
+                printf("%c\n", s[i]);
+            }
+
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.signal, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "H\na\nl\nl\no\n");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() || std::env::var("GITHUB_ACTION").is_ok() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
@@ -1789,8 +1812,8 @@ fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
 fn create_single_object_executable(code: &str, directory: &Path) -> std::path::PathBuf {
     let tree = parse_string_to_tree(code).unwrap();
 
-    let mut pipeline = Pipeline::new(Platform::host_platform(), true);
-    // let mut pipeline = Pipeline::new(Platform::new(babbelaar_compiler::Architecture::X86_64, babbelaar_compiler::Environment::Darwin, babbelaar_compiler::OperatingSystem::MacOs, Default::default()), true);
+    // let mut pipeline = Pipeline::new(Platform::host_platform(), true);
+    let mut pipeline = Pipeline::new(Platform::new(babbelaar_compiler::Architecture::X86_64, babbelaar_compiler::Environment::Darwin, babbelaar_compiler::OperatingSystem::MacOs, Default::default()), true);
     pipeline.compile_trees(&[tree]);
     pipeline.create_object(directory, "BabBestand").unwrap();
 

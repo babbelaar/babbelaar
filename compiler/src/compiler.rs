@@ -567,8 +567,22 @@ impl CompileExpression for PostfixExpression {
                     }
 
                     TypeInfo::Plain(inner) => {
-                        todo!("Ondersteun indexering van niet-opeenvolgingen. Type: {}. Locatie: {}",
-                            builder.name_of_type_id(inner), self.lhs.range().start())
+                        if inner == TypeId::SLINGER {
+                            let offset = subscript.compile(builder, ctx).to_readable(builder);
+                            let item_ty = TypeInfo::Plain(TypeId::TEKEN);
+
+                            let size = 1;
+                            let offset_typ = builder.pointer_primitive_type();
+                            let offset = builder.math(MathOperation::Multiply, offset_typ, offset, Immediate::Integer64(size as _));
+                            let offset = Operand::Register(offset);
+
+                            let typ = PrimitiveType::new(1, false);
+                            ExpressionResult::pointer(base_ptr, offset, item_ty, typ)
+                        } else {
+                            todo!("Ondersteun indexering van typen naast opeenvolgingen en slingers. Type: {}. Locatie: {}",
+                                builder.name_of_type_id(inner), self.lhs.range().start())
+                        }
+
                     }
                 }
             }
