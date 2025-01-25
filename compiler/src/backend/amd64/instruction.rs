@@ -7,7 +7,7 @@ use babbelaar::BabString;
 
 use crate::{backend::{abstract_register::AbstractRegister, VirtOrPhysReg}, DataSectionOffset, Label, TargetBranchInfo, TargetInstruction, TargetInstructionInfo};
 
-use super::{Amd64ConditionCode, Amd64FixUp, Amd64Register};
+use super::{address::Amd64Displacement, Amd64Address, Amd64ConditionCode, Amd64FixUp, Amd64Register};
 
 
 /// Intel glossary:
@@ -86,12 +86,8 @@ pub enum Amd64Instruction<Reg> {
     MovImm8ToPtrReg64 { base: Reg, src: i8 },
     MovImm8ToPtrReg64Off8 { base: Reg, offset: i8, src: i8 },
 
-    MovReg32FromPtrReg64 { dst: Reg, base: Reg },
-    MovReg32FromPtrReg64Off8 { dst: Reg, base: Reg, offset: i8 },
-    MovReg32FromPtrReg64OffReg64 { dst: Reg, base: Reg, index: Reg, scale: SibScale },
-    MovReg64FromPtrReg64 { dst: Reg, base: Reg },
-    MovReg64FromPtrReg64Off8 { dst: Reg, base: Reg, offset: i8 },
-    MovReg64FromPtrReg64OffReg64 { dst: Reg, base: Reg, index: Reg, scale: SibScale },
+    MovReg32FromPtr { dst: Reg, address: Amd64Address<Reg> },
+    MovReg64FromPtr { dst: Reg, address: Amd64Address<Reg> },
 
     MovImm32ToPtrReg64 { base: Reg, src: i32 },
     MovImm32ToPtrReg64Off8 { base: Reg, offset: i8, src: i32 },
@@ -108,8 +104,7 @@ pub enum Amd64Instruction<Reg> {
     MovReg64Imm64 { dst: Reg, src: i64 },
     MovReg64Reg64 { dst: Reg, src: Reg },
 
-    MovzxReg8FromPtrReg64 { dst: Reg, base: Reg },
-    MovzxReg8FromPtrReg64Off8 { dst: Reg, base: Reg, offset: i8 },
+    MovzxReg8FromPtr { dst: Reg, address: Amd64Address<Reg> },
 
     NegReg64 { dst: Reg },
 
@@ -360,42 +355,16 @@ impl Amd64Instruction<Amd64Register> {
                 output.extend(&offset.to_le_bytes());
             }
 
-            Self::MovReg32FromPtrReg64 { dst, base } => {
+            Self::MovReg32FromPtr { dst, address } => {
+                output.push(register_extension(false, dst.is_64_extended_register(), address.index_is_64_extended_register(), address.base().is_64_extended_register()));
                 output.push(0x8b);
-                output.push(mod_rm_no_displacement(*dst, *base));
+                encode_addressing_suffix(output, dst, address);
             }
 
-            Self::MovReg32FromPtrReg64Off8 { dst, base, offset } => {
+            Self::MovReg64FromPtr { dst, address } => {
+                output.push(register_extension(true, dst.is_64_extended_register(), address.index_is_64_extended_register(), address.base().is_64_extended_register()));
                 output.push(0x8b);
-                output.push(mod_rm_8_bit_displacement(*dst, *base));
-                output.push(*offset as u8);
-            }
-
-            Self::MovReg32FromPtrReg64OffReg64 { dst, base, index, scale } => {
-                output.push(register_extension(false, dst.is_64_extended_register(), index.is_64_extended_register(), base.is_64_extended_register()));
-                output.push(0x8b);
-                output.push(mod_rm_no_displacement_sib(*dst));
-                output.push(sib_byte(*scale, Some(*index), *base));
-            }
-
-            Self::MovReg64FromPtrReg64 { dst, base } => {
-                output.push(register_extension(true, false, false, false));
-                output.push(0x8b);
-                output.push(mod_rm_no_displacement(*dst, *base));
-            }
-
-            Self::MovReg64FromPtrReg64Off8 { dst, base, offset } => {
-                output.push(register_extension(true, false, false, false));
-                output.push(0x8b);
-                output.push(mod_rm_8_bit_displacement(*dst, *base));
-                output.push(*offset as u8);
-            }
-
-            Self::MovReg64FromPtrReg64OffReg64 { dst, base, index, scale } => {
-                output.push(register_extension(true, dst.is_64_extended_register(), index.is_64_extended_register(), base.is_64_extended_register()));
-                output.push(0x8b);
-                output.push(mod_rm_no_displacement_sib(*dst));
-                output.push(sib_byte(*scale, Some(*index), *base));
+                encode_addressing_suffix(output, dst, address);
             }
 
             Self::MovImm8ToPtrReg64 { base, src } => {
@@ -490,19 +459,11 @@ impl Amd64Instruction<Amd64Register> {
                 output.push(mod_rm_byte_reg_reg(*dst, *src));
             }
 
-            Self::MovzxReg8FromPtrReg64 { dst, base } => {
-                output.push(register_extension(true, base.is_64_extended_register(), false, dst.is_64_extended_register()));
+            Self::MovzxReg8FromPtr { dst, address } => {
+                output.push(register_extension(true, dst.is_64_extended_register(), address.index_is_64_extended_register(), address.base().is_64_extended_register()));
                 output.push(0x0F);
                 output.push(0xB6);
-                output.push(mod_rm_no_displacement(*dst, *base));
-            }
-
-            Self::MovzxReg8FromPtrReg64Off8 { dst, base, offset } => {
-                output.push(register_extension(true, base.is_64_extended_register(), false, dst.is_64_extended_register()));
-                output.push(0x0F);
-                output.push(0xB6);
-                output.push(mod_rm_8_bit_displacement(*dst, *base));
-                output.push(*offset as u8);
+                encode_addressing_suffix(output, dst, address);
             }
 
             Self::NegReg64 { dst } => {
@@ -615,6 +576,21 @@ impl Amd64Instruction<Amd64Register> {
     }
 }
 
+fn encode_addressing_suffix(output: &mut Vec<u8>, dst: &Amd64Register, address: &Amd64Address<Amd64Register>) {
+    if let Some(index) = address.index() {
+        output.push(mod_rm_byte(address.displacement().mod_rm_mode(), *dst, None));
+        output.push(sib_byte(address.scale(), Some(index), address.base()));
+    } else {
+        output.push(mod_rm_byte(address.displacement().mod_rm_mode(), *dst, Some(address.base())));
+    }
+
+    match address.displacement() {
+        Amd64Displacement::Disp8(displacement) => output.push(displacement as u8),
+        Amd64Displacement::Disp32(displacement) => output.extend_from_slice(&displacement.to_le_bytes()),
+        _ => (),
+    }
+}
+
 impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -713,28 +689,12 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
                 f.write_fmt(format_args!("lea {}, [rip + 0x{offset:x}]    # {data_section_offset}", dst.name64()))
             }
 
-            Self::MovReg32FromPtrReg64 { dst, base } => {
-                f.write_fmt(format_args!("mov {}, [{}]", dst.name32(), base.name64()))
+            Self::MovReg32FromPtr { dst, address } => {
+                f.write_fmt(format_args!("mov {}, {address}", dst.name32()))
             }
 
-            Self::MovReg32FromPtrReg64Off8 { dst, base, offset } => {
-                f.write_fmt(format_args!("mov {}, [{} + 0x{offset:x}]", dst.name32(), base.name64()))
-            }
-
-            Self::MovReg32FromPtrReg64OffReg64 { dst, base, index: offset, scale } => {
-                f.write_fmt(format_args!("mov {}, [{} + {} * {scale}]", dst.name32(), base.name64(), offset.name64()))
-            }
-
-            Self::MovReg64FromPtrReg64 { dst, base } => {
-                f.write_fmt(format_args!("mov {}, [{}]", dst.name64(), base.name64()))
-            }
-
-            Self::MovReg64FromPtrReg64Off8 { dst, base, offset } => {
-                f.write_fmt(format_args!("mov {}, [{} + 0x{offset:x}]", dst.name64(), base.name64()))
-            }
-
-            Self::MovReg64FromPtrReg64OffReg64 { dst, base, index: offset, scale } => {
-                f.write_fmt(format_args!("mov {}, [{} + {} * {scale}]", dst.name64(), base.name64(), offset.name64()))
+            Self::MovReg64FromPtr { dst, address } => {
+                f.write_fmt(format_args!("mov {}, {address}", dst.name64()))
             }
 
             Self::MovImm8ToPtrReg64 { base, src } => {
@@ -793,12 +753,8 @@ impl<Reg: AbstractRegister> Display for Amd64Instruction<Reg> {
                 f.write_fmt(format_args!("mov {}, {}", dst.name64(), src.name64()))
             }
 
-            Self::MovzxReg8FromPtrReg64 { dst, base } => {
-                f.write_fmt(format_args!("mov {}, BYTE PTR [{}]", dst.name64(), base.name8()))
-            }
-
-            Self::MovzxReg8FromPtrReg64Off8 { dst, base, offset } => {
-                f.write_fmt(format_args!("mov {}, BYTE PTR [{} + 0x{offset:x}]", dst.name64(), base.name8()))
+            Self::MovzxReg8FromPtr { dst, address } => {
+                f.write_fmt(format_args!("movzx {}, BYTE PTR {address}", dst.name64()))
             }
 
             Self::NegReg64 { dst } => {
@@ -1002,40 +958,14 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
                 _ = data_section_offset;
             }
 
-            Amd64Instruction::MovReg32FromPtrReg64 { dst, base } => {
+            Amd64Instruction::MovReg32FromPtr { dst, address } => {
                 info.add_dst(dst);
-                info.add_src(base);
+                address.add_as_source_info(&mut info);
             }
 
-            Amd64Instruction::MovReg32FromPtrReg64Off8 { dst, base, offset } => {
+            Amd64Instruction::MovReg64FromPtr { dst, address } => {
                 info.add_dst(dst);
-                info.add_src(base);
-                _ = offset;
-            }
-
-            Amd64Instruction::MovReg32FromPtrReg64OffReg64 { dst, base, index: offset, scale } => {
-                info.add_dst(dst);
-                info.add_src(base);
-                info.add_src(offset);
-                _ = scale;
-            }
-
-            Amd64Instruction::MovReg64FromPtrReg64 { dst, base } => {
-                info.add_dst(dst);
-                info.add_src(base);
-            }
-
-            Amd64Instruction::MovReg64FromPtrReg64Off8 { dst, base, offset } => {
-                info.add_dst(dst);
-                info.add_src(base);
-                _ = offset;
-            }
-
-            Amd64Instruction::MovReg64FromPtrReg64OffReg64 { dst, base, index: offset, scale } => {
-                info.add_dst(dst);
-                info.add_src(base);
-                info.add_src(offset);
-                _ = scale;
+                address.add_as_source_info(&mut info);
             }
 
             Amd64Instruction::MovImm8ToPtrReg64 { base, src } => {
@@ -1113,15 +1043,9 @@ impl TargetInstruction for Amd64Instruction<VirtOrPhysReg<Amd64Register>> {
                 info.add_src(src);
             }
 
-            Amd64Instruction::MovzxReg8FromPtrReg64 { dst, base } => {
+            Amd64Instruction::MovzxReg8FromPtr { dst, address } => {
                 info.add_dst(dst);
-                info.add_src(base);
-            }
-
-            Amd64Instruction::MovzxReg8FromPtrReg64Off8 { dst, base, offset } => {
-                info.add_dst(dst);
-                info.add_src(base);
-                _ = offset;
+                address.add_as_source_info(&mut info);
             }
 
             Amd64Instruction::NegReg64 { dst } => {
@@ -1317,11 +1241,6 @@ fn mod_rip_relative_disp32(dst: Amd64Register) -> u8 {
     byte
 }
 
-#[must_use]
-fn mod_rm_no_displacement_sib(dst: Amd64Register) -> u8 {
-    0b00_000_100 | (dst.mod_rm_bits() << 3)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[allow(unused)]
 pub enum SibScale {
@@ -1330,6 +1249,30 @@ pub enum SibScale {
     Scale2 = 0b01,
     Scale4 = 0b10,
     Scale8 = 0b11,
+}
+
+#[must_use]
+fn mod_rm_byte(mode: Amd64ModRMMode, dst: Amd64Register, src: Option<Amd64Register>) -> u8 {
+    let mut byte = (mode as u8) << 6;
+
+    byte |= dst.mod_rm_bits() << 3;
+
+    if let Some(src) = src {
+        byte |= src.mod_rm_bits();
+    } else {
+        byte |= 0b100;
+    }
+
+    byte
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(unused)]
+pub enum Amd64ModRMMode {
+    NoDisp = 0b00,
+    Disp8 = 0b01,
+    Disp32 = 0b10,
+    ExtraOp = 0b11,
 }
 
 impl Display for SibScale {
@@ -1640,36 +1583,59 @@ mod tests {
 
     #[rstest]
     #[case(
-        Amd64Instruction::MovReg32FromPtrReg64OffReg64 {
+        Amd64Instruction::MovReg32FromPtr {
             dst: Amd64Register::Rax,
-            base: Amd64Register::Rdx,
-            index: Amd64Register::R12,
-            scale: SibScale::Scale1,
+            address: Amd64Address::new(Amd64Register::Rdx)
+                .with_index(Amd64Register::R12, SibScale::Scale1),
         },
         vec![0x42, 0x8B, 0x04, 0x22]
     )]
     #[case(
-        Amd64Instruction::MovReg64FromPtrReg64OffReg64 {
+        Amd64Instruction::MovReg64FromPtr {
             dst: Amd64Register::Rax,
-            base: Amd64Register::Rdx,
-            index: Amd64Register::R12,
-            scale: SibScale::Scale1,
+            address: Amd64Address::new(Amd64Register::Rdx)
+                .with_index(Amd64Register::R12, SibScale::Scale1),
         },
         vec![0x4A, 0x8B, 0x04, 0x22]
     )]
     #[case(
-        Amd64Instruction::MovReg64FromPtrReg64OffReg64 {
+        Amd64Instruction::MovReg64FromPtr {
             dst: Amd64Register::Rdi,
-            base: Amd64Register::Rbx,
-            index: Amd64Register::Rcx,
-            scale: SibScale::Scale2,
+            address: Amd64Address::new(Amd64Register::Rbx)
+                .with_index(Amd64Register::Rcx, SibScale::Scale2),
         },
         vec![0x48, 0x8B, 0x3C, 0x4B]
+    )]
+    #[case(
+        Amd64Instruction::MovReg64FromPtr {
+            dst: Amd64Register::R9,
+            address: Amd64Address::new(Amd64Register::R10)
+                .with_index(Amd64Register::R11, SibScale::Scale4)
+                .with_displacement(Amd64Displacement::Disp8(18)),
+        },
+        vec![0x4f, 0x8b, 0x4c, 0x9a, 0x12]
+    )]
+    #[case(
+        Amd64Instruction::MovReg64FromPtr {
+            dst: Amd64Register::R10,
+            address: Amd64Address::new(Amd64Register::R11)
+                .with_index(Amd64Register::R12, SibScale::Scale8)
+                .with_displacement(Amd64Displacement::Disp32(0xCAFEBABEu32 as _)),
+        },
+        vec![0x4f, 0x8b, 0x94, 0xe3, 0xbe, 0xba, 0xfe, 0xca]
+    )]
+    #[case(
+        Amd64Instruction::MovzxReg8FromPtr {
+            dst: Amd64Register::R15,
+            address: Amd64Address::new(Amd64Register::Rbx)
+                .with_index(Amd64Register::R14, SibScale::Scale1)
+        },
+        vec![0x4e, 0x0f, 0xb6, 0x3c, 0x33]
     )]
     fn check_encoding_mov_scaled_index(#[case] input: Amd64Instruction<Amd64Register>, #[case] expected: Vec<u8>) {
         let mut actual = Vec::new();
         input.encode(&mut actual, 0, &HashMap::new());
 
-        assert_eq!(actual, expected, "actual wasn't the expected! Instruction was: {input}");
+        assert_eq!(actual, expected, "actual wasn't the expected! Instruction was: {input} and we encoded it as: {actual:x?}");
     }
 }

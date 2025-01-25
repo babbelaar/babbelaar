@@ -6,7 +6,7 @@ use log::{debug, warn};
 
 use crate::{backend::VirtOrPhysReg, ir::RegisterAllocator as IrRegisterAllocator, AllocatableRegister, Function, Immediate, Instruction, MathOperation, Operand, Platform, PrimitiveType, Register, TargetInstruction};
 
-use super::{instruction::SibScale, Amd64ConditionCode, Amd64FixUp, Amd64Instruction, Amd64Register};
+use super::{Amd64Address, Amd64ConditionCode, Amd64Displacement, Amd64FixUp, Amd64Instruction, Amd64Register, SibScale};
 
 #[derive(Debug)]
 pub struct Amd64InstructionSelector {
@@ -223,37 +223,42 @@ impl Amd64InstructionSelector {
 
                 match (offset.shrink_if_possible(), typ.bytes()) {
                     (Operand::Immediate(Immediate::Integer8(offset)), 1) => {
-                        if offset == 0 {
-                            self.instructions.push(Amd64Instruction::MovzxReg8FromPtrReg64 { dst, base });
-                        } else {
-                            self.instructions.push(Amd64Instruction::MovzxReg8FromPtrReg64Off8 { dst, base, offset });
-                        }
+                        let address = Amd64Address::new(base)
+                            .with_displacement(Amd64Displacement::from(offset));
+                        self.instructions.push(Amd64Instruction::MovzxReg8FromPtr { dst, address });
                     }
 
                     (Operand::Immediate(Immediate::Integer8(offset)), 4) => {
-                        if offset == 0 {
-                            self.instructions.push(Amd64Instruction::MovReg32FromPtrReg64 { dst, base });
-                        } else {
-                            self.instructions.push(Amd64Instruction::MovReg32FromPtrReg64Off8 { dst, base, offset });
-                        }
+                        let address = Amd64Address::new(base)
+                            .with_displacement(Amd64Displacement::from(offset));
+                        self.instructions.push(Amd64Instruction::MovReg32FromPtr { dst, address });
                     }
 
                     (Operand::Immediate(Immediate::Integer8(offset)), 8) => {
-                        if offset == 0 {
-                            self.instructions.push(Amd64Instruction::MovReg64FromPtrReg64 { dst, base });
-                        } else {
-                            self.instructions.push(Amd64Instruction::MovReg64FromPtrReg64Off8 { dst, base, offset });
-                        }
+                        let address = Amd64Address::new(base)
+                            .with_displacement(Amd64Displacement::from(offset));
+                        self.instructions.push(Amd64Instruction::MovReg64FromPtr { dst, address });
+                    }
+
+                    (Operand::Register(offset), 1) => {
+                        let offset = self.allocate_register(&offset);
+                        let address = Amd64Address::new(base)
+                            .with_index(offset, SibScale::Scale1);
+                        self.instructions.push(Amd64Instruction::MovzxReg8FromPtr { dst, address });
                     }
 
                     (Operand::Register(offset), 4) => {
                         let offset = self.allocate_register(&offset);
-                        self.instructions.push(Amd64Instruction::MovReg32FromPtrReg64OffReg64 { dst, base, index: offset, scale: SibScale::Scale1 });
+                        let address = Amd64Address::new(base)
+                            .with_index(offset, SibScale::Scale1);
+                        self.instructions.push(Amd64Instruction::MovReg32FromPtr { dst, address });
                     }
 
                     (Operand::Register(offset), 8) => {
                         let offset = self.allocate_register(&offset);
-                        self.instructions.push(Amd64Instruction::MovReg64FromPtrReg64OffReg64 { dst, base, index: offset, scale: SibScale::Scale1 });
+                        let address = Amd64Address::new(base)
+                            .with_index(offset, SibScale::Scale1);
+                        self.instructions.push(Amd64Instruction::MovReg64FromPtr { dst, address });
                     }
 
                     _ => todo!("Ondersteun register-offset {offset} met typegrootte {}", typ.bytes()),

@@ -8,7 +8,7 @@ use log::debug;
 
 use crate::{backend::{amd64::instruction_selector::Amd64InstructionSelector, VirtOrPhysReg}, CodeGenerator, CompiledFunction, Function, Instruction, Label, Platform, RegisterAllocator, Relocation, RelocationMethod, RelocationType, StackAllocator};
 
-use super::{Amd64FixUp, Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
+use super::{Amd64Address, Amd64FixUp, Amd64FunctionCharacteristics, Amd64Instruction, Amd64Register};
 
 #[derive(Debug)]
 pub struct Amd64CodeGenerator {
@@ -240,40 +240,14 @@ impl Amd64CodeGenerator {
                 data_section_offset,
             },
 
-            Amd64Instruction::MovReg32FromPtrReg64 { dst, base } => Amd64Instruction::MovReg32FromPtrReg64 {
+            Amd64Instruction::MovReg32FromPtr { dst, address } => Amd64Instruction::MovReg32FromPtr {
                 dst: self.allocate_register(dst),
-                base: self.allocate_register(base),
+                address: self.materialize_address(address),
             },
 
-            Amd64Instruction::MovReg32FromPtrReg64Off8 { dst, base, offset } => Amd64Instruction::MovReg32FromPtrReg64Off8 {
+            Amd64Instruction::MovReg64FromPtr { dst, address } => Amd64Instruction::MovReg32FromPtr {
                 dst: self.allocate_register(dst),
-                base: self.allocate_register(base),
-                offset,
-            },
-
-            Amd64Instruction::MovReg32FromPtrReg64OffReg64 { dst, base, index, scale } => Amd64Instruction::MovReg32FromPtrReg64OffReg64 {
-                dst: self.allocate_register(dst),
-                base: self.allocate_register(base),
-                index: self.allocate_register(index),
-                scale,
-            },
-
-            Amd64Instruction::MovReg64FromPtrReg64 { dst, base } => Amd64Instruction::MovReg64FromPtrReg64 {
-                dst: self.allocate_register(dst),
-                base: self.allocate_register(base),
-            },
-
-            Amd64Instruction::MovReg64FromPtrReg64Off8 { dst, base, offset } => Amd64Instruction::MovReg64FromPtrReg64Off8 {
-                dst: self.allocate_register(dst),
-                base: self.allocate_register(base),
-                offset,
-            },
-
-            Amd64Instruction::MovReg64FromPtrReg64OffReg64 { dst, base, index, scale } => Amd64Instruction::MovReg64FromPtrReg64OffReg64 {
-                dst: self.allocate_register(dst),
-                base: self.allocate_register(base),
-                index: self.allocate_register(index),
-                scale,
+                address: self.materialize_address(address),
             },
 
             Amd64Instruction::MovImm8ToPtrReg64 { base, src } => Amd64Instruction::MovImm8ToPtrReg64 {
@@ -351,15 +325,9 @@ impl Amd64CodeGenerator {
                 src: self.allocate_register(src),
             },
 
-            Amd64Instruction::MovzxReg8FromPtrReg64 { dst, base } => Amd64Instruction::MovzxReg8FromPtrReg64 {
+            Amd64Instruction::MovzxReg8FromPtr { dst, address } => Amd64Instruction::MovzxReg8FromPtr {
                 dst: self.allocate_register(dst),
-                base: self.allocate_register(base),
-            },
-
-            Amd64Instruction::MovzxReg8FromPtrReg64Off8 { dst, base, offset } => Amd64Instruction::MovzxReg8FromPtrReg64Off8 {
-                dst: self.allocate_register(dst),
-                base: self.allocate_register(base),
-                offset,
+                address: self.materialize_address(address),
             },
 
             Amd64Instruction::NegReg64 { dst } => Amd64Instruction::NegReg64 {
@@ -460,6 +428,17 @@ impl Amd64CodeGenerator {
                 }
             }
         }
+    }
+
+    #[must_use]
+    fn materialize_address(&mut self, address: Amd64Address<VirtOrPhysReg<Amd64Register>>) -> Amd64Address<Amd64Register> {
+        let mut addr = Amd64Address::new(self.allocate_register(address.base()));
+
+        if let Some(index) = address.index() {
+            addr = addr.with_index(self.allocate_register(index), address.scale());
+        }
+
+        addr.with_displacement(address.displacement())
     }
 
     #[must_use]

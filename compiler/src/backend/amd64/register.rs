@@ -139,7 +139,7 @@ impl Amd64Register {
     }
 
     #[must_use]
-    pub fn is_64_extended_register(&self) -> bool {
+    pub const fn is_64_extended_register(&self) -> bool {
         *self as u8 >= Self::R8 as u8
     }
 
