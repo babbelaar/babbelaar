@@ -5,6 +5,7 @@ mod function;
 mod function_argument;
 mod function_attribute;
 mod function_builder;
+mod function_parameter;
 mod instruction;
 mod operand;
 mod program;
@@ -22,6 +23,7 @@ pub use self::{
         FunctionAttributesExt,
     },
     function_builder::FunctionBuilder,
+    function_parameter::FunctionParameter,
     instruction::{
         Instruction,
         JumpCondition,

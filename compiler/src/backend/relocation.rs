@@ -10,9 +10,9 @@ use super::{aarch64::ArmInstruction, DataSectionKind};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Relocation {
-    pub(super) ty: RelocationType,
-    pub(super) offset: usize,
-    pub(super) method: RelocationMethod,
+    pub(crate) ty: RelocationType,
+    pub(crate) offset: usize,
+    pub(crate) method: RelocationMethod,
 }
 
 impl Relocation {
@@ -48,15 +48,27 @@ impl Relocation {
             }
 
             RelocationMethod::Aarch64PageOff12 => {
-                let orig = u64_from_slice(code);
-                let val = (orig & 0xFFFFF000) | (offset as u64 & 0xFFF);
-                code[0..8].copy_from_slice(&val.to_le_bytes());
+                // let orig = u32_from_slice(code);
+                // let val = (orig & 0xFFFFF000) | (offset as u32 & 0xFFF);
+                // code[0..4].copy_from_slice(&val.to_le_bytes());
             }
 
             RelocationMethod::Aarch64Page21 => {
-                let orig = u64_from_slice(code);
-                let val = (orig & 0xFFF00000) | (offset as u64 & 0xFFFFF);
-                code[0..8].copy_from_slice(&val.to_le_bytes());
+                // let orig = u32_from_slice(code);
+                // let val = (orig & 0xFFF00000) | (offset as u32 & 0xFFFFF);
+                // code[0..4].copy_from_slice(&val.to_le_bytes());
+            }
+
+            RelocationMethod::Aarch64GotLoadPageOff12 { addend: _ } => {
+                // let orig = u32_from_slice(code);
+                // let val = (orig & 0xFFFFF000) | (offset as u32 & 0xFFF);
+                // code[0..4].copy_from_slice(&val.to_le_bytes());
+            }
+
+            RelocationMethod::Aarch64GotLoadPage21 { addend: _ } => {
+                // let orig = u32_from_slice(code);
+                // let val = (orig & 0xFFF00000) | (offset as u32 & 0xFFFFF);
+                // code[0..4].copy_from_slice(&val.to_le_bytes());
             }
 
             RelocationMethod::Amd64CallNearRelative => {
@@ -67,6 +79,11 @@ impl Relocation {
             RelocationMethod::Amd64RipRelative => {
                 let offset = offset as u32 - 4;
                 code[0..4].copy_from_slice(&offset.to_le_bytes());
+            }
+
+            RelocationMethod::GenericAbsolute { bits, addend } => {
+                _ = bits;
+                _ = addend;
             }
         }
     }
@@ -88,8 +105,19 @@ pub enum RelocationMethod {
     AArch64BranchLink,
     Aarch64PageOff12,
     Aarch64Page21,
+    Aarch64GotLoadPageOff12 {
+        addend: i64,
+    },
+    Aarch64GotLoadPage21 {
+        addend: i64,
+    },
     Amd64CallNearRelative,
     Amd64RipRelative,
+
+    GenericAbsolute {
+        bits: u8,
+        addend: i64,
+    },
 }
 
 impl RelocationMethod {
@@ -99,8 +127,11 @@ impl RelocationMethod {
             Self::AArch64BranchLink => 0,
             Self::Aarch64PageOff12 => 0,
             Self::Aarch64Page21 => 0,
+            Self::Aarch64GotLoadPageOff12 { addend, .. } => *addend,
+            Self::Aarch64GotLoadPage21 { addend, .. } => *addend,
             Self::Amd64CallNearRelative => -4,
             Self::Amd64RipRelative => -4,
+            Self::GenericAbsolute { addend, .. } => *addend,
         }
     }
 
@@ -131,6 +162,22 @@ impl RelocationMethod {
                 }
             },
 
+            RelocationMethod::Aarch64GotLoadPage21 { addend: _ } => {
+                RelocationFlags::MachO {
+                    r_type: macho::ARM64_RELOC_GOT_LOAD_PAGE21,
+                    r_pcrel: true,
+                    r_length: 2,
+                }
+            },
+
+            RelocationMethod::Aarch64GotLoadPageOff12 { addend: _ } => {
+                RelocationFlags::MachO {
+                    r_type: macho::ARM64_RELOC_GOT_LOAD_PAGEOFF12,
+                    r_pcrel: false,
+                    r_length: 2,
+                }
+            },
+
             RelocationMethod::Amd64CallNearRelative => {
                 RelocationFlags::Generic {
                     kind: RelocationKind::Relative,
@@ -146,13 +193,22 @@ impl RelocationMethod {
                     size: 32,
                 }
             }
+
+            RelocationMethod::GenericAbsolute { bits, addend: _ } => {
+                RelocationFlags::Generic {
+                    kind: RelocationKind::Absolute,
+                    encoding: RelocationEncoding::Generic,
+                    size: *bits,
+                }
+            }
         }
     }
 }
 
 #[must_use]
-fn u64_from_slice(slice: &[u8]) -> u64 {
-    let mut bytes = [0; 8];
-    bytes.copy_from_slice(&slice[0..8]);
-    u64::from_le_bytes(bytes)
+#[allow(unused)]
+fn u32_from_slice(slice: &[u8]) -> u32 {
+    let mut bytes = [0; 4];
+    bytes.copy_from_slice(&slice[0..4]);
+    u32::from_le_bytes(bytes)
 }

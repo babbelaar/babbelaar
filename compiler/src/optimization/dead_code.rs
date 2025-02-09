@@ -196,7 +196,8 @@ impl DeadStoreEliminator {
 
                 Instruction::Label(..) => (),
 
-                Instruction::Move { source, destination } => {
+                Instruction::Move { source, destination, typ } => {
+                    _ = typ;
                     debug_assert_ne!(*source, Operand::Register(*destination));
 
                     // We use the value, which means that until this point, instructions for that register were actually
@@ -301,7 +302,7 @@ enum StoreKind {
 mod tests {
     use babbelaar::BabString;
 
-    use crate::{Immediate, Label};
+    use crate::{Immediate, Label, PrimitiveType};
 
     use super::*;
     use rstest::rstest;
@@ -319,45 +320,46 @@ mod tests {
     )]
     #[case(
         &[
-            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1), typ: PrimitiveType::S32 },
             Instruction::Return { value_reg: None }
         ],
         &[
-            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1), typ: PrimitiveType::S32 },
             Instruction::Return { value_reg: None }
         ]
     )]
     #[case(
         &[
-            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1), typ: PrimitiveType::S32 },
             Instruction::Return { value_reg: Some(Register::new(1)) },
             Instruction::Return { value_reg: None }
         ],
         &[
-            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(12)), destination: Register::new(1), typ: PrimitiveType::S32 },
             Instruction::Return { value_reg: Some(Register::new(1)) }
         ]
     )]
     #[case(
         &[
             Instruction::Jump { location: Label::new(8) },
-            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(7)), destination: Register::new(2) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer8(7)), destination: Register::new(2), typ: PrimitiveType::S32 },
             Instruction::Return { value_reg: Some(Register::new(7)) },
             Instruction::Label(Label::new(8)),
-            Instruction::Move { source: Operand::Immediate(Immediate::Integer16(1541)), destination: Register::new(9) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer16(1541)), destination: Register::new(9), typ: PrimitiveType::S32 },
             Instruction::Return { value_reg: Some(Register::new(9)) },
         ],
         &[
             Instruction::Jump { location: Label::new(8) },
             Instruction::Label(Label::new(8)),
-            Instruction::Move { source: Operand::Immediate(Immediate::Integer16(1541)), destination: Register::new(9) },
+            Instruction::Move { source: Operand::Immediate(Immediate::Integer16(1541)), destination: Register::new(9), typ: PrimitiveType::S32 },
             Instruction::Return { value_reg: Some(Register::new(9)) },
         ]
     )]
     fn dead_code_eliminator(#[case] input_instructions: &[Instruction], #[case] expected_output_instructions: &[Instruction]) {
         let mut function = Function {
             name: BabString::new_static("testfunctie"),
-            argument_registers: Vec::new(),
+            return_ty: PrimitiveType::S32,
+            arguments: Vec::new(),
             instructions: input_instructions.to_vec(),
             label_names: HashMap::new(),
             ir_register_allocator: Default::default(),

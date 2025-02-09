@@ -103,6 +103,13 @@ pub struct Register {
     number: usize,
 }
 
+impl Register {
+    #[must_use]
+    pub const fn number(&self) -> usize {
+        self.number
+    }
+}
+
 #[cfg(test)]
 impl Register {
     #[must_use]

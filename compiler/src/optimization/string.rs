@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crate::{ir::FunctionArgument, ControlFlowGraph, DataSectionOffset, Function, Immediate, Instruction, Operand, Register};
+use crate::{ir::FunctionArgument, ControlFlowGraph, DataSectionOffset, Function, Immediate, Instruction, Operand, PrimitiveType, Register};
 
 use super::{FunctionOptimizer, OptimizationContext};
 
@@ -80,6 +80,7 @@ impl StringOptimizer {
         let data = value.data.as_ref()?;
 
         Some(Instruction::Move {
+            typ: PrimitiveType::U64,
             destination: reg,
             source: Operand::Immediate(Immediate::Integer64(data.size()? as _))
         })

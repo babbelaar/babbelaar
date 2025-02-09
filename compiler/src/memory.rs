@@ -217,7 +217,7 @@ impl TypeManager {
         };
 
         let mut offset = 0;
-        for field_name in ["start", "end"] {
+        for field_name in ["start"] {
             let size = self.pointer_size();
 
             let field = FieldLayout {
@@ -238,7 +238,7 @@ impl TypeManager {
     }
 
     fn add_primitives(&mut self) {
-        for ty in Builtin::TYPES {
+        for ty in Builtin::TYPES.iter().chain(std::iter::once(&BuiltinType::Null)) {
             let size = match ty {
                 BuiltinType::Bool => 1,
                 BuiltinType::G8 => 1,
@@ -247,7 +247,7 @@ impl TypeManager {
                 BuiltinType::G64 => 8,
                 BuiltinType::Teken => 4,
 
-                BuiltinType::Null => continue,
+                BuiltinType::Null => 0,
                 BuiltinType::Slinger => continue,
             };
 
@@ -258,6 +258,7 @@ impl TypeManager {
                 BuiltinType::G32 => TypeId::G32,
                 BuiltinType::G64 => TypeId::G64,
                 BuiltinType::Teken => TypeId::TEKEN,
+                BuiltinType::Null => TypeId::NULL,
                 _ => unreachable!(),
             };
 
@@ -274,6 +275,7 @@ impl TypeManager {
     }
 
     fn add_type(&mut self, layout: StructureLayout) {
+        log::trace!("Adding type {}", layout.type_id.index);
         self.type_names.insert(layout.name.clone(), layout.type_id.index);
         self.types.insert(layout.type_id.index, layout);
     }
@@ -291,11 +293,12 @@ impl TypeId {
     pub const G32: Self = Self { index: 3 };
     pub const G64: Self = Self { index: 4 };
     pub const TEKEN: Self = Self { index: 5 };
-    pub const SLINGER: Self = Self { index: 6 };
+    pub const NULL: Self = Self { index: 6 };
+    pub const SLINGER: Self = Self { index: 7 };
 
     #[must_use]
     pub const fn is_primitive(&self) -> bool {
-        self.index <= 6
+        self.index <= 7
     }
 
     #[must_use]

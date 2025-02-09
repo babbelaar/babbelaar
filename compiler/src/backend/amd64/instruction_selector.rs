@@ -42,6 +42,7 @@ impl Amd64InstructionSelector {
 
         match instruction {
             Instruction::Compare { lhs, rhs, typ } => {
+                _ = typ;
                 let lhs = self.allocate_register(lhs);
 
                 match rhs {
@@ -84,7 +85,7 @@ impl Amd64InstructionSelector {
                 }
             }
 
-            Instruction::Move { source, destination } => {
+            Instruction::Move { source, destination, typ: _ } => {
                 let dst = self.allocate_register(destination);
 
                 self.add_instruction_mov(dst, source);
@@ -99,7 +100,8 @@ impl Amd64InstructionSelector {
                 })
             }
 
-            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
+            Instruction::Call { name, arguments, variable_arguments, ret_val_reg, ret_ty } => {
+                _ = ret_ty;
                 assert!(arguments.len() < 5, "We ondersteunen een maximum van 4 argumenten op AMD64...");
 
                 for (idx, arg) in arguments.iter().chain(variable_arguments.iter()).enumerate() {

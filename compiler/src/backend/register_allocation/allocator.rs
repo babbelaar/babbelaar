@@ -18,7 +18,7 @@ pub struct RegisterAllocator<R: AllocatableRegister> {
 
 impl<R: AllocatableRegister> RegisterAllocator<R> {
     #[must_use]
-    pub fn new<I: TargetInstruction<PhysReg = R>>(platform: Platform, argument_registers: &[IrRegister], instructions: &[I]) -> Self {
+    pub fn new<I: TargetInstruction<PhysReg = R>>(platform: Platform, argument_registers: impl Iterator<Item = IrRegister>, instructions: &[I]) -> Self {
         let mut this = Self {
             platform: platform.clone(),
             registers_to_save: Vec::new(),
@@ -62,7 +62,7 @@ impl<R: AllocatableRegister> RegisterAllocator<R> {
     //
     // we could:
     // - optimize such that the return value doesn't need to be moved to the return register
-    fn allocate<I: TargetInstruction<PhysReg = R>>(&mut self, argument_registers: &[IrRegister], instructions: &[I]) {
+    fn allocate<I: TargetInstruction<PhysReg = R>>(&mut self, argument_registers: impl Iterator<Item = IrRegister>, instructions: &[I]) {
         let analysis = LifeAnalysis::analyze(argument_registers, instructions);
         analysis.dump_result();
 

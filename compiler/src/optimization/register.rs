@@ -34,8 +34,9 @@ impl FunctionOptimizer for RegisterDeduplicator {
     fn optimize(&mut self, function: &mut Function) {
         for instruction in function.instructions.iter_mut() {
             match instruction {
-                Instruction::Call { ret_val_reg, arguments, variable_arguments, name } => {
+                Instruction::Call { ret_val_reg, arguments, variable_arguments, name, ret_ty } => {
                     _ = name;
+                    _ = ret_ty;
                     for argument in arguments {
                         if let Some(other_reg) = self.unchanged_moves.get(&argument.register()).cloned() {
                             argument.set_register(other_reg);
@@ -75,7 +76,8 @@ impl FunctionOptimizer for RegisterDeduplicator {
 
                 Instruction::Label(..) => (),
 
-                Instruction::Move { source, destination } => {
+                Instruction::Move { source, destination, typ } => {
+                    _ = typ;
                     match source {
                         Operand::Immediate(..) => {
                             self.set_value_changed(destination);
@@ -219,13 +221,14 @@ impl FunctionOptimizer for RegisterInliner {
 
                 Instruction::Label(..) => (),
 
-                Instruction::Move { source, destination } => {
+                Instruction::Move { source, destination, typ } => {
                     match source {
                         Operand::Register(source) => {
                             if let Some(known_value) = self.values.get(source).cloned() {
                                 self.values.insert(destination.clone(), known_value.clone());
                                 let destination = destination.clone();
                                 *instruction = Instruction::Move {
+                                    typ: *typ,
                                     source: Operand::Immediate(known_value),
                                     destination,
                                 };
@@ -259,7 +262,7 @@ impl FunctionOptimizer for RegisterInliner {
                     *instruction = self.calculate_math_operation(*operation, *typ, *destination, lhs, rhs);
                 }
 
-                Instruction::Negate { typ: _, dst, src } => {
+                Instruction::Negate { typ, dst, src } => {
                     let Some(val) = self.values.get(src) else { continue };
 
                     let immediate = match val {
@@ -271,7 +274,7 @@ impl FunctionOptimizer for RegisterInliner {
 
                     self.values.insert(*dst, immediate);
 
-                    *instruction = Instruction::Move { source: Operand::Immediate(immediate), destination: *dst };
+                    *instruction = Instruction::Move { source: Operand::Immediate(immediate), destination: *dst, typ: *typ };
                 }
 
                 Instruction::Return { .. } => {
@@ -341,13 +344,14 @@ impl RegisterInliner {
         match (lhs, rhs) {
             (Operand::Immediate(lhs), Operand::Immediate(rhs)) => {
                 return Instruction::Move {
+                    typ,
                     destination,
                     source: Operand::Immediate(self.calculate_math_operation_using_known_immediates(operation, destination, lhs, rhs))
                 };
             }
 
             (Operand::Register(_), Operand::Immediate(rhs)) => {
-                if let Some(instruction) = self.calculate_math_operation_using_math_rules(operation, destination, lhs, rhs) {
+                if let Some(instruction) = self.calculate_math_operation_using_math_rules(operation, destination, lhs, rhs, typ) {
                     return instruction;
                 }
             }
@@ -406,10 +410,11 @@ impl RegisterInliner {
         value
     }
 
-    fn calculate_math_operation_using_math_rules(&self, operation: MathOperation, destination: Register, lhs: Operand, rhs: Immediate) -> Option<Instruction> {
+    fn calculate_math_operation_using_math_rules(&self, operation: MathOperation, destination: Register, lhs: Operand, rhs: Immediate, typ: PrimitiveType) -> Option<Instruction> {
         if rhs.as_i64() == 0 {
             if operation == MathOperation::Add || operation == MathOperation::Subtract || operation == MathOperation::Modulo {
                 return Some(Instruction::Move {
+                    typ,
                     destination,
                     source: lhs,
                 });
@@ -417,6 +422,7 @@ impl RegisterInliner {
 
             if operation == MathOperation::Multiply {
                 return Some(Instruction::Move {
+                    typ,
                     destination,
                     source: Operand::Immediate(Immediate::Integer64(0)),
                 });
@@ -426,6 +432,7 @@ impl RegisterInliner {
         if rhs.as_i64() == 1 {
             if operation == MathOperation::Multiply || operation == MathOperation::Divide {
                 return Some(Instruction::Move {
+                    typ,
                     destination,
                     source: lhs,
                 });

@@ -46,6 +46,13 @@ pub use self::{
     },
 };
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Backend {
+    Babbelaar,
+    #[default]
+    Cranelift,
+}
+
 pub trait CodeGenerator {
     #[must_use]
     fn compile(function: &Function) -> CompiledFunction;

@@ -106,7 +106,7 @@ impl TargetInstruction for Instruction {
     }
 
     fn as_rr_move(&self) -> Option<(VirtOrPhysReg<Self::PhysReg>, VirtOrPhysReg<Self::PhysReg>)> {
-        if let Self::Move { destination, source } = self {
+        if let Self::Move { destination, source, typ: _ } = self {
             if let Operand::Register(source) = source {
                 return Some((VirtOrPhysReg::Virtual(*destination), VirtOrPhysReg::Virtual(*source)));
             }

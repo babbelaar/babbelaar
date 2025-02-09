@@ -551,6 +551,7 @@ mod tests {
     use super::*;
     use rstest::rstest;
     use pretty_assertions::assert_eq;
+    use crate::PrimitiveType;
 
     #[rstest]
     #[case(
@@ -558,9 +559,11 @@ mod tests {
         &[0xc3]
     )]
     fn single_instruction_codegen(#[case] input: Instruction, #[case] expected_bytecode: &[u8]) {
+
         let function = Function {
             name: BabString::new_static("testFunctie"),
-            argument_registers: Vec::new(),
+            return_ty: PrimitiveType::new(8, true), // doesn't matter :)
+            arguments: Vec::new(),
             instructions: vec![input],
             label_names: HashMap::new(),
             ir_register_allocator: Default::default(),

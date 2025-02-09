@@ -20,9 +20,9 @@ use super::{DataSection, DataSectionKind, Relocation, RelocationType};
 
 #[derive(Debug, Clone)]
 pub struct CompiledFunction {
-    pub(super) name: BabString,
-    pub(super) byte_code: Vec<u8>,
-    pub(super) relocations: Vec<Relocation>,
+    pub(crate) name: BabString,
+    pub(crate) byte_code: Vec<u8>,
+    pub(crate) relocations: Vec<Relocation>,
 }
 
 impl CompiledFunction {
@@ -99,7 +99,7 @@ impl CompiledObject {
         let mut obj = Object::new(self.object_format(), self.object_architecture(), self.object_endian());
 
         let rodata_section = obj.section_id(StandardSection::ReadOnlyData);
-        obj.append_section_data(rodata_section, self.read_only_data.data(), 4);
+        obj.append_section_data(rodata_section, self.read_only_data.data(), 8);
 
         if self.platform().operating_system() == OperatingSystem::MacOs {
             let mut info = MachOBuildVersion::default();
@@ -132,7 +132,9 @@ impl CompiledObject {
 
             for relocation in &function.relocations {
                 match relocation.ty() {
-                    RelocationType::Data { .. } => (),
+                    RelocationType::Data { .. } => {
+                        relocation.write(function.byte_code.as_mut_slice(), 0);
+                    }
 
                     RelocationType::Function { name } => {
                         let Some(internal_offset) = self.symbol_offsets.get(name).copied() else {
@@ -145,14 +147,14 @@ impl CompiledObject {
                 }
             }
 
-            let function_offset = obj.add_symbol_data(main_symbol, code_section, &function.byte_code(), 1);
+            let function_offset = obj.add_symbol_data(main_symbol, code_section, &function.byte_code(), 4);
 
             for relocation in &function.relocations {
                 match relocation.ty() {
                     RelocationType::Data { section, offset } => {
                         let symbol = obj.add_symbol(Symbol {
                             name: format!("{section}-{offset}").into(),
-                            value: 0,
+                            value: *offset as _,
                             size: 0,
                             kind: section.object_symbol_kind(),
                             scope: SymbolScope::Compilation,
@@ -166,7 +168,7 @@ impl CompiledObject {
                             ObjectRelocation {
                                 offset: function_offset + relocation.offset() as u64,
                                 symbol,
-                                addend: relocation.addend() + *offset as i64,
+                                addend: relocation.addend(),
                                 flags: relocation.flags(),
                             }
                         )?;

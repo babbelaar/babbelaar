@@ -7,7 +7,7 @@ use babbelaar::BabString;
 
 use crate::{TypeId, TypeInfo};
 
-use super::{Instruction, Label, Register, RegisterAllocator};
+use super::{FunctionParameter, Instruction, Label, PrimitiveType, Register, RegisterAllocator};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArgumentName {
@@ -34,7 +34,7 @@ impl ArgumentList {
     }
 
     pub fn add_this(&mut self, ty: TypeId) {
-        self.items.push((ArgumentName::This, TypeInfo::Plain(ty)));
+        self.items.push((ArgumentName::This, TypeInfo::Array(Box::new(TypeInfo::Plain(ty)))));
     }
 
     #[must_use]
@@ -46,7 +46,8 @@ impl ArgumentList {
 #[derive(Debug)]
 pub struct Function {
     pub(crate) name: babbelaar::BabString,
-    pub(crate) argument_registers: Vec<Register>,
+    pub(crate) arguments: Vec<FunctionParameter>,
+    pub(crate) return_ty: PrimitiveType,
     pub(crate) instructions: Vec<Instruction>,
     pub(crate) label_names: HashMap<Label, BabString>,
     pub(crate) ir_register_allocator: RegisterAllocator,
@@ -59,8 +60,18 @@ impl Function {
     }
 
     #[must_use]
-    pub fn argument_registers(&self) -> &[Register] {
-        &self.argument_registers
+    pub fn arguments(&self) -> &[FunctionParameter] {
+        &self.arguments
+    }
+
+    #[must_use]
+    pub fn argument_registers(&self) -> impl Iterator<Item = Register> + use<'_> {
+        self.arguments.iter().map(|param| param.register())
+    }
+
+    #[must_use]
+    pub fn labels(&self) -> impl Iterator<Item = Label> + use<'_> {
+        self.label_names.keys().cloned()
     }
 
     #[must_use]

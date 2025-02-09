@@ -19,7 +19,7 @@ pub struct LifeAnalysis {
 
 impl LifeAnalysis {
     #[must_use]
-    pub fn analyze<I: TargetInstruction>(argument_registers: &[IrRegister], instructions: &[I]) -> LifeAnalysisResult {
+    pub fn analyze<I: TargetInstruction>(argument_registers: impl Iterator<Item = IrRegister>, instructions: &[I]) -> LifeAnalysisResult {
         let mut this = Self {
             result: Default::default(),
             function_calls: Default::default(),
@@ -107,9 +107,9 @@ impl LifeAnalysis {
         lifetime
     }
 
-    fn add_argument_registers(&mut self, argument_registers: &[IrRegister]) {
+    fn add_argument_registers(&mut self, argument_registers: impl Iterator<Item = IrRegister>) {
         for register in argument_registers {
-            self.add_lifetime(register, 0);
+            self.add_lifetime(&register, 0);
         }
     }
 

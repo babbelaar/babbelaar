@@ -66,10 +66,10 @@ impl AArch64InstructionSelector {
                 self.instructions.push(ArmInstruction::AddImmediate { is_64_bit: typ.is_arm_64_bit(), dst, src, imm12, shift });
             }
 
-            Instruction::Move { source, destination } => {
+            Instruction::Move { source, destination, typ } => {
                 let dst = self.allocate_register(destination);
 
-                self.add_instruction_mov(PrimitiveType::new(8, true), dst, source);
+                self.add_instruction_mov(*typ, dst, source);
             }
 
             Instruction::MoveAddress { destination, offset } => {
@@ -119,7 +119,8 @@ impl AArch64InstructionSelector {
                 })
             }
 
-            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
+            Instruction::Call { name, arguments, variable_arguments, ret_val_reg, ret_ty } => {
+                _ = ret_ty;
                 debug_assert!(arguments.len() < (1 << 8));
 
                 let register_var_args = match self.var_args_convention {

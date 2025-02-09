@@ -45,8 +45,8 @@ impl Interpreter {
 
         let mut frame = StackFrame::new(self.stack.len());
 
-        for (reg, value) in func.argument_registers().iter().zip(arguments.into_iter()) {
-            frame.set_register(*reg, value);
+        for (reg, value) in func.argument_registers().zip(arguments.into_iter()) {
+            frame.set_register(reg, value);
         }
 
         self.stack_frames.push(frame);
@@ -96,7 +96,9 @@ impl Interpreter {
         let program_counter = self.frame().program_counter;
 
         match self.program.function(function_index).instructions()[program_counter].clone() {
-            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
+            Instruction::Call { name, arguments, variable_arguments, ret_val_reg, ret_ty } => {
+                _ = ret_ty;
+
                 let frame = self.frame();
 
                 let arguments = arguments.iter()
@@ -187,7 +189,7 @@ impl Interpreter {
 
             Instruction::Label(..) => OperationResult::Continue,
 
-            Instruction::Move { source, destination } => {
+            Instruction::Move { source, destination, typ: _ } => {
                 let value = match source {
                     Operand::Immediate(immediate) => {
                         immediate
@@ -385,6 +387,7 @@ impl Interpreter {
     }
 
     fn execute_builtin_function(&mut self, name: &BabString, arguments: &[Immediate]) -> Option<Option<Immediate>> {
+        _ = arguments;
         match name.as_str() {
             "Slinger__lengte" => {
                 todo!()
@@ -460,7 +463,7 @@ fn collect_label_positions(program: &Program) -> HashMap<(usize, Label), usize> 
 mod tests {
     use babbelaar::BabString;
 
-    use crate::{ArgumentList, Immediate, ProgramBuilder};
+    use crate::{ArgumentList, Immediate, PrimitiveType, ProgramBuilder};
 
     use super::Interpreter;
 
@@ -486,7 +489,7 @@ mod tests {
 
         let mut program = ProgramBuilder::new();
         program.build_function(function_name.clone(), ArgumentList::new(), |f| {
-            let value = f.load_immediate(Immediate::Integer32(1234));
+            let value = f.load_immediate(Immediate::Integer32(1234), PrimitiveType::S32);
             f.ret_with(value);
         });
         let program = program.build();

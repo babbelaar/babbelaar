@@ -64,6 +64,7 @@ pub enum Instruction {
     },
 
     Move {
+        typ: PrimitiveType,
         destination: Register,
         source: Operand,
     },
@@ -86,6 +87,7 @@ pub enum Instruction {
         name: BabString,
         arguments: Vec<FunctionArgument>,
         variable_arguments: Vec<FunctionArgument>,
+        ret_ty: Option<PrimitiveType>,
         ret_val_reg: Option<Register>,
     },
 
@@ -198,8 +200,9 @@ impl Instruction {
                 _ = destination;
             }
 
-            Self::Move { destination, source } => {
+            Self::Move { destination, source, typ } => {
                 _ = destination;
+                _ = typ;
 
                 if let Operand::Register(source) = source {
                     result.push(*source);
@@ -216,7 +219,7 @@ impl Instruction {
                 _ = destination;
             }
 
-            Self::Call { name, arguments, variable_arguments, ret_val_reg } => {
+            Self::Call { name, arguments, variable_arguments, ret_ty, ret_val_reg } => {
                 _ = name;
 
                 for arg in arguments {
@@ -227,6 +230,7 @@ impl Instruction {
                     result.push(arg.register());
                 }
 
+                _ = ret_ty;
                 _ = ret_val_reg;
             }
 
@@ -313,8 +317,10 @@ impl Display for Instruction {
                 f.write_fmt(format_args!("Vergelijk {typ}, {lhs}, {rhs}"))
             }
 
-            Instruction::Move { source, destination } => {
+            Instruction::Move { source, destination, typ } => {
                 f.write_str("Verplaats ")?;
+                typ.fmt(f)?;
+                f.write_str(", ")?;
                 destination.fmt(f)?;
                 f.write_str(", ")?;
                 source.fmt(f)
@@ -334,12 +340,18 @@ impl Display for Instruction {
                 condition.fmt(f)
             }
 
-            Instruction::Call { name, arguments, variable_arguments, ret_val_reg } => {
+            Instruction::Call { name, arguments, variable_arguments, ret_ty, ret_val_reg } => {
                 f.write_str("RoepAap ")?;
+                if let Some(ret_ty) = ret_ty {
+                    ret_ty.fmt(f)?;
+                    f.write_str(", ")?;
+                }
+
                 if let Some(ret_val_reg) = ret_val_reg {
                     ret_val_reg.fmt(f)?;
+                    f.write_str(", ")?;
                 }
-                f.write_fmt(format_args!(", {name}"))?;
+                f.write_str(name.as_str())?;
 
                 for arg in arguments {
                     f.write_str(", ")?;
@@ -539,7 +551,17 @@ pub struct PrimitiveType {
     bytes: usize,
 }
 
+#[allow(unused)]
 impl PrimitiveType {
+    pub const S8: Self = Self::new(1, true);
+    pub const S16: Self = Self::new(2, true);
+    pub const S32: Self = Self::new(4, true);
+    pub const S64: Self = Self::new(8, true);
+    pub const U8: Self = Self::new(1, false);
+    pub const U16: Self = Self::new(2, false);
+    pub const U32: Self = Self::new(4, false);
+    pub const U64: Self = Self::new(8, false);
+
     #[must_use]
     pub const fn new(bytes: usize, signed: bool) -> Self {
         Self {

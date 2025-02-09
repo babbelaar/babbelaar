@@ -149,6 +149,21 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
         return_type: BuiltinType::G32,
         must_use: true,
     },
+    BuiltinFunction {
+        name: "voegSamen",
+        documentation: "Voeg twee slingers samen tot één.\n## Voorbeeld\n```babbelaar\n\"Hallo\".voegSamen(\", wereld!\") // = \"Hallo, wereld!\"\n```",
+        inline_detail: "Voeg twee slingers samen tot één.",
+        function: &slinger_lengte,
+        lsp_completion: None,
+        parameters: &[
+            BuiltinFunctionParameter {
+                name: "ander",
+                typ: BuiltinType::Slinger,
+            },
+        ],
+        return_type: BuiltinType::Slinger,
+        must_use: true,
+    },
 ];
 
 pub(super) static METHODS_TEKEN: &'static [BuiltinFunction] = &[];
