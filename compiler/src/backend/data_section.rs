@@ -35,7 +35,7 @@ impl DataSection {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DataSectionKind {
     ReadOnly,
 }
@@ -62,7 +62,7 @@ impl Display for DataSectionKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DataSectionOffset {
     kind: DataSectionKind,
     offset: usize,

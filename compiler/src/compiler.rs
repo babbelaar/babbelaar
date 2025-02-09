@@ -42,17 +42,41 @@ impl Compiler {
     }
 
     fn add_function_declarations(&mut self, trees: &[ParseTree]) {
-        for statement in trees.iter().flat_map(|t| t.functions()) {
-            let StatementKind::Function(func) = &statement.kind else {
-                debug_assert!(false, "Verwachtte alleen `werkwijzen`");
-                continue;
-            };
+        for func in Builtin::FUNCTIONS {
+            let type_id = self.program_builder.type_id_for_builtin(func.return_type);
+            self.program_builder.add_function_return_type(BabString::new_static(func.name), type_id);
+        }
 
-            self.analyze_function_attributes(func, func.name.value().clone(), &statement.attributes);
+        for ty in Builtin::TYPES {
+            for method in ty.methods() {
+                let type_id = self.program_builder.type_id_for_builtin(method.return_type);
+                let name = create_mangled_method_name(&ty.name(), &BabString::new_static(method.name));
+                self.program_builder.add_function_return_type(name, type_id);
+            }
+        }
 
-            if let Some(ret) = &func.return_type {
-                let type_id = self.program_builder.type_id_for_structure(&ret.specifier.unqualified_name());
-                self.program_builder.add_function_return_type(func.name.value().clone(), type_id);
+        for statement in trees.iter().flat_map(|x| x.all()) {
+            match &statement.kind {
+                StatementKind::Function(func) => {
+                    self.analyze_function_attributes(func, func.name.value().clone(), &statement.attributes);
+
+                    if let Some(ret) = &func.return_type {
+                        let type_id = self.program_builder.type_id_for_structure(&ret.specifier.unqualified_name());
+                        self.program_builder.add_function_return_type(func.name.value().clone(), type_id);
+                    }
+                }
+
+                StatementKind::Structure(structure) => {
+                    for method in &structure.methods {
+                        if let Some(ret) = &method.function.return_type {
+                            let type_id = self.program_builder.type_id_for_structure(&ret.specifier.unqualified_name());
+                            let name = create_mangled_method_name(&structure.name, &method.function.name);
+                            self.program_builder.add_function_return_type(name, type_id);
+                        }
+                    }
+                }
+
+                _ => ()
             }
         }
     }
@@ -143,6 +167,7 @@ impl Compiler {
             }
 
             arguments.add(parameter.name.value(), type_info);
+            log::trace!("Argument {parameter:?}");
         }
 
         self.program_builder.build_function(name, arguments, |builder| {
@@ -154,7 +179,8 @@ impl Compiler {
             // Make sure the main function always returns a known value. If there was a return statement,
             // this will be removed by DCE.
             if func.name.value().as_str() == Constants::MAIN_FUNCTION {
-                let fallback_value_zero = builder.load_immediate(Immediate::Integer8(0));
+                let typ = builder.return_type();
+                let fallback_value_zero = builder.load_immediate(Immediate::Integer8(0), typ);
                 builder.ret_with(fallback_value_zero);
             } else {
                 builder.ret();
@@ -233,6 +259,7 @@ impl CompileStatement for Statement {
 impl CompileStatement for AssignStatement {
     fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
         let (rhs, rhs_ty) = self.source.compile(builder, ctx).to_readable_and_type(builder);
+        let rhs_primitive_ty = builder.primitive_type_of(&rhs_ty);
 
         let source = match self.kind.value() {
             AssignKind::Regular => rhs,
@@ -251,7 +278,7 @@ impl CompileStatement for AssignStatement {
 
         match dst.kind {
             ExpressionResultKind::Register(destination) => {
-                builder.move_register(destination, source);
+                builder.move_register(destination, source, rhs_primitive_ty);
             }
 
             ExpressionResultKind::Comparison(..) => todo!(),
@@ -297,8 +324,8 @@ impl CompileStatement for ForStatement {
 
                 if ty.type_id() == TypeId::SLINGER {
                     let str_ptr_reg = reg;
-                    let current_value = builder.load_immediate(Immediate::Integer64(0));
                     let indexer_typ = builder.pointer_primitive_type();
+                    let current_value = builder.load_immediate(Immediate::Integer64(0), indexer_typ);
 
                     let end = builder.call(
                         create_mangled_method_name(&BuiltinType::Slinger.name(),
@@ -594,15 +621,15 @@ impl CompileExpression for PrimaryExpression {
     fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> ExpressionResult {
         match self {
             Self::Boolean(b) => {
-                builder.load_immediate(Immediate::Integer32(*b as i32)).into()
+                builder.load_immediate(Immediate::Integer32(*b as i32), PrimitiveType::S32).into()
             }
 
             Self::CharacterLiteral(c) => {
-                builder.load_immediate(Immediate::Integer32(*c as i32)).into()
+                builder.load_immediate(Immediate::Integer32(*c as i32), PrimitiveType::U32).into()
             }
 
             Self::IntegerLiteral(i) => {
-                builder.load_immediate(Immediate::Integer64(*i)).into()
+                builder.load_immediate(Immediate::Integer64(*i), PrimitiveType::S64).into()
             }
 
             Self::Parenthesized(expression) => {
@@ -614,7 +641,7 @@ impl CompileExpression for PrimaryExpression {
                     Some(local) => local.into(),
                     None => {
                         error!("Ongeldige lokale variabele: {}", name.value());
-                        builder.load_immediate(Immediate::Integer64(0)).into()
+                        builder.load_immediate(Immediate::Integer64(0), PrimitiveType::U64).into()
                     }
                 }
             }
@@ -636,7 +663,8 @@ impl CompileExpression for PrimaryExpression {
 
                 let mut space_to_zero = layout.size() * size;
                 let mut offset = 0;
-                let zero = builder.load_immediate(Immediate::Integer64(0));
+                let pointer_ty = builder.pointer_primitive_type();
+                let zero = builder.load_immediate(Immediate::Integer64(0), pointer_ty);
                 let pointer_size = builder.pointer_size();
                 while space_to_zero >= builder.pointer_size() {
                     builder.store_ptr(ptr, Operand::Immediate(Immediate::Integer64(offset as i64)), zero, PrimitiveType::new(pointer_size, false));

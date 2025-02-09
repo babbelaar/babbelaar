@@ -6,13 +6,13 @@ use crate::TypeInfo;
 use super::{PrimitiveType, Register};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionArgument {
+pub struct FunctionParameter {
     register: Register,
     type_info: TypeInfo,
     primitive_type: PrimitiveType,
 }
 
-impl FunctionArgument {
+impl FunctionParameter {
     #[must_use]
     pub fn new(register: Register, type_info: TypeInfo, primitive_type: PrimitiveType) -> Self {
         Self {
@@ -30,10 +30,6 @@ impl FunctionArgument {
     #[must_use]
     pub fn size(&self) -> usize {
         self.primitive_type.bytes()
-    }
-
-    pub(crate) fn set_register(&mut self, register: Register) {
-        self.register = register;
     }
 
     #[must_use]

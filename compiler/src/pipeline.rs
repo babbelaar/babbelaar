@@ -6,12 +6,31 @@ use std::{error::Error, fmt::Display, mem::replace, path::{Path, PathBuf}};
 use babbelaar::{ArchiveKind, ParseTree};
 use log::debug;
 
-use crate::{backend::Amd64CodeGenerator, os::{linux::{LinuxArLinker, LinuxGccLinker}, macos::MacOsLdLinker, windows::{WindowsLibLinker, WindowsLinkLinker}}, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, LinkerPath, OperatingSystem, Platform};
+use crate::{
+    backend::Amd64CodeGenerator,
+    cranelift_backend::CraneliftBackend,
+    os::{
+        linux::{LinuxArLinker, LinuxGccLinker},
+        macos::MacOsLdLinker,
+        windows::{WindowsLibLinker, WindowsLinkLinker},
+    },
+    AArch64CodeGenerator,
+    Architecture,
+    Backend,
+    CompiledObject,
+    Compiler,
+    Function,
+    LinkerPath,
+    OperatingSystem,
+    Platform,
+};
 
 #[derive(Debug)]
 pub struct Pipeline {
+    backend: Backend,
     object: CompiledObject,
     paths: Vec<LinkerPath>,
+    function_counter: usize,
 }
 
 impl Pipeline {
@@ -24,8 +43,18 @@ impl Pipeline {
         }
 
         Self {
+            backend: Backend::default(),
             object: CompiledObject::new(platform),
             paths,
+            function_counter: 0,
+        }
+    }
+
+    #[must_use]
+    pub fn with_backend(self, backend: Backend) -> Self {
+        Self {
+            backend,
+            ..self
         }
     }
 
@@ -45,6 +74,13 @@ impl Pipeline {
     }
 
     fn code_gen(&mut self, function: &Function) {
+        match self.backend {
+            Backend::Babbelaar => self.code_gen_babbelaar(function),
+            Backend::Cranelift => self.code_gen_cranelift(function),
+        }
+    }
+
+    fn code_gen_babbelaar(&mut self, function: &Function) {
         let function = match self.object.platform().architecture() {
             Architecture::AArch64 => {
                 AArch64CodeGenerator::compile(function, self.object.platform().clone())
@@ -54,6 +90,14 @@ impl Pipeline {
                 Amd64CodeGenerator::compile(function, self.object.platform().clone())
             }
         };
+        self.object.add_function(function);
+    }
+
+    fn code_gen_cranelift(&mut self, function: &Function) {
+        let idx = self.function_counter;
+        self.function_counter += 1;
+
+        let function = CraneliftBackend::compile(idx, function, self.object.platform());
         self.object.add_function(function);
     }
 

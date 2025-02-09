@@ -7,7 +7,7 @@ use babbelaar::BabString;
 
 use crate::{DataSectionOffset, StructureLayout, TypeId, TypeInfo};
 
-use super::{Function, FunctionArgument, FunctionAttributesExt, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, PrimitiveType, ProgramBuilder, Register, RegisterAllocator};
+use super::{Function, FunctionArgument, FunctionAttributesExt, FunctionParameter, Immediate, Instruction, JumpCondition, Label, MathOperation, Operand, PrimitiveType, ProgramBuilder, Register, RegisterAllocator};
 
 #[derive(Debug)]
 pub struct FunctionBuilder<'program> {
@@ -15,7 +15,8 @@ pub struct FunctionBuilder<'program> {
     pub(super) name: BabString,
     pub(super) register_allocator: RegisterAllocator,
     pub(super) this: Option<(TypeInfo, Register, PrimitiveType)>,
-    pub(super) argument_registers: Vec<Register>,
+    pub(super) return_ty: PrimitiveType,
+    pub(super) arguments: Vec<FunctionParameter>,
     pub(super) instructions: Vec<Instruction>,
     pub(super) locals: HashMap<BabString, FunctionLocal>,
     pub(super) label_counter: usize,
@@ -36,10 +37,14 @@ impl<'program> FunctionBuilder<'program> {
             arguments.split_off(var_args_after_n)
         };
 
+        let ret_ty = self.return_type_of(&name);
+        let ret_ty = self.program_builder.type_manager.layout(ret_ty).primitive_type();
+
         self.instructions.push(Instruction::Call {
             name,
             arguments,
             variable_arguments,
+            ret_ty: Some(ret_ty),
             ret_val_reg: Some(ret_val_reg),
         });
 
@@ -97,10 +102,11 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     #[must_use]
-    pub fn load_immediate(&mut self, immediate: Immediate) -> Register {
+    pub fn load_immediate(&mut self, immediate: Immediate, typ: PrimitiveType) -> Register {
         let destination = self.register_allocator.next();
 
         self.instructions.push(Instruction::Move {
+            typ,
             destination,
             source: Operand::Immediate(immediate),
         });
@@ -205,7 +211,8 @@ impl<'program> FunctionBuilder<'program> {
     pub fn build(self) -> Function {
         Function {
             name: self.name,
-            argument_registers: self.argument_registers,
+            return_ty: self.return_ty,
+            arguments: self.arguments,
             instructions: self.instructions,
             label_names: self.label_names,
             ir_register_allocator: self.register_allocator,
@@ -291,9 +298,9 @@ impl<'program> FunctionBuilder<'program> {
         self.this.clone()
     }
 
-    pub fn move_register(&mut self, destination: Register, source: Register) {
+    pub fn move_register(&mut self, destination: Register, source: Register, typ: PrimitiveType) {
         let source = Operand::Register(source);
-        self.instructions.push(Instruction::Move { source, destination });
+        self.instructions.push(Instruction::Move { source, destination, typ });
     }
 
     #[must_use]
@@ -363,7 +370,7 @@ impl<'program> FunctionBuilder<'program> {
     #[must_use]
     pub fn malloc(&mut self, size: Operand) -> Register {
         let size_register = match size {
-            Operand::Immediate(imm) => self.load_immediate(imm),
+            Operand::Immediate(imm) => self.load_immediate(imm, self.pointer_primitive_type()),
             Operand::Register(reg) => reg,
         };
 
@@ -379,8 +386,16 @@ impl<'program> FunctionBuilder<'program> {
     }
 
     #[must_use]
+    pub const fn return_type(&self) -> PrimitiveType {
+        self.return_ty
+    }
+
+    #[must_use]
     pub fn return_type_of(&self, name: &BabString) -> TypeId {
-        self.program_builder.function_return_types.get(name).copied().unwrap_or(TypeId::G32)
+        self.program_builder.function_return_types.get(name).copied().unwrap_or_else(|| {
+            log::warn!("We don't know the return type of {name}!");
+            TypeId::G32
+        })
     }
 
     pub fn promote_to_stack(&mut self, variable: BabString) -> (Register, PrimitiveType) {

@@ -6,6 +6,7 @@
 mod analysis;
 mod backend;
 mod compiler;
+mod cranelift_backend;
 mod interpreter;
 mod ir;
 mod memory;
@@ -21,6 +22,7 @@ pub use self::{
         AbstractRegister,
         Amd64CodeGenerator,
         AllocatableRegister,
+        Backend,
         CodeGenerator,
         CompiledFunction,
         CompiledObject,
@@ -42,8 +44,10 @@ pub use self::{
     ir::{
         ArgumentList,
         Function,
+        FunctionArgument,
         FunctionAttribute,
         FunctionBuilder,
+        FunctionParameter,
         Immediate,
         Instruction,
         JumpCondition,

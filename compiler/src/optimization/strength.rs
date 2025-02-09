@@ -37,7 +37,7 @@ impl StrengthReductor {
         match operation {
             MathOperation::Multiply => {
                 if rhs == 0 {
-                    return Some(Instruction::Move { destination, source: Operand::Immediate(Immediate::Integer64(0)) });
+                    return Some(Instruction::Move { destination, source: Operand::Immediate(Immediate::Integer64(0)), typ });
                 }
 
                 if rhs < 0 {
