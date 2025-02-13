@@ -19,6 +19,7 @@ Hieronder zie je de bouwstatussen per platform. Andere platforms die hier niet g
 | macOS             | AArch64 (Apple Silicon)   | Darwin    | [![Bouwen op macOS (AArch64)](https://github.com/babbelaar/babbelaar/actions/workflows/bouwen-macos-aarch64.yaml/badge.svg)](https://github.com/babbelaar/babbelaar/actions/workflows/bouwen-macos-aarch64.yaml)
 | macOS             | AMD64 (Intel)             | Darwin    | [![Bouwen op macOS (AMD64)](https://github.com/babbelaar/babbelaar/actions/workflows/bouwen-macos-amd64.yaml/badge.svg)](https://github.com/babbelaar/babbelaar/actions/workflows/bouwen-macos-amd64.yaml)
 | Ubuntu Linux      | AMD64                     | GNU       | [![Bouwen op Ubuntu Linux (AMD64)](https://github.com/babbelaar/babbelaar/actions/workflows/bouwen-linux-ubuntu-amd64.yaml/badge.svg)](https://github.com/babbelaar/babbelaar/actions/workflows/bouwen-linux-ubuntu-amd64.yaml)
+| Windows           | AMD64                     | MSVC      | [![Bouwen op Windows (AMD64)](https://github.com/babbelaar/babbelaar/actions/workflows/bouwen-windows-amd64.yaml/badge.svg)](https://github.com/babbelaar/babbelaar/actions/workflows/bouwen-windows-amd64.yaml)
 
 ## 🧑‍💻 Ontwikkeling
 Als je mee wilt helpen met het ontwikkelen van Babbelaar, zorg er dan voor dat je de onderstaande pakketten hebt geïnstalleerd:
