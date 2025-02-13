@@ -6,7 +6,7 @@ use std::{error::Error, fmt::Display, mem::replace, path::{Path, PathBuf}};
 use babbelaar::{ArchiveKind, ParseTree};
 use log::debug;
 
-use crate::{backend::Amd64CodeGenerator, os::{linux::{LinuxArLinker, LinuxGccLinker}, macos::MacOsLdLinker, windows::WindowsLinkLinker}, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, LinkerPath, OperatingSystem, Platform};
+use crate::{backend::Amd64CodeGenerator, os::{linux::{LinuxArLinker, LinuxGccLinker}, macos::MacOsLdLinker, windows::{WindowsLibLinker, WindowsLinkLinker}}, AArch64CodeGenerator, Architecture, CompiledObject, Compiler, Function, LinkerPath, OperatingSystem, Platform};
 
 #[derive(Debug)]
 pub struct Pipeline {
@@ -117,13 +117,27 @@ impl Pipeline {
             }
 
             OperatingSystem::Windows => {
-                let mut linker = WindowsLinkLinker::new(self.object.platform().clone(), &path);
+                match archive {
+                    ArchiveKind::Applicatie => {
+                        let mut linker = WindowsLinkLinker::new(self.object.platform().clone(), &path);
 
-                for path in &self.paths {
-                    linker.add_object(path.path_buf());
+                        for path in self.paths {
+                            linker.add_object(&path.as_path_buf());
+                        }
+
+                        linker.run()?;
+                    }
+
+                    ArchiveKind::StatischeBibliotheek => {
+                        let mut linker = WindowsLibLinker::new(self.object.platform().clone(), &path);
+
+                        for path in self.paths {
+                            linker.add_object(&path.as_path_buf());
+                        }
+
+                        linker.run()?;
+                    }
                 }
-
-                linker.run()?;
             }
         }
 
