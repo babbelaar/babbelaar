@@ -1838,8 +1838,8 @@ fn set_environment_vars_for_windows() {
 fn create_single_object_executable(code: &str, directory: &Path) -> std::path::PathBuf {
     let tree = parse_string_to_tree(code).unwrap();
 
-    // let mut pipeline = Pipeline::new(Platform::host_platform(), true);
-    let mut pipeline = Pipeline::new(Platform::new(babbelaar_compiler::Architecture::X86_64, babbelaar_compiler::Environment::Darwin, babbelaar_compiler::OperatingSystem::MacOs, Default::default()), true);
+    let mut pipeline = Pipeline::new(Platform::host_platform(), true);
+    // let mut pipeline = Pipeline::new(Platform::new(babbelaar_compiler::Architecture::X86_64, babbelaar_compiler::Environment::Darwin, babbelaar_compiler::OperatingSystem::MacOs, Default::default()), true);
     pipeline.compile_trees(&[tree]);
     pipeline.create_object(directory, "BabBestand").unwrap();
 
