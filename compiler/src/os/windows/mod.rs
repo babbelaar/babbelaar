@@ -133,8 +133,14 @@ impl WindowsLinkLinker {
 
 #[must_use]
 fn find_linker_path(platform: &Platform, name: &str) -> Result<PathBuf, io::Error> {
-    // TODO: use vswhere/envvars to resolve this
-    let root_dir = r#"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC"#;
+    let mut root_dir = r#"C:\Program Files\Microsoft Visual Studio\2022\Community"#.to_string();
+
+    if !Path::new(root_dir.as_str()).exists() {
+        let mut vs = VisualStudio::new(Path::new(root_dir.as_str())).unwrap();
+        vs.path_to_install_dir().unwrap().clone_into(&mut root_dir);
+    }
+
+    root_dir.push_str(r"\VC\Tools\MSVC");
 
     for entry in read_dir(root_dir)?.flatten() {
         if entry.file_type().is_ok_and(|x| x.is_dir()) {
