@@ -74,6 +74,7 @@ pub use self::{
     },
     os::{
         LinkerPath,
+        NtStatus,
         Signal,
     },
     pipeline::{
