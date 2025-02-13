@@ -1800,6 +1800,8 @@ fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();
     }
 
+    set_environment_vars_for_windows();
+
     let dir = TempDir::new().unwrap().panic_on_cleanup_error();
     let directory = dir.path().to_path_buf();
     dir.leak();
@@ -1807,6 +1809,20 @@ fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     let executable = create_single_object_executable(code, &directory);
     info!("Running executable {}", executable.display());
     run(executable).unwrap()
+}
+
+fn set_environment_vars_for_windows() {
+    if !cfg!(target_os = "windows") {
+        return;
+    }
+
+    let mut metadata_directory = std::env::current_dir().unwrap();
+    metadata_directory.pop();
+    metadata_directory.push("uit");
+    metadata_directory.push("toetsen");
+    _ = std::fs::create_dir_all(&metadata_directory);
+
+    std::env::set_var("BABBELAAR_METAGEGEVENS_MAP", metadata_directory);
 }
 
 fn create_single_object_executable(code: &str, directory: &Path) -> std::path::PathBuf {
