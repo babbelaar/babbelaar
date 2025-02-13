@@ -556,6 +556,7 @@ impl<'a> CraneliftFrontend<'a> {
                 self.builder.ins().uextend(target_ty, val)
             }
         } else {
+            log::debug!("Waarschuwing! We verlagen waarde {val:?} van {current_ty:?} naar {target_primitive:?}");
             self.builder.ins().ireduce(target_ty, val)
         }
     }
