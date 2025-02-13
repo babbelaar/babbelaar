@@ -83,6 +83,14 @@ impl Architecture {
     }
 
     #[must_use]
+    pub const fn frame_alignment(&self) -> u64 {
+        match self {
+            Self::AArch64 => 4,
+            Self::X86_64 => 1,
+        }
+    }
+
+    #[must_use]
     pub const fn stack_alignment(&self) -> usize {
         match self {
             Self::AArch64 => 16,

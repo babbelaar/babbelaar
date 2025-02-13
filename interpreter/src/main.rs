@@ -262,7 +262,7 @@ fn init_logger(config: &ConfigRoot) {
     let mut builder = env_logger::builder();
 
     if config.log.debug {
-        builder.filter(None, log::LevelFilter::Debug);
+        builder.filter(None, log::LevelFilter::Trace);
     }
 
     let env = Env::default()

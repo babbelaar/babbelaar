@@ -1,4 +1,4 @@
-// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2024 - 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 use std::{collections::HashMap, error::Error, fs::File, io::Write, path::Path, time::SystemTime};
@@ -147,7 +147,7 @@ impl CompiledObject {
                 }
             }
 
-            let function_offset = obj.add_symbol_data(main_symbol, code_section, &function.byte_code(), 4);
+            let function_offset = obj.add_symbol_data(main_symbol, code_section, &function.byte_code(), self.platform.architecture().frame_alignment());
 
             for relocation in &function.relocations {
                 match relocation.ty() {
