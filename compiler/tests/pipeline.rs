@@ -4,7 +4,7 @@
 use std::{error::Error, io::Read, path::{Path, PathBuf}, process::{Command, Stdio}};
 
 use babbelaar::{parse_string_to_tree, ArchiveKind};
-use babbelaar_compiler::{Pipeline, Platform, Signal};
+use babbelaar_compiler::{NtStatus, Pipeline, Platform, Signal};
 use log::info;
 use rstest::rstest;
 use temp_dir::TempDir;
@@ -17,7 +17,7 @@ fn simple_return_0() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
 }
 
@@ -31,7 +31,7 @@ fn simple_reassign_1_to_2() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(2));
 }
 
@@ -43,7 +43,7 @@ fn simple_return_123() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(123));
 }
 
@@ -58,7 +58,7 @@ fn simple_return_with_discard_result_of_subroutine() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(123));
 }
 
@@ -74,7 +74,7 @@ fn simple_return_with_discard_result_of_subroutine2() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(8));
 }
 
@@ -88,7 +88,7 @@ fn simple_return_1_plus_2() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(3));
 }
 
@@ -104,7 +104,7 @@ fn return_1_plus_subroutine_val() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(3));
 }
 
@@ -118,7 +118,7 @@ fn simple_return_8_minus_6() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(2));
 }
 
@@ -138,7 +138,7 @@ fn simple_call_other_than_returns_100() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(100));
 }
 
@@ -154,7 +154,7 @@ fn return_1_plus_1_with_subroutine_in_between() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(2));
 }
 
@@ -175,7 +175,7 @@ fn use_variables_after_subroutine() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(21));
 }
 
@@ -194,7 +194,7 @@ fn return_8_if_5_is_equal_to_5() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(8));
 }
 
@@ -212,7 +212,7 @@ fn subroutine_for_minus() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
 }
 
@@ -224,7 +224,7 @@ fn negate_immediate() {
     }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(-8));
 }
 
@@ -240,7 +240,7 @@ fn negate_with_function_call() {
     }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(-94));
 }
 
@@ -259,7 +259,7 @@ fn method_call() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(3));
 }
 
@@ -282,7 +282,7 @@ fn method_call_with_this() { //
     }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(7));
 }
 
@@ -307,7 +307,7 @@ fn method_call_with_this_and_two_fields() {
     }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(11));
 }
 
@@ -320,7 +320,7 @@ fn function_with_unused_string_literal_variable() {
     }
     ");
 
-    assert_eq!(value.signal, None);
+    assert_eq!(value.error, None);
     assert_eq!(value.exit_code, Some(1));
 }
 
@@ -332,7 +332,7 @@ fn function_returns_length_of_string_literal() {
     }
     ");
 
-    assert_eq!(value.signal, None);
+    assert_eq!(value.error, None);
     assert_eq!(value.exit_code, Some(5));
 }
 
@@ -344,7 +344,7 @@ fn two_strings_one_program() {
     }
     ");
 
-    assert_eq!(value.signal, None);
+    assert_eq!(value.error, None);
     assert_eq!(value.exit_code, Some(9));
 }
 
@@ -361,7 +361,7 @@ fn return_comparison_value() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(1));
 }
 
@@ -382,7 +382,7 @@ fn pass_single_comparison_value() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(1));
 }
 
@@ -403,7 +403,7 @@ fn pass_comparison_value() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(1));
 }
 
@@ -422,7 +422,7 @@ fn check_returned_negative_one() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(2));
 }
 
@@ -434,7 +434,7 @@ fn multiply_immediate() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(24));
 }
 
@@ -450,7 +450,7 @@ fn multiply_unknown_lhs_and_rhs() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(27));
 }
 
@@ -466,7 +466,7 @@ fn multiply_known_lhs() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(35));
 }
 
@@ -482,7 +482,7 @@ fn multiply_known_rhs() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(-56));
 }
 
@@ -494,7 +494,7 @@ fn divide_immediate() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(6));
 }
 
@@ -510,7 +510,7 @@ fn divide_unknown_lhs_and_rhs() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(25));
 }
 
@@ -526,7 +526,7 @@ fn divide_known_lhs() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(4));
 }
 
@@ -542,7 +542,7 @@ fn divide_known_rhs() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(40));
 }
 
@@ -554,7 +554,7 @@ fn modulo_immediate() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(1));
 }
 
@@ -570,7 +570,7 @@ fn modulo_unknown_lhs_and_rhs() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
 }
 
@@ -586,7 +586,7 @@ fn modulo_known_lhs() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(4), "{result:#?}");
 }
 
@@ -604,7 +604,7 @@ fn modulo_known_rhs() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
 }
 
@@ -620,7 +620,7 @@ fn simple_array_add() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(7));
 }
 
@@ -633,7 +633,7 @@ fn simple_array_add_zero_initialized() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
 }
 
@@ -646,7 +646,7 @@ fn array_zero_initialised() {
         }
     ");
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
 }
 
@@ -663,7 +663,7 @@ fn iterate_fixed_range_sum() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(5));
 }
 
@@ -680,7 +680,7 @@ fn loop_string_length() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(5));
 }
 
@@ -701,7 +701,7 @@ fn loop_string_length_from_subroutine() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(5));
 }
 
@@ -719,7 +719,7 @@ fn loop_string_chars() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
 }
 
@@ -743,7 +743,7 @@ fn loop_g32_array() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(29));
 }
 
@@ -756,7 +756,7 @@ fn left_shift_immediate_2() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(12));
 }
 
@@ -769,7 +769,7 @@ fn left_shift_immediate_lhs_0() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
 }
 
@@ -782,7 +782,7 @@ fn left_shift_immediate_rhs_0() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(3));
 }
 
@@ -798,7 +798,7 @@ fn left_shift_unknown_lhs() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(16));
 }
 
@@ -814,7 +814,7 @@ fn left_shift_unknown_rhs() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(64));
 }
 
@@ -830,7 +830,7 @@ fn left_shift_unknown_lhs_and_rhs() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(40));
 }
 
@@ -843,7 +843,7 @@ fn right_shift_immediate_2() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(3));
 }
 
@@ -856,7 +856,7 @@ fn right_shift_immediate_lhs_0() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
 }
 
@@ -869,7 +869,7 @@ fn right_shift_immediate_rhs_0() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(3));
 }
 
@@ -885,7 +885,7 @@ fn right_shift_unknown_lhs() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(2));
 }
 
@@ -901,7 +901,7 @@ fn right_shift_unknown_rhs() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(8));
 }
 
@@ -917,7 +917,7 @@ fn right_shift_unknown_lhs_and_rhs() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(3));
 }
 
@@ -934,7 +934,7 @@ fn printf_with_single_number() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "Hallo, 10");
 }
@@ -955,7 +955,7 @@ fn printf_with_three_numbers() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "1 + 3 = 7");
 }
@@ -973,7 +973,7 @@ fn printf_with_string() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "Hallo, wereld");
 }
@@ -993,7 +993,7 @@ fn printf_with_concatenated_string() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "Hallo, wereld");
 }
@@ -1016,7 +1016,7 @@ fn printf_with_number_from_subroutine() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "99 ! 123");
 }
@@ -1034,7 +1034,7 @@ fn var_arg_function_after_main() {
         werkwijze printf(format: Slinger);
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "Hallo, wereld");
 }
@@ -1057,7 +1057,7 @@ fn argument_survives_after_subroutine_call() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(99));
 }
 
@@ -1088,7 +1088,7 @@ fn callee_saved_registers_correct_with_two_calls() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(68));
 }
 
@@ -1121,7 +1121,7 @@ fn store_bigger_value_in_smaller_field() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(2));
 }
 
@@ -1137,7 +1137,7 @@ fn string_concat_static() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(14));
     assert_eq!(result.stdout.trim_end_matches(|c| c == '\r' || c == '\n'), "Hallo, wereld!");
 }
@@ -1153,7 +1153,7 @@ fn string_concat_assign_static() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(13));
     assert_eq!(result.stdout.trim_end_matches(|c| c == '\r' || c == '\n'), "Doei, gastje!");
 }
@@ -1174,7 +1174,7 @@ fn string_concat_loop() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.stdout.trim_end_matches(|c| c == '\r' || c == '\n'), "Doei!!!!!");
     assert_eq!(result.exit_code, Some(9));
 }
@@ -1187,7 +1187,7 @@ fn type_resolution_return_g8() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(10));
     assert_eq!(result.stdout, "");
 }
@@ -1204,7 +1204,7 @@ fn type_resolution_pass_g32() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(8));
     assert_eq!(result.stdout, "");
 }
@@ -1221,7 +1221,7 @@ fn type_resolution_array_g8() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(20));
     assert_eq!(result.stdout, "");
 }
@@ -1244,7 +1244,7 @@ fn comparison_immediate(#[case] expr: &str, #[case] expected: bool) {
         }}
     "#));
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(expected as _));
 }
 */
@@ -1269,7 +1269,7 @@ fn if_with_comparison_immediate(#[case] expr: &str, #[case] expected: bool) {
         }}
     "#));
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(expected as _));
 }
 
@@ -1294,7 +1294,7 @@ fn assign_with_math_operation(#[case] first: i64, #[case] op: &str, #[case] seco
         }}
     "#));
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(expected));
 }
 
@@ -1310,7 +1310,7 @@ fn loop_continue_does_nothing() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "Hallo\nHallo\nHallo\nHallo\nHallo\n");
 }
@@ -1327,7 +1327,7 @@ fn loop_break_without_if() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "Hallo\n");
 }
@@ -1346,7 +1346,7 @@ fn loop_break_with_if_modulo() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "Doei\nDoei\n");
 }
@@ -1365,7 +1365,7 @@ fn opt_multiply_then_add() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(21));
     assert_eq!(result.stdout, "");
 }
@@ -1382,7 +1382,7 @@ fn opt_add_then_multiply() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(42));
     assert_eq!(result.stdout, "");
 }
@@ -1401,7 +1401,7 @@ fn opt_multiply_then_sub() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(9));
     assert_eq!(result.stdout, "");
 }
@@ -1420,7 +1420,7 @@ fn opt_sub_then_multiply() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(4));
     assert_eq!(result.stdout, "");
 }
@@ -1439,7 +1439,7 @@ fn not_immediate_bool() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(1));
     assert_eq!(result.stdout, "");
 }
@@ -1458,7 +1458,7 @@ fn not_not_immediate_bool() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "");
 }
@@ -1479,7 +1479,7 @@ fn not_from_subroutine() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(1));
     assert_eq!(result.stdout, "");
 }
@@ -1500,7 +1500,7 @@ fn not_not_from_subroutine() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(2));
     assert_eq!(result.stdout, "");
 }
@@ -1521,7 +1521,7 @@ fn not_from_parameter() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(1));
     assert_eq!(result.stdout, "");
 }
@@ -1545,7 +1545,7 @@ fn fill_array_using_subroutine() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(15));
     assert_eq!(result.stdout, "");
 }
@@ -1573,7 +1573,7 @@ fn fill_array_g8() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(1));
     assert_eq!(result.stdout, "");
 }
@@ -1592,7 +1592,7 @@ fn variable_statement_type_specifier() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(15));
     assert_eq!(result.stdout, "");
 }
@@ -1617,7 +1617,7 @@ fn fill_local_by_ptr() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(5));
     assert_eq!(result.stdout, "");
 }
@@ -1671,7 +1671,7 @@ fn numeric_bounds_printf(#[case] format: &str, #[case] ty: &str, #[case] number:
         }}
     "#));
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, number);
 }
@@ -1700,7 +1700,7 @@ fn ptr_to_first_field_is_same_as_ptr_to_structure() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
 
     let parts = result.stdout.trim().split('\n').collect::<Vec<_>>();
@@ -1740,7 +1740,7 @@ fn memcpy_of_structure_field_g32() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(64));
     assert_eq!(result.stdout, "");
 }
@@ -1776,7 +1776,7 @@ fn memcpy_of_structure_field_g8() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(77));
     assert_eq!(result.stdout, "");
 }
@@ -1800,7 +1800,7 @@ fn slinger_index_constant() {
         }
     "#);
 
-    assert_eq!(result.signal, None);
+    assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "H\na\nl\nl\no\n");
 }
@@ -1857,12 +1857,15 @@ fn run(path: impl AsRef<Path>) -> Result<ProgramResult, Box<dyn Error>> {
     let stdout = process.stdout.and_then(|mut x| {
         let mut buf = String::new();
         x.read_to_string(&mut buf).ok()?;
+        if cfg!(target_os = "windows") {
+            return Some(buf.replace("\r\n", "\n"))
+        }
         Some(buf)
     }).unwrap_or_default();
 
     let mut result = ProgramResult {
         exit_code: exit_status.code(),
-        signal: None, // only set on UNIX-platforms below
+        error: None,
         stdout,
         path: path.as_ref().into(),
     };
@@ -1872,7 +1875,14 @@ fn run(path: impl AsRef<Path>) -> Result<ProgramResult, Box<dyn Error>> {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;
-        result.signal = exit_status.signal().map(Signal::from);
+        result.error = Some(ProgramError::Signal(exit_status.signal().map(Signal::from)));
+    }
+
+    #[cfg(windows)]
+    if let Some(exit_code) = exit_status.code() {
+        if exit_code > 255 {
+            result.error = Some(ProgramError::NtStatus(NtStatus::from(exit_code)));
+        }
     }
 
     Ok(result)
@@ -1882,7 +1892,14 @@ fn run(path: impl AsRef<Path>) -> Result<ProgramResult, Box<dyn Error>> {
 #[allow(unused)]
 struct ProgramResult {
     exit_code: Option<i32>,
-    signal: Option<Signal>,
+    error: Option<ProgramError>,
     stdout: String,
     path: PathBuf,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(unused)]
+enum ProgramError {
+    NtStatus(NtStatus),
+    Signal(Signal),
 }
