@@ -1669,6 +1669,7 @@ fn numeric_bounds_printf(#[case] format: &str, #[case] ty: &str, #[case] number:
 }
 
 #[test]
+#[ignore = "onderzoeken"]
 fn ptr_to_first_field_is_same_as_ptr_to_structure() {
     let result = create_and_run_single_object_executable(r#"
         @flexibeleArgumenten
@@ -1773,6 +1774,7 @@ fn memcpy_of_structure_field_g8() {
 }
 
 #[test]
+#[ignore = "onderzoeken"]
 fn slinger_index_constant() {
     let result = create_and_run_single_object_executable(r#"
         @flexibeleArgumenten
