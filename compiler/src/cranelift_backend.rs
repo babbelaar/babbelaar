@@ -71,6 +71,7 @@ impl CraneliftBackend {
 
         let mut builder = settings::builder();
         builder.enable("is_pic").unwrap();
+        builder.set("opt_level", "speed_and_size").unwrap();
         builder.set("unwind_info", "false").unwrap();
         let flags = settings::Flags::new(builder);
         let res = verify_function(&func, &flags);
@@ -309,7 +310,7 @@ impl<'a> CraneliftFrontend<'a> {
                     args.push(val);
                 }
 
-                if self.platform.environment() == Environment::Darwin && !variable_arguments.is_empty() {
+                if !variable_arguments.is_empty() && self.platform.environment() == Environment::Darwin && self.platform.architecture() == Architecture::AArch64 {
                     for _ in arguments.len()..8 {
                         args.push(self.builder.ins().iconst(I64, 0));
                     }
@@ -508,7 +509,7 @@ impl<'a> CraneliftFrontend<'a> {
             sig.params.push(AbiParam::new(ty));
         }
 
-        if self.platform.environment() == Environment::Darwin && !var_args.is_empty() {
+        if !var_args.is_empty() && self.platform.environment() == Environment::Darwin && self.platform.architecture() == Architecture::AArch64 {
             for _ in arguments.len()..8 {
                 sig.params.push(AbiParam::new(I64));
             }
