@@ -1,4 +1,4 @@
-// Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
+// Copyright (C) 2024 - 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
 use std::collections::HashMap;
@@ -72,13 +72,17 @@ impl Relocation {
             }
 
             RelocationMethod::Amd64CallNearRelative => {
-                let offset = offset as u32 - 4;
+                let offset = (offset as u32).wrapping_sub(4);
                 code[0..4].copy_from_slice(&offset.to_le_bytes());
             }
 
             RelocationMethod::Amd64RipRelative => {
-                let offset = offset as u32 - 4;
+                let offset = (offset as u32).wrapping_sub(4);
                 code[0..4].copy_from_slice(&offset.to_le_bytes());
+            }
+
+            RelocationMethod::Amd64GotPcRelative4 { addend } => {
+                _ = addend;
             }
 
             RelocationMethod::GenericAbsolute { bits, addend } => {
@@ -113,6 +117,9 @@ pub enum RelocationMethod {
     },
     Amd64CallNearRelative,
     Amd64RipRelative,
+    Amd64GotPcRelative4 {
+        addend: i64,
+    },
 
     GenericAbsolute {
         bits: u8,
@@ -131,6 +138,7 @@ impl RelocationMethod {
             Self::Aarch64GotLoadPage21 { addend, .. } => *addend,
             Self::Amd64CallNearRelative => -4,
             Self::Amd64RipRelative => -4,
+            Self::Amd64GotPcRelative4 { addend } => *addend,
             Self::GenericAbsolute { addend, .. } => *addend,
         }
     }
@@ -189,6 +197,14 @@ impl RelocationMethod {
             RelocationMethod::Amd64RipRelative => {
                 RelocationFlags::Generic {
                     kind: RelocationKind::Relative,
+                    encoding: RelocationEncoding::Generic,
+                    size: 32,
+                }
+            }
+
+            RelocationMethod::Amd64GotPcRelative4 { addend: _ } => {
+                RelocationFlags::Generic {
+                    kind: RelocationKind::GotRelative,
                     encoding: RelocationEncoding::Generic,
                     size: 32,
                 }

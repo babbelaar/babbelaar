@@ -1159,6 +1159,30 @@ fn string_concat_assign_static() {
 }
 
 #[test]
+fn string_concat_subroutine() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hallo() -> Slinger {
+            bekeer "Hallo,";
+        }
+
+        werkwijze wereld() -> Slinger {
+            bekeer " wereld";
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel a = hallo() + wereld();
+            schrijf(a);
+            bekeer a.lengte();
+        }
+    "#);
+
+    assert_eq!(result.error, None);
+    assert_eq!(result.exit_code, Some(13));
+    assert_eq!(result.stdout.trim_end_matches(|c| c == '\r' || c == '\n'), "Hallo, wereld");
+}
+
+
+#[test]
 fn string_concat_loop() {
     let result = create_and_run_single_object_executable(r#"
         werkwijze hoofd() -> g32 {
@@ -1677,7 +1701,6 @@ fn numeric_bounds_printf(#[case] format: &str, #[case] ty: &str, #[case] number:
 }
 
 #[test]
-#[ignore = "onderzoeken"]
 fn ptr_to_first_field_is_same_as_ptr_to_structure() {
     let result = create_and_run_single_object_executable(r#"
         @flexibeleArgumenten
@@ -1782,7 +1805,6 @@ fn memcpy_of_structure_field_g8() {
 }
 
 #[test]
-#[ignore = "onderzoeken"]
 fn slinger_index_constant() {
     let result = create_and_run_single_object_executable(r#"
         @flexibeleArgumenten
@@ -1880,7 +1902,7 @@ fn run(path: impl AsRef<Path>) -> Result<ProgramResult, Box<dyn Error>> {
 
     #[cfg(windows)]
     if let Some(exit_code) = exit_status.code() {
-        if exit_code > 255 {
+        if exit_code as u32 > 0xC000000 && exit_code < -128 {
             result.error = Some(ProgramError::NtStatus(NtStatus::from(exit_code)));
         }
     }

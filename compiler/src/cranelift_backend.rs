@@ -92,7 +92,6 @@ impl CraneliftBackend {
         let mut relocations = Vec::new();
 
         for reloc in result.buffer.relocs() {
-            log::debug!("RELOCATION {reloc:#?}");
             let ty = match reloc.target {
                 FinalizedRelocTarget::ExternalName(ExternalName::User(usr)) => {
                     frontend_info.relocation_map.get(&usr).unwrap().clone()
@@ -151,8 +150,18 @@ impl CraneliftBackend {
                     });
                 }
 
+                Reloc::X86GOTPCRel4 => {
+                    relocations.push(Relocation {
+                        method: RelocationMethod::Amd64GotPcRelative4 {
+                            addend: reloc.addend,
+                        },
+                        ty,
+                        offset: reloc.offset as _,
+                    });
+                }
+
                 _ => {
-                    todo!("Support target of reloc {reloc:#?}");
+                    todo!("Ondersteun doelsrelocatie {reloc:#?}");
                 }
             }
         }
