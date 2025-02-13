@@ -341,7 +341,7 @@ impl Display for Instruction {
             }
 
             Instruction::Call { name, arguments, variable_arguments, ret_ty, ret_val_reg } => {
-                f.write_str("RoepAap ")?;
+                f.write_str("RoepAan ")?;
                 if let Some(ret_ty) = ret_ty {
                     ret_ty.fmt(f)?;
                     f.write_str(", ")?;
@@ -355,6 +355,8 @@ impl Display for Instruction {
 
                 for arg in arguments {
                     f.write_str(", ")?;
+                    arg.primitive_type().fmt(f)?;
+                    f.write_str(" ")?;
                     arg.register().fmt(f)?;
                 }
 
@@ -365,6 +367,8 @@ impl Display for Instruction {
                         f.write_str("flexArgs: ")?;
                     }
 
+                    arg.primitive_type().fmt(f)?;
+                    f.write_str(" ")?;
                     arg.register().fmt(f)?;
                 }
 

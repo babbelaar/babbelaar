@@ -520,7 +520,8 @@ fn compile_math_op(builder: &mut FunctionBuilder, op: MathOperator, lhs: (Regist
 
     let math_operation = MathOperation::from(op);
     let typ = builder.primitive_type_of(&lhs_ty);
-    builder.math(math_operation, typ, lhs, rhs).into()
+    let reg = builder.math(math_operation, typ, lhs, rhs);
+    ExpressionResult::typed(reg, lhs_ty)
 }
 
 impl CompileExpression for PostfixExpression {
@@ -572,7 +573,9 @@ impl CompileExpression for PostfixExpression {
                     &method.method_name
                 );
 
-                builder.call(name, arguments).into()
+                let ty = builder.return_type_of(&name);
+                let reg = builder.call(name, arguments);
+                ExpressionResult::typed(reg, ty)
             }
 
             PostfixExpressionKind::Subscript(subscript) => {
@@ -621,15 +624,24 @@ impl CompileExpression for PrimaryExpression {
     fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) -> ExpressionResult {
         match self {
             Self::Boolean(b) => {
-                builder.load_immediate(Immediate::Integer32(*b as i32), PrimitiveType::S32).into()
+                ExpressionResult::typed(
+                    builder.load_immediate(Immediate::Integer32(*b as i32), PrimitiveType::S32),
+                    TypeInfo::Plain(TypeId::G32)
+                )
             }
 
             Self::CharacterLiteral(c) => {
-                builder.load_immediate(Immediate::Integer32(*c as i32), PrimitiveType::U32).into()
+                ExpressionResult::typed(
+                    builder.load_immediate(Immediate::Integer32(*c as i32), PrimitiveType::U32),
+                    TypeInfo::Plain(TypeId::G32)
+                )
             }
 
             Self::IntegerLiteral(i) => {
-                builder.load_immediate(Immediate::Integer64(*i), PrimitiveType::S64).into()
+                ExpressionResult::typed(
+                    builder.load_immediate(Immediate::Integer64(*i), PrimitiveType::S64),
+                    TypeInfo::Plain(TypeId::G64)
+                )
             }
 
             Self::Parenthesized(expression) => {
@@ -641,7 +653,7 @@ impl CompileExpression for PrimaryExpression {
                     Some(local) => local.into(),
                     None => {
                         error!("Ongeldige lokale variabele: {}", name.value());
-                        builder.load_immediate(Immediate::Integer64(0), PrimitiveType::U64).into()
+                        ExpressionResult::typed(builder.load_immediate(Immediate::Integer64(0), PrimitiveType::U32), TypeInfo::Plain(TypeId::G32))
                     }
                 }
             }
@@ -754,9 +766,9 @@ impl CompileExpression for UnaryExpression {
             }
 
             UnaryExpressionKind::Negate => {
-                let (value, typ) = value.to_readable_and_type(builder);
-                let typ = builder.primitive_type_of(&typ);
-                builder.unary_negate(typ, value).into()
+                let (value, type_info) = value.to_readable_and_type(builder);
+                let typ = builder.primitive_type_of(&type_info);
+                ExpressionResult::typed(builder.unary_negate(typ, value), type_info)
             }
 
             UnaryExpressionKind::Not => {
@@ -844,15 +856,6 @@ impl From<&Comparison> for ExpressionResult {
     fn from(value: &Comparison) -> Self {
         Self {
             kind: ExpressionResultKind::Comparison(*value),
-            type_info: TypeId::G32.into(),
-        }
-    }
-}
-
-impl From<Register> for ExpressionResult {
-    fn from(value: Register) -> Self {
-        Self {
-            kind: ExpressionResultKind::Register(value),
             type_info: TypeId::G32.into(),
         }
     }
