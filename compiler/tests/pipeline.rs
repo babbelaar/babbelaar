@@ -1897,7 +1897,7 @@ fn run(path: impl AsRef<Path>) -> Result<ProgramResult, Box<dyn Error>> {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;
-        result.error = Some(ProgramError::Signal(exit_status.signal().map(Signal::from)));
+        result.error = exit_status.signal().map(|x| ProgramError::Signal(Signal::from(x)));
     }
 
     #[cfg(windows)]
