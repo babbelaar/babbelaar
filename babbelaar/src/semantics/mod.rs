@@ -29,6 +29,7 @@ pub use self::{
     diagnostic::{
         SemanticDiagnostic,
         SemanticDiagnosticKind,
+        SemanticDiagnosticSettings,
         SemanticDiagnosticSeverity,
         SemanticDiagnosticsList,
     },

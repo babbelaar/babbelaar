@@ -148,7 +148,7 @@ fn compile(map: PathBuf, config: &ConfigRoot) -> PathBuf {
         exit(1);
     }
 
-    analyze(&files);
+    analyze(&files, config);
 
     let trees: Vec<ParseTree> = files.into_iter()
         .map(|(_, tree)| tree)
@@ -181,12 +181,16 @@ fn compile(map: PathBuf, config: &ConfigRoot) -> PathBuf {
     pipeline.link(&dir, &config.project.naam, config.project.r#type).unwrap()
 }
 
-fn analyze(files: &[(SourceCode, ParseTree)]) {
+fn analyze(files: &[(SourceCode, ParseTree)], config: &ConfigRoot) {
     let file_ids: HashMap<FileId, SourceCode> = files.iter()
         .map(|(source_code, _)| (source_code.file_id(), source_code.clone()))
         .collect();
 
-    let mut analyzer = SemanticAnalyzer::new(file_ids.clone(), true);
+    let mut diagnostics_settings = SemanticDiagnosticSettings::new();
+    diagnostics_settings.import_from_config(&config.diagnostieken);
+
+    let mut analyzer = SemanticAnalyzer::new(file_ids.clone(), true)
+        .with_diagnostic_settings(diagnostics_settings);
 
     for phase in SemanticAnalysisPhase::iter() {
         for (_, tree) in files {

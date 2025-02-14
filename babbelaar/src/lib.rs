@@ -94,6 +94,7 @@ pub use self::{
         SemanticAnalyzer,
         SemanticDiagnostic,
         SemanticDiagnosticKind,
+        SemanticDiagnosticSettings,
         SemanticDiagnosticSeverity,
         SemanticLocal,
         SemanticLocalKind,

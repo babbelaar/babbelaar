@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::collections::HashMap;
+
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
@@ -19,6 +21,7 @@ pub struct ConfigRoot {
     pub project: ConfigSectionProject,
     pub arch: ConfigSectionArch,
     pub bouwen: ConfigSectionBuild,
+    pub diagnostieken: HashMap<String, bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

@@ -34,6 +34,14 @@ impl SemanticAnalyzer {
         Self::new(files, should_produce_diagnostics)
     }
 
+    #[must_use]
+    pub fn with_diagnostic_settings(self, settings: SemanticDiagnosticSettings) -> Self {
+        Self {
+            diagnostics: self.diagnostics.with_settings(settings),
+            ..self
+        }
+    }
+
     pub fn analyze_tree(&mut self, tree: &ParseTree, phase: SemanticAnalysisPhase) {
         self.context.announce_file(tree);
 

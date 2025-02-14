@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{error::Error, fmt::Display};
+use std::{collections::HashMap, error::Error, fmt::Display};
 
 use strum::AsRefStr;
 use thiserror::Error;
@@ -258,6 +258,7 @@ pub enum SemanticDiagnosticKind {
     },
 
     #[error("Werkwijze `{name}` wordt nergens gebruikt.")]
+    #[strum(serialize = "ongebruikte-werkwijze")]
     UnusedFunction { name: BabString },
 
     #[error("Iterator `{name}` wordt nergens gebruikt.")]
@@ -357,6 +358,34 @@ impl SemanticDiagnosticKind {
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct SemanticDiagnosticSettings {
+    settings: HashMap<String, bool>,
+}
+
+impl SemanticDiagnosticSettings {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn import_from_config(&mut self, settings: &HashMap<String, bool>) {
+        for (key, value) in settings.iter() {
+            self.settings.insert(key.clone(), *value);
+        }
+    }
+
+    #[must_use]
+    pub fn should_include(&self, diagnostic: &SemanticDiagnostic) -> bool {
+        match diagnostic.severity() {
+            SemanticDiagnosticSeverity::Error => true,
+            SemanticDiagnosticSeverity::Warning => {
+                self.settings.get(diagnostic.kind().as_ref()).cloned().unwrap_or(true)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SemanticDiagnosticSeverity {
     Error,
@@ -374,12 +403,15 @@ impl Display for SemanticDiagnosticSeverity {
 
 #[derive(Default, Debug)]
 pub struct SemanticDiagnosticsList {
+    settings: SemanticDiagnosticSettings,
     contents: Option<Vec<SemanticDiagnostic>>,
 }
 
 impl SemanticDiagnosticsList {
+    #[must_use]
     pub fn new(should_produce_diagnostics: bool) -> Self {
         Self {
+            settings: SemanticDiagnosticSettings::new(),
             contents: if should_produce_diagnostics {
                 Some(Vec::new())
             } else {
@@ -388,11 +420,25 @@ impl SemanticDiagnosticsList {
         }
     }
 
+    #[must_use]
+    pub fn with_settings(self, settings: SemanticDiagnosticSettings) -> Self {
+        Self {
+            settings,
+            ..self
+        }
+    }
+
     #[inline]
     pub fn create<F: FnOnce() -> SemanticDiagnostic>(&mut self, f: F) {
         let Some(contents) = &mut self.contents else { return };
 
-        contents.push(f());
+        let diagnostic = f();
+
+        if !self.settings.should_include(&diagnostic) {
+            return;
+        }
+
+        contents.push(diagnostic);
     }
 
     pub fn to_vec(self) -> Vec<SemanticDiagnostic> {
