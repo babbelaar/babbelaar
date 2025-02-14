@@ -5,3 +5,6 @@ type = "statische-bibliotheek"
 [bouwen]
 geen-babbib = true
 alle-architecturen = true
+
+[diagnostieken]
+ongebruikte-werkwijze = false
