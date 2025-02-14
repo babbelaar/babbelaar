@@ -224,21 +224,21 @@ impl Amd64InstructionSelector {
                 let base = self.allocate_register(base_ptr);
 
                 match (offset.shrink_if_possible(), typ.bytes()) {
-                    (Operand::Immediate(Immediate::Integer8(offset)), 1) => {
+                    (Operand::Immediate(offset), 1) => {
                         let address = Amd64Address::new(base)
-                            .with_displacement(Amd64Displacement::from(offset));
+                            .with_displacement(Amd64Displacement::try_new(offset.as_i64()).unwrap());
                         self.instructions.push(Amd64Instruction::MovzxReg8FromPtr { dst, address });
                     }
 
-                    (Operand::Immediate(Immediate::Integer8(offset)), 4) => {
+                    (Operand::Immediate(offset), 4) => {
                         let address = Amd64Address::new(base)
-                            .with_displacement(Amd64Displacement::from(offset));
+                            .with_displacement(Amd64Displacement::try_new(offset.as_i64()).unwrap());
                         self.instructions.push(Amd64Instruction::MovReg32FromPtr { dst, address });
                     }
 
-                    (Operand::Immediate(Immediate::Integer8(offset)), 8) => {
+                    (Operand::Immediate(offset), 8) => {
                         let address = Amd64Address::new(base)
-                            .with_displacement(Amd64Displacement::from(offset));
+                            .with_displacement(Amd64Displacement::try_new(offset.as_i64()).unwrap());
                         self.instructions.push(Amd64Instruction::MovReg64FromPtr { dst, address });
                     }
 

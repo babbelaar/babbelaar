@@ -34,7 +34,7 @@ impl ArmRegister {
     #[must_use]
     pub fn name(&self, is_64_bit: &bool) -> impl Display {
         ArmRegisterDisplay {
-            mode: if *is_64_bit { ArmRegisterMode::Bit64 } else { ArmRegisterMode::Bit64 },
+            mode: if *is_64_bit { ArmRegisterMode::Bit64 } else { ArmRegisterMode::Bit32 },
             reg: *self
         }
     }
