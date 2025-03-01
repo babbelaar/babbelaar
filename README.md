@@ -22,11 +22,7 @@ Hieronder zie je de bouwstatussen per platform. Andere platforms die hier niet g
 | Windows           | AMD64                     | MSVC      | [![Bouwen op Windows (AMD64)](https://github.com/babbelaar/babbelaar/actions/workflows/bouwen-windows-amd64.yaml/badge.svg)](https://github.com/babbelaar/babbelaar/actions/workflows/bouwen-windows-amd64.yaml)
 
 ## 🧑‍💻 Ontwikkeling
-Als je mee wilt helpen met het ontwikkelen van Babbelaar, zorg er dan voor dat je de onderstaande pakketten hebt geïnstalleerd:
-```sh
-sudo npm install -g @vscode/vsce yo typescript
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
+Als je mee wilt helpen met het ontwikkelen van Babbelaar, kun je [de stappen op de interne documentatie](https://babbelaar.dev/docs/intern/bouwen) volgen. Mocht je vragen hebben, voel je dan vrij om deze te stellen via de [overlegpagina](https://github.com/orgs/babbelaar/discussions).
 
 ## 📄 Licentie
 Babbelaar is gelicenseerd onder de [Apache License 2.0 (Engelstalig)](https://www.apache.org/licenses/LICENSE-2.0.html). Voor een Nederlandse beschrijving, lees het [Wikipedia-artikel](https://nl.wikipedia.org/wiki/Apache-licentie) erover.
