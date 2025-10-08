@@ -15,9 +15,9 @@ default-members = ["interpreter"]
 
 [workspace.dependencies]
 thiserror = "2"
-strum = { version = "0.26", features = ["derive"] }
+strum = { version = "0.27", features = ["derive"] }
 log = "0.4"
-object = { version = "0.36", features = ["write"] }
+object = { version = "0.37", features = ["write"] }
 
 libloading = "0.8"
 clap = { version = "4.5.16", features = ["derive"] }
@@ -28,8 +28,8 @@ dashmap = "6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-toml = "0.8"
+toml = "0.9"
 tower-lsp = { git = "https://github.com/babbelaar/tower-lsp.git", rev = "cce815536edb201b5082b8310227796ec40e09d4" }
 url = "2"
 env_logger = "0.11"
-rstest = "0.24"
+rstest = "0.26"

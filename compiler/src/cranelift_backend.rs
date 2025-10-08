@@ -471,11 +471,9 @@ impl<'a> CraneliftFrontend<'a> {
 
     #[must_use]
     fn variable(&mut self, register: &Register, ty: Type, primitive_ty: PrimitiveType) -> VariableInfo {
-        let variable = Variable::new(register.number());
-
         self.register_map.entry(*register)
             .or_insert_with(|| {
-                self.builder.declare_var(variable, ty);
+                let variable = self.builder.declare_var(ty);
 
                 VariableInfo {
                     variable,
