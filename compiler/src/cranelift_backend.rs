@@ -274,7 +274,8 @@ impl<'a> CraneliftFrontend<'a> {
             }
 
             IrInstruction::Return { value_reg: Some(register) } => {
-                let value = self.builder.use_var(Variable::new(register.number()));
+                let register = self.register_map.get(register).unwrap();
+                let value = self.builder.use_var(register.variable);
                 let value = self.ensure_type(value, self.builder.func.signature.returns[0].value_type, function.return_ty);
                 self.builder.ins().return_(&[value]);
                 self.last_was_jump = true;
@@ -461,10 +462,9 @@ impl<'a> CraneliftFrontend<'a> {
             }
 
             IrOperand::Register(register) => {
-                let var = Variable::new(register.number());
-                let ty = self.register_map.get(register).unwrap().ty;
-                let val = self.builder.use_var(var);
-                (ty, val)
+                let info = self.register_map.get(register).unwrap();
+                let val = self.builder.use_var(info.variable);
+                (info.ty, val)
             }
         }
     }
