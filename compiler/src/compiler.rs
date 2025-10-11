@@ -286,6 +286,8 @@ impl CompileStatement for AssignStatement {
             ExpressionResultKind::PointerRegister { base_ptr, offset, typ } => {
                 builder.store_ptr(base_ptr, offset, source, typ);
             }
+
+            ExpressionResultKind::PointerRegisterExplicit { .. } => panic!("Cannot assign to explicit pointer reference"),
         }
     }
 }
@@ -718,7 +720,7 @@ impl CompileExpression for StructureInstantiationExpression {
 
         let ty = layout.type_id().clone();
 
-        let default_values: Vec<(usize, PrimitiveType, Rc<Expression>)> = layout
+        let default_values: Vec<(isize, PrimitiveType, Rc<Expression>)> = layout
             .fields()
             .iter()
             .filter_map(|field| {
@@ -729,7 +731,7 @@ impl CompileExpression for StructureInstantiationExpression {
             })
             .collect();
 
-        let fields: Vec<(usize, PrimitiveType, &FieldInstantiation)> = self.fields
+        let fields: Vec<(isize, PrimitiveType, &FieldInstantiation)> = self.fields
             .iter()
             .map(|field| {
                 let layout = layout.field(&field.name);
@@ -762,7 +764,7 @@ impl CompileExpression for UnaryExpression {
                         if type_info.type_id().is_primitive() {
                             let (reg, _) = builder.promote_to_stack(reference.value().clone());
                             let typ = builder.primitive_type_of(&type_info);
-                            return ExpressionResult::pointer(reg, Operand::Immediate(Immediate::Integer64(0)), type_info, typ);
+                            return ExpressionResult::pointer_explicit(reg, Operand::Immediate(Immediate::Integer64(0)), type_info, typ);
                         }
                     }
                 }
@@ -812,6 +814,14 @@ impl ExpressionResult {
     pub fn pointer(base_ptr: Register, offset: Operand, type_info: impl Into<TypeInfo>, typ: PrimitiveType) -> Self {
         Self {
             kind: ExpressionResultKind::PointerRegister { base_ptr, offset, typ },
+            type_info: type_info.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn pointer_explicit(base_ptr: Register, offset: Operand, type_info: impl Into<TypeInfo>, typ: PrimitiveType) -> Self {
+        Self {
+            kind: ExpressionResultKind::PointerRegisterExplicit { base_ptr, offset, typ },
             type_info: type_info.into(),
         }
     }
@@ -905,6 +915,8 @@ enum ExpressionResultKind {
     Comparison(Comparison),
     Register(Register),
     PointerRegister { base_ptr: Register, offset: Operand, typ: PrimitiveType },
+    /// TODO: these names kind of suck...
+    PointerRegisterExplicit { base_ptr: Register, offset: Operand, typ: PrimitiveType },
 }
 
 impl ExpressionResultKind {
@@ -924,6 +936,13 @@ impl ExpressionResultKind {
                 builder.compare(register, Operand::Immediate(Immediate::Integer64(0)), typ);
                 Comparison::Inequality
             }
+
+            Self::PointerRegisterExplicit { base_ptr, offset, typ } => {
+                // if the value is a register, we want to branch/jump when the value isn't 0 (false)
+                let register = builder.math(MathOperation::Add, typ, base_ptr, offset);
+                builder.compare(register, Operand::Immediate(Immediate::Integer64(0)), typ);
+                Comparison::Inequality
+            }
         }
     }
 
@@ -939,6 +958,10 @@ impl ExpressionResultKind {
             Self::PointerRegister { base_ptr, offset, typ } => {
                 builder.load_ptr(base_ptr, offset, typ)
             }
+
+            Self::PointerRegisterExplicit { base_ptr, offset, typ } => {
+                builder.math(MathOperation::Add, typ, base_ptr, offset)
+            }
         }
     }
 
@@ -953,6 +976,10 @@ impl ExpressionResultKind {
 
             Self::PointerRegister { base_ptr, offset, .. } => {
                 let typ = builder.pointer_primitive_type();
+                builder.math(MathOperation::Add, typ, base_ptr, offset)
+            }
+
+            Self::PointerRegisterExplicit { base_ptr, offset, typ } => {
                 builder.math(MathOperation::Add, typ, base_ptr, offset)
             }
         }

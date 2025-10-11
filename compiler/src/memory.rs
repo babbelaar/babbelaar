@@ -13,7 +13,7 @@ pub use self::stack_allocator::StackAllocator;
 
 #[derive(Debug, Clone)]
 pub struct FieldLayout {
-    offset: usize,
+    offset: isize,
 
     /// How much space is actually used for the field
     size: usize,
@@ -34,7 +34,7 @@ impl FieldLayout {
     }
 
     #[must_use]
-    pub const fn offset(&self) -> usize {
+    pub const fn offset(&self) -> isize {
         self.offset
     }
 
@@ -140,7 +140,7 @@ impl TypeManager {
         };
 
         let ref_count_field = RefCount::field_layout();
-        let mut offset = ref_count_field.size;
+        let mut offset = 0;
 
         layout.add_field(RefCount::FIELD_NAME, ref_count_field);
 
@@ -156,12 +156,12 @@ impl TypeManager {
                 type_id,
             };
 
-            offset += field.stride;
+            offset += field.stride.cast_signed();
 
             layout.add_field(ast_field.name.value().clone(), field);
         }
 
-        layout.size = offset;
+        layout.size = (offset - layout.fields[0].offset).try_into().expect("struct layout size should be positive");
 
         self.add_type(layout);
     }
@@ -236,11 +236,11 @@ impl TypeManager {
                 type_id: TypeId::G32,
             };
 
-            offset += field.stride;
+            offset += field.stride.cast_signed();
             layout.add_field(BabString::new_static(field_name), field);
         }
 
-        layout.size = offset;
+        layout.size = offset.cast_unsigned();
 
         self.add_type(layout);
     }
