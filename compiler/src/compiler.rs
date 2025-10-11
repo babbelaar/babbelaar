@@ -590,9 +590,12 @@ impl CompileExpression for PostfixExpression {
                         let size = builder.size_of_type_info(&item_ty);
                         let offset_typ = builder.pointer_primitive_type();
                         let offset = builder.math(MathOperation::Multiply, offset_typ, offset, Immediate::Integer64(size as _));
+                        // let offset = builder.math(MathOperation::Add, offset_typ, offset, Immediate::Integer64(builder.pointer_size() as _));
                         let offset = Operand::Register(offset);
 
                         let typ = builder.primitive_type_of(&item_ty);
+
+                        log::trace!("Haalopp: {item_ty:#?} or {typ:#?}");
                         ExpressionResult::pointer(base_ptr, offset, *item_ty, typ)
                     }
 
@@ -674,7 +677,7 @@ impl CompileExpression for PrimaryExpression {
                 let result = ExpressionResult::array(ptr, *layout.type_id());
 
                 let mut space_to_zero = layout.size() * size;
-                let mut offset = 0;
+                let mut offset = builder.pointer_size();
                 let pointer_ty = builder.pointer_primitive_type();
                 let zero = builder.load_immediate(Immediate::Integer64(0), pointer_ty);
                 let pointer_size = builder.pointer_size();
@@ -758,7 +761,8 @@ impl CompileExpression for UnaryExpression {
                     if let TypeInfo::Plain(_) = type_info {
                         if type_info.type_id().is_primitive() {
                             let (reg, _) = builder.promote_to_stack(reference.value().clone());
-                            return ExpressionResult::array(reg, type_info);
+                            let typ = builder.primitive_type_of(&type_info);
+                            return ExpressionResult::pointer(reg, Operand::Immediate(Immediate::Integer64(0)), type_info, typ);
                         }
                     }
                 }

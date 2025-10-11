@@ -61,6 +61,7 @@ pub use self::{
     },
     memory::{
         FieldLayout,
+        RefCount,
         StackAllocator,
         StructureLayout,
         TypeId,

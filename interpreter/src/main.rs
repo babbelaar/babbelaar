@@ -8,8 +8,9 @@
 mod data;
 mod error;
 mod scope;
+mod signal;
 
-use std::{collections::HashMap, fs::{create_dir_all, read_dir}, io, path::{Path, PathBuf}, process::{exit, Command, Stdio}, time::Instant};
+use std::{collections::HashMap, fs::{create_dir_all, read_dir}, io, path::{Path, PathBuf}, process::{Command, Stdio, exit}, time::Instant};
 
 use anyhow::Result;
 pub use babbelaar::*;
@@ -89,11 +90,42 @@ fn main() {
 
         Commands::Uitvoeren { .. } => {
             let path = compile(map, &config);
-            Command::new(path)
+            let start = Instant::now();
+            let exit_status = Command::new(path)
                 .stderr(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .spawn().unwrap()
                 .wait().unwrap();
+            let time = start.elapsed();
+
+            print!("Programma stopte na ");
+
+            if time.as_secs() != 0 {
+                print!("{}s, ", time.as_secs());
+            }
+
+            print!("{}ms", time.as_millis());
+
+            let mut sep = "";
+            if let Some(status) = exit_status.code() {
+                print!(" met statuscode: {status}");
+                sep = " en";
+            }
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::ExitStatusExt;
+
+                if let Some(signal) = exit_status.signal() {
+                    print!("{sep} met signaal: {signal}");
+
+                    if let Some(name) = signal::human_name(signal) {
+                        print!(" ({name})");
+                    }
+                }
+            }
+
+            println!("");
         }
     }
 }

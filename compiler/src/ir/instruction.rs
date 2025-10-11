@@ -5,7 +5,7 @@ use std::fmt::{Display, Write};
 
 use babbelaar::{BabString, Comparison, MathOperator};
 
-use crate::DataSectionOffset;
+use crate::{DataSectionOffset, TypeId};
 
 use super::{FunctionArgument, Operand, Register};
 
@@ -87,7 +87,7 @@ pub enum Instruction {
         name: BabString,
         arguments: Vec<FunctionArgument>,
         variable_arguments: Vec<FunctionArgument>,
-        ret_ty: Option<PrimitiveType>,
+        ret_ty: Option<(PrimitiveType, TypeId)>,
         ret_val_reg: Option<Register>,
     },
 
@@ -343,7 +343,7 @@ impl Display for Instruction {
             Instruction::Call { name, arguments, variable_arguments, ret_ty, ret_val_reg } => {
                 f.write_str("RoepAan ")?;
                 if let Some(ret_ty) = ret_ty {
-                    ret_ty.fmt(f)?;
+                    ret_ty.0.fmt(f)?;
                     f.write_str(", ")?;
                 }
 
@@ -587,6 +587,18 @@ impl PrimitiveType {
     #[must_use]
     pub const fn is_arm_64_bit(&self) -> bool {
         self.bytes >= 8
+    }
+
+    #[must_use]
+    pub const fn bit_mask(&self) -> Option<u64> {
+        match self.bytes {
+            0 => Some(0),
+            1 => Some(0xFF),
+            2 => Some(0xFFFF),
+            4 => Some(0xFFFFFFFF),
+            8 => Some(0xFFFFFFFFFFFFFFFF),
+            _ => None,
+        }
     }
 }
 

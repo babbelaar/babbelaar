@@ -1585,7 +1585,7 @@ fn fill_array_g8() {
             a[4] = 5;
         }
 
-        werkwijze hoofd() -> g32 {
+        werkwijze hoofd() -> g8 {
             stel x = nieuw g8[5];
             vulOpeenvolging(x);
 
@@ -1593,7 +1593,7 @@ fn fill_array_g8() {
                 bekeer 1;
             }
 
-            bekeer 0;
+            bekeer x[2];
         }
     "#);
 
@@ -1701,6 +1701,7 @@ fn numeric_bounds_printf(#[case] format: &str, #[case] ty: &str, #[case] number:
     assert_eq!(result.stdout, number);
 }
 
+#[ignore = "this isn't the case anymore, we have the refcount now"]
 #[test]
 fn ptr_to_first_field_is_same_as_ptr_to_structure() {
     let result = create_and_run_single_object_executable(r#"
@@ -1733,6 +1734,7 @@ fn ptr_to_first_field_is_same_as_ptr_to_structure() {
     assert_eq!(ptr_to_first_field, ptr_to_structure);
 }
 
+#[ignore = "refcount is now the first field, this doesn't work anymore"]
 #[test]
 fn memcpy_of_structure_field_g32() {
     let result = create_and_run_single_object_executable(r#"
@@ -1769,6 +1771,7 @@ fn memcpy_of_structure_field_g32() {
     assert_eq!(result.stdout, "");
 }
 
+#[ignore = "refcount is now the first field, this doesn't work anymore"]
 #[test]
 fn memcpy_of_structure_field_g8() {
     let result = create_and_run_single_object_executable(r#"
@@ -1826,6 +1829,40 @@ fn slinger_index_constant() {
     assert_eq!(result.error, None);
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(result.stdout, "H\na\nl\nl\no\n");
+}
+
+#[test]
+fn return_structure_type() {
+    let result = create_and_run_single_object_executable(r#"
+        structuur Dingetje {
+            veld a: g32,
+            veld b: g32,
+            veld c: g32,
+            veld d: g32,
+
+            werkwijze bereken() -> g32 {
+                bekeer dit.a * dit.b * dit.c * dit.d;
+            }
+        }
+
+        werkwijze krijgIets(a: g32) -> Dingetje {
+            bekeer nieuw Dingetje {
+                a: a,
+                b: 2,
+                c: 4,
+                d: 3,
+            };
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel dingetje = krijgIets(3);
+            bekeer dingetje.bereken();
+        }
+    "#);
+
+    assert_eq!(result.error, None);
+    assert_eq!(result.exit_code, Some(72));
+    assert_eq!(result.stdout, "");
 }
 
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {

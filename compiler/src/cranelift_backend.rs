@@ -4,38 +4,32 @@
 use std::collections::HashMap;
 
 use crate::{
-    Architecture,
-    CompiledFunction,
-    DataSectionOffset,
-    Environment,
-    Function as IrFunction,
-    FunctionArgument,
-    Immediate as IrImmediate,
-    Instruction as IrInstruction,
-    JumpCondition,
-    Label,
-    MathOperation,
-    Operand as IrOperand,
-    OperatingSystem,
-    Platform,
-    PrimitiveType,
-    Register,
-    Relocation,
-    RelocationMethod,
-    RelocationType,
+    Architecture, CompiledFunction, DataSectionOffset, Environment, Function as IrFunction, FunctionArgument, Immediate as IrImmediate, Instruction as IrInstruction, JumpCondition, Label, MathOperation, Operand as IrOperand, OperatingSystem, Platform, PrimitiveType, Register, Relocation, RelocationMethod, RelocationType, TypeId, TypeInfo, ir::RegisterAllocator
 };
 
 use babbelaar::BabString;
 use cranelift_codegen::{
-    binemit::Reloc, control::ControlPlane, ir::{
-        types::*, Function as ClFunction, GlobalValue, UserExternalName, UserExternalNameRef, UserFuncName
-    }, verify_function, Context, FinalizedRelocTarget
+    Context,
+    FinalizedRelocTarget,
+    binemit::Reloc,
+    control::ControlPlane,
+    ir::{
+        FuncRef,
+        Function as ClFunction,
+        GlobalValue,
+        UserExternalName,
+        UserExternalNameRef,
+        UserFuncName,
+        types::*,
+    },
+    verify_function,
 };
 
 use cranelift::prelude::{
     isa::CallConv,
     *,
 };
+use log::trace;
 use target_lexicon::Triple;
 
 
@@ -57,7 +51,11 @@ impl CraneliftBackend {
         let mut sig = Signature::new(call_conv);
 
         if function.return_ty.bytes() != 0 {
-            sig.returns.push(AbiParam::new(cl_type_for_primitive_type(function.return_ty)));
+            if let Some(ty) = try_cl_type_for_primitive_type(function.return_ty) {
+                sig.returns.push(AbiParam::new(ty));
+            } else {
+                sig.returns.push(AbiParam::new(I64));
+            }
         }
 
         for param in function.arguments() {
@@ -201,6 +199,8 @@ struct CraneliftFrontend<'a> {
 
     last_was_jump: bool,
     last_compare: Option<Compare>,
+
+    malloc_func_ref: FuncRef,
 }
 
 impl<'a> CraneliftFrontend<'a> {
@@ -239,8 +239,10 @@ impl<'a> CraneliftFrontend<'a> {
 
             last_compare: None,
             last_was_jump: false,
+            malloc_func_ref: FuncRef::from_bits(0),
         };
 
+        this.prepare_malloc();
         this.compile_func(function);
         this.builder.finalize();
 
@@ -278,6 +280,7 @@ impl<'a> CraneliftFrontend<'a> {
                 let value = self.builder.use_var(register.variable);
                 let value = self.ensure_type(value, self.builder.func.signature.returns[0].value_type, function.return_ty);
                 self.builder.ins().return_(&[value]);
+
                 self.last_was_jump = true;
             }
 
@@ -293,15 +296,7 @@ impl<'a> CraneliftFrontend<'a> {
             }
 
             IrInstruction::Call { name, arguments, variable_arguments, ret_val_reg, ret_ty } => {
-                let name = self.user_func_name(name);
-                let sig = self.signature_for(ret_ty, arguments, variable_arguments);
-                let signature = self.builder.import_signature(sig);
-
-                let func_ref = self.builder.import_function(ExtFuncData {
-                    name: ExternalName::User(name),
-                    signature,
-                    colocated: true,
-                });
+                let func_ref = self.func_ref_for(name, arguments, variable_arguments, ret_ty);
 
                 let mut args = Vec::new();
 
@@ -326,7 +321,9 @@ impl<'a> CraneliftFrontend<'a> {
                 let inst = self.builder.ins().call(func_ref, &args);
                 if let Some(ret_val_reg) = ret_val_reg {
                     let value = self.builder.inst_results(inst)[0];
-                    self.set_variable(ret_val_reg, ret_ty.unwrap(), value);
+                    let (ret_ty, ret_ty_id) = ret_ty.unwrap();
+                    let typ = if ret_ty_id.is_primitive() { ret_ty } else { PrimitiveType::S64 };
+                    self.set_variable(ret_val_reg, typ, value);
                 }
             }
 
@@ -415,9 +412,14 @@ impl<'a> CraneliftFrontend<'a> {
             }
 
             IrInstruction::StackAlloc { dst, size } => {
-                let slot = self.builder.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, *size as _, 1));
-                let ty = self.pointer_type();
-                let value = self.builder.ins().stack_addr(ty, slot, 0);
+                // let slot = self.builder.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, *size as _, 1));
+
+                let size = self.builder.ins().iconst(I64, *size as i64);
+                let inst = self.builder.ins().call(self.malloc_func_ref, &[
+                    size,
+                ]);
+
+                let value = self.builder.inst_results(inst)[0];
                 self.set_variable(dst, PrimitiveType::U64, value);
             }
 
@@ -432,6 +434,7 @@ impl<'a> CraneliftFrontend<'a> {
                 let ty = cl_type_for_primitive_type(*typ);
 
                 let val = self.builder.ins().load(ty, MemFlags::new(), p, 0);
+                // let val = self.builder.ins().band_imm(val, typ.bit_mask().unwrap().cast_signed());
                 self.set_variable(destination, *typ, val);
             }
 
@@ -475,6 +478,8 @@ impl<'a> CraneliftFrontend<'a> {
             .or_insert_with(|| {
                 let variable = self.builder.declare_var(ty);
 
+                trace!("Variable {variable:?} is mapped to BIR-register {register}");
+
                 VariableInfo {
                     variable,
                     ty,
@@ -499,7 +504,7 @@ impl<'a> CraneliftFrontend<'a> {
     }
 
     #[must_use]
-    fn signature_for(&mut self, ret_ty: &Option<PrimitiveType>, arguments: &[FunctionArgument], var_args: &[FunctionArgument]) -> Signature {
+    fn signature_for(&mut self, ret_ty: &Option<(PrimitiveType, TypeId)>, arguments: &[FunctionArgument], var_args: &[FunctionArgument]) -> Signature {
         let mut sig = Signature::new(self.call_conv);
 
         for arg in arguments {
@@ -517,11 +522,24 @@ impl<'a> CraneliftFrontend<'a> {
             sig.params.push(AbiParam::new(self.pointer_type()));
         }
 
-        if let Some(ret_ty) = ret_ty {
+        if let Some((ret_ty, ret_ty_id)) = ret_ty {
             sig.returns.push(AbiParam::new(cl_type_for_primitive_type(*ret_ty)));
         }
 
         sig
+    }
+
+    #[must_use]
+    fn func_ref_for(&mut self, name: &BabString, arguments: &[FunctionArgument], variable_arguments: &[FunctionArgument], ret_ty: &Option<(PrimitiveType, TypeId)>) -> FuncRef {
+        let name = self.user_func_name(name);
+        let sig = self.signature_for(ret_ty, arguments, variable_arguments);
+        let signature = self.builder.import_signature(sig);
+
+        self.builder.import_function(ExtFuncData {
+            name: ExternalName::User(name),
+            signature,
+            colocated: true,
+        })
     }
 
     #[must_use]
@@ -593,6 +611,24 @@ impl<'a> CraneliftFrontend<'a> {
         let val = self.ensure_type(val, var.ty, var.primitive_ty);
         self.builder.def_var(var.variable, val);
     }
+
+    fn prepare_malloc(&mut self) {
+        self.malloc_func_ref = self.func_ref_for(
+            &BabString::new_static("malloc"),
+            &[
+                FunctionArgument::new(
+                    RegisterAllocator::new().next(),
+                    TypeInfo::Plain(TypeId::G64),
+                    PrimitiveType::U64,
+                ),
+            ],
+            &[],
+            &Some((
+                PrimitiveType::S64,
+                TypeId::G64,
+            )),
+        );
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -621,6 +657,18 @@ fn cl_type_for_primitive_type(ty: PrimitiveType) -> Type {
         4 => I32,
         8 => I64,
         _ => todo!("Ondersteun type met grootte {ty:?}"),
+    }
+}
+
+#[must_use]
+fn try_cl_type_for_primitive_type(ty: PrimitiveType) -> Option<Type> {
+    match ty.bytes() {
+        0 => Some(I32),
+        1 => Some(I8),
+        2 => Some(I16),
+        4 => Some(I32),
+        8 => Some(I64),
+        _ => None,
     }
 }
 
@@ -664,18 +712,19 @@ fn cl_triple_from_platform(platform: &Platform) -> Triple {
 
 #[must_use]
 fn cl_cond_for_jump_condition(condition: &JumpCondition, ty: PrimitiveType,) -> IntCC {
+    trace!("CL COND: {condition:?} ty: {ty:?}");
     match (condition, ty.is_signed()) {
         (JumpCondition::Equal, _) => IntCC::Equal,
         (JumpCondition::NotEqual, _) => IntCC::NotEqual,
 
-        (JumpCondition::Greater, false) => IntCC::SignedGreaterThan,
-        (JumpCondition::GreaterOrEqual, false) => IntCC::SignedGreaterThanOrEqual,
-        (JumpCondition::Less, false) => IntCC::SignedLessThan,
-        (JumpCondition::LessOrEqual, false) => IntCC::SignedLessThanOrEqual,
+        (JumpCondition::Greater, true) => IntCC::SignedGreaterThan,
+        (JumpCondition::GreaterOrEqual, true) => IntCC::SignedGreaterThanOrEqual,
+        (JumpCondition::Less, true) => IntCC::SignedLessThan,
+        (JumpCondition::LessOrEqual, true) => IntCC::SignedLessThanOrEqual,
 
-        (JumpCondition::Greater, true) => IntCC::UnsignedGreaterThan,
-        (JumpCondition::GreaterOrEqual, true) => IntCC::UnsignedGreaterThanOrEqual,
-        (JumpCondition::Less, true) => IntCC::UnsignedLessThan,
-        (JumpCondition::LessOrEqual, true) => IntCC::UnsignedLessThanOrEqual,
+        (JumpCondition::Greater, false) => IntCC::UnsignedGreaterThan,
+        (JumpCondition::GreaterOrEqual, false) => IntCC::UnsignedGreaterThanOrEqual,
+        (JumpCondition::Less, false) => IntCC::UnsignedLessThan,
+        (JumpCondition::LessOrEqual, false) => IntCC::UnsignedLessThanOrEqual,
     }
 }

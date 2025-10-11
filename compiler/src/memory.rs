@@ -5,7 +5,7 @@ mod stack_allocator;
 
 use std::{collections::HashMap, rc::Rc};
 
-use babbelaar::{BabString, Builtin, BuiltinType, Expression, Structure, Type};
+use babbelaar::{BabString, Builtin, BuiltinType, Expression, PrimaryExpression, Structure, Type};
 
 use crate::PrimitiveType;
 
@@ -105,6 +105,10 @@ impl StructureLayout {
 
     #[must_use]
     pub fn primitive_type(&self) -> PrimitiveType {
+        if !self.type_id.is_primitive() {
+            return PrimitiveType::S64;
+        }
+
         PrimitiveType::new(self.size, true)
     }
 }
@@ -135,7 +139,11 @@ impl TypeManager {
             field_names: HashMap::new(),
         };
 
-        let mut offset = 0;
+        let ref_count_field = RefCount::field_layout();
+        let mut offset = ref_count_field.size;
+
+        layout.add_field(RefCount::FIELD_NAME, ref_count_field);
+
         for ast_field in &structure.fields {
             let size = self.size_of(&ast_field.ty);
             let type_id = self.layout_of(&ast_field.ty.specifier.unqualified_name()).type_id;
@@ -328,5 +336,23 @@ impl TypeInfo {
 impl From<TypeId> for TypeInfo {
     fn from(value: TypeId) -> Self {
         Self::Plain(value)
+    }
+}
+
+pub struct RefCount;
+
+impl RefCount {
+    pub const PRIMITIVE_TY: PrimitiveType = PrimitiveType::S32;
+    pub const TYPE_ID: TypeId = TypeId::G32;
+    pub const FIELD_NAME: BabString = BabString::new_static("#ref-count");
+
+    pub fn field_layout() -> FieldLayout {
+        FieldLayout {
+            offset: 0,
+            size: Self::PRIMITIVE_TY.bytes(),
+            stride: Self::PRIMITIVE_TY.bytes(),
+            default_value_expression: Some(Rc::new(Expression::Primary(PrimaryExpression::IntegerLiteral(1)))),
+            type_id: Self::TYPE_ID,
+        }
     }
 }

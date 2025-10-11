@@ -44,6 +44,7 @@ impl MacOsLdLinker {
 
         command.arg("-o");
         command.arg(&self.output_path);
+        log::info!("Executable: {}", self.output_path.display());
 
         command.arg("-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib");
         command.arg("-lSystem");

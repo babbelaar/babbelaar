@@ -37,14 +37,14 @@ impl<'program> FunctionBuilder<'program> {
             arguments.split_off(var_args_after_n)
         };
 
-        let ret_ty = self.return_type_of(&name);
-        let ret_ty = self.program_builder.type_manager.layout(ret_ty).primitive_type();
+        let ret_ty_id = self.return_type_of(&name);
+        let ret_ty = self.program_builder.type_manager.layout(ret_ty_id).primitive_type();
 
         self.instructions.push(Instruction::Call {
             name,
             arguments,
             variable_arguments,
-            ret_ty: Some(ret_ty),
+            ret_ty: Some((ret_ty, ret_ty_id)),
             ret_val_reg: Some(ret_val_reg),
         });
 
@@ -238,20 +238,6 @@ impl<'program> FunctionBuilder<'program> {
 
     pub fn allocate_array(&mut self, item_structure_name: &BabString, size: usize) -> (&StructureLayout, Register) {
         let layout = self.program_builder.type_manager.layout_of(item_structure_name);
-        let size = layout.size() * size;
-
-        let dst = self.register_allocator.next();
-
-        self.instructions.push(Instruction::StackAlloc {
-            dst,
-            size,
-        });
-
-        (layout, dst)
-    }
-
-    pub fn allocate_array_type_id(&mut self, item_ty_id: TypeId, size: usize) -> (&StructureLayout, Register) {
-        let layout = self.program_builder.type_manager.layout(item_ty_id);
         let size = layout.size() * size;
 
         let dst = self.register_allocator.next();
