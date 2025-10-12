@@ -374,7 +374,14 @@ impl Format for PrimaryExpression {
                 _ = f.write_fmt(format_args!("{integer}"));
             }
             Self::ReferenceThis => f.write_str(Keyword::Dit.as_ref()),
-            Self::Reference(s) => f.write_str(s.value()),
+            Self::Reference(s, _) => f.write_str(s.value()),
+            Self::ReferencePath(path) => {
+                for part in &path.parts {
+                    f.write_str(&part);
+                    f.write_str("::");
+                }
+                f.write_str(&path.base);
+            }
             Self::CharacterLiteral(c) => {
                 f.write_char('"');
                 f.write_char(*c);

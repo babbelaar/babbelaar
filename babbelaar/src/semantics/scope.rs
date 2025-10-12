@@ -57,7 +57,7 @@ impl SemanticScope {
     }
 
     #[must_use]
-    pub fn get_function_mut(&mut self, name: &BabString) -> Option<&mut SemanticFunction> {
+    pub fn get_function_mut(&mut self, name: &BabString) -> Option<&mut Arc<SemanticFunction>> {
         let local = self.locals.get_mut(name)?;
         match &mut local.typ {
             SemanticType::Function(semantic_function) => Some(semantic_function),

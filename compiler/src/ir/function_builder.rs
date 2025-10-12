@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::BabString;
+use babbelaar::{BabString, SemanticType};
 
 use crate::{DataSectionOffset, StructureLayout, TypeId, TypeInfo};
 
@@ -26,6 +26,11 @@ pub struct FunctionBuilder<'program> {
 
 impl<'program> FunctionBuilder<'program> {
     pub fn call(&mut self, name: BabString, arguments: impl Into<Vec<FunctionArgument>>) -> Register {
+        let ret_ty_id = self.return_type_of(&name);
+        self.call_and_return(name, ret_ty_id, arguments)
+    }
+
+    pub fn call_and_return(&mut self, name: BabString, ret_ty_id: TypeId, arguments: impl Into<Vec<FunctionArgument>>) -> Register {
         let var_args_after_n = self.program_builder.function_attributes_of(&name).var_args_after_n_normal_params().unwrap_or(usize::MAX);
 
         let ret_val_reg = self.register_allocator.next();
@@ -37,7 +42,6 @@ impl<'program> FunctionBuilder<'program> {
             arguments.split_off(var_args_after_n)
         };
 
-        let ret_ty_id = self.return_type_of(&name);
         let ret_ty = self.program_builder.type_manager.layout(ret_ty_id).primitive_type();
 
         self.instructions.push(Instruction::Call {
@@ -374,6 +378,11 @@ impl<'program> FunctionBuilder<'program> {
     #[must_use]
     pub const fn return_type(&self) -> PrimitiveType {
         self.return_ty
+    }
+
+    #[must_use]
+    pub fn type_id_for(&self, ty: &SemanticType) -> TypeId {
+        self.program_builder.type_id_for_semantic(ty)
     }
 
     #[must_use]

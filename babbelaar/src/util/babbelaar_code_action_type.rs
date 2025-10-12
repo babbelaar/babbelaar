@@ -84,6 +84,9 @@ pub enum BabbelaarCodeActionType {
     #[error("Verwijder extra tekens")]
     RemoveResidualTokens,
 
+    #[error("Verwijder sleutelwoord")]
+    RemoveKeyboard,
+
     #[error("Verwijder attribute `@{name}`")]
     RemoveAttribute { name: BabString },
 

@@ -9,6 +9,7 @@ use crate::{DocumentationProvider, LspCompletion};
 #[derive(strum::AsRefStr, strum::EnumIter)]
 #[strum(serialize_all = "snake_case")]
 pub enum Keyword {
+    Algemene,
     Als,
     Bekeer,
     Dit,
@@ -84,6 +85,7 @@ impl Keyword {
 impl DocumentationProvider for Keyword {
     fn provide_documentation(&self) -> std::borrow::Cow<'_, str> {
         match self {
+            Self::Algemene => "",
             Self::Als => "Evalueer sectie als een voorwaarde geldt.",
             Self::Bekeer => "Geef een waarde terug aan de aanroeper van de werkwijze.",
             Self::Dit => r#"De huidige waarde binnen een werkwijze van een structuur.

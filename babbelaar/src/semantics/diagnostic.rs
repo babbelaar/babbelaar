@@ -350,6 +350,27 @@ pub enum SemanticDiagnosticKind {
         expected: SemanticType,
         actual: SemanticType,
     },
+
+    #[error("padonderdeel `{name}` is ongeldig")]
+    UnknownPathPart { name: BabString },
+
+    #[error("padonderdeel `{name}` vereist generieke argumenten, maar dit is nog niet ondersteund")]
+    PathPartRequiresGenerics { name: BabString },
+
+    #[error("padonderdeel `{name}` is geen structuurverwijzing")]
+    PathNotStructure { name: BabString },
+
+    #[error("kon methode `{name}` niet vinden in structuur `{structure}`")]
+    PathMethodNotFound { name: BabString, structure: BabString },
+
+    #[error("kan niet verwijzen naar niet-algemene methode `{name}` in structuur `{structure}`")]
+    PathMethodNotStatic { name: BabString, structure: BabString },
+
+    #[error("qualificatie `{name}` is ongeldig omdat `{name}` al naar een methode verwijst")]
+    PathMethodCannotBeFurtherQualified { name: BabString, method: BabString },
+
+    #[error("pad naar structuur `{name}` is geen expressie")]
+    PathStructureIsNotAnExpression { name: BabString },
 }
 
 impl SemanticDiagnosticKind {

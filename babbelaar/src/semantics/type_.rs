@@ -3,7 +3,7 @@
 
 use std::{fmt::{Display, Write}, sync::Arc};
 
-use crate::{BabString, BuiltinType, Expression, FileRange, PrimaryExpression, UnaryExpressionKind};
+use crate::{BabString, BuiltinType, Expression, FileRange, PrimaryExpression, Ranged, UnaryExpressionKind};
 
 use super::{FunctionReference, SemanticFunction, SemanticInterface, SemanticStructure};
 
@@ -25,7 +25,7 @@ pub enum SemanticType {
     Array(Box<SemanticType>),
     Builtin(BuiltinType),
     Custom { base: Arc<SemanticStructure>, parameters: Vec<SemanticType> },
-    Function(SemanticFunction),
+    Function(Arc<SemanticFunction>),
     FunctionReference(FunctionReference),
     Interface { base: Arc<SemanticInterface>, parameters: Vec<SemanticType> },
     Generic(SemanticGenericType),
@@ -42,6 +42,14 @@ impl SemanticType {
     #[must_use]
     pub fn is_null(&self) -> bool {
         matches!(self, Self::Builtin(BuiltinType::Null))
+    }
+
+    #[must_use]
+    pub fn generic_type_names(&self) -> &[Ranged<BabString>] {
+        match self {
+            Self::Custom { base, .. } => &base.generic_types,
+            _ => &[],
+        }
     }
 
     pub fn declaration_range(&self) -> FileRange {
@@ -280,6 +288,7 @@ impl SemanticTypeResolution {
         match expression {
             Expression::Primary(PrimaryExpression::SizedArrayInitializer { .. }) => Self::default(),
             Expression::Primary(PrimaryExpression::Reference { .. }) => Self::default(),
+            Expression::Primary(PrimaryExpression::ReferencePath(..)) => Self::default(),
             Expression::Primary(PrimaryExpression::ReferenceThis) => Self::default(),
             Expression::Primary(PrimaryExpression::StructureInstantiation(..)) => Self::default(),
 

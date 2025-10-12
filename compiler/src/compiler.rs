@@ -7,7 +7,7 @@
 use std::rc::Rc;
 
 use babbelaar::*;
-use log::{debug, error};
+use log::{debug, error, warn};
 
 use crate::{ir::FunctionArgument, optimize_program, ArgumentList, FunctionAttribute, FunctionBuilder, Immediate, Label, MathOperation, Operand, PrimitiveType, Program, ProgramBuilder, Register, TypeId, TypeInfo};
 
@@ -76,6 +76,16 @@ impl Compiler {
                     }
                 }
 
+                StatementKind::Extension(extension) => {
+                    for method in &extension.methods {
+                        if let Some(ret) = &method.function.return_type {
+                            let type_id = self.program_builder.type_id_for_structure(&ret.specifier.unqualified_name());
+                            let name = create_mangled_method_name(&extension.type_specifier.unqualified_name(), &method.function.name);
+                            self.program_builder.add_function_return_type(name, type_id);
+                        }
+                    }
+                }
+
                 _ => ()
             }
         }
@@ -103,9 +113,22 @@ impl Compiler {
 
             for method in &structure.methods {
                 let name = create_mangled_method_name(structure.name.value(), method.function.name.value());
-                self.compile_function(&method.function, name, CallingConvention::Method {
-                    this: type_id,
-                });
+                self.compile_function(&method.function, name, CallingConvention::determine(method.is_static, type_id));
+            }
+        }
+
+        for statement in trees.iter().flat_map(|t| t.extensions()) {
+            let StatementKind::Extension(extension) = &statement.kind else {
+                debug_assert!(false, "Verwachtte alleen `uitbreidingen`");
+                continue;
+            };
+
+            let name = extension.type_specifier.unqualified_name();
+            let type_id = self.program_builder.type_id_for_structure(&name);
+
+            for method in &extension.methods {
+                let name = create_mangled_method_name(&name, method.function.name.value());
+                self.compile_function(&method.function, name, CallingConvention::determine(method.is_static, type_id));
             }
         }
     }
@@ -138,7 +161,7 @@ impl Compiler {
         }
     }
 
-    fn compile_function(&mut self, func: &FunctionStatement, name: BabString, call_convention: CallingConvention) {
+    fn compile_function(&mut self, func: &FunctionStatement, name: BabString, calling_convention: CallingConvention) {
         let Some(body) = &func.body else {
             return;
         };
@@ -147,7 +170,7 @@ impl Compiler {
 
         let mut arguments = ArgumentList::new();
 
-        match call_convention {
+        match calling_convention {
             CallingConvention::Regular => (),
             CallingConvention::Method { this } => {
                 arguments.add_this(this);
@@ -304,7 +327,6 @@ impl CompileStatement for FunctionStatement {
     fn compile(&self, builder: &mut FunctionBuilder, ctx: &mut FunctionContext) {
         _ = builder;
         _ = ctx;
-        todo!();
     }
 }
 
@@ -533,10 +555,40 @@ impl CompileExpression for PostfixExpression {
                 let arguments = call.arguments.compile(builder, ctx);
 
                 match self.lhs.value() {
-                    Expression::Primary(PrimaryExpression::Reference(reference)) => {
-                        let reg = builder.call(reference.value().clone(), arguments);
+                    Expression::Primary(PrimaryExpression::Reference(reference, computed)) => {
+                        let name = reference.value().clone();
+
+                        if let Some(ty) = computed.ty.lock().ok().as_ref().and_then(|x| x.as_ref()) {
+                            match ty {
+                                SemanticType::Function(function) => {
+                                    let ret_ty_id = builder.type_id_for(&function.return_type);
+                                    let reg = builder.call_and_return(name, ret_ty_id, arguments);
+                                    return ExpressionResult::typed(reg, ret_ty_id);
+                                }
+
+                                SemanticType::FunctionReference(function) => {
+                                    let ret_ty_id = builder.type_id_for(&function.return_type());
+                                    let reg = builder.call_and_return(name, ret_ty_id, arguments);
+                                    return ExpressionResult::typed(reg, ret_ty_id);
+                                }
+
+                                _ => {
+                                    warn!("Cannot deduct return type from field type of computed reference: {ty:#?}");
+                                    debug_assert!(false, "cannot deduct return type (see warn above)");
+                                }
+                            }
+                        }
+
+                        let reg = builder.call(name, arguments);
                         let ty = builder.return_type_of(reference.value());
                         ExpressionResult::typed(reg, ty)
+                    }
+
+                    Expression::Primary(PrimaryExpression::ReferencePath(path)) => {
+                        let computed = path.computed.lock().unwrap().clone().expect("path not computed!");
+                        let ret_ty_id = builder.type_id_for(&computed.return_type);
+                        let reg = builder.call_and_return(computed.name, ret_ty_id, arguments);
+                        ExpressionResult::typed(reg, ret_ty_id)
                     }
 
                     _ => todo!("Ondersteun aanroepexpressies met linkerzijde: {:#?}", self.lhs)
@@ -653,7 +705,7 @@ impl CompileExpression for PrimaryExpression {
                 expression.compile(builder, ctx)
             }
 
-            Self::Reference(name) => {
+            Self::Reference(name, _) => {
                 match builder.load_local(name.value()) {
                     Some(local) => local.into(),
                     None => {
@@ -661,6 +713,10 @@ impl CompileExpression for PrimaryExpression {
                         ExpressionResult::typed(builder.load_immediate(Immediate::Integer64(0), PrimitiveType::U32), TypeInfo::Plain(TypeId::G32))
                     }
                 }
+            }
+
+            Self::ReferencePath(..) => {
+                todo!()
             }
 
             Self::ReferenceThis => {
@@ -759,7 +815,7 @@ impl CompileExpression for UnaryExpression {
         match self.kind.value() {
             UnaryExpressionKind::AddressOf => {
                 let (register, type_info) = value.to_register_and_type(builder);
-                if let Expression::Primary(PrimaryExpression::Reference(reference)) = self.rhs.value() {
+                if let Expression::Primary(PrimaryExpression::Reference(reference, _)) = self.rhs.value() {
                     if let TypeInfo::Plain(_) = type_info {
                         if type_info.type_id().is_primitive() {
                             let (reg, _) = builder.promote_to_stack(reference.value().clone());
@@ -1010,6 +1066,17 @@ enum CallingConvention {
     Method {
         this: TypeId,
     },
+}
+
+impl CallingConvention {
+    #[must_use]
+    fn determine(is_static: bool, this: TypeId) -> Self {
+        if is_static {
+            Self::Regular
+        } else {
+            Self::Method { this }
+        }
+    }
 }
 
 #[derive(Debug, Default)]

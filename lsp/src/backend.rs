@@ -380,7 +380,7 @@ impl Backend {
 
                 match postfix.kind.value() {
                     PostfixExpressionKind::Call(..) => {
-                        let Expression::Primary(PrimaryExpression::Reference(calling_name)) = postfix.lhs.value() else {
+                        let Expression::Primary(PrimaryExpression::Reference(calling_name, _)) = postfix.lhs.value() else {
                             log::warn!("Cannot give signature help for a non-identifier Call Postfix Expression");
                             return Ok(None);
                         };

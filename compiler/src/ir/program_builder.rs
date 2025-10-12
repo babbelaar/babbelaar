@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use babbelaar::{BabString, BuiltinType, Structure};
+use babbelaar::{BabString, BuiltinType, SemanticType, Structure};
 
 use crate::{ir::{function_builder::FunctionLocal, ArgumentName}, ArgumentList, FunctionParameter, Instruction, PrimitiveType, TypeId, TypeManager};
 
@@ -109,6 +109,15 @@ impl ProgramBuilder {
     #[must_use]
     pub fn type_id_for_structure(&self, name: &BabString) -> TypeId {
         self.type_manager.layout_of(name).type_id().clone()
+    }
+
+    #[must_use]
+    pub fn type_id_for_semantic(&self, ty: &SemanticType) -> TypeId {
+        match ty {
+            SemanticType::Builtin(ty) => self.type_id_for_builtin(*ty),
+            SemanticType::Custom { base, .. } => self.type_id_for_structure(&base.name),
+            _ => todo!("TypeId for ty: {ty:#?}"),
+        }
     }
 
     pub fn add_function_alias(&mut self, name: &BabString, actual_name: &BabString) {

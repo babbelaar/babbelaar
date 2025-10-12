@@ -171,6 +171,7 @@ impl SemanticContext {
         let name = function.name.value().clone();
         let declaration_range = function.name.range();
 
+        let function = Arc::new(function);
         if let Some(tracker) = &mut self.declaration_tracker {
             tracker.push(SemanticReference {
                 local_name: function.name.value().clone(),

@@ -1,16 +1,16 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
-use crate::{BabString, BuiltinFunction, FileRange};
+use crate::{BabString, BuiltinFunction, FileRange, SemanticType};
 
 use super::SemanticFunction;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FunctionReference {
     Builtin(&'static BuiltinFunction),
-    Custom(SemanticFunction),
+    Custom(Arc<SemanticFunction>),
 }
 
 impl Display for FunctionReference {
@@ -85,6 +85,14 @@ impl FunctionReference {
         match self {
             Self::Builtin(func) => Some(BabString::new_static(func.inline_detail)),
             Self::Custom(..) => None,
+        }
+    }
+
+    #[must_use]
+    pub fn return_type(&self) -> SemanticType {
+        match self {
+            Self::Builtin(func) => SemanticType::Builtin(func.return_type),
+            Self::Custom(func) => func.return_type.as_ref().clone(),
         }
     }
 }

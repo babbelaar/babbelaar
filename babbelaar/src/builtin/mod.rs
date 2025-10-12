@@ -7,6 +7,8 @@ mod methods;
 mod pointer;
 mod types;
 
+use crate::BabString;
+
 pub use self::{
     array::{BuiltinArray, ArrayMethod, ArrayMethodParameter, ArrayTypeRef},
     functions::{BuiltinFunction, BuiltinFunctionParameter},
@@ -19,8 +21,8 @@ pub struct Builtin;
 
 impl Builtin {
     #[must_use]
-    pub fn type_by_name(name: &str) -> Option<BuiltinType> {
-        Self::TYPES.iter().find(|x| x.name() == name).copied()
+    pub fn type_by_name(name: &BabString) -> Option<BuiltinType> {
+        Self::TYPES.iter().find(|x| x.name() == *name).copied()
     }
 
     #[must_use]

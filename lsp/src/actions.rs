@@ -183,6 +183,7 @@ impl CodeActionsAnalyzable for PrimaryExpression {
 
             Self::Reference(..) => (),
             Self::ReferenceThis => (),
+            Self::ReferencePath { .. } => (),
             Self::StringLiteral(..) => (),
 
             Self::SizedArrayInitializer{ size, .. } => {
@@ -696,6 +697,18 @@ impl CodeActionsAnalyzable for ParseDiagnostic {
             Self::UnexpectedTokenAtStartOfStructureInstantiation { .. } => (),
 
             Self::UnexpectedTokenInsideStructureInstantiation { .. } => (),
+
+            Self::DuplicateStaticStorageClassSpecifier { token, prev } => {
+                _ = prev;
+                ctx.items.push(
+                    BabbelaarCodeAction::new(
+                        BabbelaarCodeActionType::RemoveKeyboard,
+                        vec![
+                            FileEdit::new(token.range(), "")
+                        ]
+                    ),
+                );
+            }
         }
     }
 }

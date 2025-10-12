@@ -92,6 +92,8 @@ pub enum Punctuator {
     Not,
     #[strum(serialize = "niet-gelijk-aan")]
     NotEquals,
+    #[strum(serialize = "dubbele-dubbele-punt")]
+    DoubleColon,
 }
 
 impl Punctuator {
@@ -140,6 +142,7 @@ impl Punctuator {
             Self::RightShiftAssign => ">>=",
             Self::Not => "!",
             Self::NotEquals => "!=",
+            Self::DoubleColon => "::",
         }
     }
 }

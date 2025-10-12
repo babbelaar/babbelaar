@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{collections::{HashMap, HashSet}, fmt::Write, sync::Arc};
+use std::{collections::{HashMap, HashSet}, fmt::Write, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}};
 
 use log::warn;
 
@@ -61,15 +61,15 @@ impl SemanticAnalyzer {
             }
 
             SemanticAnalysisPhase::Phase2 => {
-                self.analyze_statements(tree.extensions());
-            }
-
-            SemanticAnalysisPhase::Phase3 => {
                 for statement in tree.functions() {
                     if let StatementKind::Function(function) = &statement.kind {
                         self.analyze_function_declaration(function, statement);
                     }
                 }
+            }
+
+            SemanticAnalysisPhase::Phase3 => {
+                self.analyze_statements(tree.extensions());
             }
 
             SemanticAnalysisPhase::Phase4 => {
@@ -152,9 +152,9 @@ impl SemanticAnalyzer {
                 attributes: statement.attributes.clone(),
                 name: function.name.clone(),
                 parameters,
-                has_variable_arguments: false,
+                has_variable_arguments: AtomicBool::new(false),
                 parameters_right_paren_range: function.parameters_right_paren_range,
-                extern_function: None,
+                extern_function: Mutex::new(None),
                 return_type,
             },
             statement.range,
@@ -914,10 +914,10 @@ impl SemanticAnalyzer {
             self.analyze_attributes_for_field(field);
         }
 
-        let this_type = Some(SemanticType::Custom {
+        let this_type = SemanticType::Custom {
             base: Arc::clone(&semantic_structure),
             parameters: Vec::new(),
-        });
+        };
 
         let mut names = HashSet::new();
         for method in &structure.methods {
@@ -931,7 +931,8 @@ impl SemanticAnalyzer {
                 );
             }
 
-            self.analyze_function(&method.function, this_type.clone());
+            let this_type = if !method.is_static { Some(this_type.clone()) } else { None };
+            self.analyze_function(&method.function, this_type);
         }
 
         self.context.pop_scope();
@@ -941,7 +942,8 @@ impl SemanticAnalyzer {
     fn create_semantic_method(&mut self, method: &Method) -> SemanticMethod {
         SemanticMethod {
             range: method.range,
-            function: self.create_semantic_function(&method.function, Vec::new()),
+            function: Arc::new(self.create_semantic_function(&method.function, Vec::new())),
+            is_static: method.is_static,
         }
     }
 
@@ -962,9 +964,9 @@ impl SemanticAnalyzer {
             attributes,
             name: function.name.clone(),
             parameters,
-            has_variable_arguments: false,
+            has_variable_arguments: AtomicBool::new(false),
             parameters_right_paren_range: function.parameters_right_paren_range,
-            extern_function: None,
+            extern_function: Mutex::new(None),
             return_type,
         }
     }
@@ -1057,7 +1059,7 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn analyze_function_call_expression(&mut self, lhs: SemanticType, expression: &FunctionCallExpression, postfix: &PostfixExpression) -> SemanticValue {
+    fn analyze_function_call_expression_function_ref(&mut self, lhs: SemanticType, expression: &FunctionCallExpression, postfix: &PostfixExpression) -> Option<(SemanticReference, BabString)> {
         // TODO: why do we this again? we only need the function and function ref...
         let function_name = match lhs {
             SemanticType::Array(..) => postfix.lhs.value().to_string().into(),
@@ -1065,6 +1067,15 @@ impl SemanticAnalyzer {
             SemanticType::Builtin(builtin) => builtin.name(),
             SemanticType::Custom { base, .. } => base.name.value().clone(),
             SemanticType::Function(func) => func.name.value().clone(),
+            SemanticType::FunctionReference(FunctionReference::Custom(function)) => {
+                let function_name = function.name.value().clone();
+                return Some((SemanticReference {
+                    local_name: function.name.value().clone(),
+                    local_kind: SemanticLocalKind::Function,
+                    declaration_range: function.name.range(),
+                    typ: SemanticType::Function(function),
+                }, function_name));
+            }
             SemanticType::FunctionReference(func) => func.name(),
             SemanticType::IndexReference(ty) => ty.name().clone(),
             SemanticType::Interface { base, .. } => base.name.value().clone(),
@@ -1081,6 +1092,14 @@ impl SemanticAnalyzer {
             let diag = diag.with_action(self.create_action_create_function(function_name, expression));
 
             self.diagnostics.create(|| diag);
+            return None;
+        };
+
+        Some((function, function_name))
+    }
+
+    fn analyze_function_call_expression(&mut self, lhs: SemanticType, expression: &FunctionCallExpression, postfix: &PostfixExpression) -> SemanticValue {
+        let Some((function, function_name)) = self.analyze_function_call_expression_function_ref(lhs, expression, postfix) else {
             return SemanticValue::null();
         };
 
@@ -1272,7 +1291,7 @@ impl SemanticAnalyzer {
                 SemanticType::Builtin(BuiltinType::Slinger)
             }
 
-            PrimaryExpression::Reference(reference) => {
+            PrimaryExpression::Reference(reference, computed) => {
                 if reference.value() == &Constants::DISCARDING_IDENT {
                     self.diagnostics.create(||
                         SemanticDiagnostic::new(
@@ -1298,12 +1317,18 @@ impl SemanticAnalyzer {
                     typ: local.typ.clone(),
                 };
 
+                *computed.ty.lock().unwrap() = Some(local.typ.clone());
+
                 let typ = local.typ.clone();
                 if let Some(tracker) = &mut self.context.definition_tracker {
                     tracker.insert(reference.range(), local_reference);
                 }
 
                 typ
+            }
+
+            PrimaryExpression::ReferencePath(path) => {
+                self.analyze_path_expression(path)
             }
 
             PrimaryExpression::Parenthesized(expr) => return self.analyze_expression(expr, &SemanticTypeResolution::default()),
@@ -1941,7 +1966,7 @@ impl SemanticAnalyzer {
                             local_name: method.name().clone(),
                             local_kind: SemanticLocalKind::Method,
                             declaration_range: method.function.name.range(),
-                            typ: SemanticType::FunctionReference(FunctionReference::Custom(method.function.clone())), // is this okay?
+                            typ: SemanticType::FunctionReference(FunctionReference::Custom(Arc::clone(&method.function))), // is this okay?
                         };
 
                         if let Some(tracker) = &mut self.context.definition_tracker {
@@ -2168,7 +2193,9 @@ impl SemanticAnalyzer {
             return;
         };
 
-        if func.extern_function.is_some() {
+        let mut func = func.extern_function.lock().unwrap();
+
+        if func.is_some() {
             let diag = SemanticDiagnostic::new(
                 attr.name.range().as_full_line(),
                 SemanticDiagnosticKind::AttributeExternOnlyOnce,
@@ -2181,7 +2208,7 @@ impl SemanticAnalyzer {
             return;
         }
 
-        func.extern_function = Some(extern_func);
+        *func = Some(extern_func);
     }
 
     fn attribute_extern_evaluate(&mut self, attr: &Attribute) -> Option<SemanticExternFunction> {
@@ -2264,7 +2291,7 @@ impl SemanticAnalyzer {
             return;
         };
 
-        if func.extern_function.is_some() {
+        if func.extern_function.lock().unwrap().is_some() {
             let diag = SemanticDiagnostic::new(
                 attr.name.range().as_full_line(),
                 SemanticDiagnosticKind::AttributeExternOnlyOnce,
@@ -2277,7 +2304,7 @@ impl SemanticAnalyzer {
             return;
         }
 
-        func.has_variable_arguments = true;
+        func.has_variable_arguments.store(true, Ordering::SeqCst);
     }
 
     fn analyze_attributes_for_field(&mut self, field: &SemanticField) {
@@ -2669,7 +2696,8 @@ impl SemanticAnalyzer {
             Expression::Primary(PrimaryExpression::Boolean(..)) => None,
             Expression::Primary(PrimaryExpression::IntegerLiteral(..)) => Some(BabString::new_static("getal")),
             Expression::Primary(PrimaryExpression::Parenthesized(expr)) => self.find_canonical_name_for_variable(expr.value()),
-            Expression::Primary(PrimaryExpression::Reference(reference)) => Some(reference.value().clone()),
+            Expression::Primary(PrimaryExpression::Reference(reference, _)) => Some(reference.value().clone()),
+            Expression::Primary(PrimaryExpression::ReferencePath(path)) => Some(path.base.value().clone()),
             Expression::Primary(PrimaryExpression::ReferenceThis) => {
                 Some(self.context.current_scope().this.as_ref()?.name().to_lowercase().into())
             }
@@ -2875,4 +2903,172 @@ impl SemanticAnalyzer {
     fn is_in_function_scope(&self) -> bool {
         self.context.scope.iter().find(|x| x.kind.is_function()).is_some()
     }
+
+    fn iter_extensions<'a>(&'a self, ty: &'a SemanticType) -> impl Iterator<Item = &'a SemanticExtension> + 'a {
+        self.context.scope.iter()
+            .rev()
+            .flat_map(|x| &x.extensions)
+            .filter(|x| x.ty == *ty)
+    }
+
+    fn analyze_path_expression(&mut self, path: &PathExpression) -> SemanticType {
+        let mut current = CurrentPathReference::Root;
+
+        let parts = path.parts.iter()
+            .chain(std::iter::once(&path.base));
+
+        for part in parts {
+            match self.analyze_path_expression_part(current, part) {
+                Some(new_reference) => {
+                    current = new_reference;
+                }
+
+                None => {
+                    return SemanticType::null();
+                }
+            }
+        }
+
+        match current {
+            CurrentPathReference::Root => unreachable!(),
+
+            CurrentPathReference::Ty { ty, .. } => {
+                self.emit_diagnostic(|_| {
+                    SemanticDiagnostic::new(path.range(), SemanticDiagnosticKind::PathStructureIsNotAnExpression {
+                        name: ty.name(),
+                    })
+                });
+                SemanticType::null()
+            }
+
+            CurrentPathReference::StaticMethod { reference, name, parent_type_name, .. } => {
+                *path.computed.lock().unwrap() = Some(ComputedPathExpression {
+                    name: BabString::new(format!("{parent_type_name}__{name}")),
+                    return_type: reference.return_type(),
+                });
+                SemanticType::FunctionReference(reference)
+            }
+        }
+    }
+
+    fn analyze_path_expression_part(&mut self, current: CurrentPathReference, part: &Ranged<BabString>) -> Option<CurrentPathReference> {
+        let name = part.value().clone();
+
+        Some(match current {
+            CurrentPathReference::Root => {
+                let ty = self.context.scope.iter().rev()
+                    .filter_map(|x| x.structures.get(&name))
+                    .cloned()
+                    .map(|base| SemanticType::Custom { base, parameters: Vec::new() })
+                    .next()
+                    .or_else(|| {
+                        Builtin::type_by_name(&name).map(|x| SemanticType::Builtin(x))
+                    });
+
+                let Some(ty) = ty else {
+                    self.emit_diagnostic(|_| {
+                        SemanticDiagnostic::new(part.range(), SemanticDiagnosticKind::UnknownPathPart { name })
+                    });
+                    return None;
+                };
+
+                if !ty.generic_type_names().is_empty() {
+                    self.emit_diagnostic(|_| {
+                        SemanticDiagnostic::new(part.range(), SemanticDiagnosticKind::PathPartRequiresGenerics { name })
+                    });
+                    return None;
+                }
+
+                CurrentPathReference::Ty {
+                    ty,
+                    range: part.range(),
+                }
+            }
+
+            CurrentPathReference::Ty { ty, range } => {
+                let extension_method = self.iter_extensions(&ty).find_map(|x| x.methods.get(&name));
+
+                if let Some(method) = extension_method {
+                    if !method.is_static {
+                        self.emit_diagnostic(|_| {
+                            SemanticDiagnostic::new(part.range(), SemanticDiagnosticKind::PathMethodNotStatic {
+                                name,
+                                structure: ty.name(),
+                            })
+                        });
+                        return None;
+                    }
+
+                    return Some(CurrentPathReference::StaticMethod {
+                        reference: FunctionReference::Custom(Arc::clone(&method.function)),
+                        name: method.name().clone(),
+                        parent_type_name: ty.name(),
+                    });
+                }
+
+                match &ty {
+                    SemanticType::Custom { base, parameters } => {
+                        assert!(parameters.is_empty());
+
+                        let Some(method) = base.methods.iter().find(|x| *x.name() == name) else {
+                            self.emit_diagnostic(|_| {
+                                SemanticDiagnostic::new(part.range(), SemanticDiagnosticKind::PathMethodNotFound {
+                                    name,
+                                    structure: ty.name(),
+                                })
+                            });
+                            return None;
+                        };
+
+                        if !method.is_static {
+                            self.emit_diagnostic(|_| {
+                                SemanticDiagnostic::new(part.range(), SemanticDiagnosticKind::PathMethodNotStatic {
+                                    name,
+                                    structure: ty.name(),
+                                })
+                            });
+                            return None;
+                        }
+
+                        CurrentPathReference::StaticMethod {
+                            reference: FunctionReference::Custom(Arc::clone(&method.function)),
+                            name: method.name().clone(),
+                            parent_type_name: ty.name(),
+                        }
+                    }
+
+                    _ => {
+                        self.emit_diagnostic(|_| {
+                            SemanticDiagnostic::new(range, SemanticDiagnosticKind::PathNotStructure { name: ty.name() })
+                        });
+
+                        return None;
+                    }
+                }
+            }
+
+            CurrentPathReference::StaticMethod { name: method_name, .. } => {
+                self.emit_diagnostic(|_| {
+                    SemanticDiagnostic::new(part.range(), SemanticDiagnosticKind::PathMethodCannotBeFurtherQualified {
+                        name,
+                        method: method_name,
+                    })
+                });
+                return None;
+            }
+        })
+    }
+}
+
+enum CurrentPathReference {
+    Root,
+    Ty {
+        ty: SemanticType,
+        range: FileRange,
+    },
+    StaticMethod {
+        reference: FunctionReference,
+        name: BabString,
+        parent_type_name: BabString,
+    },
 }

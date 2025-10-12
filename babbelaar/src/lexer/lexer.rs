@@ -56,7 +56,7 @@ impl<'source_code> Lexer<'source_code> {
             '/' => self.handle_solidus(),
             '*' => self.consume_assign_or_normal_token(Punctuator::Asterisk, Punctuator::MultiplyAssign),
             '%' => self.consume_assign_or_normal_token(Punctuator::PercentageSign, Punctuator::ModuloAssign),
-            ':' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Colon)),
+            ':' => self.consume_single_or_double_char_token(Punctuator::Colon, Punctuator::DoubleColon),
             '.' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::Period)),
             '@' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::AtSign)),
             '<' => self.consume_quadruple(Punctuator::LessThan, Punctuator::LessThanOrEqual, Punctuator::LeftShift, Punctuator::LeftShiftAssign),

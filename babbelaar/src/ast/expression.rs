@@ -1,9 +1,9 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::{Debug, Display, Write};
+use std::{fmt::{Debug, Display, Write}, sync::{Arc, Mutex}};
 
-use crate::{BabString, FileRange, Ranged, Type};
+use crate::{BabString, FileRange, Ranged, SemanticType, Type};
 
 #[derive(Clone, Debug)]
 pub enum PrimaryExpression {
@@ -11,7 +11,8 @@ pub enum PrimaryExpression {
     CharacterLiteral(char),
     StringLiteral(BabString),
     IntegerLiteral(i64),
-    Reference(Ranged<BabString>),
+    Reference(Ranged<BabString>, ComputedReference),
+    ReferencePath(PathExpression),
     ReferenceThis,
     StructureInstantiation(StructureInstantiationExpression),
     TemplateString {
@@ -39,8 +40,11 @@ impl Display for PrimaryExpression {
                 f.write_char('"')
             }
             PrimaryExpression::IntegerLiteral(i) => f.write_fmt(format_args!("{i}")),
-            PrimaryExpression::Reference(bab_string) => {
+            PrimaryExpression::Reference(bab_string, _) => {
                 f.write_str(bab_string.as_str())
+            }
+            PrimaryExpression::ReferencePath(path) => {
+                Display::fmt(path, f)
             }
             PrimaryExpression::ReferenceThis => f.write_str("dit"),
             PrimaryExpression::StructureInstantiation(..) => todo!(),
@@ -55,6 +59,42 @@ impl Display for PrimaryExpression {
             }
         }
     }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ComputedReference {
+    pub ty: Arc<Mutex<Option<SemanticType>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PathExpression {
+    pub parts: Vec<Ranged<BabString>>,
+    pub base: Ranged<BabString>,
+    pub computed: Arc<Mutex<Option<ComputedPathExpression>>>,
+}
+
+impl PathExpression {
+    #[must_use]
+    pub fn range(&self) -> FileRange {
+        FileRange::new(self.parts[0].range().start(), self.base.range().end())
+    }
+}
+
+impl Display for PathExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for part in &self.parts {
+            f.write_str(&part)?;
+            f.write_str("::")?;
+        }
+
+        f.write_str(self.base.as_str())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ComputedPathExpression {
+    pub name: BabString,
+    pub return_type: SemanticType,
 }
 
 #[derive(Debug, Clone)]
@@ -92,7 +132,7 @@ impl Expression {
     #[must_use]
     pub fn as_identifier(&self) -> Option<&BabString> {
         match self {
-            Self::Primary(PrimaryExpression::Reference(ident)) => Some(ident.value()),
+            Self::Primary(PrimaryExpression::Reference(ident, _)) => Some(ident.value()),
             _ => None,
         }
     }

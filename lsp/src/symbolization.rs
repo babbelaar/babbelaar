@@ -306,7 +306,7 @@ impl Symbolizer {
         match expression {
             Expression::Postfix(expression) => self.add_expression_postfix(expression),
 
-            Expression::Primary(PrimaryExpression::Reference(identifier)) => {
+            Expression::Primary(PrimaryExpression::Reference(identifier, _)) => {
                 if let Some(reference) = self.semantic_analyzer.find_reference(identifier.range()) {
                     self.symbols.insert(LspSymbol {
                         name: identifier.value().clone(),
@@ -387,7 +387,7 @@ impl Symbolizer {
     fn add_expression_postfix(&mut self, expression: &PostfixExpression) {
         match expression.kind.value() {
             PostfixExpressionKind::Call(..) => {
-                if let Expression::Primary(PrimaryExpression::Reference(ident)) = expression.lhs.value() {
+                if let Expression::Primary(PrimaryExpression::Reference(ident, _)) = expression.lhs.value() {
                     self.symbols.insert(LspSymbol {
                         name: ident.value().clone(),
                         kind: LspTokenType::Function,

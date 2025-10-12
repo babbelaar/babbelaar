@@ -33,7 +33,7 @@
                     "name": "keyword.control.babbelaar"
                 },
                 {
-                    "match": "\\b(werkwijze|waar|structuur|onwaar|veld|nieuw|stel|dit|uitbreiding|koppelvlak|op)\\b",
+                    "match": "\\b(werkwijze|waar|structuur|onwaar|veld|nieuw|stel|dit|uitbreiding|koppelvlak|op|algemene)\\b",
                     "name": "keyword.other.babbelaar"
                 }
             ]

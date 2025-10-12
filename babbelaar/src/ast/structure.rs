@@ -24,6 +24,7 @@ pub struct InterfaceStatement {
 pub struct Method {
     pub range: FileRange,
     pub function: FunctionStatement,
+    pub is_static: bool,
 }
 
 #[derive(Debug, Clone)]

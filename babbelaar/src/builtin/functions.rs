@@ -58,6 +58,8 @@ impl Debug for BuiltinFunction {
             .field("function", &"(native)")
             .field("lsp_completion", &self.lsp_completion)
             .field("parameters", &self.parameters)
+            .field("return_type", &self.return_type)
+            .field("must_use", &self.must_use)
             .finish()
     }
 }

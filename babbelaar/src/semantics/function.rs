@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::fmt::Display;
+use std::{fmt::Display, sync::{Mutex, atomic::AtomicBool}};
 
 use crate::{Attribute, BabString, FileRange, Ranged};
 
@@ -13,7 +13,7 @@ pub struct SemanticExternFunction {
     pub name: BabString,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SemanticFunction {
     pub attributes: Vec<Ranged<Attribute>>,
     pub name: Ranged<BabString>,
@@ -22,10 +22,10 @@ pub struct SemanticFunction {
     /// Signifies that the function allows more arguments than specified in the
     /// functions argument list. (Not intended to be a standard Babbelaar feature,
     /// but for compatibility with C).
-    pub has_variable_arguments: bool,
+    pub has_variable_arguments: AtomicBool,
 
     pub parameters_right_paren_range: FileRange,
-    pub extern_function: Option<SemanticExternFunction>,
+    pub extern_function: Mutex<Option<SemanticExternFunction>>,
     pub return_type: Box<SemanticType>,
 }
 

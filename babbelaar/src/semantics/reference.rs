@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
+use std::sync::atomic::Ordering;
+
 use crate::{BabString, FileRange, IntoBabString};
 
 use super::{FunctionReference, SemanticLocalKind, SemanticType};
@@ -187,11 +189,11 @@ impl SemanticReference {
     pub fn has_variable_arguments(&self) -> bool {
         match &self.typ {
             SemanticType::Function(func) => {
-                func.has_variable_arguments
+                func.has_variable_arguments.load(Ordering::SeqCst)
             }
 
             SemanticType::FunctionReference(FunctionReference::Custom(func)) => {
-                func.has_variable_arguments
+                func.has_variable_arguments.load(Ordering::SeqCst)
             }
 
             _ => false,

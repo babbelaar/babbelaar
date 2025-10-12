@@ -240,6 +240,7 @@ impl<'tokens> Parser<'tokens> {
             right_curly_bracket: left_curly_bracket.end().as_zero_range(),
         };
 
+        let mut static_storage_class = None;
         loop {
             if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
                 extension.right_curly_bracket = self.consume_token()?.range();
@@ -253,16 +254,36 @@ impl<'tokens> Parser<'tokens> {
 
                 }
 
+                TokenKind::Keyword(Keyword::Algemene) => {
+                    let token = self.consume_token()?;
+                    let range = token.range();
+
+                    if let Some(prev) = static_storage_class {
+                        self.emit_diagnostic(ParseDiagnostic::DuplicateStaticStorageClassSpecifier {
+                            token,
+                            prev,
+                        });
+                    }
+
+                    static_storage_class = Some(range);
+                }
+
                 TokenKind::Keyword(Keyword::Werkwijze) => {
                     let start = self.consume_token()?.begin;
 
-                    let function = self.parse_function(FunctionParsingContext::Method)?;
+                    let mut ctx = FunctionParsingContext::Method;
+                    if static_storage_class.is_some() {
+                        ctx = FunctionParsingContext::MethodStatic;
+                    }
+
+                    let function = self.parse_function(ctx)?;
 
                     let range = FileRange::new(start, self.token_end);
 
                     extension.methods.push(Method {
                         range,
                         function,
+                        is_static: static_storage_class.is_some(),
                     });
                 }
 
@@ -472,6 +493,7 @@ impl<'tokens> Parser<'tokens> {
                     interface.methods.push(Method {
                         range,
                         function,
+                        is_static: false,
                     });
 
                     require_comma = false;
@@ -608,6 +630,7 @@ impl<'tokens> Parser<'tokens> {
                     structure.methods.push(Method {
                         range,
                         function,
+                        is_static: false,
                     });
 
                     require_comma = false;
@@ -1123,7 +1146,32 @@ impl<'tokens> Parser<'tokens> {
             TokenKind::CharacterLiteral(char) => Ok(PrimaryExpression::CharacterLiteral(char)),
             TokenKind::StringLiteral(literal) => Ok(PrimaryExpression::StringLiteral(literal)),
             TokenKind::Integer(integer) => Ok(PrimaryExpression::IntegerLiteral(integer)),
-            TokenKind::Identifier(ref identifier) => Ok(PrimaryExpression::Reference(Ranged::new(token.range(), identifier.clone()))),
+            TokenKind::Identifier(ref identifier) => {
+                let reference = Ranged::new(token.range(), identifier.clone());
+
+                if self.peek_punctuator() == Some(Punctuator::DoubleColon) {
+                    _ = self.consume_token();
+
+                    let mut parts = [reference].to_vec();
+
+                    loop {
+                        let previous = parts.last().unwrap().value().clone();
+                        let identifier = self.consume_identifier("padonderdeel", previous)?;
+
+                        if self.peek_punctuator() != Some(Punctuator::DoubleColon) {
+                            break Ok(PrimaryExpression::ReferencePath(PathExpression {
+                                base: identifier,
+                                parts,
+                                computed: Default::default(),
+                            }))
+                        }
+
+                        parts.push(identifier);
+                    }
+                } else {
+                    Ok(PrimaryExpression::Reference(reference, Default::default()))
+                }
+            },
             TokenKind::TemplateString(template_string) => self.parse_template_string(template_string),
             TokenKind::Keyword(Keyword::Waar) => Ok(PrimaryExpression::Boolean(true)),
             TokenKind::Keyword(Keyword::Onwaar) => Ok(PrimaryExpression::Boolean(false)),
@@ -1137,7 +1185,7 @@ impl<'tokens> Parser<'tokens> {
             }
 
             _ => {
-                let replacement_token = PrimaryExpression::Reference(Ranged::new(token.range(), BabString::empty()));
+                let replacement_token = PrimaryExpression::Reference(Ranged::new(token.range(), BabString::empty()), Default::default());
                 self.emit_diagnostic(ParseDiagnostic::UnknownStartOfExpression { token });
                 return Ok(Ranged::new(FileRange::new(self.token_begin, self.token_end), replacement_token));
             }
@@ -1948,6 +1996,9 @@ pub enum ParseDiagnostic {
 
     #[error("Werkwijze moet een definitie bevatten")]
     FunctionMustHaveDefinition { semicolon: Token, range: FileRange },
+
+    #[error("Meerdere keren als algemeen gespecificeerd")]
+    DuplicateStaticStorageClassSpecifier { token: Token, prev: FileRange },
 }
 
 impl ParseDiagnostic {
@@ -1997,6 +2048,7 @@ impl ParseDiagnostic {
             Self::UnexpectedTokenAtStartOfStructureInstantiation { .. } => "p0041",
             Self::UnexpectedTokenInsideStructureInstantiation { .. } => "p0042",
             Self::FunctionMustHaveDefinition { .. } => "p0043",
+            Self::DuplicateStaticStorageClassSpecifier { .. } => "p0044",
        }
     }
 
@@ -2045,6 +2097,7 @@ impl ParseDiagnostic {
             Self::UnexpectedTokenAtStartOfStructureMember { token } => token,
             Self::UnexpectedTokenAtStartOfStructureInstantiation { token } => token,
             Self::UnexpectedTokenInsideStructureInstantiation { token } => token,
+            Self::DuplicateStaticStorageClassSpecifier { token, .. } => token,
         }
     }
 
@@ -2080,13 +2133,14 @@ pub enum ParseError {
 pub enum FunctionParsingContext {
     Function,
     Method,
+    MethodStatic,
     Interface,
 }
 
 impl FunctionParsingContext {
     #[must_use]
     pub const fn require_body(&self) -> bool {
-        matches!(self, Self::Method)
+        matches!(self, Self::Method | Self::MethodStatic)
     }
 }
 
