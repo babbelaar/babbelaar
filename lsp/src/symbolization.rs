@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::once};
 
 use babbelaar::{AssignStatement, Attribute, BabString, Expression, ExtensionStatement, Field, FileLocation, FileRange, ForIterableKind, ForStatement, FunctionStatement, IfStatement, InterfaceSpecifier, InterfaceStatement, Keyword, Method, OptionExt, Parameter, ParseTree, PostfixExpression, PostfixExpressionKind, PrimaryExpression, Ranged, ReturnStatement, SemanticAnalysisPhase, SemanticAnalyzer, SemanticLocalKind, SourceCode, Statement, StatementKind, Structure, StructureInstantiationExpression, TemplateStringExpressionPart, TemplateStringToken, Token, TokenKind, Type, TypeSpecifier, VariableStatement};
 use log::error;
@@ -310,18 +310,32 @@ impl Symbolizer {
                 if let Some(reference) = self.semantic_analyzer.find_reference(identifier.range()) {
                     self.symbols.insert(LspSymbol {
                         name: identifier.value().clone(),
-                        kind: match reference.local_kind {
-                            SemanticLocalKind::FieldReference => LspTokenType::Property,
-                            SemanticLocalKind::Iterator => LspTokenType::Variable,
-                            SemanticLocalKind::StructureReference => LspTokenType::Class,
-                            SemanticLocalKind::Parameter => LspTokenType::ParameterName,
-                            SemanticLocalKind::Function => LspTokenType::Function,
-                            SemanticLocalKind::FunctionReference => LspTokenType::Function,
-                            SemanticLocalKind::Method => LspTokenType::Method,
-                            SemanticLocalKind::Variable => LspTokenType::Variable,
-                            SemanticLocalKind::ReferenceThis => LspTokenType::ParameterName,
-                        },
+                        kind: map_local_kind(reference.local_kind),
                         range: identifier.range(),
+                        modifier: LspSymbolModifier::default(),
+                    });
+                }
+            }
+
+            Expression::Primary(PrimaryExpression::ReferencePath(path)) => {
+                let computed = path.computed.lock();
+                let computed = computed.as_ref().unwrap().as_ref();
+
+                for (idx, name) in path.parts.iter().chain(once(&path.base)).enumerate() {
+                    let kind = if idx == path.parts.len() {
+                        LspTokenType::Function
+                    } else {
+                        if let Some(path) = computed {
+                            map_local_kind(path.parts[idx])
+                        } else {
+                            LspTokenType::Class
+                        }
+                    };
+
+                    self.symbols.insert(LspSymbol {
+                        name: name.value().clone(),
+                        kind,
+                        range: name.range(),
                         modifier: LspSymbolModifier::default(),
                     });
                 }
@@ -394,6 +408,8 @@ impl Symbolizer {
                         range: ident.range(),
                         modifier: LspSymbolModifier::default(),
                     });
+                } else {
+                    self.add_expression(&expression.lhs);
                 }
             }
 
@@ -486,6 +502,21 @@ impl Symbolizer {
         for param in specifier.type_parameters.value() {
             self.add_type(param);
         }
+    }
+}
+
+#[must_use]
+fn map_local_kind(local_kind: SemanticLocalKind) -> LspTokenType {
+    match local_kind {
+        SemanticLocalKind::FieldReference => LspTokenType::Property,
+        SemanticLocalKind::Iterator => LspTokenType::Variable,
+        SemanticLocalKind::StructureReference => LspTokenType::Class,
+        SemanticLocalKind::Parameter => LspTokenType::ParameterName,
+        SemanticLocalKind::Function => LspTokenType::Function,
+        SemanticLocalKind::FunctionReference => LspTokenType::Function,
+        SemanticLocalKind::Method => LspTokenType::Method,
+        SemanticLocalKind::Variable => LspTokenType::Variable,
+        SemanticLocalKind::ReferenceThis => LspTokenType::ParameterName,
     }
 }
 

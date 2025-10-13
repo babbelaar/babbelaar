@@ -2925,9 +2925,12 @@ impl SemanticAnalyzer {
         let parts = path.parts.iter()
             .chain(std::iter::once(&path.base));
 
+        let mut computed_parts = Vec::new();
         for part in parts {
             match self.analyze_path_expression_part(current, part) {
                 Some(new_reference) => {
+                    computed_parts.push(new_reference.kind());
+                    self.track_new_path_segment(part, &new_reference);
                     current = new_reference;
                 }
 
@@ -2953,6 +2956,7 @@ impl SemanticAnalyzer {
                 *path.computed.lock().unwrap() = Some(ComputedPathExpression {
                     name: BabString::new(format!("{parent_type_name}__{name}")),
                     return_type: reference.return_type(),
+                    parts: computed_parts,
                 });
                 SemanticType::FunctionReference(reference)
             }
@@ -3066,6 +3070,34 @@ impl SemanticAnalyzer {
             }
         })
     }
+
+    fn track_new_path_segment(&mut self, part: &Ranged<BabString>, reference: &CurrentPathReference) {
+        let Some(tracker) = &mut self.context.definition_tracker else {
+            return;
+        };
+
+        match reference {
+            CurrentPathReference::Root => unreachable!(),
+
+            CurrentPathReference::StaticMethod { reference, .. } => {
+                tracker.insert(part.range(), SemanticReference {
+                    local_name: reference.name(),
+                    local_kind: SemanticLocalKind::FunctionReference,
+                    declaration_range: reference.declaration_range(),
+                    typ: SemanticType::FunctionReference(reference.clone()),
+                });
+            }
+
+            CurrentPathReference::Ty { ty, .. } => {
+                tracker.insert(part.range(), SemanticReference {
+                    local_name: ty.name(),
+                    local_kind: SemanticLocalKind::StructureReference,
+                    declaration_range: ty.declaration_range(),
+                    typ: ty.clone(),
+                });
+            }
+        }
+    }
 }
 
 enum CurrentPathReference {
@@ -3079,4 +3111,15 @@ enum CurrentPathReference {
         name: BabString,
         parent_type_name: BabString,
     },
+}
+
+impl CurrentPathReference {
+    #[must_use]
+    fn kind(&self) -> SemanticLocalKind {
+        match self {
+            Self::Root => unreachable!(),
+            Self::Ty { .. } => SemanticLocalKind::StructureReference,
+            Self::StaticMethod { .. } => SemanticLocalKind::FunctionReference,
+        }
+    }
 }

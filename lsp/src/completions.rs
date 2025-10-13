@@ -55,6 +55,7 @@ impl<'b> CompletionEngine<'b> {
             Some(CompletionMode::Function((range, ident))) => {
                 self.suggest_this(range, &ident).await?;
                 self.complete_global_function(&ident).await?;
+                self.complete_type(range, &ident).await?;
                 self.complete_variable(range).await?;
                 self.suggest_identifiers(&ident);
                 Ok(true)
@@ -77,6 +78,11 @@ impl<'b> CompletionEngine<'b> {
 
             Some(CompletionMode::ExternFunctionName { name }) => {
                 self.complete_extern_function_name(name).await;
+                Ok(true)
+            }
+
+            Some(CompletionMode::Path(path)) => {
+                self.complete_method(path).await?;
                 Ok(true)
             }
 
@@ -184,9 +190,17 @@ impl<'b> CompletionEngine<'b> {
                 return Ok(None);
             };
 
+            if previous.last().is_some_and(|x| x.kind == TokenKind::Punctuator(Punctuator::DoubleColon)) {
+                if let Some(token) = previous.iter().rev().nth(1) {
+                    if token.kind.can_be_variable()  {
+                        return Ok(Some(CompletionMode::Path(token.range())));
+                    }
+                }
+            }
+
             let mut scope_stack = Vec::new();
-            for token in previous {
-                match token.kind {
+            for token in &previous {
+                match token.kind.clone() {
                     TokenKind::Keyword(kw @ Keyword::Structuur) => scope_stack.push(kw),
                     TokenKind::Keyword(kw @ Keyword::Uitbreiding) => scope_stack.push(kw),
                     TokenKind::Keyword(kw @ Keyword::Volg) => scope_stack.push(kw),
@@ -199,7 +213,13 @@ impl<'b> CompletionEngine<'b> {
             }
 
             Ok(Some(match scope_stack.last() {
-                Some(Keyword::Structuur) |  Some(Keyword::Uitbreiding) => CompletionMode::StructureMember(Ranged::new(token.range(), ident.clone())),
+                Some(kw @ Keyword::Structuur) |  Some(kw @ Keyword::Uitbreiding) => {
+                    if previous.last().is_some_and(|x| x.kind == TokenKind::Keyword(*kw)) {
+                        return Ok(None);
+                    }
+
+                    CompletionMode::StructureMember(Ranged::new(token.range(), ident.clone()))
+                }
                 _ => CompletionMode::Function((token.range(), ident.to_string())),
             }))
         }).await?;
@@ -581,6 +601,28 @@ impl<'b> CompletionEngine<'b> {
             });
         }
     }
+
+    async fn complete_type(&mut self, range: FileRange, ident: &str) -> Result<()> {
+        let document = &self.params.text_document_position.text_document;
+
+        self.server.with_semantics(document, |analyzer, _| {
+            analyzer.scopes_surrounding(range.start(), |scope| {
+                for structure in scope.structures.values() {
+                    self.completions.push(CompletionItem {
+                        label: structure.name.to_string(),
+                        kind: Some(CompletionItemKind::CLASS),
+                        detail: None,
+                        documentation: None,
+                        insert_text: Some(structure.name.to_string()),
+                        insert_text_format: Some(InsertTextFormat::SNIPPET),
+                        ..Default::default()
+                    });
+                }
+            });
+
+            Ok(())
+        }).await
+    }
 }
 
 #[must_use]
@@ -642,4 +684,5 @@ enum CompletionMode {
     ExternFunctionName {
         name: BabString,
     },
+    Path(FileRange),
 }

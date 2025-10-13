@@ -3,7 +3,7 @@
 
 use std::{fmt::{Debug, Display, Write}, sync::{Arc, Mutex}};
 
-use crate::{BabString, FileRange, Ranged, SemanticType, Type};
+use crate::{BabString, FileRange, Ranged, SemanticLocalKind, SemanticType, Type};
 
 #[derive(Clone, Debug)]
 pub enum PrimaryExpression {
@@ -93,6 +93,7 @@ impl Display for PathExpression {
 
 #[derive(Debug, Clone)]
 pub struct ComputedPathExpression {
+    pub parts: Vec<SemanticLocalKind>,
     pub name: BabString,
     pub return_type: SemanticType,
 }

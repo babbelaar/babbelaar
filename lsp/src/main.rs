@@ -206,3 +206,9 @@ impl PathBufExt for PathBuf {
         self.as_path().to_uri()
     }
 }
+
+pub fn starts_with_ignore_ascii_case(string: &str, prefix: &str) -> bool {
+    string.len() >= prefix.len()
+        && string.as_bytes()[0..prefix.len()].eq_ignore_ascii_case(prefix.as_bytes())
+
+}
