@@ -603,6 +603,7 @@ impl<'tokens> Parser<'tokens> {
             methods: Vec::new(),
         };
 
+        let mut static_storage_class = None;
         let mut is_closed_correctly = false;
         while !self.is_at_end() {
             if self.peek_punctuator() == Some(Punctuator::RightCurlyBracket) {
@@ -615,6 +616,21 @@ impl<'tokens> Parser<'tokens> {
 
             let peeked_token = self.peek_token()?;
             match peeked_token.kind {
+                TokenKind::Keyword(Keyword::Algemene) => {
+                    let token = self.consume_token()?;
+                    let range = token.range();
+
+                    if let Some(prev) = static_storage_class {
+                        self.emit_diagnostic(ParseDiagnostic::DuplicateStaticStorageClassSpecifier {
+                            token,
+                            prev,
+                        });
+                    }
+
+                    static_storage_class = Some(range);
+                    continue;
+                }
+
                 TokenKind::Keyword(Keyword::Veld) => {
                     _ = self.consume_token();
                     structure.fields.push(self.parse_structure_field()?);
@@ -630,7 +646,7 @@ impl<'tokens> Parser<'tokens> {
                     structure.methods.push(Method {
                         range,
                         function,
-                        is_static: false,
+                        is_static: static_storage_class.is_some(),
                     });
 
                     require_comma = false;
