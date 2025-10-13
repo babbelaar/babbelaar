@@ -1190,7 +1190,17 @@ impl SemanticAnalyzer {
         }
 
         for (arg_idx, arg) in expression.arguments.iter().enumerate() {
-            let Some(parameter_type) = self.resolve_parameter_type(&function, arg_idx) else {
+            let parameter_type = self.resolve_parameter_type(&function, arg_idx);
+
+            let resolution = if let Some(parameter_type) = parameter_type.clone() {
+                SemanticTypeResolution::with_type_hint(parameter_type.clone())
+            } else {
+                SemanticTypeResolution::default()
+            };
+            let argument_type = self.analyze_expression(arg, &resolution).ty;
+
+
+            let Some(parameter_type) = parameter_type else {
                 if has_var_args {
                     continue;
                 }
@@ -1198,8 +1208,6 @@ impl SemanticAnalyzer {
                 warn!("Cannot check type of parameter with index {arg_idx}");
                 break;
             };
-
-            let argument_type = self.analyze_expression(arg, &SemanticTypeResolution::with_type_hint(parameter_type.clone())).ty;
 
             let parameter_type = match this_structure {
                 Some(this) => parameter_type.resolve_against(this),
