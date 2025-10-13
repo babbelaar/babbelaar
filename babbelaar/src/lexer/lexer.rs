@@ -39,7 +39,7 @@ impl<'source_code> Lexer<'source_code> {
             '€' => self.consume_template_string(),
             '\'' => self.consume_character_literal(),
 
-            'a'..='z' | 'A'..='Z' | '_' => self.consume_identifier_or_keyword(),
+            c if c == '_' || c.is_alphabetic() => self.consume_identifier_or_keyword(),
             '0'..='9' => self.consume_number(),
 
             '(' => self.consume_single_char_token(TokenKind::Punctuator(Punctuator::LeftParenthesis)),
@@ -582,10 +582,7 @@ impl<'source_code> Iterator for Lexer<'source_code> {
 }
 
 fn is_identifier_char(c: char) -> bool {
-    ('a'..='z').contains(&c)
-        || ('A'..='Z').contains(&c)
-        || ('0'..='9').contains(&c)
-        || c == '_'
+    c == '_' || c.is_alphanumeric()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
