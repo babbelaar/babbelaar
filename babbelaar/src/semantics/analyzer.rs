@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{collections::{HashMap, HashSet}, fmt::Write, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}};
+use std::{collections::{HashMap, HashSet}, fmt::Write, mem::replace, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}};
 
 use log::warn;
 
@@ -206,52 +206,71 @@ impl SemanticAnalyzer {
         let interface = extension.interface_specifier.as_ref()
             .and_then(|specifier| self.resolve_interface(specifier));
 
-        let mut ext = SemanticExtension {
-            ty,
+        let ext = self.context.push_extension(SemanticExtension {
+            ty: ty.clone(),
             interface,
             generic_types: extension.generic_types.iter().map(|x| x.value().clone()).collect(),
             methods: HashMap::new(),
             range,
             right_curly_bracket: extension.right_curly_bracket,
-        };
+        });
 
+        let mut method_info = Vec::with_capacity(extension.methods.len());
         for method in &extension.methods {
-            let name = method.function.name.value();
+            let (function, scope_list) = self.analyze_function_with_callback(&method.function, Some(ty.clone()), |this, _| this.context.scope.scope.clone());
 
-            let function = self.analyze_function(&method.function, Some(ext.ty.clone()));
+            let is_valid = !self.is_invalid_method(ext, method, function);
+            method_info.push((is_valid, scope_list));
 
-            if self.is_invalid_method(&ext, &name, method, function) {
+            if !is_valid {
                 continue;
             }
 
+            let name = method.function.name.value().clone();
             let method = self.create_semantic_method(method);
-            ext.methods.insert(name.clone(), method);
+
+            self.context.extensions[ext.id()].methods.insert(name, method);
         }
 
-        if let Some(interface) = &ext.interface {
-            self.analyze_missing_interface_methods(&ext, extension, interface);
+        for (method, (is_valid, scope_list)) in extension.methods.iter().zip(method_info.into_iter()) {
+            if !is_valid {
+                continue;
+            }
+
+            let scope_list_to_restore = replace(&mut self.context.scope.scope, scope_list);
+            self.analyze_statements(method.function.body.as_inner_slice());
+            self.context.scope.scope = scope_list_to_restore;
+        }
+
+        if let Some(interface) = self.context.extensions[ext.id()].interface.clone() {
+            self.analyze_missing_interface_methods(ext, extension, &interface);
         }
 
         self.context.pop_scope();
-
-        let scope = self.context.current();
-        scope.extensions.push(ext);
     }
 
     /// Returns whether or not this method is invalid.
-    fn is_invalid_method(&mut self, ext: &SemanticExtension, name: &BabString, method: &Method, function: SemanticFunctionAnalysis) -> bool {
-        if let Some(existing) = ext.methods.get(name) {
-            let name = name.clone();
-            self.diagnostics.create(||
-                SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
-                    .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
-                    .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
-            );
-            return true;
+    fn is_invalid_method(&mut self, ext: SemanticExtensionId, method: &Method, function: SemanticFunctionAnalysis) -> bool {
+        let name = method.function.name.value();
+        let interface;
+
+        {
+            let ext = &self.context.extensions[ext.id()];
+            if let Some(existing) = ext.methods.get(name) {
+                let name = name.clone();
+                self.diagnostics.create(||
+                    SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
+                        .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
+                        .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
+                );
+                return true;
+            }
+
+            interface = ext.interface.clone();
         }
 
-        if let Some(interface) = &ext.interface {
-            self.is_invalid_method_in_interface_extension(name, method, interface, function)
+        if let Some(interface) = interface {
+            self.is_invalid_method_in_interface_extension(name, method, &interface, function)
         } else {
             self.is_invalid_method_in_normal_extension(ext, name, method)
         }
@@ -350,25 +369,27 @@ impl SemanticAnalyzer {
     }
 
     /// Returns whether or not this method is invalid.
-    fn is_invalid_method_in_normal_extension(&mut self, ext: &SemanticExtension, name: &BabString, method: &Method) -> bool {
-        if let SemanticType::Custom { base, .. } = &ext.ty {
-            let structure = self.context.structure(*base);
-            if let Some(existing) = structure.methods.iter().find(|x| x.name() == name) {
-                let name = name.clone();
-                self.diagnostics.create(||
-                    SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
-                        .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
-                        .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
-                );
-                return true;
-            }
+    fn is_invalid_method_in_normal_extension(&self, ext: SemanticExtensionId, name: &BabString, method: &Method) -> bool {
+        let ty = self.context.extensions[ext.id()].ty.clone();
+        let SemanticType::Custom { base, .. } = ty else { return false };
+
+        let structure = self.context.structure(base);
+        if let Some(existing) = structure.methods.iter().find(|x| x.name() == name) {
+            let name = name.clone();
+            self.diagnostics.create(||
+                SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ty.name() })
+                    .with_related(SemanticRelatedInformation::new(existing.function.name.range(), SemanticRelatedMessage::DuplicateMethodFirstDefinedHere { name }))
+                    .with_action(BabbelaarCodeAction::new_command(method.function.name.range(), BabbelaarCommand::RenameFunction))
+            );
+            return true;
         }
 
         false
     }
 
-    fn analyze_missing_interface_methods(&mut self, ext: &SemanticExtension, ast: &ExtensionStatement, interface: &SemanticInterface) {
+    fn analyze_missing_interface_methods(&mut self, ext: SemanticExtensionId, ast: &ExtensionStatement, interface: &SemanticInterface) {
         let mut methods = Vec::new();
+        let ext = &mut self.context.extensions[ext.id()];
 
         for method in &interface.methods {
             if !ext.methods.contains_key(method.name()) {
@@ -403,6 +424,11 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_function(&mut self, function: &FunctionStatement, this: Option<SemanticType>) -> SemanticFunctionAnalysis {
+        self.analyze_function_with_callback(function, this, Self::analyze_function_body_now).0
+    }
+
+    fn analyze_function_with_callback<F, R>(&mut self, function: &FunctionStatement, this: Option<SemanticType>, f: F) -> (SemanticFunctionAnalysis, R)
+            where F: FnOnce(&mut Self, &FunctionStatement) -> R {
         let is_definition = function.body.is_some();
 
         self.context.push_function_scope(function, this);
@@ -464,11 +490,15 @@ impl SemanticAnalyzer {
             self.context.current().return_type = Some(Ranged::new(ty.range(), typ));
         }
 
-        self.analyze_statements(function.body.as_inner_slice());
+        let result = f(self, function);
 
         self.context.pop_scope();
 
-        analysis
+        (analysis, result)
+    }
+
+    fn analyze_function_body_now(&mut self, function: &FunctionStatement) {
+        self.analyze_statements(function.body.as_inner_slice());
     }
 
     pub fn analyze_statement(&mut self, statement: &Statement) {
@@ -1262,14 +1292,7 @@ impl SemanticAnalyzer {
             }
 
             PrimaryExpression::ReferenceThis => {
-                let Some(scope) = self.context.scope.last() else {
-                    log::warn!("How come we have no scope?");
-                    debug_assert!(false);
-                    return SemanticValue {
-                        ty: SemanticType::null(),
-                        usage: SemanticUsage::Indifferent
-                    };
-                };
+                let scope = self.context.scope.current();
 
                 if let Some(this) = &scope.this {
                     if let Some(tracker) = &mut self.context.definition_tracker {
@@ -1371,7 +1394,12 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_structure_instantiation(&mut self, instantiation: &StructureInstantiationExpression) -> SemanticValue {
-        let ty = self.resolve_type_by_name(&instantiation.name, &instantiation.type_parameters, Some(instantiation));
+        let field_types: Vec<SemanticType> = instantiation.fields.iter()
+            .map(|field| {
+                self.analyze_expression(&field.value, &SemanticTypeResolution::default()).ty
+            })
+            .collect();
+        let ty = self.resolve_type_by_name(&instantiation.name, &instantiation.type_parameters, Some((instantiation, &field_types)));
         let SemanticType::Custom { base, .. } = &ty else {
             return SemanticValue::null();
         };
@@ -1658,8 +1686,12 @@ impl SemanticAnalyzer {
     }
 
     #[must_use]
-    pub fn diagnostics(&self) -> &[SemanticDiagnostic] {
-        self.diagnostics.as_slice()
+    pub fn diagnostics(&self) -> Vec<SemanticDiagnostic> {
+        self.diagnostics.collect()
+    }
+
+    pub fn iterate_diagnostics<F: FnMut(&SemanticDiagnostic)>(&self, f: F) {
+        self.diagnostics.iterate(f)
     }
 
     fn resolve_interface(&mut self, specifier: &Ranged<InterfaceSpecifier>) -> Option<Arc<SemanticInterface>> {
@@ -1685,7 +1717,7 @@ impl SemanticAnalyzer {
     }
 
     #[must_use]
-    pub fn resolve_type(&mut self, ty: &Ranged<Type>) -> SemanticType {
+    pub fn resolve_type(&self, ty: &Ranged<Type>) -> SemanticType {
         let mut semantic_type = self.resolve_type_specifier(&ty.specifier);
 
         for qual in &ty.qualifiers {
@@ -1699,7 +1731,7 @@ impl SemanticAnalyzer {
     }
 
     #[must_use]
-    fn resolve_type_specifier(&mut self, specifier: &TypeSpecifier) -> SemanticType {
+    fn resolve_type_specifier(&self, specifier: &TypeSpecifier) -> SemanticType {
         match specifier {
             TypeSpecifier::BuiltIn(ty) => SemanticType::Builtin(*ty.value()),
             TypeSpecifier::Custom { name, type_parameters } => {
@@ -1752,7 +1784,7 @@ impl SemanticAnalyzer {
     }
 
     #[must_use]
-    fn resolve_type_by_name(&mut self, name: &Ranged<BabString>, params: &Ranged<Vec<Ranged<Type>>>, instantiation: Option<&StructureInstantiationExpression>) -> SemanticType {
+    fn resolve_type_by_name(&self, name: &Ranged<BabString>, params: &Ranged<Vec<Ranged<Type>>>, instantiation: Option<(&StructureInstantiationExpression, &[SemanticType])>) -> SemanticType {
         for scope in self.context.scope.iter().rev() {
             if let Some(generic) = scope.generic_types.get(&name) {
                 return SemanticType::Generic(generic.clone());
@@ -1810,13 +1842,7 @@ impl SemanticAnalyzer {
 
     pub fn scopes_surrounding<F>(&self, location: FileLocation, mut f: F)
             where F: FnMut(&SemanticScope) {
-        for scope in &self.context.previous_scopes {
-            if scope.is_location_inside(location) {
-                f(scope);
-            }
-        }
-
-        for scope in &self.context.scope {
+        for scope in &self.context.scope.all_scopes {
             if scope.is_location_inside(location) {
                 f(scope);
             }
@@ -2135,42 +2161,40 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_method_expression_with_extensions(&mut self, typ: &SemanticType, expression: &MethodCallExpression) -> Option<SemanticValue> {
-        for extension in self.context.scope.iter().rev().flat_map(|x| &x.extensions) {
-            if !extension.is_for_type(typ) {
-                continue;
-            }
+        let x = self.context.scope.iter().rev().flat_map(|x| &x.extensions)
+            .map(|x| &self.context.extensions[x.id()])
+            .filter(|e| e.is_for_type(typ))
+            .filter_map(|e| e.methods.get(&expression.method_name))
+            .map(|method| {
+                let local_reference = SemanticReference {
+                    local_name: method.name().clone(),
+                    local_kind: SemanticLocalKind::Method,
+                    declaration_range: method.function.name.range(),
+                    typ: SemanticType::FunctionReference(FunctionReference::Custom(method.function.clone())), // is this okay?
+                };
 
-            let Some(method) = extension.methods.get(&expression.method_name) else {
-                continue;
-            };
+                if let Some(tracker) = &mut self.context.definition_tracker {
+                    tracker.insert(expression.method_name.range(), local_reference.clone());
+                }
 
-            let local_reference = SemanticReference {
-                local_name: method.name().clone(),
-                local_kind: SemanticLocalKind::Method,
-                declaration_range: method.function.name.range(),
-                typ: SemanticType::FunctionReference(FunctionReference::Custom(method.function.clone())), // is this okay?
-            };
+                let return_type = method.return_type().resolve_against(typ);
+                let usage = method.return_type_usage();
+                let name = method.name().clone();
+                (return_type, usage, name, local_reference)
+            })
+            .next()?;
 
-            if let Some(tracker) = &mut self.context.definition_tracker {
-                tracker.insert(expression.method_name.range(), local_reference.clone());
-            }
+        let (return_type, usage, name, local_reference) = x;
+        self.analyze_function_parameters(name, local_reference, &expression.call, Some(typ));
 
-            let return_type = method.return_type().resolve_against(typ);
-            let usage = method.return_type_usage();
-
-            self.analyze_function_parameters(method.name().clone(), local_reference, &expression.call, Some(&typ));
-
-            if return_type.is_null() {
-                return Some(SemanticValue::null());
-            }
-
-            return Some(SemanticValue {
-                ty: return_type,
-                usage,
-            });
+        if return_type.is_null() {
+            return Some(SemanticValue::null());
         }
 
-        None
+        Some(SemanticValue {
+            ty: return_type,
+            usage,
+        })
     }
 
     fn analyze_attributes_for_statement(&mut self, statement: &Statement) {
@@ -2615,6 +2639,7 @@ impl SemanticAnalyzer {
     fn find_extension_block_for(&self, typ: &SemanticType) -> Option<&SemanticExtension> {
         for scope in self.context.scope.iter().rev() {
             for extension in scope.extensions.iter().rev() {
+                let extension = &self.context.extensions[extension.id()];
                 if extension.ty == *typ {
                     return Some(extension);
                 }
@@ -2637,6 +2662,7 @@ impl SemanticAnalyzer {
 
         for scope in self.context.scope.iter().rev() {
             if let Some(ext) = scope.extensions.last() {
+                let ext = &self.context.extensions[ext.id()];
                 if ext.range.file_id() == file_id {
                     last_extension = Some(ext.range);
                 }
@@ -2723,7 +2749,7 @@ impl SemanticAnalyzer {
     fn find_function_insertion_location(&self) -> Option<FileLocation> {
         let mut location = self.context.current_scope().range.end();
 
-        for scope in &self.context.scope {
+        for scope in self.context.scope.iter() {
             location = scope.range.end();
             if !matches!(scope.kind, SemanticScopeKind::Default) {
                 break;
@@ -2761,7 +2787,7 @@ impl SemanticAnalyzer {
     }
 
     fn analyze_usages(&mut self) {
-        for scope in self.context.scope.iter().chain(self.context.previous_scopes.iter()) {
+        for scope in &self.context.scope.all_scopes {
             for (name, local) in &scope.locals {
                 if local.usage_count != 0 {
                     continue;
@@ -2892,15 +2918,15 @@ impl SemanticAnalyzer {
         actions
     }
 
-    fn build_structure_body_based_on_instantiation(&mut self, instantiation: Option<&StructureInstantiationExpression>) -> String {
-        let Some(instantiation) = instantiation else {
+    fn build_structure_body_based_on_instantiation(&self, instantiation: Option<(&StructureInstantiationExpression, &[SemanticType])>) -> String {
+        let Some((instantiation, field_types)) = instantiation else {
             log::warn!("Kan structuurlichaam op dit moment alleen bepalen vanuit een `nieuw`-expressie");
             return String::new();
         };
 
         let mut body = String::new();
 
-        for (idx, field) in instantiation.fields.iter().enumerate() {
+        for ((idx, field), field_ty) in instantiation.fields.iter().enumerate().zip(field_types.iter()) {
             if idx != 0 {
                 body += "\n";
             }
@@ -2908,7 +2934,7 @@ impl SemanticAnalyzer {
             body += "    veld ";
             body += &field.name;
             body += ": ";
-            body += &self.analyze_expression(&field.value, &SemanticTypeResolution::default()).ty.name();
+            body += &field_ty.name();
             body += ",";
         }
 
@@ -2916,7 +2942,7 @@ impl SemanticAnalyzer {
     }
 
     #[inline]
-    fn emit_diagnostic<F: FnOnce(&mut Self) -> SemanticDiagnostic>(&mut self, f: F) {
+    fn emit_diagnostic<F: FnOnce(&Self) -> SemanticDiagnostic>(&self, f: F) {
         if !self.should_produce_diagnostics {
             return;
         }
@@ -2931,6 +2957,7 @@ impl SemanticAnalyzer {
             .iter()
             .rev()
             .flat_map(|scope| scope.extensions.iter())
+            .map(|x| &self.context.extensions[x.id()])
             .filter(|extension| extension.is_for_type(typ))
             .filter(|extension| extension.interface.as_ref().is_some_and(|i| i.as_ref() == interface))
             .next()
@@ -2955,6 +2982,7 @@ impl SemanticAnalyzer {
         self.context.scope.iter()
             .rev()
             .flat_map(|x| &x.extensions)
+            .map(|x| &self.context.extensions[x.id()])
             .filter(|x| x.ty == *ty)
     }
 

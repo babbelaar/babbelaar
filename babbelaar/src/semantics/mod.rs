@@ -33,7 +33,10 @@ pub use self::{
         SemanticDiagnosticSeverity,
         SemanticDiagnosticsList,
     },
-    extension::SemanticExtension,
+    extension::{
+        SemanticExtension,
+        SemanticExtensionId,
+    },
     function_reference::FunctionReference,
     function::{
         SemanticExternFunction,
@@ -53,6 +56,7 @@ pub use self::{
     },
     scope::{
         SemanticScope,
+        SemanticScopeId,
         SemanticScopeKind,
     },
     structure_or_interface::StructureOrInterface,

@@ -116,7 +116,7 @@ impl Backend {
         }
 
         self.with_semantics(&params.text_document, |semantics, source_code| {
-            for scope in semantics.context.previous_scopes.iter().chain(semantics.context.scope.iter()) {
+            for scope in &semantics.context.scope.all_scopes {
                 if let Some(main_func) = scope.locals.get(&BabString::new_static(Constants::MAIN_FUNCTION)) {
                     if main_func.kind.is_function() && main_func.name_declaration_range.file_id() == source_code.file_id() {
                         let range = self.converter(source_code).convert_file_range(main_func.name_declaration_range)?;
@@ -628,7 +628,7 @@ impl Backend {
 
             let converter = self.converter(source_code);
 
-            for scope in analyzer.context.scope.iter().chain(analyzer.context.previous_scopes.iter()) {
+            for scope in &analyzer.context.scope.all_scopes {
                 if scope.range.file_id() != source_code.file_id() {
                     continue;
                 }
@@ -1030,9 +1030,9 @@ impl Backend {
         }).await?;
 
         self.with_semantics(&params.text_document, |analyzer, source_code| {
-            for diagnostic in analyzer.diagnostics() {
+            analyzer.iterate_diagnostics(|diagnostic| {
                 self.create_code_actions_by_semantic_diagnostic(diagnostic, analyzer, source_code, &mut items);
-            }
+            });
 
             Ok(())
         }).await?;

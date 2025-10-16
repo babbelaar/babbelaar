@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{collections::HashMap, error::Error, fmt::Display};
+use std::{collections::HashMap, error::Error, fmt::Display, sync::Mutex};
 
 use strum::AsRefStr;
 use thiserror::Error;
@@ -425,7 +425,7 @@ impl Display for SemanticDiagnosticSeverity {
 #[derive(Default, Debug)]
 pub struct SemanticDiagnosticsList {
     settings: SemanticDiagnosticSettings,
-    contents: Option<Vec<SemanticDiagnostic>>,
+    contents: Option<Mutex<Vec<SemanticDiagnostic>>>,
 }
 
 impl SemanticDiagnosticsList {
@@ -434,7 +434,7 @@ impl SemanticDiagnosticsList {
         Self {
             settings: SemanticDiagnosticSettings::new(),
             contents: if should_produce_diagnostics {
-                Some(Vec::new())
+                Some(Mutex::new(Vec::new()))
             } else {
                 None
             }
@@ -450,8 +450,8 @@ impl SemanticDiagnosticsList {
     }
 
     #[inline]
-    pub fn create<F: FnOnce() -> SemanticDiagnostic>(&mut self, f: F) {
-        let Some(contents) = &mut self.contents else { return };
+    pub fn create<F: FnOnce() -> SemanticDiagnostic>(&self, f: F) {
+        let Some(contents) = &self.contents else { return };
 
         let diagnostic = f();
 
@@ -459,14 +459,22 @@ impl SemanticDiagnosticsList {
             return;
         }
 
-        contents.push(diagnostic);
+        contents.lock().unwrap().push(diagnostic);
     }
 
     pub fn to_vec(self) -> Vec<SemanticDiagnostic> {
-        self.contents.unwrap_or_default()
+        self.contents.unwrap_or_default().into_inner().unwrap()
     }
 
-    pub fn as_slice(&self) -> &[SemanticDiagnostic] {
-        self.contents.as_ref().map(|x| x.as_slice()).unwrap_or_default()
+    pub fn collect(&self) -> Vec<SemanticDiagnostic> {
+        self.contents.as_ref().map(|x| x.lock().unwrap().to_vec()).unwrap_or_default()
+    }
+
+    pub fn iterate<F: FnMut(&SemanticDiagnostic)>(&self, mut f: F) {
+        let diags = self.contents.as_ref().unwrap();
+        let diags = diags.lock().unwrap();
+        for diag in diags.iter() {
+            f(diag);
+        }
     }
 }

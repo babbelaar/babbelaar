@@ -53,3 +53,20 @@ impl SemanticExtension {
         true
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SemanticExtensionId {
+    id: usize,
+}
+
+impl SemanticExtensionId {
+    #[must_use]
+    pub fn new(id: usize) -> Self {
+        Self { id }
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> usize {
+        self.id
+    }
+}

@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{BabString, Builtin, FileId, FileLocation, FileRange, Ranged, StructureId};
 
-use super::{FunctionReference, SemanticExtension, SemanticFunction, SemanticGenericType, SemanticInterface, SemanticLocal, SemanticLocalKind, SemanticType};
+use super::{FunctionReference, SemanticExtensionId, SemanticFunction, SemanticGenericType, SemanticInterface, SemanticLocal, SemanticLocalKind, SemanticType};
 
 #[derive(Debug)]
 pub struct SemanticScope {
@@ -16,7 +16,7 @@ pub struct SemanticScope {
     pub this: Option<SemanticType>,
     pub return_type: Option<Ranged<SemanticType>>,
     pub kind: SemanticScopeKind,
-    pub extensions: Vec<SemanticExtension>,
+    pub extensions: Vec<SemanticExtensionId>,
     pub interfaces: HashMap<BabString, Arc<SemanticInterface>>,
 }
 
@@ -63,6 +63,23 @@ impl SemanticScope {
             SemanticType::Function(semantic_function) => Some(semantic_function),
             _ => None,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SemanticScopeId {
+    id: usize,
+}
+
+impl SemanticScopeId {
+    #[must_use]
+    pub fn new(id: usize) -> Self {
+        Self { id }
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> usize {
+        self.id
     }
 }
 
