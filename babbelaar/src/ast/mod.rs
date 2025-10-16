@@ -59,6 +59,7 @@ pub use self::{
         InterfaceStatement,
         Method,
         Structure,
+        StructureId,
     },
     tree::ParseTree,
     type_::{

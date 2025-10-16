@@ -357,6 +357,7 @@ impl CodeActionsAnalyzable for StructureInstantiationExpression {
 
         ctx.semantics.scopes_surrounding(self.name.range().start(), |scope| {
             if let Some(structure) = scope.structures.get(self.name.value()) {
+                let structure = ctx.semantics.context.structure(*structure);
                 let mut str = String::new();
 
                 for field in structure.fields.iter() {

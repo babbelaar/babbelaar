@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 use babbelaar::*;
 use log::warn;
@@ -55,7 +55,7 @@ impl<'b> CompletionEngine<'b> {
             Some(CompletionMode::Function((range, ident))) => {
                 self.suggest_this(range, &ident).await?;
                 self.complete_global_function(&ident).await?;
-                self.complete_type(range, &ident).await?;
+                self.complete_type(range).await?;
                 self.complete_variable(range).await?;
                 self.suggest_identifiers(&ident);
                 Ok(true)
@@ -316,6 +316,7 @@ impl<'b> CompletionEngine<'b> {
         self.server.with_semantics(document, |analyzer, _| {
             analyzer.scopes_surrounding(range.start(), |scope| {
                 if let Some(structure) = scope.structures.get(&structure) {
+                    let structure = analyzer.context.structure(*structure);
                     for field in &structure.fields {
                         if let Some(idx) = field.name.find(&field_to_complete) {
                             let value_hint = field.ty.value_or_field_name_hint();
@@ -389,7 +390,8 @@ impl<'b> CompletionEngine<'b> {
                     }
 
                     SemanticType::Custom { base, ..} => {
-                        self.complete_structure_method_or_field(base.clone(), "")
+                        let structure = analyzer.context.structure(base);
+                        self.complete_structure_method_or_field(structure, None)
                     }
 
                     _ => Vec::new(),
@@ -447,8 +449,9 @@ impl<'b> CompletionEngine<'b> {
         completions
     }
 
-    fn complete_structure_method_or_field(&self, structure: Arc<SemanticStructure>, prefix: &str) -> Vec<CompletionItem> {
+    fn complete_structure_method_or_field<'a>(&self, structure: &SemanticStructure, prefix: Option<&'a str>) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
+        let prefix = prefix.unwrap_or_default();
 
         for method in &structure.methods {
             let name = &method.function.name;
@@ -528,7 +531,8 @@ impl<'b> CompletionEngine<'b> {
             semantics.scopes_surrounding(range.start(), |scope| {
                 if let Some(this) = &scope.this {
                     if let SemanticType::Custom { base, .. } = this {
-                        completions.extend(self.complete_structure_method_or_field(base.clone(), "dit."));
+                        let structure = semantics.context.structure(*base);
+                        completions.extend(self.complete_structure_method_or_field(structure, Some("dit.")));
                     }
                 }
             });
@@ -602,12 +606,13 @@ impl<'b> CompletionEngine<'b> {
         }
     }
 
-    async fn complete_type(&mut self, range: FileRange, ident: &str) -> Result<()> {
+    async fn complete_type(&mut self, range: FileRange) -> Result<()> {
         let document = &self.params.text_document_position.text_document;
 
         self.server.with_semantics(document, |analyzer, _| {
             analyzer.scopes_surrounding(range.start(), |scope| {
-                for structure in scope.structures.values() {
+                for id in scope.structures.values().copied() {
+                    let structure = analyzer.context.structure(id);
                     self.completions.push(CompletionItem {
                         label: structure.name.to_string(),
                         kind: Some(CompletionItemKind::CLASS),

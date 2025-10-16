@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 
 use super::FileRange;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Ranged<T> {
     range: FileRange,
     value: T,

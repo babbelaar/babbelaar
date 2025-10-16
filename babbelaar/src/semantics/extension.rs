@@ -20,11 +20,11 @@ pub struct SemanticExtension {
 impl SemanticExtension {
     #[must_use]
     pub fn is_for_type(&self, typ: &SemanticType) -> bool {
-        let SemanticType::Custom { base: req_base, parameters: req_params } = typ else {
+        let SemanticType::Custom { base: req_base, parameters: req_params, name: _ } = typ else {
             return &self.ty == typ;
         };
 
-        let SemanticType::Custom { base: ext_base, parameters: ext_params } = &self.ty else {
+        let SemanticType::Custom { base: ext_base, parameters: ext_params, name: _ } = &self.ty else {
             return &self.ty == typ;
         };
 

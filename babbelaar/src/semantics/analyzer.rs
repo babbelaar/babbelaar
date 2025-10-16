@@ -352,7 +352,8 @@ impl SemanticAnalyzer {
     /// Returns whether or not this method is invalid.
     fn is_invalid_method_in_normal_extension(&mut self, ext: &SemanticExtension, name: &BabString, method: &Method) -> bool {
         if let SemanticType::Custom { base, .. } = &ext.ty {
-            if let Some(existing) = base.methods.iter().find(|x| x.name() == name) {
+            let structure = self.context.structure(*base);
+            if let Some(existing) = structure.methods.iter().find(|x| x.name() == name) {
                 let name = name.clone();
                 self.diagnostics.create(||
                     SemanticDiagnostic::new(method.function.name.range(), SemanticDiagnosticKind::DuplicateMethodNameInExtension { name: name.clone(), structure: ext.ty.name() })
@@ -624,11 +625,11 @@ impl SemanticAnalyzer {
                 return SemanticType::Builtin(BuiltinType::Teken);
             }
 
-            SemanticType::Custom { ref base, ref parameters } => {
+            SemanticType::Custom { base, ref parameters, .. } => {
                 if let Some(interface) = self.resolve_interface_by_name(&BabString::new_static("Doorloper")) {
                     if let Some(extension) = self.get_interface_implementation_for(&ty, &interface) {
                         let ty_name = interface.generic_types[0].value().clone();
-                        let ty_idx = base.index_of_generic_type(&ty_name).expect("Het vinden van de generieke parameter van `Doorloper`");
+                        let ty_idx = self.context.structure(base).index_of_generic_type(&ty_name).expect("Het vinden van de generieke parameter van `Doorloper`");
                         _ = extension; // Dit zou gebruikt moeten worden?
                         return parameters[ty_idx].clone();
                     }
@@ -637,7 +638,7 @@ impl SemanticAnalyzer {
                 self.emit_diagnostic(|this| {
                     SemanticDiagnostic::new(expression.range(), SemanticDiagnosticKind::ExpressionNotIterable)
                         .with_related(SemanticRelatedInformation::new(expression.range(), SemanticRelatedMessage::ExpressionIsOfType { ty: ty.clone() }))
-                        .with_action(this.create_actions_extend_structure_with_interface_by_name(&base, expression.range().file_id(), "Doorloper"))
+                        .with_action(this.create_actions_extend_structure_with_interface_by_name(base, expression.range().file_id(), "Doorloper"))
                 });
 
                 return ty;
@@ -881,7 +882,7 @@ impl SemanticAnalyzer {
 
         let methods = structure.methods.iter().map(|x| self.create_semantic_method(x)).collect();
 
-        let semantic_structure = Arc::new(SemanticStructure {
+        let semantic_structure = SemanticStructure {
             attributes: statement.attributes.clone(),
             name: structure.name.clone(),
             generic_types: structure.generic_types.clone(),
@@ -889,18 +890,21 @@ impl SemanticAnalyzer {
             right_curly_range: structure.right_curly_range,
             fields,
             methods,
-        });
+        };
 
-        self.context.push_structure(Arc::clone(&semantic_structure));
+        let field_count = semantic_structure.fields.len();
+        let structure_id = structure.id;
+        self.context.push_structure(semantic_structure, structure_id);
 
         for (idx, field) in structure.fields.iter().enumerate() {
             if let Some(default_value) = &field.default_value {
-                self.analyze_expression(default_value, &SemanticTypeResolution::with_type_hint(semantic_structure.fields[idx].ty.clone()));
+                let field_type = self.context.field(structure_id, SemanticFieldId::new(idx)).ty.clone();
+                self.analyze_expression(default_value, &SemanticTypeResolution::with_type_hint(field_type));
             }
         }
 
         let mut names = HashSet::new();
-        for field in &semantic_structure.fields {
+        for field in &self.context.structure(structure_id).fields {
             if !names.insert(field.name.value()) {
                 self.diagnostics.create(||
                     SemanticDiagnostic::new(
@@ -910,13 +914,17 @@ impl SemanticAnalyzer {
                     .with_action(BabbelaarCodeAction::new_command(field.name.range(), BabbelaarCommand::RenameField))
                 );
             }
+        }
 
-            self.analyze_attributes_for_field(field);
+        for field in 0..field_count {
+            let field = SemanticFieldId::new(field);
+            self.analyze_attributes_for_field(structure_id, field);
         }
 
         let this_type = SemanticType::Custom {
-            base: Arc::clone(&semantic_structure),
+            base: structure_id,
             parameters: Vec::new(),
+            name: structure.name.clone(),
         };
 
         let mut names = HashSet::new();
@@ -1065,7 +1073,7 @@ impl SemanticAnalyzer {
             SemanticType::Array(..) => postfix.lhs.value().to_string().into(),
             SemanticType::Builtin(BuiltinType::Null) => postfix.lhs.value().to_string().into(),
             SemanticType::Builtin(builtin) => builtin.name(),
-            SemanticType::Custom { base, .. } => base.name.value().clone(),
+            SemanticType::Custom { base, .. } => self.context.structure(base).name.value().clone(),
             SemanticType::Function(func) => func.name.value().clone(),
             SemanticType::FunctionReference(FunctionReference::Custom(function)) => {
                 let function_name = function.name.value().clone();
@@ -1368,28 +1376,32 @@ impl SemanticAnalyzer {
             return SemanticValue::null();
         };
 
+        let structure = self.context.structures.get(&base).unwrap();
         let struct_hint = SemanticRelatedInformation::new(
-            base.name.range(),
-            SemanticRelatedMessage::StructureDefinedHere { name: base.name.value().clone() }
+            structure.name.range(),
+            SemanticRelatedMessage::StructureDefinedHere { name: structure.name.value().clone() }
         );
 
-        let all_valid_fields: HashMap<&BabString, &SemanticField> = base.fields.iter().map(|x| (x.name.value(), x)).collect();
-        let mut fields_left = all_valid_fields.clone();
+        let all_valid_fields: HashMap<BabString, FileRange> = structure.fields.iter().map(|x| (x.name.value().clone(), x.name.range())).collect();
+        let mut fields_left: HashMap<BabString, SemanticFieldId> = structure.fields.iter().enumerate().map(|(idx, x)| (x.name.value().clone(), SemanticFieldId::new(idx))).collect();
 
         if let Some(tracker) = &mut self.context.definition_tracker {
             tracker.insert(instantiation.name.range(), SemanticReference {
                 local_name: instantiation.name.value().clone(),
                 local_kind: SemanticLocalKind::StructureReference,
-                declaration_range: base.name.range(),
+                declaration_range: structure.name.range(),
                 typ: ty.clone(),
             });
         }
 
+        let structure_id = *base;
+        let struct_name = structure.name.value().clone();
         for field_instantiation in &instantiation.fields {
             let name = &field_instantiation.name;
             match fields_left.remove(name.value()) {
-                Some(field) => {
-                    let declaration_type = field.ty.clone().resolve_against(&ty);
+                Some(field_id) => {
+                    let declaration_range = self.context.field(structure_id, field_id).name.range();
+                    let declaration_type = self.context.field(structure_id, field_id).ty.clone().resolve_against(&ty);
                     let definition_type = self.analyze_expression(&field_instantiation.value, &SemanticTypeResolution::with_type_hint(declaration_type.clone())).ty;
                     if !declaration_type.is_compatible_with(&definition_type) {
                         let actions = self.try_create_conversion_actions(&declaration_type, &definition_type, &field_instantiation.value);
@@ -1397,7 +1409,7 @@ impl SemanticAnalyzer {
                         self.diagnostics.create(|| SemanticDiagnostic::new(
                             field_instantiation.value.range(),
                             SemanticDiagnosticKind::IncompatibleFieldTypes {
-                                struct_name: base.name.value().clone(),
+                                struct_name: struct_name.clone(),
                                 field_name: name.value().clone(),
                                 declaration_type: declaration_type.to_string(),
                                 definition_type: definition_type.to_string(),
@@ -1407,18 +1419,18 @@ impl SemanticAnalyzer {
 
                     if let Some(tracker) = &mut self.context.definition_tracker {
                         tracker.insert(field_instantiation.name.range(), SemanticReference {
-                            local_name: field.name.value().clone(),
+                            local_name: name.value().clone(),
                             local_kind: SemanticLocalKind::FieldReference,
-                            declaration_range: field.name.range(),
+                            declaration_range,
                             typ: declaration_type.clone(),
                         });
                     }
                 }
                 None => {
-                    if let Some(duplicate_field) = all_valid_fields.get(name.value()) {
+                    if let Some(duplicate_field_name_range) = all_valid_fields.get(name.value()).copied() {
                         let field_def_hint = SemanticRelatedInformation::new(
-                            duplicate_field.name.range(),
-                            SemanticRelatedMessage::DuplicateFieldFirstUse { name: duplicate_field.name.value().clone() }
+                            duplicate_field_name_range,
+                            SemanticRelatedMessage::DuplicateFieldFirstUse { name: name.value().clone() }
                         );
 
                         let diag = SemanticDiagnostic::new(
@@ -1435,7 +1447,7 @@ impl SemanticAnalyzer {
                             SemanticDiagnostic::new(
                                 name.range(),
                                 SemanticDiagnosticKind::InvalidFieldInstantiation {
-                                    struct_name: base.name.value().clone(),
+                                    struct_name: self.context.structure(*base).name.value().clone(),
                                     field_name: name.value().clone()
                                 },
                             )
@@ -1448,12 +1460,12 @@ impl SemanticAnalyzer {
         }
 
         let count_fields_left = fields_left.iter()
-            .filter(|(_, field)| !field.has_default_value)
+            .filter(|(_, field_id)| !self.context.field(structure_id, **field_id).has_default_value)
             .count();
 
         if count_fields_left != 0 {
             let names = fields_left.iter()
-                .filter(|(_, x)| !x.has_default_value)
+                .filter(|(_, field_id)| !self.context.field(structure_id, **field_id).has_default_value)
                 .map(|(x, _)| x.as_str())
                 .join("`, `");
 
@@ -1712,9 +1724,9 @@ impl SemanticAnalyzer {
                 SemanticType::Generic(ty.clone())
             }
 
-            SemanticType::Custom { base, parameters } => {
+            SemanticType::Custom { base, parameters, name } => {
                 let parameters = parameters.iter().map(|x| self.refine_type(x)).collect();
-                SemanticType::Custom { base: Arc::clone(&base), parameters }
+                SemanticType::Custom { base: *base, parameters, name: name.clone() }
             }
 
             SemanticType::Interface { base, parameters } => {
@@ -1746,14 +1758,13 @@ impl SemanticAnalyzer {
                 return SemanticType::Generic(generic.clone());
             }
 
-            if let Some(structure) = scope.structures.get(name.value()) {
-                let structure = Arc::clone(structure);
-
+            if let Some(structure_id) = scope.structures.get(name.value()).copied() {
                 let mut parameters = Vec::new();
                 for parameter in params.value() {
                     parameters.push(self.resolve_type(parameter));
                 }
 
+                let structure = self.context.structure(structure_id);
                 if params.len() != 0 && structure.generic_types.len() == 0 {
                     self.diagnostics.create(||
                         SemanticDiagnostic::new(params.range(), SemanticDiagnosticKind::TypeParametersUnexpected { ty: structure.name.value().clone() })
@@ -1778,8 +1789,9 @@ impl SemanticAnalyzer {
                 parameters.resize(structure.generic_types.len(), SemanticType::null());
 
                 return SemanticType::Custom {
-                    base: structure,
+                    base: structure_id,
                     parameters,
+                    name: structure.name.clone(),
                 };
             }
         }
@@ -1878,29 +1890,35 @@ impl SemanticAnalyzer {
             return SemanticValue::null()
         };
 
-        for field in &base.fields {
-            if field.name.value() == member.value() {
-                let ty = field.ty.clone().resolve_against(&typ);
-
-                if let Some(tracker) = &mut self.context.definition_tracker {
-                    tracker.insert(member.range(), SemanticReference {
-                        local_name: member.value().clone(),
-                        local_kind: SemanticLocalKind::FieldReference,
-                        declaration_range: field.name.range(),
-                        typ: ty.clone(),
-                    });
-                }
-
-                return SemanticValue {
-                    ty,
-                    usage: SemanticUsage::Pure(PureValue::FieldReference {
-                        declaration: field.name.range(),
-                        name: field.name.value().clone(),
-                    }),
-                };
+        for field in 0..self.context.structure(*base).fields.len() {
+            let field = &self.context.structure(*base).fields[field];
+            if field.name.value() != member.value() {
+                continue;
             }
+            let ty = field.ty.clone().resolve_against(&typ);
+
+            let field_range = field.name.range();
+            let field_name = field.name.value().clone();
+
+            if let Some(tracker) = &mut self.context.definition_tracker {
+                tracker.insert(member.range(), SemanticReference {
+                    local_name: member.value().clone(),
+                    local_kind: SemanticLocalKind::FieldReference,
+                    declaration_range: field_range,
+                    typ: ty.clone(),
+                });
+            }
+
+            return SemanticValue {
+                ty,
+                usage: SemanticUsage::Pure(PureValue::FieldReference {
+                    declaration: field_range,
+                    name: field_name,
+                }),
+            };
         }
 
+        let base = self.context.structure(*base);
         let struct_hint = SemanticRelatedInformation::new(
             base.name.range(),
             SemanticRelatedMessage::StructureDefinedHere { name: base.name.value().clone() }
@@ -1968,31 +1986,44 @@ impl SemanticAnalyzer {
             }
 
             SemanticType::Custom { ref base, .. } => {
-                for method in &base.methods {
-                    if *method.name() == *expression.method_name {
-                        let local_reference = SemanticReference {
+                for method in 0..self.context.structure(*base).methods.len() {
+                    if self.context.structure(*base).methods[method].name() != expression.method_name.value() {
+                        continue;
+                    }
+
+                    let local_reference;
+                    let method_return_type;
+                    let usage;
+                    let method_name;
+
+                    {
+                        let method = &self.context.structure(*base).methods[method];
+                        local_reference = SemanticReference {
                             local_name: method.name().clone(),
                             local_kind: SemanticLocalKind::Method,
                             declaration_range: method.function.name.range(),
                             typ: SemanticType::FunctionReference(FunctionReference::Custom(Arc::clone(&method.function))), // is this okay?
                         };
-
-                        if let Some(tracker) = &mut self.context.definition_tracker {
-                            tracker.insert(expression.method_name.range(), local_reference.clone());
-                        }
-
-                        self.analyze_function_parameters(method.name().clone(), local_reference, &expression.call, Some(&typ));
-
-                        let ty = method.return_type().resolve_against(&typ);
-                        if ty.is_null() {
-                            return SemanticValue::null();
-                        }
-
-                        return SemanticValue {
-                            ty,
-                            usage: method.return_type_usage(),
-                        };
+                        method_return_type = method.return_type();
+                        usage = method.return_type_usage();
+                        method_name = method.name().clone();
                     }
+
+                    if let Some(tracker) = &mut self.context.definition_tracker {
+                        tracker.insert(expression.method_name.range(), local_reference.clone());
+                    }
+
+                    self.analyze_function_parameters(method_name, local_reference, &expression.call, Some(&typ));
+
+                    let ty = method_return_type.resolve_against(&typ);
+                    if ty.is_null() {
+                        return SemanticValue::null();
+                    }
+
+                    return SemanticValue {
+                        ty,
+                        usage,
+                    };
                 }
 
                 if let Some(value) = self.analyze_method_expression_with_extensions(&typ, expression) {
@@ -2000,12 +2031,12 @@ impl SemanticAnalyzer {
                 }
 
                 let struct_hint = SemanticRelatedInformation::new(
-                    base.name.range(),
-                    SemanticRelatedMessage::StructureDefinedHere { name: base.name.value().clone() }
+                    self.context.structure(*base).name.range(),
+                    SemanticRelatedMessage::StructureDefinedHere { name: self.context.structure(*base).name.value().clone() }
                 );
 
                 let args: Vec<SemanticType> = expression.call.arguments.iter().map(|x| self.analyze_expression(x, &SemanticTypeResolution::default()).ty).collect();
-                let create_method_action = self.create_action_create_method(base.as_ref(), expression, &args);
+                let create_method_action = self.create_action_create_method(self.context.structure(*base), expression, &args);
                 let create_method_extension_actions = self.create_actions_create_method_extension(&typ, expression, &args);
                 let diag = SemanticDiagnostic::new(
                     expression.method_name.range(),
@@ -2315,7 +2346,8 @@ impl SemanticAnalyzer {
         func.has_variable_arguments.store(true, Ordering::SeqCst);
     }
 
-    fn analyze_attributes_for_field(&mut self, field: &SemanticField) {
+    fn analyze_attributes_for_field(&mut self, structure: StructureId, field: SemanticFieldId) {
+        let field = self.context.field(structure, field);
         for attribute in &field.attributes {
             self.diagnostics.create(|| SemanticDiagnostic::new(
                 attribute.name.range(),
@@ -2367,7 +2399,8 @@ impl SemanticAnalyzer {
             return Vec::new();
         };
 
-        let (add_location, indent) = self.calculate_new_field_or_method_location(structure.as_ref());
+        let structure = self.context.structure(*structure);
+        let (add_location, indent) = self.calculate_new_field_or_method_location(structure);
 
         let mut items = Vec::new();
 
@@ -2463,7 +2496,8 @@ impl SemanticAnalyzer {
     }
 
     #[must_use]
-    fn create_actions_extend_structure_with_interface_by_name(&self, structure: &SemanticStructure, file_id: FileId, name: &'static str) -> Option<BabbelaarCodeAction> {
+    fn create_actions_extend_structure_with_interface_by_name(&self, structure: StructureId, file_id: FileId, name: &'static str) -> Option<BabbelaarCodeAction> {
+        let structure = self.context.structure(structure);
         let interface = self.resolve_interface_by_name(&BabString::new_static(name))?;
         Some(self.create_actions_extend_structure_with_interface(structure, file_id, &interface))
     }
@@ -2608,7 +2642,12 @@ impl SemanticAnalyzer {
                 }
             }
 
-            if let Some(structure) = scope.structures.values().map(|x| x.right_curly_range).max() {
+            let last_structure_definition = scope.structures.values()
+                    .copied()
+                    .map(|id| self.context.structure(id).right_curly_range)
+                    .max();
+
+            if let Some(structure) = last_structure_definition {
                 if structure.file_id() == file_id {
                     last_structure = Some(structure);
                 }
@@ -2971,7 +3010,7 @@ impl SemanticAnalyzer {
                 let ty = self.context.scope.iter().rev()
                     .filter_map(|x| x.structures.get(&name))
                     .cloned()
-                    .map(|base| SemanticType::Custom { base, parameters: Vec::new() })
+                    .map(|base| SemanticType::Custom { base, parameters: Vec::new(), name: self.context.structure(base).name.clone() })
                     .next()
                     .or_else(|| {
                         Builtin::type_by_name(&name).map(|x| SemanticType::Builtin(x))
@@ -2984,7 +3023,7 @@ impl SemanticAnalyzer {
                     return None;
                 };
 
-                if !ty.generic_type_names().is_empty() {
+                if !ty.generic_type_names(&self.context).is_empty() {
                     self.emit_diagnostic(|_| {
                         SemanticDiagnostic::new(part.range(), SemanticDiagnosticKind::PathPartRequiresGenerics { name })
                     });
@@ -3019,10 +3058,10 @@ impl SemanticAnalyzer {
                 }
 
                 match &ty {
-                    SemanticType::Custom { base, parameters } => {
+                    SemanticType::Custom { base, parameters, .. } => {
                         assert!(parameters.is_empty());
 
-                        let Some(method) = base.methods.iter().find(|x| *x.name() == name) else {
+                        let Some(method) = self.context.structure(*base).methods.iter().find(|x| *x.name() == name).cloned() else {
                             self.emit_diagnostic(|_| {
                                 SemanticDiagnostic::new(part.range(), SemanticDiagnosticKind::PathMethodNotFound {
                                     name,

@@ -167,6 +167,7 @@ impl InlayHintsEngine {
             PostfixExpressionKind::MethodCall(method_call) => {
                 if let Some(ty) = &self.analyzer.context.value_type_tracker.as_ref().and_then(|x| x.get(&expression.lhs.range())) {
                     let SemanticType::Custom { base, .. } = ty else { return };
+                    let base = self.analyzer.context.structure(*base);
                     let Some(method) = base.methods.iter().find(|x| x.function.name.value() == method_call.method_name.value()) else { return };
 
                     for (argument, parameter) in method_call.call.arguments.iter().zip(method.function.parameters.iter()) {

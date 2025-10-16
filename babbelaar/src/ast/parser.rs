@@ -1,7 +1,7 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::atomic::{AtomicUsize, Ordering}};
 
 use log::error;
 use strum::AsRefStr;
@@ -9,6 +9,8 @@ use strum::AsRefStr;
 use crate::*;
 
 pub type ParseResult<T> = Result<T, ParseError>;
+
+static STRUCTURE_ID_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone)]
 pub struct Parser<'tokens> {
@@ -36,7 +38,7 @@ impl<'tokens> Parser<'tokens> {
                 kind: TokenKind::Identifier(BabString::empty()),
                 begin: end,
                 end,
-            }
+            },
         }
     }
 
@@ -594,7 +596,10 @@ impl<'tokens> Parser<'tokens> {
 
         let left_curly_range = self.expect_left_curly_bracket("structuurnaam")?;
 
+        let id = StructureId::new(STRUCTURE_ID_COUNT.fetch_add(1, Ordering::SeqCst));
+
         let mut structure = Structure {
+            id,
             name,
             generic_types,
             left_curly_range,

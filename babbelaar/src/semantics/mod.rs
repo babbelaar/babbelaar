@@ -58,6 +58,7 @@ pub use self::{
     structure_or_interface::StructureOrInterface,
     structure::{
         SemanticField,
+        SemanticFieldId,
         SemanticStructure,
     },
     type_::{

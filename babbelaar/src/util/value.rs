@@ -28,18 +28,9 @@ pub enum Value {
         lhs: Box<Value>,
         method: BuiltinMethodReference,
     },
-    MethodIdReference {
-        lhs: Box<Value>,
-        method: MethodId,
-    },
     Function {
         name: String,
         id: FunctionId,
-    },
-    Object {
-        structure: StructureId,
-        fields: Rc<RefCell<HashMap<String, Value>>>,
-        generic_types: HashMap<BabString, ValueType>,
     },
     Pointer {
         address: usize,
@@ -79,9 +70,7 @@ impl Value {
             Self::String(..) => BuiltinType::Slinger.into(),
             Self::Character(..) => BuiltinType::Teken.into(),
             Self::MethodReference { .. } => todo!(),
-            Self::MethodIdReference { .. } => todo!(),
             Self::Function { .. } => todo!(),
-            Self::Object { structure, generic_types, .. } => ValueType::Structure(*structure, generic_types.clone()),
             Self::Pointer { ty, .. } => ValueType::Pointer(Box::new(ty.clone())),
         }
     }
@@ -136,9 +125,7 @@ impl Display for Value {
             Self::String(str) => f.write_str(str),
             Self::Character(c) => f.write_char(*c),
             Self::MethodReference { lhs, method } => f.write_fmt(format_args!("{lhs}.{}()", method.name())),
-            Self::MethodIdReference { .. } => f.write_str("werkwijze"),
             Self::Function { name, .. } => f.write_fmt(format_args!("werkwijze {name}() {{ .. }}")),
-            Self::Object { .. } => f.write_str("te-doen(object-waarde-formatteren)"),
             Self::Pointer { address, .. } => f.write_fmt(format_args!("{address:p}")),
         }
     }
@@ -149,7 +136,6 @@ pub enum ValueType {
     Array(Box<ValueType>),
     Builtin(BuiltinType),
     Pointer(Box<ValueType>),
-    Structure(StructureId, HashMap<BabString, ValueType>),
 }
 
 impl From<BuiltinType> for ValueType {
@@ -203,75 +189,5 @@ impl From<&InterfaceStatement> for InterfaceId {
             namespace: 1,
             id: hasher.finish() as usize,
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct StructureId {
-    pub namespace: usize,
-    pub id: usize,
-}
-
-impl From<&Structure> for StructureId {
-    fn from(value: &Structure) -> Self {
-        let mut hasher = DefaultHasher::new();
-        "Structure-".hash(&mut hasher);
-        value.name.value().hash(&mut hasher);
-        Self {
-            namespace: 0,
-            id: hasher.finish() as usize,
-        }
-    }
-}
-
-impl From<BuiltinType> for StructureId {
-    fn from(value: BuiltinType) -> Self {
-        Self{
-            namespace: 1,
-            id: value as u8 as usize,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct MethodId {
-    pub owner: MethodOwnerId,
-    pub index: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MethodOwnerId {
-    Extension(ExtensionId),
-    Interface(InterfaceId),
-    Structure(StructureId),
-}
-
-impl From<ExtensionId> for MethodOwnerId {
-    fn from(value: ExtensionId) -> Self {
-        Self::Extension(value)
-    }
-}
-
-impl From<InterfaceId> for MethodOwnerId {
-    fn from(value: InterfaceId) -> Self {
-        Self::Interface(value)
-    }
-}
-
-impl From<&InterfaceId> for MethodOwnerId {
-    fn from(value: &InterfaceId) -> Self {
-        Self::Interface(*value)
-    }
-}
-
-impl From<StructureId> for MethodOwnerId {
-    fn from(value: StructureId) -> Self {
-        Self::Structure(value)
-    }
-}
-
-impl From<&StructureId> for MethodOwnerId {
-    fn from(value: &StructureId) -> Self {
-        Self::Structure(*value)
     }
 }

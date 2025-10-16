@@ -153,6 +153,5 @@ fn pointer_krijg(_: &mut dyn Interpreter, _parameters: Vec<Value>, this: Option<
                 ty: *value_type,
             }
         }
-        ValueType::Structure(..) => todo!(),
     }
 }

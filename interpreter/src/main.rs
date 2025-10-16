@@ -5,9 +5,9 @@
 #![deny(elided_lifetimes_in_paths)]
 
 
-mod data;
+// mod data;
 mod error;
-mod scope;
+// mod scope;
 mod signal;
 
 use std::{collections::HashMap, fs::{create_dir_all, read_dir}, io, path::{Path, PathBuf}, process::{Command, Stdio, exit}, time::Instant};
@@ -21,14 +21,14 @@ use env_logger::Env;
 use error::ErrorPrinter;
 
 pub use self::{
-    data::{
-        InterpreterExtension,
-        InterpreterFunction,
-        InterpreterInterface,
-        InterpreterStructure,
-    },
+    // data::{
+    //     InterpreterExtension,
+    //     InterpreterFunction,
+    //     InterpreterInterface,
+    //     InterpreterStructure,
+    // },
     error::RuntimeError,
-    scope::Scope,
+    // scope::Scope,
 };
 
 #[derive(clap::Parser, Debug)]

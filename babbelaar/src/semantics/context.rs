@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{BabString, Constants, ExtensionStatement, FileId, FileLocation, FileRange, FunctionStatement, InterfaceStatement, ParseTree, Ranged, Structure};
+use crate::{BabString, Constants, ExtensionStatement, FileId, FileLocation, FileRange, FunctionStatement, InterfaceStatement, ParseTree, Ranged, StructureId, Structure, semantics::{SemanticField, SemanticFieldId}};
 
 use super::{SemanticLocal, SemanticReference, scope::SemanticScope, FunctionReference, SemanticFunction, SemanticGenericType, SemanticInterface, SemanticLocalKind, SemanticScopeKind, SemanticStructure, SemanticType};
 
@@ -11,6 +11,7 @@ use super::{SemanticLocal, SemanticReference, scope::SemanticScope, FunctionRefe
 pub struct SemanticContext {
     pub scope: Vec<SemanticScope>,
     pub previous_scopes: Vec<SemanticScope>,
+    pub structures: HashMap<StructureId, SemanticStructure>,
 
     pub definition_tracker: Option<HashMap<FileRange, SemanticReference>>,
     pub declaration_tracker: Option<Vec<SemanticReference>>,
@@ -24,6 +25,7 @@ impl SemanticContext {
                 SemanticScope::new_top_level(),
             ],
             previous_scopes: Vec::new(),
+            structures: Default::default(),
             definition_tracker: Some(HashMap::new()),
             declaration_tracker: Some(Vec::new()),
             value_type_tracker: Some(HashMap::new()),
@@ -194,15 +196,16 @@ impl SemanticContext {
         self.scope.last_mut().unwrap().locals.insert(name, local);
     }
 
-    pub fn push_structure(&mut self, structure: Arc<SemanticStructure>) {
+    pub fn push_structure(&mut self, structure: SemanticStructure, id: StructureId) {
         if let Some(tracker) = &mut self.declaration_tracker {
             tracker.push(SemanticReference {
                 local_name: structure.name.value().clone(),
                 local_kind: SemanticLocalKind::StructureReference,
                 declaration_range: structure.name.range(),
                 typ: SemanticType::Custom {
-                    base: Arc::clone(&structure),
+                    base: id,
                     parameters: Vec::new(),
+                    name: structure.name.clone(),
                 },
             });
 
@@ -226,7 +229,8 @@ impl SemanticContext {
         }
 
         let previous_idx = self.scope.len() - 2;
-        self.scope[previous_idx].structures.insert(structure.name.value().clone(), structure);
+        self.scope[previous_idx].structures.insert(structure.name.value().clone(), id);
+        self.structures.insert(id, structure);
     }
 
     pub fn push_interface(&mut self, interface: Arc<SemanticInterface>) {
@@ -277,5 +281,16 @@ impl SemanticContext {
         }
 
         self.scope.last_mut().as_mut().unwrap().locals.insert(name.value().clone(), local);
+    }
+
+    #[must_use]
+    pub fn structure(&self, id: StructureId) -> &SemanticStructure {
+        log::trace!("Get structure with ID {id:?}");
+        self.structures.get(&id).expect("Cannot find structure with ID")
+    }
+
+    #[must_use]
+    pub fn field(&self, structure_id: StructureId, field_id: SemanticFieldId) -> &SemanticField {
+        &self.structure(structure_id).fields[field_id.id()]
     }
 }

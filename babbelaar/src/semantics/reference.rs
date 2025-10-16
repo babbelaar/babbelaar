@@ -3,7 +3,7 @@
 
 use std::sync::atomic::Ordering;
 
-use crate::{BabString, FileRange, IntoBabString};
+use crate::{BabString, FileRange, IntoBabString, semantics::SemanticContext};
 
 use super::{FunctionReference, SemanticLocalKind, SemanticType};
 
@@ -72,7 +72,7 @@ impl SemanticReference {
         }
     }
 
-    pub fn hover(&self) -> String {
+    pub fn hover(&self, ctx: &SemanticContext) -> String {
         match self.local_kind {
             SemanticLocalKind::Function | SemanticLocalKind::FunctionReference => {
                 match &self.typ {
@@ -144,6 +144,7 @@ impl SemanticReference {
                 };
 
                 if let SemanticType::Custom { base: typ, .. } = typ {
+                    let typ = ctx.structure(*typ);
                     for field in &typ.fields {
                         fields += &format!("\n    veld {}: {}", field.name.value(), field.ty);
                     }

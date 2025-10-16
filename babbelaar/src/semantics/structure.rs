@@ -49,3 +49,20 @@ impl PartialEq for SemanticStructure {
         self.name.range() == other.name.range() && self.name.value() == other.name.value()
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SemanticFieldId {
+    id: usize,
+}
+
+impl SemanticFieldId {
+    #[must_use]
+    pub fn new(id: usize) -> Self {
+        Self { id }
+    }
+
+    #[must_use]
+    pub const fn id(&self) -> usize {
+        self.id
+    }
+}

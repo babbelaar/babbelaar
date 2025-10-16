@@ -413,12 +413,13 @@ impl Backend {
                             return Ok(None);
                         };
 
-                        let SemanticType::Custom { base, parameters: _ } = ty else {
+                        let SemanticType::Custom { base, parameters: _, name: _ } = ty else {
                             log::warn!("Kan geen handtekeningshulp aanbieden voor deze methode, want het is gebonden aan een ingebouwd of speciaal type.");
                             return Ok(None);
                         };
 
                         let name_to_find = call_expr.method_name.value();
+                        let base = analyzer.context.structure(*base);
                         let Some(method) = base.methods.iter().find(|x| x.function.name.value() == name_to_find) else {
                             log::trace!("Kan geen handtekeningshulp aanbieden, want methode `{name_to_find}` bestaat niet.");
                             return Ok(None);
@@ -633,6 +634,7 @@ impl Backend {
                 }
 
                 for (name, structure) in &scope.structures {
+                    let structure = analyzer.context.structure(*structure);
                     if structure.name.range().file_id() != source_code.file_id() || name.is_empty(){
                         continue;
                     }
@@ -793,13 +795,14 @@ impl Backend {
             let (reference, source_code) = self.with_semantics(&params.text_document_position_params.text_document, |analyzer, source_code| {
                 let pos = params.text_document_position_params.position;
                 let location = self.converter(source_code).convert_location(pos)?;
-                Ok((analyzer.find_reference_at(location), source_code.clone()))
+                let reference = analyzer.find_reference_at(location)
+                    .map(|(range, reference)| (range, reference.hover(&analyzer.context), reference.declaration_range.file_id()));
+                Ok((reference, source_code.clone()))
             }).await?;
 
-            if let Some((range, reference)) = reference {
+            if let Some((range, text, file_id)) = reference {
                 debug_assert_eq!(range.file_id(), source_code.file_id(), "is invalid");
-                let text = reference.hover();
-                let file_name = self.file_humanized_name(reference.declaration_range.file_id()).await.unwrap_or_else(|| "(onbekend)".to_string());
+                let file_name = self.file_humanized_name(file_id).await.unwrap_or_else(|| "(onbekend)".to_string());
 
                 hover = Some(Hover {
                     contents: HoverContents::Markup(MarkupContent {

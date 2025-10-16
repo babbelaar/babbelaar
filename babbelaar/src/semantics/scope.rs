@@ -3,15 +3,15 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{BabString, Builtin, FileId, FileLocation, FileRange, Ranged};
+use crate::{BabString, Builtin, FileId, FileLocation, FileRange, Ranged, StructureId};
 
-use super::{FunctionReference, SemanticExtension, SemanticFunction, SemanticGenericType, SemanticInterface, SemanticLocal, SemanticLocalKind, SemanticStructure, SemanticType};
+use super::{FunctionReference, SemanticExtension, SemanticFunction, SemanticGenericType, SemanticInterface, SemanticLocal, SemanticLocalKind, SemanticType};
 
 #[derive(Debug)]
 pub struct SemanticScope {
     pub range: FileRange,
     pub locals: HashMap<BabString, SemanticLocal>,
-    pub structures: HashMap<BabString, Arc<SemanticStructure>>,
+    pub structures: HashMap<BabString, StructureId>,
     pub generic_types: HashMap<BabString, SemanticGenericType>,
     pub this: Option<SemanticType>,
     pub return_type: Option<Ranged<SemanticType>>,

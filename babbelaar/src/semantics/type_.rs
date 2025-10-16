@@ -3,9 +3,9 @@
 
 use std::{fmt::{Display, Write}, sync::Arc};
 
-use crate::{BabString, BuiltinType, Expression, FileRange, PrimaryExpression, Ranged, UnaryExpressionKind};
+use crate::{BabString, BuiltinType, Expression, FileRange, PrimaryExpression, Ranged, StructureId, UnaryExpressionKind, semantics::SemanticContext};
 
-use super::{FunctionReference, SemanticFunction, SemanticInterface, SemanticStructure};
+use super::{FunctionReference, SemanticFunction, SemanticInterface};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SemanticGenericType {
@@ -24,7 +24,7 @@ impl Display for SemanticGenericType {
 pub enum SemanticType {
     Array(Box<SemanticType>),
     Builtin(BuiltinType),
-    Custom { base: Arc<SemanticStructure>, parameters: Vec<SemanticType> },
+    Custom { base: StructureId, parameters: Vec<SemanticType>, name: Ranged<BabString> },
     Function(Arc<SemanticFunction>),
     FunctionReference(FunctionReference),
     Interface { base: Arc<SemanticInterface>, parameters: Vec<SemanticType> },
@@ -45,9 +45,9 @@ impl SemanticType {
     }
 
     #[must_use]
-    pub fn generic_type_names(&self) -> &[Ranged<BabString>] {
+    pub fn generic_type_names<'a>(&self, ctx: &'a SemanticContext) -> &'a [Ranged<BabString>] {
         match self {
-            Self::Custom { base, .. } => &base.generic_types,
+            Self::Custom { base, .. } => &ctx.structure(*base).generic_types,
             _ => &[],
         }
     }
@@ -56,7 +56,7 @@ impl SemanticType {
         match self {
             Self::Array(ty) => ty.declaration_range(),
             Self::Builtin(..) => FileRange::default(),
-            Self::Custom { base, .. } => base.name.range(),
+            Self::Custom { name, .. } => name.range(),
             Self::Function(func) => func.name.range(),
             Self::FunctionReference(func) => func.declaration_range(),
             Self::IndexReference(ty) => ty.declaration_range(),
@@ -88,7 +88,7 @@ impl SemanticType {
             Self::Builtin(BuiltinType::Slinger) => BabString::new_static("tekst"),
             Self::Builtin(BuiltinType::G32) => BabString::new_static("getal"),
             Self::Builtin(builtin) => builtin.name().to_lowercase().into(),
-            Self::Custom { base, .. } => base.name.value().to_lowercase().into(),
+            Self::Custom { name, .. } => name.value().to_lowercase().into(),
             Self::Interface { base, .. } => base.name.value().to_lowercase().into(),
 
             Self::Function(..) => BabString::empty(),
@@ -116,7 +116,7 @@ impl SemanticType {
         match self {
             Self::Array(..) => BabString::new_static("opeenvolging-naam"),
             Self::Builtin(builtin) => builtin.name().into(),
-            Self::Custom { base, .. } => base.name.value().clone(),
+            Self::Custom { name, .. } => name.value().clone(),
             Self::Function(func) => func.name.value().clone(),
             Self::FunctionReference(func) => func.name(),
             Self::IndexReference(ty) => ty.name(),
@@ -195,8 +195,9 @@ impl Display for SemanticType {
                 f.write_str("[]")
             }
             Self::Builtin(typ) => typ.fmt(f),
-            Self::Custom { base, parameters } => {
-                base.fmt(f)?;
+            Self::Custom { base, parameters, name } => {
+                _ = base;
+                f.write_str(&name)?;
 
                 if parameters.is_empty() {
                     return Ok(());
