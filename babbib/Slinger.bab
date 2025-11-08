@@ -13,6 +13,19 @@ werkwijze strcat(dst: g64*, slinger: Slinger);
 @uitheems(naam: "strcpy")
 werkwijze strcpy(dst: g64*, slinger: Slinger);
 
+werkwijze substr1(s: g64, g: g64) -> g64 {
+    bekeer s + g;
+}
+
+@uitheems(naam: "substr1")
+werkwijze substr(s: Slinger, g: g64) -> Slinger;
+
+uitbreiding Slinger {
+    werkwijze knip(start: g64) -> Slinger {
+        bekeer substr(dit, start);
+    }
+}
+
 werkwijze Slinger__lengte(a: Slinger) -> g64 {
     bekeer strlen(a);
 }
@@ -26,5 +39,3 @@ werkwijze Slinger__voegSamen(a: Slinger, b: Slinger) -> g64* {
 
     bekeer data;
 }
-
-

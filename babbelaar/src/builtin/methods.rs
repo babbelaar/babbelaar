@@ -164,6 +164,21 @@ pub(super) static METHODS_SLINGER: &'static [BuiltinFunction] = &[
         return_type: BuiltinType::Slinger,
         must_use: true,
     },
+    BuiltinFunction {
+        name: "knip",
+        documentation: "",
+        inline_detail: "",
+        function: &slinger_lengte,
+        lsp_completion: None,
+        parameters: &[
+            BuiltinFunctionParameter {
+                name: "start",
+                typ: BuiltinType::G64,
+            },
+        ],
+        return_type: BuiltinType::Slinger,
+        must_use: true,
+    },
 ];
 
 pub(super) static METHODS_TEKEN: &'static [BuiltinFunction] = &[];
