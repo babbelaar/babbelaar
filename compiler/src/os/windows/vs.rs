@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{collections::HashMap, fs::File, io::Write, path::{Path, PathBuf}, process::{Command, Stdio}, rc::Rc, str::Utf8Error};
+use std::{collections::HashMap, fs::{File, remove_file}, io::Write, path::{Path, PathBuf}, process::{Command, Stdio}, rc::Rc, str::Utf8Error};
 
 use log::{debug, warn};
 use thiserror::Error;
@@ -67,15 +67,20 @@ impl VisualStudio {
     }
 
     fn vs_dev_cmd_contents(&mut self) -> Result<&HashMap<String, String>, VisualStudioError> {
+        self.do_vs_dev_cmd_contents(false)
+    }
+
+    fn do_vs_dev_cmd_contents(&mut self, retry: bool) -> Result<&HashMap<String, String>, VisualStudioError> {
         if self.vs_dev_cmd_contents.is_some() {
             return Ok(self.vs_dev_cmd_contents.as_ref().unwrap());
         }
 
         let mut contents_file = self.temp_dir.clone();
         contents_file.push("VsDevCmd.uitvoer");
+        let was_cached = contents_file.exists();
 
-        let contents = if contents_file.exists() {
-            debug!("VsDevCmd was al een keer opgehaald en gestopt in de cache...");
+        let contents = if was_cached {
+            debug!("VsDevCmd was al een keer opgehaald en gestopt in de cache: {}", contents_file.display());
             std::fs::read_to_string(&contents_file).map_err(|x| VisualStudioError::VsDevCmdContentsFileOpenError(x.into()))?
         } else {
             let mut batch_file_path = self.temp_dir.clone();
@@ -137,8 +142,34 @@ impl VisualStudio {
             }
         }
 
+        if !retry && was_cached && !self.validate_environment(&map) {
+            _ = remove_file(contents_file);
+            return self.do_vs_dev_cmd_contents(true);
+        }
+
         self.vs_dev_cmd_contents = Some(map);
         Ok(self.vs_dev_cmd_contents.as_ref().unwrap())
+    }
+
+    #[must_use]
+    fn validate_environment(&self, map: &HashMap<String, String>) -> bool {
+        let Some(include) = map.get("INCLUDE") else {
+            warn!("VsDevCmd validatie faalde: omgevingsvariabele `INCLUDE` bestaat niet");
+            return false;
+        };
+
+        let Some(first_include_path) = include.split(';').next() else {
+            warn!("VsDevCmd validatie faalde: omgevingsvariabele `INCLUDE` heeft geen inhoud");
+            debug_assert!(false);
+            return false;
+        };
+
+        if !Path::new(first_include_path).exists() {
+            warn!("VsDevCmd validatie faalde: INCLUDE-pad bestaat niet: {first_include_path}");
+            return false;
+        }
+
+        true
     }
 }
 
