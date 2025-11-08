@@ -242,7 +242,7 @@ impl<'program> FunctionBuilder<'program> {
 
     pub fn allocate_array(&mut self, item_structure_name: &BabString, size: usize) -> (&StructureLayout, Register) {
         let layout = self.program_builder.type_manager.layout_of(item_structure_name);
-        let size = layout.size() * size;
+        let size = self.pointer_size() + layout.size() * size;
 
         let dst = self.register_allocator.next();
 

@@ -644,7 +644,7 @@ impl CompileExpression for PostfixExpression {
                         let size = builder.size_of_type_info(&item_ty);
                         let offset_typ = builder.pointer_primitive_type();
                         let offset = builder.math(MathOperation::Multiply, offset_typ, offset, Immediate::Integer64(size as _));
-                        // let offset = builder.math(MathOperation::Add, offset_typ, offset, Immediate::Integer64(builder.pointer_size() as _));
+                        let offset = builder.math(MathOperation::Add, offset_typ, offset, Immediate::Integer64(builder.pointer_size() as _));
                         let offset = Operand::Register(offset);
 
                         let typ = builder.primitive_type_of(&item_ty);
