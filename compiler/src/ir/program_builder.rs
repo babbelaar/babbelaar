@@ -116,6 +116,7 @@ impl ProgramBuilder {
         match ty {
             SemanticType::Builtin(ty) => self.type_id_for_builtin(*ty),
             SemanticType::Custom { name, .. } => self.type_id_for_structure(&name),
+            SemanticType::Pointer(..) => TypeId::G64,
             _ => todo!("TypeId for ty: {ty:#?}"),
         }
     }

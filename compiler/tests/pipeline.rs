@@ -1865,6 +1865,68 @@ fn return_structure_type() {
     assert_eq!(result.stdout, "");
 }
 
+#[test]
+fn slinger_knip_volg() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            stel tekst = "Hallo";
+
+            volg i in reeks(0, 5) {
+                schrijf(tekst.knip(i));
+            }
+
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.error, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "Hallo\nallo\nllo\nlo\no\n");
+}
+
+#[test]
+fn slinger_knip_volg_vervang() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze hoofd() -> g32 {
+            stel tekst = "Hallo";
+
+            volg _i in reeks(0, 5) {
+                schrijf(tekst);
+                tekst = tekst.knip(1);
+            }
+
+            bekeer 0;
+        }
+    "#);
+
+    assert_eq!(result.error, None);
+    assert_eq!(result.exit_code, Some(0));
+    assert_eq!(result.stdout, "Hallo\nallo\nllo\nlo\no\n");
+}
+
+#[test]
+fn integer_volg_sum() {
+    let result = create_and_run_single_object_executable(r#"
+        werkwijze telOp(a: g32, b: g32) -> g32 {
+            bekeer a + b;
+        }
+
+        werkwijze hoofd() -> g32 {
+            stel getal = 0;
+
+            volg i in reeks(0, 5) {
+                getal = telOp(getal, i);
+            }
+
+            bekeer getal;
+        }
+    "#);
+
+    assert_eq!(result.error, None);
+    assert_eq!(result.exit_code, Some(1 + 2 + 3 + 4));
+    assert_eq!(result.stdout, "");
+}
+
 fn create_and_run_single_object_executable(code: &str) -> ProgramResult {
     if !std::env::args().nth(1).unwrap_or_default().is_empty() || std::env::var("GITHUB_ACTION").is_ok() {
         let _ = env_logger::builder().is_test(true).filter(None, log::LevelFilter::max()).try_init();

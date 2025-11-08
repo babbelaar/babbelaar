@@ -371,6 +371,7 @@ impl<'a> CraneliftFrontend<'a> {
                 let else_block = self.builder.create_block();
                 let condition = self.condition(condition);
 
+                // TODO: if the statement is unlikely, invert the check so Cranelift will optimize it better.
                 self.builder.ins().brif(condition, then_block, &[], else_block, &[]);
 
                 // We create our own fake else block, so we have to nop it to make sure the block can't be empty.

@@ -114,7 +114,8 @@ impl FunctionOptimizer for DeadStoreEliminator {
                             continue;
                         }
 
-                        function.instructions.remove(removal_index);
+                        let instr = function.instructions.remove(removal_index);
+                        debug!("[DeadStore] Removing useless {instr}");
                     }
                 }
             }

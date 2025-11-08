@@ -166,7 +166,7 @@ impl Compiler {
             return;
         };
 
-        debug!("IR-code aan het genereren voor werkwijze `{name}`");
+        debug!("IR-code aan het genereren voor werkwijze `{name}` {func:#?}");
 
         let mut arguments = ArgumentList::new();
 
@@ -710,6 +710,7 @@ impl CompileExpression for PrimaryExpression {
                     Some(local) => local.into(),
                     None => {
                         error!("Ongeldige lokale variabele: {}", name.value());
+                        debug_assert!(false);
                         ExpressionResult::typed(builder.load_immediate(Immediate::Integer64(0), PrimitiveType::U32), TypeInfo::Plain(TypeId::G32))
                     }
                 }

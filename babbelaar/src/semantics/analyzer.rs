@@ -3,7 +3,7 @@
 
 use std::{collections::{HashMap, HashSet}, fmt::Write, mem::replace, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}};
 
-use log::warn;
+use log::{trace, warn};
 
 use crate::*;
 use super::*;
@@ -1212,6 +1212,28 @@ impl SemanticAnalyzer {
 
                 let edit = FileEdit::new(insert_range.as_zero_range(), params);
                 add_parameter_action = Some(BabbelaarCodeAction::new(BabbelaarCodeActionType::AddParameter { residual_args }, vec![ edit ]));
+            } else if let SemanticType::FunctionReference(FunctionReference::Builtin(..)) = &function.typ {
+                let residual_args = arg_count - param_count;
+                let mut params = String::new();
+
+                for (idx, arg) in expression.arguments.iter().enumerate().skip(param_count) {
+                    if idx != 0 {
+                        params += ", ";
+                    }
+
+                    let argument_type = self.analyze_expression(arg, &SemanticTypeResolution::default()).ty;
+                    params += &format!("param{idx}: {argument_type}");
+                }
+
+                let end = expression.arguments.last().unwrap().range().end();
+                let range = if param_count == 0 {
+                    FileRange::new(expression.arguments[0].range().start(), end)
+                } else {
+                    FileRange::new(expression.arguments[param_count - 1].range().end(), end)
+                };
+
+                let edit = FileEdit::new(range, "");
+                remove_parameter_action = Some(BabbelaarCodeAction::new(BabbelaarCodeActionType::RemoveArgument { residual_args }, vec![ edit ]));
             }
 
 
@@ -1236,7 +1258,7 @@ impl SemanticAnalyzer {
                 SemanticTypeResolution::default()
             };
             let argument_type = self.analyze_expression(arg, &resolution).ty;
-
+            trace!("Matching {parameter_type:?} to argument {argument_type:?}");
 
             let Some(parameter_type) = parameter_type else {
                 if has_var_args {
@@ -1989,6 +2011,17 @@ impl SemanticAnalyzer {
             SemanticType::Builtin(builtin) => {
                 for method in builtin.methods() {
                     if *expression.method_name == method.name {
+                        let name = BabString::new_static(method.name);
+                        let function = SemanticReference {
+                            local_name: name.clone(),
+                            local_kind: SemanticLocalKind::Method,
+                            declaration_range: FileRange::default(),
+                            typ: SemanticType::FunctionReference(FunctionReference::Builtin(method)),
+                        };
+
+                        let this_structure = Some(&SemanticType::Builtin(builtin));
+
+                        self.analyze_function_parameters(name, function, &expression.call, this_structure);
                         return SemanticValue {
                             ty: SemanticType::Builtin(method.return_type),
                             usage: if method.must_use { SemanticUsage::Pure(PureValue::ReturnValue) } else { SemanticUsage::Indifferent },
