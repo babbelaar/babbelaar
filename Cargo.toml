@@ -19,8 +19,8 @@ strum = { version = "0.27", features = ["derive"] }
 log = "0.4"
 object = { version = "0.37", features = ["write"] }
 
-libloading = "0.8"
-clap = { version = "4.5.16", features = ["derive"] }
+libloading = "0.9"
+clap = { version = "4", features = ["derive"] }
 colored = "3"
 
 anyhow = "1"

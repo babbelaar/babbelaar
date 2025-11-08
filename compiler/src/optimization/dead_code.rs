@@ -72,6 +72,7 @@ impl DeadCodeEliminator {
     }
 }
 
+#[allow(unused)]
 #[derive(Debug, Default)]
 pub struct DeadStoreEliminator {
     writing_instructions_per_register: HashMap<Register, Store>,

@@ -1,9 +1,9 @@
 // Copyright (C) 2023 - 2024 Tristan Gerritsen <tristan@thewoosh.org>
 // All Rights Reserved.
 
-use std::{borrow::Cow, cell::RefCell, cmp::Ordering, collections::HashMap, fmt::{Display, Write}, hash::{DefaultHasher, Hash, Hasher}, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, cmp::Ordering, fmt::{Display, Write}, hash::{DefaultHasher, Hash, Hasher}, rc::Rc};
 
-use crate::{BabString, BuiltinMethodReference, BuiltinType, Comparison, FunctionStatement, InterfaceStatement, Structure};
+use crate::{BuiltinMethodReference, BuiltinType, Comparison, FunctionStatement, InterfaceStatement};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {

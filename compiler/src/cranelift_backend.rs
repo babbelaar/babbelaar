@@ -524,6 +524,7 @@ impl<'a> CraneliftFrontend<'a> {
         }
 
         if let Some((ret_ty, ret_ty_id)) = ret_ty {
+            _ = ret_ty_id;
             sig.returns.push(AbiParam::new(cl_type_for_primitive_type(*ret_ty)));
         }
 

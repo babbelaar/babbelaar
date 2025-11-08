@@ -67,6 +67,7 @@ fn optimize_function(function: &mut Function, ctx: &mut OptimizationContext) {
     run_optimization::<StrengthReductor>(function, ctx);
     run_optimization::<RegisterDeduplicator>(function, ctx);
     // run_optimization::<DeadStoreEliminator>(function, ctx);
+    _ = DeadStoreEliminator::optimize;
     run_optimization::<DeadCodeEliminator>(function, ctx);
 }
 

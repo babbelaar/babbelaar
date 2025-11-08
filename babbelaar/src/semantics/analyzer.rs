@@ -2217,6 +2217,7 @@ impl SemanticAnalyzer {
             })
             .next()?;
 
+        trace!("Expr={}", expression.method_name.value());
         let (return_type, usage, name, local_reference) = x;
         self.analyze_function_parameters(name, local_reference, &expression.call, Some(typ));
 
